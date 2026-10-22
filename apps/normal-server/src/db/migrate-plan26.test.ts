@@ -114,6 +114,6 @@ describe('0005_plan26', () => {
     expect(await rows(`SELECT 1 FROM information_schema.tables WHERE "table_name" = 'gift_months'`)).toHaveLength(1)
     expect(await snapshot()).toEqual(before)
     await migrate(db, { migrationsFolder: migrationsFolder() }) // nothing left to apply
-    expect(await rows(`SELECT "hash" FROM "drizzle"."__drizzle_migrations"`)).toHaveLength(6)
+    expect(await rows(`SELECT "hash" FROM "drizzle"."__drizzle_migrations"`)).toHaveLength(7)
   })
 })

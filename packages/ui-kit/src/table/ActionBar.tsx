@@ -262,7 +262,11 @@ export function ActionBar({
       label: full,
     }
   }
-  const play = labelled(t('actions.play'), wager)
+  // Plan 27 D2: a seat short of the wager plays all in for what the ante left (`callAmount` is min(stack, wager)), and
+  // the button says so with the stable "Tất tay" — still a `play` on the wire.
+  const fixedWager = room.config.blind?.fixedWager ?? 0
+  const playsAllIn = legal !== null && legal.callAmount > 0 && legal.callAmount < fixedWager
+  const play = labelled(t(playsAllIn ? 'actions.allIn' : 'actions.play'), wager)
   const call = labelled(t('actions.call'), callAmount > 0 ? callAmount : null)
   const submitLabel = labelled(t(canRaise ? 'actions.raise' : 'actions.bet'), value)
 

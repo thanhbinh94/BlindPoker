@@ -24,6 +24,13 @@ describe('parseWorstHash', () => {
     expect(parseWorstHash('#worst/turn/9/vi/short/landscape')).toMatchObject({ long: false, frame: 'landscape' })
   })
 
+  it('reads /rank<N> as the viewer’s own rank, 1 to 5', () => {
+    expect(parseWorstHash('#worst/turn/8/vi/rank5')).toMatchObject({ seats: 8, meRank: 5 })
+    expect(parseWorstHash('#worst/turn/8/vi/long/rank2')).toMatchObject({ long: true, meRank: 2 })
+    expect(parseWorstHash('#worst/turn/8/vi/rank9')?.meRank).toBeUndefined()
+    expect(parseWorstHash('#worst/turn/8/vi')?.meRank).toBeUndefined()
+  })
+
   it('ignores a token it does not know', () => {
     expect(parseWorstHash('#worst/result/6/vi/sideways/long')).toMatchObject({ long: true, frame: null })
   })

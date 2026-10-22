@@ -28,6 +28,7 @@ import type { SessionService } from '../auth/session-service.js'
 import type { NormalConfig } from '../config.js'
 import type { AppDb } from '../db/client.js'
 import type { EconomyService } from '../economy/economy-service.js'
+import type { WelcomeService } from '../economy/welcome-service.js'
 import type { GmRoomService } from '../gm/gm-rooms.js'
 import type { GmService } from '../gm/gm-service.js'
 import type { HistoryService } from '../history/history-service.js'
@@ -37,6 +38,8 @@ import type { ItemCatalog } from '../inventory/items.js'
 import type { AvatarManifest } from '../inventory/manifest.js'
 import type { OutfitsService } from '../inventory/outfits-service.js'
 import type { NormalRepositories } from '../repos/index.js'
+import type { ReputationService } from '../reputation/reputation-service.js'
+import type { ShopService } from '../shop/shop-service.js'
 import type { StatsService } from '../stats/stats-service.js'
 import { createRequireGm, createRequireUser, decorateRequestUser } from './auth-guard.js'
 import { LOGIN_RATE_LIMIT, REGISTER_RATE_LIMIT, registerAuthRoutes } from './routes-auth.js'
@@ -45,6 +48,8 @@ import { registerGmRoutes } from './routes-gm.js'
 import { registerMeRoutes } from './routes-me.js'
 import { registerOutfitRoutes } from './routes-outfits.js'
 import { registerRewardRoutes } from './routes-rewards.js'
+import { registerShopRoutes } from './routes-shop.js'
+import { registerWelcomeRoutes } from './routes-welcome.js'
 import './types.js'
 
 export interface RouteDeps {
@@ -62,6 +67,12 @@ export interface RouteDeps {
   /** What a GM may do to an account (Plan 25), and the façade over live rooms the GM routes use. */
   gm: GmService
   gmRooms: GmRoomService
+  /** Plan 27: the rank ladder the profile reads. */
+  reputation: Pick<ReputationService, 'ranks'>
+  /** Plan 27: the shelves and a purchase for points (spec §3 B2). */
+  shop: Pick<ShopService, 'view' | 'buy'>
+  /** Plan 27: the welcome gift — one of three rare items, once per account (spec §4 C1). */
+  welcome: WelcomeService
   catalog: ItemCatalog
   defs: AchievementDef[]
   /** Old wardrobe ids, kept readable — see `inventory/aliases.ts`. */
@@ -191,6 +202,8 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
   })
   registerMeRoutes(app, { ...deps, requireUser })
   registerRewardRoutes(app, { economy: deps.economy, requireUser })
+  registerShopRoutes(app, { shop: deps.shop, requireUser })
+  registerWelcomeRoutes(app, { welcome: deps.welcome, requireUser })
   registerOutfitRoutes(app, { outfits: deps.outfits, catalog: deps.catalog, requireUser })
   registerGmRoutes(app, { gm: deps.gm, gmRooms: deps.gmRooms, history: deps.history, repos: deps.repos, requireGm, log: deps.log })
   registerCatalogRoutes(app, {

@@ -102,8 +102,9 @@ describe('createApi — reads', () => {
     const fetchImpl = ok({})
     await apiOf(fetchImpl).playerAvatar('p1', { fresh: true })
     // Without this the re-read after `PUT /api/me/avatar` is served out of memory cache: the wardrobe shows
-    // the face the player just replaced, for up to a minute.
-    expect(init(fetchImpl).cache).toBe('no-store')
+    // the face the player just replaced, for up to a minute. `reload`, not `no-store`: the fresh answer is written back,
+    // so a reload or another screen inside that minute reads it too, not the stale one (a rank-up then F5, Plan 27).
+    expect(init(fetchImpl).cache).toBe('reload')
   })
 })
 
@@ -370,6 +371,7 @@ describe('createApi — the GM routes', () => {
     ['gmResetCheckin', ['p1', 'bấm nhầm'], '/api/gm/players/p1/checkin/reset', { reason: 'bấm nhầm' }],
     ['gmKick', ['r1', 'p2', 'ồn ào'], '/api/gm/rooms/r1/kick', { playerId: 'p2', reason: 'ồn ào' }],
     ['gmCloseRoom', ['r1', 'bảo trì'], '/api/gm/rooms/r1/close', { reason: 'bảo trì' }],
+    ['gmGrantReputation', ['p1', 500, 'thưởng'], '/api/gm/players/p1/reputation', { amount: 500, reason: 'thưởng' }],
   ])('%s POSTs %s with the CSRF header', async (method, args, path, expected) => {
     const fetchImpl = ok({})
     await (apiOf(fetchImpl) as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>)[method]!(...(args as unknown[]))
@@ -389,6 +391,7 @@ describe('createApi — the GM routes', () => {
     ['gmCheckin', ['p 1'], '/api/gm/players/p%201/checkin'],
     ['gmRooms', [], '/api/gm/rooms'],
     ['gmRoom', ['r1'], '/api/gm/rooms/r1'],
+    ['gmShop', [], '/api/gm/shop'],
   ])('%s GETs %s with no CSRF header', async (method, args, path) => {
     const fetchImpl = ok({})
     await (apiOf(fetchImpl) as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>)[method]!(...(args as unknown[]))
@@ -396,6 +399,22 @@ describe('createApi — the GM routes', () => {
     expect(url(fetchImpl)).toBe(path)
     expect(init(fetchImpl).method).toBe('GET')
     expect(headers(fetchImpl)['x-requested-with']).toBeUndefined()
+  })
+
+  it.each([
+    ['gmSetShopPrices', [[{ itemId: 'outfit_dealer01', pricePoints: 1 }], 'giá'], '/api/gm/shop/prices', { changes: [{ itemId: 'outfit_dealer01', pricePoints: 1 }], reason: 'giá' }],
+    ['gmSetShopFeatured', ['2026-W44', ['aura_ice01'], 'kệ'], '/api/gm/shop/featured/2026-W44', { itemIds: ['aura_ice01'], reason: 'kệ' }],
+    ['gmSetWelcomeChoices', [['a', 'b', 'c'], 'quà'], '/api/gm/shop/welcome', { itemIds: ['a', 'b', 'c'], reason: 'quà' }],
+    ['gmSetReputationRules', [{ daily_login: 15 }, 'nguồn'], '/api/gm/reputation/rules', { rules: { daily_login: 15 }, reason: 'nguồn' }],
+    ['gmSetReputationRanks', [[{ rank: 1, threshold: 0 }], 'bậc'], '/api/gm/reputation/ranks', { ranks: [{ rank: 1, threshold: 0 }], reason: 'bậc' }],
+  ])('%s PUTs %s with the CSRF header (Plan 27)', async (method, args, path, expected) => {
+    const fetchImpl = ok({})
+    await (apiOf(fetchImpl) as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>)[method]!(...(args as unknown[]))
+
+    expect(url(fetchImpl)).toBe(path)
+    expect(init(fetchImpl).method).toBe('PUT')
+    expect(headers(fetchImpl)['x-requested-with']).toBe(REQUESTED_WITH)
+    expect(body(fetchImpl)).toEqual(expected)
   })
 
   it('keeps the reason a locked account is refused with, beside the code', async () => {

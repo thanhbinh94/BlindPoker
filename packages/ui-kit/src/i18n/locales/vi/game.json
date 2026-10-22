@@ -266,9 +266,16 @@
     "DAILY_REWARD": "Thưởng hằng ngày: {{amount}} điểm",
     "ACHIEVEMENT_UNLOCKED": "Đạt thành tựu mới: {{id}}",
     "GM_NOTICE": "Quản trị viên: {{reason}}",
-    "TABLE_LIMIT_SPENT": "Bạn đã dùng hết hạn mức ở bàn này, {{amount}} điểm còn lại đã được trả về số dư. Chọn ghế trống để chơi tiếp.",
-    "TABLE_LIMIT_SPENT_none": "Bạn đã dùng hết hạn mức ở bàn này. Chọn ghế trống để chơi tiếp.",
+    "STACK_SPENT": "Bạn đã hết điểm ở bàn này. Nhận Cứu trợ nếu số dư dưới {{threshold}} điểm, hoặc chọn ghế trống khi có điểm.",
+    "RANK_UP": "Bạn vừa lên bậc {{rank}}",
     "other": "Thông báo mới"
+  },
+  "rank": {
+    "1": "Tân binh",
+    "2": "Tay bài",
+    "3": "Cao thủ",
+    "4": "Bậc thầy",
+    "5": "Huyền thoại"
   },
   "presets": {
     "min": "Min",

@@ -28,7 +28,7 @@ import type { StatMetric } from './stats/player-stats.js'
 /**
  * `server-kit`'s domain events, re-published here, plus the ones this edition raises itself.
  *
- * `DAILY_CLAIMED` carries the day and streak so `stats` never has to re-read the row the economy
+ * `DAILY_CLAIMED` carries the day, streak and consecutive run so `stats` never has to re-read the row the economy
  * service just wrote; `STATS_UPDATED` names the metrics that were written so `achievements` can
  * consider a handful of definitions instead of all thirty-two.
  *
@@ -38,7 +38,8 @@ import type { StatMetric } from './stats/player-stats.js'
  */
 export type AppEvent =
   | DomainEvent
-  | { type: 'DAILY_CLAIMED'; playerId: string; day: number; streak: number }
+  /** `streak` is the month's claim count, `consecutive` the run of calendar days (§13.1 as amended by Plan 27 Part G). */
+  | { type: 'DAILY_CLAIMED'; playerId: string; day: number; streak: number; consecutive: number }
   | { type: 'STATS_UPDATED'; playerId: string; changedMetrics: StatMetric[] }
 
 export type AppEventHandler = (e: AppEvent) => Promise<void> | void

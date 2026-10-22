@@ -132,8 +132,35 @@ async function settleAfterSignIn(page: Page, submit: () => Promise<void>): Promi
   // the lobby is on screen while it waits, so "lobby visible" alone would be a race the reminder then loses.
   const shownBefore = await page.evaluate(() => localStorage.getItem('bp.dailyNudge'))
   const asked = page.waitForResponse((r) => r.url().includes('/api/rewards/daily') && r.request().method() === 'GET')
+  // The lobby also asks whether the welcome gift is taken (Plan 27, C3): while it is not, the dialog opens over the
+  // lobby and the reminder stays put. An answer that never comes is read as "taken", which is what the app does too.
+  const welcomed = page
+    .waitForResponse((r) => new URL(r.url()).pathname === '/api/welcome' && r.request().method() === 'GET', { timeout: 15_000 })
+    .then(async (r) => ((await r.json()) as { claimed: boolean }).claimed)
+    .catch(() => true)
+  // The dialog opens by itself once per account and browser (`bp.welcomeShown` holds the last account it did): the
+  // account comes from the sign-in's own answer, and the flag is read before the app can write it again.
+  const shownTo = await page.evaluate(() => {
+    try {
+      return localStorage.getItem('bp.welcomeShown')
+    } catch {
+      return null
+    }
+  })
+  const signedInAs = page
+    .waitForResponse((r) => /^\/api\/auth\/(login|register)$/.test(new URL(r.url()).pathname) && r.request().method() === 'POST', { timeout: 15_000 })
+    .then(async (r) => ((await r.json()) as { playerId?: string }).playerId ?? null)
+    .catch(() => null)
   await submit()
   const status = (await (await asked).json()) as { claimable: boolean; nextResetAt: number }
+  if (!(await welcomed)) {
+    const me = await signedInAs
+    // Already shown to this account here: the lobby has only its button, so a long wait would be wasted. Otherwise
+    // the dialog is on its way — and should it not come after all, the wait gives up rather than fails.
+    if (me === null || me !== shownTo) await dismissWelcome(page, 10_000)
+    await expectLobby(page)
+    return
+  }
   // Once per day per browser: a second sign-in on the same day stays in the lobby even with the reward unclaimed.
   if (status.claimable && shownBefore !== String(status.nextResetAt)) {
     await expect(page).toHaveURL(/#\/daily$/)
@@ -142,6 +169,22 @@ async function settleAfterSignIn(page: Page, submit: () => Promise<void>): Promi
     await page.goto('/#/lobby')
   }
   await expectLobby(page)
+}
+
+/**
+ * Closes the welcome dialog with "Để sau" if it is open, or opens within `timeout` ms — and does nothing otherwise: an
+ * account whose gift is taken never sees it. The gift stays unclaimed, so the lobby keeps its "🎁 Quà chào mừng".
+ */
+export async function dismissWelcome(page: Page, timeout = 5_000): Promise<void> {
+  // Either language: A-08 signs in with English chosen, so the box reads "Welcome to Blind Luck Poker" / "Later".
+  const dialog = page.getByRole('dialog', { name: /Chào mừng đến Blind Luck Poker|Welcome to Blind Luck Poker/ })
+  try {
+    await dialog.waitFor({ state: 'visible', timeout })
+  } catch {
+    return
+  }
+  await dialog.getByRole('button', { name: /^(Để sau|Later)$/ }).click()
+  await expect(dialog).toBeHidden()
 }
 
 /** Registers `who` and waits for the lobby. The cookie the server sets is the only credential involved. */

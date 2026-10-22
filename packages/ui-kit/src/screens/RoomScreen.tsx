@@ -1,4 +1,4 @@
-import { blindRequiredStack, type PlayerAction, type RoomPlayerView } from '@bp/core'
+import type { PlayerAction, RoomPlayerView } from '@bp/core'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useTableExpressions, type ChibiSubject } from '../avatar2d/index.js'
@@ -13,6 +13,7 @@ import { ActionBar } from '../table/ActionBar.js'
 import { HandResult } from '../table/HandResult.js'
 import { useRoomFrame, type RoomFrame } from '../table/frame.js'
 import { PokerTable, type TableLayout } from '../table/PokerTable.js'
+import { RankLabel } from '../table/RankLabel.js'
 import { RoomHeader } from '../table/RoomHeader.js'
 import { useRevealHold } from './reveal-hold.js'
 import { useSeatClearance } from './seat-clearance.js'
@@ -30,6 +31,9 @@ export interface RoomScreenProps {
   chibiFor?: (p: RoomPlayerView) => ChibiSubject | null
   /** One muted line under each seat's name — a title, a rank. Threaded straight to `PokerTable`. */
   captionFor?: (p: RoomPlayerView) => ReactNode
+  /** A human player's reputation rank 1..5 (Plan 27): after the name on their seat, and as a numeral in the host's
+   * "Mời ra" list. `null` (or no answer) shows nothing. Threaded to `PokerTable`. */
+  rankFor?: (p: RoomPlayerView) => number | null
   /** App-specific banner above the room (edition branding, announcements…). */
   header?: ReactNode
   /** Forces the table layout; by default the table picks ring or stack from the viewport. */
@@ -87,7 +91,7 @@ function toggleFullscreen(): void {
  * Everything shown is derived from `client.state`; every button is one `GameClientApi` call. The screen decides
  * nothing about the game — not whose turn it is, not what a legal bet is, not who may start.
  */
-export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header, layout, frame: frameOverride }: RoomScreenProps) {
+export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor, header, layout, frame: frameOverride }: RoomScreenProps) {
   const { t } = useTranslation()
   const { state } = client
   const room = state.room
@@ -218,11 +222,11 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
             : 'room.startHint'
   /**
    * What sitting down needs, when the balance cannot cover it (finding T4 of the 2026-09-28 run, reworked for the table
-   * limit of 2026-09-29). Blind only, and only for a player who is not seated: a seat plays from the stack it brought,
-   * and a seat whose stack cannot cover the next hand is stood up — so the one who can be short is the one watching.
+   * limit of 2026-09-29): one wager (plan 27 D2, R11). Blind only, and only for a player who is not seated: a seat
+   * plays from the stack it brought down to 0 and is stood up there — so the one who can be short is the one watching.
    * Hold'em's buy-in dialog states its own range.
    */
-  const needed = room.config.blind === undefined ? null : blindRequiredStack(room.config.blind)
+  const needed = room.config.blind === undefined ? null : room.config.blind.fixedWager
   const shortToSit = canSit && needed !== null && state.balance < needed ? needed : null
   const hint = shortToSit !== null ? t('room.shortToSit', { amount: formatPoints(shortToSit, lang) }) : hintKey === null ? null : t(hintKey)
   /** Everyone the host could ask to leave: the other seats and the spectators, bots included. */
@@ -338,6 +342,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
           chibiFor={chibiFor}
           expressionFor={expressionFor}
           captionFor={captionFor}
+          rankFor={rankFor}
           resultPending={held}
           onReveal={reveal}
           note={landscape && waiting ? hint : null}
@@ -459,6 +464,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
           {others.map((p) => (
             <li key={p.playerId} className={cx(s.rosterRow, !p.connected && s.rosterOffline)}>
               <span className={s.rosterName}>{p.displayName}</span>
+              {p.isBot ? null : <RankLabel rank={rankFor?.(p)} lang={lang} compact />}
               {p.seat === null || p.isBot ? null : <span className={s.rosterStack}>{formatPoints(p.stack, lang)}</span>}
               <Button
                 variant="danger"

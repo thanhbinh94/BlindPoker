@@ -61,6 +61,15 @@ describe('LobbyScreen', () => {
     expect(screen.getByRole('heading', { name: 'Chiếu Bạc' })).toBeInTheDocument()
   })
 
+  it('puts the app’s bar links inside the player bar, not in a row of their own', () => {
+    render(
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <LobbyScreen client={fakeClient(makeState({ lobby: lobbyRooms }))} lang="en" onEnteredRoom={vi.fn()} barLinks={<a href="#/shop">Shop</a>} />
+      </I18nextProvider>,
+    )
+    expect(screen.getByRole('banner')).toContainElement(screen.getByRole('link', { name: 'Shop' }))
+  })
+
   it('titles the page like every other page, with the create button beside the title', () => {
     wrap(fakeClient(makeState({ lobby: lobbyRooms })))
     const title = screen.getByRole('heading', { level: 1, name: 'Rooms' })

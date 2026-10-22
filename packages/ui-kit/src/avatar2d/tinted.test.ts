@@ -1,7 +1,10 @@
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { tintKey, useTintedLayer } from './tinted.js'
+import { TINT_CONCURRENCY, enqueue, tintQueueStats } from './tint-queue.js'
+import { TINT_LOAD_TIMEOUT_MS, tintKey, useTintedLayer } from './tinted.js'
 import type { LayerRef, TintRef } from './types.js'
+
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 const SKIN_TINT: TintRef = { mask: 'body_f_L30_skinmask', colour: '#b3261e', meanL: 0.4 }
 
@@ -188,6 +191,165 @@ describe('useTintedLayer — with a faked canvas pipeline', () => {
 
     rerender({ layer: { order: 30, file: 'tint_stub_c' } })
     expect(result.current).toBeNull()
+  })
+
+  it('renders no more than four tinted layers at once, the rest waiting their turn (plan 27 E1)', async () => {
+    const held: (() => void)[] = []
+    vi.mocked(HTMLImageElement.prototype.decode).mockImplementation(() => new Promise<void>((resolve) => held.push(resolve)))
+    const hooks = Array.from({ length: 6 }, (_, i) =>
+      renderHook(() => useTintedLayer('/avatar/', { order: 60, file: `tint_stub_queue_${i}`, tints: [{ ...RED, mask: `tint_stub_queue_${i}_hairmask` }] })),
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    // Each running render is stuck on its first image: four renders, four image loads, two renders not started.
+    expect(held).toHaveLength(4)
+
+    // Let every image through; the two waiting renders start as slots free, and all six land.
+    vi.mocked(HTMLImageElement.prototype.decode).mockResolvedValue(undefined)
+    for (const release of held.splice(0)) release()
+    for (const hook of hooks) await waitFor(() => expect(hook.result.current).not.toBeNull())
+  })
+
+  it('drops a waiting render all of whose consumers unmounted, and a later mount loads it after all (plan 27 E1 fix)', async () => {
+    const held: (() => void)[] = []
+    const loaded: string[] = []
+    vi.mocked(HTMLImageElement.prototype.decode).mockImplementation(function (this: HTMLImageElement) {
+      loaded.push(this.src)
+      return new Promise<void>((resolve) => held.push(resolve))
+    })
+    const layerFor = (i: number): LayerRef => ({ order: 60, file: `tint_stub_unwanted_${i}`, tints: [{ ...RED, mask: `tint_stub_unwanted_${i}_hairmask` }] })
+    const hooks = Array.from({ length: 7 }, (_, i) => renderHook(() => useTintedLayer('/avatar/', layerFor(i))))
+    await flush()
+    expect(held).toHaveLength(4)
+    expect(tintQueueStats()).toEqual({ running: 4, waiting: 3 })
+
+    // The last three leave the page (a tab switch) while they still wait their turn.
+    for (const hook of hooks.slice(4)) hook.unmount()
+
+    vi.mocked(HTMLImageElement.prototype.decode).mockImplementation(function (this: HTMLImageElement) {
+      loaded.push(this.src)
+      return Promise.resolve()
+    })
+    for (const release of held.splice(0)) release()
+    for (const hook of hooks.slice(0, 4)) await waitFor(() => expect(hook.result.current).not.toBeNull())
+    await flush()
+    expect(tintQueueStats()).toEqual({ running: 0, waiting: 0 })
+    expect(loaded.filter((src) => /tint_stub_unwanted_[456]/.test(src))).toEqual([])
+
+    // Dropped, not cached as a failure: the same layer mounted again is rendered.
+    const again = renderHook(() => useTintedLayer('/avatar/', layerFor(6)))
+    await waitFor(() => expect(again.result.current).not.toBeNull())
+    expect(loaded.some((src) => src.includes('tint_stub_unwanted_6@'))).toBe(true)
+  })
+
+  it('a render another mount still wants is not dropped when one of its consumers unmounts', async () => {
+    const held: (() => void)[] = []
+    vi.mocked(HTMLImageElement.prototype.decode).mockImplementation(() => new Promise<void>((resolve) => held.push(resolve)))
+    const busy = Array.from({ length: 4 }, (_, i) =>
+      renderHook(() => useTintedLayer('/avatar/', { order: 60, file: `tint_stub_shared_busy_${i}`, tints: [{ ...RED, mask: `tint_stub_shared_busy_${i}_hairmask` }] })),
+    )
+    const shared: LayerRef = { order: 60, file: 'tint_stub_shared', tints: [{ ...RED, mask: 'tint_stub_shared_hairmask' }] }
+    const leaving = renderHook(() => useTintedLayer('/avatar/', shared))
+    const staying = renderHook(() => useTintedLayer('/avatar/', shared))
+    await flush()
+    leaving.unmount()
+
+    vi.mocked(HTMLImageElement.prototype.decode).mockResolvedValue(undefined)
+    for (const release of held.splice(0)) release()
+    await waitFor(() => expect(staying.result.current).not.toBeNull())
+    for (const hook of busy) await waitFor(() => expect(hook.result.current).not.toBeNull())
+  })
+
+  it('starts a lower layer before a higher one asked for first, when both wait (the default rank is -layer.order)', async () => {
+    const loaded: string[] = []
+    vi.mocked(HTMLImageElement.prototype.decode).mockImplementation(function (this: HTMLImageElement) {
+      loaded.push(this.src)
+      return Promise.resolve()
+    })
+    const busy: (() => void)[] = []
+    const busyDone = Array.from({ length: TINT_CONCURRENCY }, () => enqueue(() => new Promise<void>((resolve) => busy.push(resolve)), 1000))
+    const hat = renderHook(() => useTintedLayer('/avatar/', { order: 80, file: 'tint_stub_rank_hat', tints: [{ ...RED, mask: 'tint_stub_rank_hat_tintmask' }] }))
+    const body = renderHook(() => useTintedLayer('/avatar/', { order: 30, file: 'tint_stub_rank_body', tints: [{ ...RED, mask: 'tint_stub_rank_body_skinmask' }] }))
+    expect(loaded).toEqual([])
+
+    // One slot frees: the body (rank −30) takes it, though the hat (rank −80) asked first.
+    busy.shift()!()
+    await busyDone[0]
+    await flush()
+    expect(loaded[0]).toContain('tint_stub_rank_body@')
+
+    for (const release of busy) release()
+    await Promise.all(busyDone)
+    await waitFor(() => expect(hat.result.current).not.toBeNull())
+    await waitFor(() => expect(body.result.current).not.toBeNull())
+  })
+
+  it('gives up on an image that never loads after fifteen seconds, freeing its slot, and a later mount tries again', async () => {
+    expect(TINT_LOAD_TIMEOUT_MS).toBe(15_000)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      vi.mocked(HTMLImageElement.prototype.decode).mockImplementation(() => new Promise<void>(() => {}))
+      const layer: LayerRef = { order: 30, file: 'tint_stub_stalled', tints: [{ ...RED, mask: 'tint_stub_stalled_hairmask' }] }
+      const first = renderHook(() => useTintedLayer('/avatar/', layer))
+
+      await act(() => vi.advanceTimersByTimeAsync(TINT_LOAD_TIMEOUT_MS - 1))
+      expect(tintQueueStats()).toEqual({ running: 1, waiting: 0 })
+      await act(() => vi.advanceTimersByTimeAsync(1))
+      expect(tintQueueStats()).toEqual({ running: 0, waiting: 0 })
+      expect(first.result.current).toBeNull()
+
+      // Not cached as a failure: the next mount renders, and each image that loads clears its own timer.
+      vi.mocked(HTMLImageElement.prototype.decode).mockResolvedValue(undefined)
+      const second = renderHook(() => useTintedLayer('/avatar/', layer))
+      await act(() => vi.advanceTimersByTimeAsync(0))
+      expect(second.result.current).not.toBeNull()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  describe('the density it paints from (plan 27 E1: @2x only from a device pixel ratio of 1.5)', () => {
+    let saved: PropertyDescriptor | undefined
+    beforeEach(() => {
+      saved = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio')
+    })
+    afterEach(() => {
+      if (saved === undefined) delete (window as { devicePixelRatio?: number }).devicePixelRatio
+      else Object.defineProperty(window, 'devicePixelRatio', saved)
+    })
+
+    it.each([
+      [1, 1],
+      [1.4, 1],
+      [1.5, 2],
+      [2, 2],
+    ])('at a device pixel ratio of %s it loads the layer and its mask @%ix', async (dpr, density) => {
+      Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: dpr })
+      const loaded: string[] = []
+      vi.mocked(HTMLImageElement.prototype.decode).mockImplementation(function (this: HTMLImageElement) {
+        loaded.push(this.src)
+        return Promise.resolve()
+      })
+      const file = `tint_stub_dpr_${String(dpr).replace('.', '_')}`
+      const tint: TintRef = { mask: `${file}_hairmask`, colour: '#123456', meanL: 0.4 }
+      const { result } = renderHook(() => useTintedLayer('/avatar/', { order: 60, file, tints: [tint] }))
+      await waitFor(() => expect(result.current).not.toBeNull())
+      expect(loaded).toEqual([`/avatar/${file}@${density}x.png`, `/avatar/${file}_hairmask@${density}x.png`].map((p) => new URL(p, document.baseURI).href))
+    })
+
+    it('paints from @1x at any device pixel ratio when the caller asks for density 1 (a small portrait, Ruling 16)', async () => {
+      Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 3 })
+      const loaded: string[] = []
+      vi.mocked(HTMLImageElement.prototype.decode).mockImplementation(function (this: HTMLImageElement) {
+        loaded.push(this.src)
+        return Promise.resolve()
+      })
+      const file = 'tint_stub_dpr_forced_1x'
+      const tint: TintRef = { mask: `${file}_hairmask`, colour: '#123456', meanL: 0.4 }
+      const { result } = renderHook(() => useTintedLayer('/avatar/', { order: 60, file, tints: [tint] }, undefined, 1))
+      await waitFor(() => expect(result.current).not.toBeNull())
+      expect(loaded).toEqual([`/avatar/${file}@1x.png`, `/avatar/${file}_hairmask@1x.png`].map((p) => new URL(p, document.baseURI).href))
+    })
   })
 
   it('retries a render whose mask failed to load after a 2D context was available, instead of caching the failure', async () => {

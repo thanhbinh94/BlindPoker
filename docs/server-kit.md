@@ -130,9 +130,12 @@ Three further rules the implementation must honor:
   player balances and went to no player. Normal writes a
   `point_transactions` row with a null `player_id`; the in-memory
   repositories push the meta onto `repos.sinks`. `meta.kind` is
-  `'table_fee'` (the rake of a settled hand, `refId` = handId) or
-  `'carry_over'` (the indivisible remainder of a released carry-over pot,
-  or the whole pot when nobody was seated, `refId` = roomId). A hand
+  `'table_fee'` (the rake of a settled Hold'em hand, `refId` = handId;
+  Blind takes no fee since Plan 27), `'carry_over'` (the indivisible
+  remainder of a released carry-over pot, or the whole pot when nobody was
+  seated, `refId` = roomId) or `'shop'` (Normal only, Plan 27: the points a
+  purchase took, written by `creditWithin` with `refId` = the item id, so
+  `TxReason` also gains `shop_purchase` for the player's own row). A hand
   settles no player entries in either mode (chips move on the table), so
   its fee arrives as `apply([], { kind: 'table_fee', ... })` — an empty
   batch that exists purely to write the sink row.
@@ -247,17 +250,33 @@ A seat plays from a stack taken out of the balance at `SIT_DOWN` (a
 `buy_in` row, `refId` = roomId), in both modes: Hold'em brings the buy-in
 the player chose, Blind brings the table limit `blindTableLimit(rules)`
 (5 × the wager) — or the whole balance when that is less, as long as it
-covers one hand (`blindRequiredStack`; below that the answer is
-`INSUFFICIENT_BALANCE`). The room pushes `BALANCE` right after the buy-in.
-Hands move only table stacks; every way off a seat (stand, leave, kick,
-reconnect expiry, sat out too long, shutdown) writes the stack back as a
-`cash_out`. When a hand ends, a human seat whose stack can no longer cover
-a hand is stood up the same way and stays in the room to watch; in Blind
-the player alone is sent `NOTIFICATION { kind: 'TABLE_LIMIT_SPENT',
-payload: { roomId, limit, amount } }`, where `amount` is what went back to
-the balance (possibly 0). Sitting again is a fresh buy-in. Bots play from a
-virtual stack of the limit, topped back up before a hand when it falls
-short, and never touch the ledger.
+covers **one** wager, in both decision modes (Plan 27 D2; below that the
+answer is `INSUFFICIENT_BALANCE`, and the client's hint quotes one wager).
+The room pushes `BALANCE` right after the buy-in. Hands move only table
+stacks; every way off a seat (stand, leave, kick, reconnect expiry, sat out
+too long, shutdown) writes the stack back as a `cash_out`.
+
+**Playing to zero (Plan 27 D1/D2, spec 2026-10-21 Part D).** A Blind table
+takes no fee (`ECONOMY.blindTableFeeRate` is 0, so a Blind hand writes no
+`table_fee` sink) and deals every seat with a stack above 0:
+`requiredStack()` is 1 in both modes. A seat short of the wager antes what
+it has and is all in; in play-or-fold a seat the ante emptied is played for
+it — decided `play` at the deal, never asked, never timed out, and counted
+neither way towards the three timeouts that stand a player up — and a seat
+short for the second commit plays the rest of its stack ("Tất tay N" on the
+button). An all-in seat wins only the pots it matched; when every seat that
+covered a short one folds, each folder's excess above the highest live
+commitment goes back to the folder (`returnDeadExcess` in core, ahead of
+`settle`). When a hand ends, a human seat at exactly 0 — in **either** mode,
+so a busted Hold'em seat too — is stood up (`standUpSpent`: nothing to cash
+out, no ledger row) and stays in the room to watch; the player alone is sent
+`NOTIFICATION { kind: 'STACK_SPENT', payload: { roomId, threshold } }`,
+where `threshold` is `ECONOMY.reliefThreshold`, so the toast can point at
+Cứu trợ. A player who chose to stand or leave in that hand gets no notice.
+`TABLE_LIMIT_SPENT` is gone: no seat is ever stood up with points left.
+Sitting again is a fresh buy-in. Bots play from a virtual stack of the
+limit, play a short stack all in like a human, are topped back up only once
+it is spent, and never touch the ledger.
 
 ### Carry-over pots (spec §8.4)
 
@@ -267,15 +286,18 @@ whenever the table stops being able to use it — when the room has been
 unable to start a hand for `carryOverReleaseMs` (the timer is armed each
 time the room falls back to `OPEN` and cancelled as soon as a hand
 starts), when the room closes, and on `shutdown()`. The pot is split
-evenly among the seated humans (regardless of stack) and the pot's
-claimants still in the room, each person counted once; the indivisible
+evenly among the seated humans (regardless of stack); the indivisible
 remainder — or the whole pot, when there is nobody to pay — is recorded
 as a `carry_over` sink row rather than being handed to an arbitrary
-player. A claimant is a human `standUpSpent` stood up for a spent table
-limit while the pot was carried: their antes are in it, so they are paid
-as if still seated. The claim ends when the pot goes into a new hand
-(`startHand` takes it as `carryOverIn`), when it is released, or when
-the claimant leaves the room.
+player. Until Plan 27 a human stood up for a spent table limit while the
+pot was carried stayed a *claimant* on it; that path is deleted (Ruling 14):
+every seat is now dealt with at least 1 point and an emptied seat is played
+for it, so an all-fold hand always leaves each folder with points and
+nobody reaches 0 while a pot is carried (`room-hands.test.ts` → "an
+all-fold table plays its last wagers all in, so the carried-over pot goes
+to a seat and never to the house"). The pot goes into the next hand as
+`carryOverIn` and, in that hand, into the main pot, so a short all-in seat
+is eligible for it (spec R19).
 
 ### The squeeze round (spec 2026-10-08)
 

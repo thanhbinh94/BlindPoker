@@ -10,6 +10,7 @@ import { LedgerPanel } from './LedgerPanel.js'
 import { formatDay, formatMoment, formatSigned } from './format.js'
 import s from './normal.module.css'
 import { refusalText } from './refusal.js'
+import { ReputationLine } from './ReputationLine.js'
 import { useAsync } from './useAsync.js'
 
 /** §19.2 serves the last twenty hands by default, and twenty is what a profile page is for. */
@@ -265,6 +266,7 @@ export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenPr
             {badgeId === undefined || badgeId === '' ? null : <Badge tone="teal">{itemName(badgeId, t)}</Badge>}
           </p>
           <p className={s.footnote}>{t('profile.memberSince', { date: formatDay(me.createdAt, lang) })}</p>
+          <ReputationLine standing={me} lang={lang} />
           <p className={s.balanceLine}>
             <span className={s.rowMeta}>{t('profile.balance')}</span>
             <span className={s.balance}>{balanceText}</span>

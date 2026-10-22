@@ -51,6 +51,13 @@ const reasonOf = (payload: unknown): string | null => {
   return typeof reason === 'string' ? reason : null
 }
 
+/** A numeric payload field — `rank` (a `RANK_UP`), `threshold` — under the same one-named-field rule. */
+const numberOf = (payload: unknown, key: 'rank' | 'threshold'): number | null => {
+  if (typeof payload !== 'object' || payload === null || !(key in payload)) return null
+  const value = (payload as Record<string, unknown>)[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
 /**
  * The one place the screens speak up: a bottom-right stack of lacquered slips. Errors are assertive (`role="alert"`,
  * red edge), notifications are polite (`role="status"`, gold edge) — the colour is never the only signal, each slip
@@ -75,13 +82,17 @@ export function Toasts({ error, notifications, onClearError, onDismiss, lang }: 
 
   const describe = (n: ClientNotification): string => {
     const amount = amountOf(n.payload)
-    // A spent table limit with nothing left over has no "went back to your balance" to report (spec 2026-09-29).
-    const key = n.kind === 'TABLE_LIMIT_SPENT' && amount === 0 ? 'notify.TABLE_LIMIT_SPENT_none' : `notify.${n.kind}`
+    const key = `notify.${n.kind}`
+    // A rank travels as its number and is read out as its name (Plan 27): "Bạn vừa lên bậc Cao thủ".
+    const rank = numberOf(n.payload, 'rank')
+    const threshold = numberOf(n.payload, 'threshold')
     return t(key, {
       defaultValue: t('notify.other'),
       amount: amount === null ? '' : formatPoints(amount, lang),
       id: idOf(n.payload) ?? '',
       reason: reasonOf(n.payload) ?? '',
+      rank: rank === null ? '' : t(`rank.${rank}`, { defaultValue: String(rank) }),
+      threshold: threshold === null ? '' : formatPoints(threshold, lang),
     })
   }
 

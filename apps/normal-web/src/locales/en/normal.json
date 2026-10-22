@@ -52,9 +52,10 @@
   },
   "daily": {
     "title": "Daily check-in",
-    "lead": "Once a day. The longer the streak the larger the reward, and a new month starts the streak again at day 1.",
+    "lead": "Once a day. Your Nth check-in of the month takes tile N, so no streak is needed and a missed day loses no tile. A new month starts again at tile 1.",
     "error": "Your check-in calendar could not be loaded",
-    "streak": "Current streak: {{streak}} days",
+    "summaryCount": "Check-in {{day}} of {{month}} · no streak needed",
+    "daysLeft": "{{days}} days left this month for {{cells}} tiles",
     "resetsAt": "The next day begins at {{at}}",
     "reward": "Today's reward: {{amount}}",
     "claim": "Claim",
@@ -75,7 +76,26 @@
       "item": "Item",
       "fallback": "This tier had no new item left for you — {{amount}} instead of an item.",
       "balance": "New balance",
-      "streak": "Streak after this claim: {{streak}} days"
+      "streak": "Check-in {{streak}} of the month",
+      "newcomer": {
+        "title": "First week",
+        "day": "Day {{day}}/7",
+        "item": "First-week gift",
+        "fallback": "You already own every item of this step — {{amount}} instead.",
+        "reputation": "Reputation",
+        "reputationValue": "+{{amount}}",
+        "finished": "You have finished your first week."
+      }
+    },
+    "newcomer": {
+      "title": "First week",
+      "lead": "Your first seven check-ins carry extra gifts. Missing a day loses nothing.",
+      "day": "Day {{day}}",
+      "today": "Today",
+      "claimed": "Claimed",
+      "locked": "Not yet",
+      "common": "1 common item",
+      "rare": "1 rare item +{{amount}} reputation"
     },
     "errors": {
       "ALREADY_CLAIMED": "Today's reward has already been claimed, possibly on another device. The calendar has been reloaded."
@@ -94,7 +114,7 @@
         "other": "Relief is not available right now."
       }
     },
-    "calendarLead": "Points for each day of the streak; a gift means an item comes with them."
+    "calendarLead": "Points for each tile, where tile N is your Nth check-in of the month; a gift means an item comes with them."
   },
   "settings": {
     "title": "Settings",
@@ -132,7 +152,113 @@
     "title": "Game master",
     "copyId": "Copy id",
     "copied": "Copied",
-    "tabs": { "overview": "Overview", "players": "Players", "rooms": "Rooms", "gifts": "Gift months", "actions": "Log" },
+    "tabs": { "overview": "Overview", "players": "Players", "rooms": "Rooms", "gifts": "Gift months", "shop": "Shop", "actions": "Log" },
+    "shop": {
+      "lead": "Prices, the week's shelf and the welcome gift apply from the next purchase. Every save needs a reason and goes into the Log.",
+      "error": "Could not load the shop settings",
+      "slot": {
+        "hairStyle": "Hairstyle",
+        "head": "Hat",
+        "face": "Face accessory",
+        "outfit": "Outfit",
+        "aura": "Aura",
+        "frame": "Frame",
+        "hairColor": "Hair colour",
+        "eyeColor": "Eye colour",
+        "skinColor": "Skin tone",
+        "title": "Title",
+        "badge": "Badge"
+      },
+      "lock": {
+        "achievement": "🏆 Achievement: {{name}}",
+        "gift_month": "📅 Gift of {{month}}",
+        "gift_default": "📅 Check-in gift",
+        "free": "Free",
+        "default": "Default item",
+        "disabled": "Switched off",
+        "unpriced": "Not priced",
+        "none": "On sale"
+      },
+      "prices": {
+        "title": "Prices",
+        "filterSlot": "Slot",
+        "filterRarity": "Rarity",
+        "all": "All",
+        "colItem": "Item",
+        "colRarity": "Rarity",
+        "colLock": "Status",
+        "colPrice": "Price (points)",
+        "colRank": "Minimum rank",
+        "colEnabled": "Sell",
+        "priceOf": "Price of {{item}}",
+        "rankOf": "Minimum rank for {{item}}",
+        "enabledOf": "Sell {{item}}",
+        "rankOption": "{{n}} · {{rank}}",
+        "unpriced": "not priced",
+        "empty": "No item matches the filter.",
+        "changed": "{{count}} rows changed, not saved.",
+        "invalid": "A price is a whole number from 0 to 1,000,000,000.",
+        "invalidItems": "Fix the price of: {{items}}.",
+        "save": "Save prices",
+        "saveTitle": "Save {{count}} price changes",
+        "achievementNote": "Switching on an achievement's item or a month's gift does not put it on sale: the label beside it says why."
+      },
+      "featured": {
+        "title": "This week's shelf",
+        "week": "Week",
+        "weekOption": "Week {{week}}/{{year}}",
+        "current": "(this week)",
+        "edited": "(arranged)",
+        "auto": "This week is not arranged: the shelf rotates on its own, as below. Add an item to arrange it.",
+        "picked": "{{count}}/6 picked",
+        "items": "Items on the shelf",
+        "pick": "Pick an item",
+        "add": "Add item",
+        "remove": "Remove",
+        "full": "The shelf holds 6 items: remove one before adding another.",
+        "save": "Save shelf",
+        "clear": "Back to rotation",
+        "saveTitle": "Save the shelf — {{week}}",
+        "clearTitle": "Back to rotation — {{week}}"
+      },
+      "welcome": {
+        "title": "Welcome gift",
+        "lead": "The three items a new player picks one of on their first visit to the lobby: an outfit, hat, face accessory, aura or frame that is on sale.",
+        "choice": "Item {{n}}",
+        "pick": "Pick an item",
+        "needThree": "Pick exactly three different items.",
+        "save": "Save welcome gift",
+        "saveTitle": "Save the three welcome items"
+      }
+    },
+    "reputation": {
+      "title": "Reputation",
+      "rulesTitle": "Reputation sources",
+      "ranksTitle": "Ranks",
+      "colSource": "Source",
+      "colAmount": "Reputation",
+      "colRank": "Rank",
+      "colThreshold": "Threshold",
+      "amountOf": "Reputation for: {{rule}}",
+      "thresholdOf": "Threshold of {{rank}}",
+      "rule": {
+        "hand_played": "A hand dealt in",
+        "hand_won": "A hand won (on top)",
+        "daily_login": "A day checked in",
+        "achievement_small": "Small achievement (up to 5,000 points)",
+        "achievement_big": "Big achievement (over 5,000 points)",
+        "achievement_item": "Achievement with an item",
+        "welcome": "Picking the welcome gift",
+        "newcomer_day7": "Day 7 of the newcomer calendar"
+      },
+      "invalidRules": "Each source is a whole number from 0 to 100,000.",
+      "invalidRanks": "Each threshold is a whole number from 0 to 1,000,000,000.",
+      "ranksNote": "Rank 1 always starts at 0 and the thresholds must rise. Raising a threshold never takes a rank away.",
+      "saveRules": "Save sources",
+      "saveRanks": "Save ranks",
+      "rulesDialog": "Save the reputation sources",
+      "ranksDialog": "Save the rank thresholds"
+    },
     "gifts": {
       "month": "Month",
       "edited": "(edited)",
@@ -180,7 +306,9 @@
       "colNet": "Net",
       "colBar": "Share",
       "byDayEmpty": "No transactions in this range.",
-      "byDayError": "Could not load the figures by day"
+      "byDayError": "Could not load the figures by day",
+      "reputation": "Reputation, players at each rank: {{counts}}",
+      "rankCount": "{{rank}} {{n}}"
     },
     "players": {
       "search": "Search by email or name",
@@ -211,7 +339,8 @@
       "balance": "Balance",
       "role": "Role",
       "error": "Could not load this player",
-      "roles": { "gm": "Game master", "player": "Player" }
+      "roles": { "gm": "Game master", "player": "Player" },
+      "reputation": "Reputation: {{points}} ({{rank}})"
     },
     "actions": {
       "points": "Add or remove points",
@@ -223,12 +352,15 @@
       "demote": "Remove game master rights",
       "unlockAchievement": "Unlock achievement",
       "resetCheckin": "Reset check-in",
+      "grantReputation": "Add reputation",
       "kick": "Remove from room",
       "close": "Close room"
     },
     "dialog": {
       "reason": "Reason (required, 3–200 characters)",
       "amount": "Points (negative to deduct, at most ±10,000,000)",
+      "reputationAmount": "Reputation to add (1–100,000)",
+      "reputationBody": "Reputation is only ever added; it cannot be taken back.",
       "item": "Item id",
       "achievement": "Achievement",
       "checkinBody": "Undo today's check-in: take back {{points}} points and {{items}}; the streak is kept and the player can claim again at once.",
@@ -288,7 +420,13 @@
         "unlock_achievement": "Unlock achievement",
         "reset_checkin": "Reset check-in",
         "set_gift_month": "Set gift month",
-        "clear_gift_month": "Clear gift month"
+        "clear_gift_month": "Clear gift month",
+        "grant_reputation": "Add reputation",
+        "set_reputation_rules": "Change reputation sources",
+        "set_reputation_ranks": "Change rank thresholds",
+        "set_shop_prices": "Change shop prices",
+        "set_shop_featured": "Arrange the week's shelf",
+        "set_welcome_choices": "Change the welcome gift"
       }
     },
     "done": {
@@ -304,7 +442,13 @@
       "kick": "Removed ({{when}})",
       "kickNow": "now",
       "kickAfterHand": "after this hand",
-      "close": "Room closed, refunded {{count}} players"
+      "close": "Room closed, refunded {{count}} players",
+      "grantReputation": "Reputation added: {{points}} ({{rank}})",
+      "shopPrices": "Saved {{count}} prices.",
+      "shopFeatured": "Shelf saved.",
+      "welcome": "Welcome gift saved.",
+      "reputationRules": "Reputation sources saved.",
+      "reputationRanks": "Rank thresholds saved."
     },
     "errors": {
       "INVALID_REASON": "The reason must be 3–200 characters",
@@ -328,10 +472,18 @@
       "MONTH_IN_PAST": "That month is over.",
       "INVALID_GIFTS": "Invalid gift schedule: {{message}}",
       "NOTHING_TO_CLEAR": "This month has no edits.",
-      "INVALID_MONTH": "Invalid month."
+      "INVALID_MONTH": "Invalid month.",
+      "INVALID_PRICES": "Invalid prices: {{message}}",
+      "INVALID_FEATURED": "Invalid shelf: {{message}}",
+      "INVALID_WELCOME": "Invalid welcome gift: {{message}}",
+      "INVALID_RULES": "Invalid reputation sources: {{message}}",
+      "INVALID_RANKS": "Invalid rank thresholds: {{message}}",
+      "INVALID_WEEK": "Invalid week.",
+      "WEEK_IN_PAST": "That week is over."
     },
     "notice": {
       "points": "{{amount}} points — {{reason}}",
+      "reputation": "{{amount}} reputation — {{reason}}",
       "item": "{{item}} — {{reason}}",
       "promote": "You are now a game master — {{reason}}",
       "demote": "Your game-master role was removed — {{reason}}",
@@ -353,6 +505,8 @@
     "title": "Profile",
     "memberSince": "Member since {{date}}",
     "balance": "Balance",
+    "reputation": "Reputation {{points}} · {{rank}} · {{left}} to {{next}}",
+    "reputationTop": "Reputation {{points}} · {{rank}}",
     "noTitle": "No title yet",
     "toAvatar": "Edit wardrobe",
     "toAchievements": "Achievements",
@@ -427,6 +581,8 @@
       "gm_adjust": "Points taken by the game master",
       "gm_achievement": "GM unlocked an achievement",
       "gm_checkin_undo": "GM undid a check-in",
+      "shop_purchase": "Shop purchase",
+      "shop": "Shop (sink)",
       "other": "Other"
     }
   },
@@ -546,6 +702,77 @@
     "rename": "Rename",
     "delete": "Delete",
     "error": "Could not complete that action — please try again"
+  },
+  "welcome": {
+    "title": "Welcome to Blind Luck Poker",
+    "lead": "Pick an item to start with",
+    "leadAllOwned": "You already own all three welcome gifts, so take the reputation instead.",
+    "choices": "Welcome gifts",
+    "owned": "✓ Owned",
+    "claim": "Take it",
+    "claimReputationOnly": "Take {{amount}} reputation",
+    "later": "Later",
+    "close": "Close",
+    "start": "Let's play",
+    "done": "{{item}} is in your wardrobe, +{{amount}} reputation",
+    "doneReputationOnly": "{{amount}} reputation added",
+    "lobbyButton": "🎁 Welcome gift",
+    "refusal": {
+      "ALREADY_OWNED": "You already own this one — pick another",
+      "NOT_A_CHOICE": "This item is no longer a welcome gift — pick another"
+    }
+  },
+  "shop": {
+    "title": "Shop",
+    "lobbyLinks": "Wardrobe and shop",
+    "featured": "This week's shelf",
+    "week": "Week {{week}}/{{year}}",
+    "shelves": "By rarity",
+    "slotFilter": "Filter by slot",
+    "slot": {
+      "all": "All",
+      "colour": "Colours"
+    },
+    "empty": "Nothing on this shelf yet",
+    "figure": "Your character",
+    "balance": "Balance: {{points}} points",
+    "trying": "Trying on: {{item}}",
+    "reset": "Back to my outfit",
+    "wearNow": "Wear it now",
+    "worn": "Your character is wearing it.",
+    "buy": "Buy",
+    "buyPrice": "Buy · {{price}}",
+    "price": "{{price}} points",
+    "short": "{{amount}} points short",
+    "needRank": "🔒 needs {{rank}}",
+    "owned": "✓ Owned",
+    "wear": "Wear",
+    "wearLabel": "Wear {{item}} in the wardrobe",
+    "lock": {
+      "achievement": "🏆 Achievement: {{name}}",
+      "giftMonth": "📅 Gift of {{month}}",
+      "giftDefault": "📅 Check-in gift",
+      "free": "Free — already in your wardrobe",
+      "default": "Not for sale",
+      "disabled": "Not for sale",
+      "unpriced": "Not for sale"
+    },
+    "confirmTitle": "Buy this item?",
+    "confirm": "Buy {{item}} for {{price}} points? {{left}} left.",
+    "cancel": "Cancel",
+    "close": "Close",
+    "bought": "{{item}} is in your wardrobe",
+    "retry": "Not sure the purchase went through. Press Buy again: you will not be charged twice.",
+    "failed": "Couldn't do that, please try again",
+    "error": "Could not load the shop",
+    "refusal": {
+      "SHOP_DISABLED": "This item is not for sale right now",
+      "RANK_TOO_LOW": "Your rank is too low for this item",
+      "ALREADY_OWNED": "You already own this item",
+      "INSUFFICIENT_POINTS": "You do not have enough points for this item",
+      "PURCHASE_UNDONE": "That purchase was undone. Open it again to buy once more.",
+      "UNKNOWN_ITEM": "This item does not exist"
+    }
   },
   "items": {
     "head_beanie01": "Beanie",

@@ -46,8 +46,8 @@ Caddy là service duy nhất có cổng, và đó là chủ ý.
 ## 2. Lần triển khai đầu tiên
 
 ```bash
-git clone <repository này> /srv/bind-poker
-cd /srv/bind-poker/deploy/normal
+git clone <repository này> /opt/bind-poker
+cd /opt/bind-poker/deploy/normal
 cp .env.example .env
 $EDITOR .env
 ```
@@ -137,7 +137,7 @@ chọn `Promise.all` hay chạy nối đuôi đúng theo điều kiện này, v�
 có CI trong repository này. Vậy nên: hãy tự chạy nó một lần và lưu lại output.
 
 ```bash
-cd /srv/bind-poker
+cd /opt/bind-poker
 
 # 1. Dựng riêng service `db` (cần deploy/normal/.env cho POSTGRES_PASSWORD).
 docker compose -f deploy/normal/docker-compose.yml up -d db
@@ -268,7 +268,7 @@ deployment có thể đặt tất cả bằng biến container và không cần 
 ## 5. Vận hành hằng ngày
 
 ```bash
-cd /srv/bind-poker/deploy/normal
+cd /opt/bind-poker/deploy/normal
 
 docker compose ps                    # cái gì đang chạy, và sức khoẻ ra sao
 docker compose logs -f app           # mỗi dòng một object JSON, ra stdout
@@ -294,7 +294,7 @@ xem và đóng phòng, xem nhật ký. GM đầu tiên chỉ có thể do bạn 
 khác trong game được. Tài khoản phải **đã đăng ký** trên trang web trước, rồi chạy:
 
 ```bash
-cd /srv/bind-poker/deploy/normal
+cd /opt/bind-poker/deploy/normal
 docker compose exec app node dist/grant-gm-cli.js ten@example.com             # trao quyền
 docker compose exec app node dist/grant-gm-cli.js ten@example.com --revoke    # thu quyền
 ```
@@ -343,7 +343,7 @@ Nếu truy vấn cuối trả về dòng nào, log của app cũng có một dò
 ## 6. Sao lưu
 
 ```bash
-cd /srv/bind-poker/deploy/normal
+cd /opt/bind-poker/deploy/normal
 ./backup.sh
 ```
 
@@ -361,7 +361,7 @@ BACKUP_DIR=/var/backups/bind-poker ./backup.sh
 Chạy hằng ngày, 03:15:
 
 ```cron
-15 3 * * * cd /srv/bind-poker/deploy/normal && BACKUP_DIR=/var/backups/bind-poker ./backup.sh >> /var/log/bind-poker-backup.log 2>&1
+15 3 * * * cd /opt/bind-poker/deploy/normal && BACKUP_DIR=/var/backups/bind-poker ./backup.sh >> /var/log/bind-poker-backup.log 2>&1
 ```
 
 (Thư mục `backups/` mặc định và `backup.log` đều đã nằm trong `.gitignore`, nhưng chúng vẫn là bản
@@ -385,9 +385,9 @@ Khôi phục: [`../deploy/normal/restore.md`](../deploy/normal/restore.md). Đ�
 ## 7. Nâng cấp
 
 ```bash
-cd /srv/bind-poker/deploy/normal
+cd /opt/bind-poker/deploy/normal
 ./backup.sh                          # 1. luôn luôn, và ngay trước khi nâng cấp
-git -C /srv/bind-poker pull          # 2.
+git -C /opt/bind-poker pull          # 2.
 docker compose up -d --build         # 3. build lại, chạy lại migrate, tạo lại app
 docker compose logs -f app
 ```
@@ -403,6 +403,40 @@ nếu có thể.
 
 **Không có down-migration.** Lùi lại nghĩa là khôi phục bản dump ở bước 1 rồi chạy image cũ; quy
 trình nằm ở cuối `restore.md`. Đó là lý do bước 1 không phải tuỳ chọn.
+
+### Lần nâng cấp lên Plan 27: tính danh vọng từ lịch sử
+
+Plan 27 thêm danh vọng và bậc (migration `0006_plan27`). Migration chỉ tạo bảng, nên mọi tài khoản cũ bắt đầu ở 0. Ngay
+sau bước 3 ở trên (đã `backup.sh` ở bước 1, `app` đã lên), chạy **một lần** lệnh tính lại danh vọng từ lịch sử — trước
+hết chạy thử, rồi chạy thật:
+
+```bash
+cd /opt/bind-poker/deploy/normal
+curl -fsS https://$DOMAIN/health                                         # chờ tới khi "rooms":0
+docker compose exec app node dist/reputation-backfill-cli.js --dry-run   # chỉ tính, không ghi gì
+docker compose exec app node dist/reputation-backfill-cli.js             # ghi thật
+```
+
+Mỗi lần in một dòng `players=<số tài khoản xét> applied=<tổng danh vọng cộng thêm> ranks=[b1,b2,b3,b4,b5]` (số người ở
+từng bậc 1..5 sau lần chạy); lần chạy thử in thêm tiền tố `(dry run) ` ở đầu dòng, ví dụ
+`(dry run) players=42 applied=18350 ranks=[30,8,3,1,0]`. Danh vọng của mỗi người = số ván đã chơi × `hand_played` + số
+ván thắng × `hand_won` + số ngày điểm danh × `daily_login` + phần thưởng của từng thành tựu đã mở, theo bảng
+`reputation_rules` đang lưu; trừ đi những gì server đã cộng cho ván, lần điểm danh và thành tựu kể từ khi `app` lên (quà
+chào mừng, lịch tân thủ và danh vọng GM cộng thì **không** bị trừ). Lệnh đọc `DATABASE_URL` của container `app`; thoát 0
+khi xong, 2 khi thiếu `DATABASE_URL` hoặc gõ sai tham số (in dòng hướng dẫn, không ghi gì), 1 khi lỗi. Chạy lại không cộng thêm gì cho người đã được tính (mỗi người có đúng
+một dòng `reputation_events` lý do `backfill`, `ref_id = 'plan27'`), nên lỡ chạy hai lần cũng không sao. Lệnh không gửi
+thông báo lên bậc.
+
+**Chạy một lần, lúc vắng, không bao giờ sau khi GM đổi nguồn danh vọng.**
+
+- **Lúc vắng:** `/health` báo `"rooms":0`. Một ván kết thúc hay một lượt điểm danh rơi đúng vào vài chục ms lệnh đang
+  tính cho chính người đó có thể làm người đó lệch một chút (tối đa khoảng +4 hoặc −10 danh vọng): số đếm trong
+  `player_stats` và các sự kiện sống không được đọc trong cùng một khoảnh khắc. Lệch nhỏ, không đụng tới điểm, và không
+  sửa lại được bằng cách chạy lần nữa (người đó đã có dòng `backfill`).
+- **Không chạy lại sau khi đổi `reputation_rules`:** lệnh nhân lịch sử với số đang lưu. Người đã có dòng `backfill` thì
+  không đổi gì, nhưng người chưa có (lần đầu tính ra 0, tài khoản tạo sau đó, hay một tài khoản lần đầu lỗi giữa chừng)
+  sẽ được tính theo số mới, không cùng thước với những người khác. Nếu cần chạy lại, hãy chạy trước khi GM sửa bảng
+  nguồn.
 
 ---
 

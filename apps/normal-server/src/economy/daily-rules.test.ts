@@ -9,6 +9,8 @@ import {
   itemMarker,
   MAX_STREAK,
   monthKey,
+  NEWCOMER_DAYS,
+  newcomerGiftFor,
   nextDayStartMs,
   nextStreak,
   NO_ITEM_FALLBACK_POINTS,
@@ -62,28 +64,83 @@ describe('day keys', () => {
 })
 
 describe('nextStreak', () => {
+  /** Claims every day of October 2026 (31 days) except `skipped`, and returns the tier each claim paid. */
+  const octoberTiers = (skipped: readonly number[]): number[] => {
+    let state = { streak: 0, consecutive: 0, lastClaimDate: null as string | null }
+    const tiers: number[] = []
+    for (let d = 1; d <= 31; d += 1) {
+      if (skipped.includes(d)) continue
+      const key = `2026-10-${String(d).padStart(2, '0')}`
+      const outcome = nextStreak(state, key)
+      expect(outcome.alreadyClaimed).toBe(false)
+      tiers.push(outcome.day)
+      state = { streak: outcome.streak, consecutive: outcome.consecutive, lastClaimDate: key }
+    }
+    return tiers
+  }
+
   it('starts at day 1 for a player who has never claimed', () => {
-    expect(nextStreak({ streak: 0, lastClaimDate: null }, '2026-09-04')).toEqual({ alreadyClaimed: false, streak: 1, day: 1, points: 5_000 })
+    expect(nextStreak({ streak: 0, consecutive: 0, lastClaimDate: null }, '2026-09-04')).toEqual({ alreadyClaimed: false, streak: 1, consecutive: 1, day: 1, points: 5_000 })
   })
 
   it('advances when the previous claim was yesterday', () => {
-    expect(nextStreak({ streak: 3, lastClaimDate: '2026-09-03' }, '2026-09-04')).toMatchObject({ alreadyClaimed: false, streak: 4, day: 4 })
+    expect(nextStreak({ streak: 3, consecutive: 3, lastClaimDate: '2026-09-03' }, '2026-09-04')).toMatchObject({ alreadyClaimed: false, streak: 4, consecutive: 4, day: 4 })
   })
 
   it('reports a claim already made today rather than advancing', () => {
-    expect(nextStreak({ streak: 4, lastClaimDate: '2026-09-04' }, '2026-09-04')).toMatchObject({ alreadyClaimed: true, streak: 4, day: 4 })
+    expect(nextStreak({ streak: 4, consecutive: 2, lastClaimDate: '2026-09-04' }, '2026-09-04')).toMatchObject({ alreadyClaimed: true, streak: 4, consecutive: 2, day: 4 })
   })
 
-  it('restarts at 1 after a missed day', () => {
-    expect(nextStreak({ streak: 9, lastClaimDate: '2026-09-02' }, '2026-09-04')).toMatchObject({ streak: 1, day: 1 })
+  it("a missed day keeps the month's count", () => {
+    expect(nextStreak({ streak: 14, consecutive: 5, lastClaimDate: '2026-09-10' }, '2026-09-12')).toMatchObject({
+      alreadyClaimed: false,
+      streak: 15,
+      day: 15,
+      consecutive: 1,
+      points: rewardForDay(15),
+    })
   })
 
-  it('restarts at 1 on the first of a month, even when the days are consecutive', () => {
-    expect(nextStreak({ streak: 14, lastClaimDate: '2026-08-31' }, '2026-09-01')).toMatchObject({ streak: 1, day: 1, points: 5_000 })
+  it('three missed days in a 31-day month still reach tier 28, four do not', () => {
+    const three = octoberTiers([3, 11, 20])
+    expect(three).toHaveLength(28)
+    expect(three.at(-1)).toBe(28)
+    expect(three).toEqual(Array.from({ length: 28 }, (_, i) => i + 1))
+
+    const four = octoberTiers([3, 11, 20, 30])
+    expect(four.at(-1)).toBe(27)
+    expect(four).not.toContain(28)
+  })
+
+  it('consecutive survives a month boundary: 2026-08-31 → 2026-09-01 gives day 1, consecutive +1', () => {
+    expect(nextStreak({ streak: 14, consecutive: 20, lastClaimDate: '2026-08-31' }, '2026-09-01')).toMatchObject({ streak: 1, day: 1, consecutive: 21, points: 5_000 })
+    // A gap across the boundary restarts both.
+    expect(nextStreak({ streak: 14, consecutive: 20, lastClaimDate: '2026-08-30' }, '2026-09-01')).toMatchObject({ streak: 1, day: 1, consecutive: 1 })
+  })
+
+  // A clock that ran ahead once (a host whose time was corrected backwards) leaves a last claim *after* today. Neither
+  // case throws; a later month starts the tier over, a later day of the same month counts one more claim, and the
+  // consecutive run restarts in both.
+  it('a last claim in a later month (clock skew) restarts the tier and the run', () => {
+    expect(nextStreak({ streak: 9, consecutive: 9, lastClaimDate: '2026-11-02' }, '2026-10-30')).toMatchObject({
+      alreadyClaimed: false,
+      streak: 1,
+      consecutive: 1,
+      day: 1,
+    })
+  })
+
+  it('a last claim later in the same month (clock skew) counts one more claim and restarts the run', () => {
+    expect(nextStreak({ streak: 9, consecutive: 9, lastClaimDate: '2026-10-20' }, '2026-10-18')).toMatchObject({
+      alreadyClaimed: false,
+      streak: 10,
+      consecutive: 1,
+      day: 10,
+    })
   })
 
   it('caps the streak at 31', () => {
-    expect(nextStreak({ streak: MAX_STREAK, lastClaimDate: '2026-03-30' }, '2026-03-31')).toMatchObject({ streak: 31, day: 31 })
+    expect(nextStreak({ streak: MAX_STREAK, consecutive: 40, lastClaimDate: '2026-03-30' }, '2026-03-31')).toMatchObject({ streak: 31, day: 31, consecutive: 41 })
   })
 })
 
@@ -140,6 +197,16 @@ describe('the reward table', () => {
 
   it('substitutes 10,000 points when a tier has nothing left', () => {
     expect(NO_ITEM_FALLBACK_POINTS).toBe(10_000)
+  })
+})
+
+describe('newcomerGiftFor', () => {
+  it('gives a common on day 3, a rare on day 7, and nothing on the other days of the seven', () => {
+    expect(NEWCOMER_DAYS).toBe(7)
+    const gifts = Array.from({ length: NEWCOMER_DAYS }, (_, i) => newcomerGiftFor(i + 1))
+    expect(gifts).toEqual([null, null, 'common', null, null, null, 'rare'])
+    expect(newcomerGiftFor(0)).toBeNull()
+    expect(newcomerGiftFor(8)).toBeNull()
   })
 })
 

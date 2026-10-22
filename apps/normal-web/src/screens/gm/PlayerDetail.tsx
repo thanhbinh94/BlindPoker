@@ -24,6 +24,7 @@ type ActionKind =
   | 'demote'
   | 'unlockAchievement'
   | 'resetCheckin'
+  | 'grantReputation'
 
 /** What each action asks for besides the reason, and the sentence of consequence shown above the form. */
 const ACTIONS: Record<ActionKind, { fields: { amount?: boolean; item?: boolean; achievement?: boolean }; body?: string }> = {
@@ -37,7 +38,12 @@ const ACTIONS: Record<ActionKind, { fields: { amount?: boolean; item?: boolean; 
   unlockAchievement: { fields: { achievement: true } },
   // Its sentence names the points and items, so it is computed from the preview rather than keyed.
   resetCheckin: { fields: {} },
+  // Its amount is a range with its own label (1..100 000, never a deduction), set where the dialog opens.
+  grantReputation: { fields: { amount: true }, body: 'gm.dialog.reputationBody' },
 }
+
+/** The most reputation one grant may add; the server refuses past it too. */
+export const MAX_REPUTATION_GRANT = 100_000
 
 export interface PlayerDetailProps extends GmTabProps {
   playerId: string
@@ -65,6 +71,7 @@ export function PlayerDetail({ api, lang, playerId, onBack }: PlayerDetailProps)
   /** Bumped by every successful action; the ledger is keyed on it, so it starts over from the newest row. */
   const [ledgerKey, setLedgerKey] = useState(0)
   const player = detail.data
+  const rankName = (rank: number): string => t(`game:rank.${rank}`, { defaultValue: String(rank) })
 
   const perform = async (kind: ActionKind, values: ReasonValues): Promise<string> => {
     switch (kind) {
@@ -101,6 +108,11 @@ export function PlayerDetail({ api, lang, playerId, onBack }: PlayerDetailProps)
       case 'resetCheckin':
         await api.gmResetCheckin(playerId, values.reason)
         return t('gm.done.resetCheckin')
+      case 'grantReputation': {
+        if (values.amount === undefined) throw new Error('amount')
+        const result = await api.gmGrantReputation(playerId, values.amount, values.reason)
+        return t('gm.done.grantReputation', { points: formatPoints(result.reputation, lang), rank: rankName(result.rank) })
+      }
     }
   }
 
@@ -174,6 +186,7 @@ export function PlayerDetail({ api, lang, playerId, onBack }: PlayerDetailProps)
             {player.room === null ? t('gm.player.notInRoom') : t('gm.player.inRoom', { name: player.room.name, code: player.room.code })}
           </p>
           <p className={g.lockNote}>{t('gm.player.inventory', { count: player.inventoryCount })}</p>
+          <p className={g.lockNote}>{t('gm.player.reputation', { points: formatPoints(player.reputation, lang), rank: rankName(player.rank) })}</p>
           {player.locked === null ? null : (
             <p className={`${s.alert} ${g.lockNote}`}>
               {t('gm.player.lockedSince', { at: formatMoment(player.locked.at, lang), reason: player.locked.reason })}
@@ -216,6 +229,9 @@ export function PlayerDetail({ api, lang, playerId, onBack }: PlayerDetailProps)
               onClick={() => open('resetCheckin')}
             >
               {t('gm.actions.resetCheckin')}
+            </Button>
+            <Button variant="ghost" onClick={() => open('grantReputation')}>
+              {t('gm.actions.grantReputation')}
             </Button>
           </div>
         </div>
@@ -264,6 +280,10 @@ export function PlayerDetail({ api, lang, playerId, onBack }: PlayerDetailProps)
           body={dialogBody(action)}
           fields={{
             ...ACTIONS[action].fields,
+            amount:
+              action === 'grantReputation'
+                ? { min: 1, max: MAX_REPUTATION_GRANT, label: t('gm.dialog.reputationAmount') }
+                : ACTIONS[action].fields.amount,
             achievement: ACTIONS[action].fields.achievement
               ? { options: catalog.data?.achievements ?? [], disabledIds: new Set(player.unlockedAchievementIds) }
               : undefined,

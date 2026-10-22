@@ -289,8 +289,30 @@ describe('GET /api/players/:id/avatar', () => {
     const other = await h.register(SECOND)
     const res = await h.app.fastify.inject({ url: `/api/players/${other.playerId}/avatar`, headers: { cookie: me.cookie } })
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({ playerId: other.playerId, displayName: 'Mai Lan', avatar: DEFAULT_AVATAR })
+    expect(res.json()).toEqual({ playerId: other.playerId, displayName: 'Mai Lan', avatar: DEFAULT_AVATAR, rank: 1 })
     expect(res.headers['cache-control']).toBe('private, max-age=60')
+  })
+
+  it('me and a player\'s avatar carry rank', async () => {
+    const other = await h.register(SECOND)
+    await db.update(players).set({ reputation: 455, rank: 3 }).where(eq(players.id, other.playerId))
+    const seat = await h.app.fastify.inject({ url: `/api/players/${other.playerId}/avatar`, headers: { cookie: me.cookie } })
+    expect(seat.json()).toMatchObject({ playerId: other.playerId, rank: 3 })
+    // The profile's own body: the number, the rank reached, and the ladder the progress bar is drawn against.
+    const theirs = await h.app.fastify.inject({ url: '/api/me', headers: { cookie: other.cookie } })
+    expect(theirs.json()).toMatchObject({
+      reputation: 455,
+      rank: 3,
+      ranks: [
+        { rank: 1, threshold: 0 },
+        { rank: 2, threshold: 100 },
+        { rank: 3, threshold: 400 },
+        { rank: 4, threshold: 1800 },
+        { rank: 5, threshold: 5000 },
+      ],
+    })
+    const mine = await h.app.fastify.inject({ url: '/api/me', headers: { cookie: me.cookie } })
+    expect(mine.json()).toMatchObject({ reputation: 0, rank: 1 })
   })
 
   it('404s an unknown id — a malformed one included — and 401s a caller with no session', async () => {

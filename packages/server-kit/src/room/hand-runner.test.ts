@@ -108,6 +108,19 @@ describe('HandRunner — blind mode B', () => {
     expect(clock.pending).toBe(0)
   })
 
+  it('a seat the ante emptied is never scheduled as a bot and never timed out', () => {
+    // Seat 1 (a bot) and seat 2 (a human) hold less than the 1.000 ante: both are played all in on the spot (D1).
+    const { clock, runner, all } = setup(BLIND_B, [{ seat: 0, stack: 20000, isBot: false }, { seat: 1, stack: 600, isBot: true }, { seat: 2, stack: 400, isBot: false }], { turnTimerMs: 15_000 })
+    expect(runner.state.phase).toBe('DECISION')
+    expect(clock.pending).toBe(1) // the decision timer alone: no bot timer for the emptied bot
+    expect(all().filter((e) => e.type === 'DECISION_MADE').map((e) => e.type === 'DECISION_MADE' && e.seat)).toEqual([1, 2])
+    clock.advance(15_000) // the deadline times out the one seat still undecided, and only it
+    const acted = all().filter((e): e is Extract<GameEvent, { type: 'PLAYER_ACTED' }> => e.type === 'PLAYER_ACTED')
+    expect(acted.map((e) => [e.seat, e.action.kind, e.timedOut])).toEqual([[0, 'fold', true], [1, 'play', false], [2, 'play', false]])
+    while (!runner.isComplete) clock.advance(1_500)
+    expect(clock.pending).toBe(0)
+  })
+
   it('auto-fold applies during DECISION', () => {
     const { runner } = setup(BLIND_B, [{ seat: 0, stack: 20000, isBot: false }, { seat: 1, stack: 20000, isBot: false }])
     runner.markAutoFold(0)

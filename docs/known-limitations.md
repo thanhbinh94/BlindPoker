@@ -34,8 +34,8 @@ in as many words when a rename succeeds (`apps/normal-web/src/screens/ProfileScr
 adds the player with no seat (`packages/server-kit/src/room/room.ts`, `addPlayer`), so they see the
 live table — every hole card blanked by `playerView`, `packages/core/src/hand/engine.test.ts` →
 "hides every hand from a spectator" — until they take a seat (`packages/ui-kit/src/screens/RoomScreen.tsx`'s `room.sitFirst` line,
-"Chọn một ghế trống để vào chơi."). A Blind seat stood up for a spent table limit goes back to
-watching the same way. What is still missing:
+"Chọn một ghế trống để vào chơi."). A seat stood up because its stack reached 0 (Plan 27,
+`STACK_SPENT`) goes back to watching the same way. What is still missing:
 - **A watcher takes a place.** Room capacity counts every human in the room, seated or not, against
   `maxPlayers` less the seats bots hold, so a table with empty seats can answer `ROOM_FULL` while
   watchers fill the room, and the players count in the lobby and the room header (`n/max`) includes
@@ -74,9 +74,9 @@ sit-out counter.
 
 **A carry-over pot released to the table also pays seats that asked to sit out.** When a Blind room
 cannot start a hand for `carryOverReleaseMs`, the accumulated pot is split across every seated human
-— which since Plan 7 includes seats that have asked to sit out — and, since the table limit, every
-human stood up for a spent limit while that pot was carried who is still in the room
-(`Room.releaseCarryOver`). Money is still exactly conserved — the `Σ balances + Σ sinks` identity is
+— which since Plan 7 includes seats that have asked to sit out (`Room.releaseCarryOver`; the
+"claimants" stood up for a spent table limit, whom rooms also paid from the table limit's spec (2026-09-29) on, are gone since Plan 27,
+Ruling 14, because no seat reaches 0 while a pot is carried). Money is still exactly conserved — the `Σ balances + Σ sinks` identity is
 untouched, and the Blind soak asserts it every run — but a player who declined to play shares a pot
 they were never eligible for.
 *Why it stays:* spec §8.4 predates `SIT_OUT` and says "the seated humans" without qualification, so
@@ -84,6 +84,15 @@ excluding sitters is a rule change rather than a bug fix, and it is a rule chang
 of taking points away from somebody. Ruled a roadmap item rather than a fix in this milestone.
 *Tracked:* here; spec §8.4 needs either the exclusion or a sentence saying seated-but-sitting-out
 still counts.
+
+**One account on two devices: the later one takes the seat, with no "Tiếp quản" prompt and no device list (Plan 27,
+K1).** Signing in on a second device (or a second tab) opens a new socket; the server keeps one connection per player,
+so the earlier one is closed, shows "Đã đăng nhập ở nơi khác" and does not reconnect by itself, while the later one takes over the
+seat and the hand in progress. Nobody is banned and no points move. There is no confirmation before the takeover and no
+list of signed-in devices to close one from.
+*Why it stays:* the user ruled it a rule, not a bug (spec Q9): the takeover is what someone moving from a laptop to a
+phone wants, and the player guide says so ("Chơi trên hai thiết bị").
+*Tracked:* `docs/bug-log.md` §9 (K1), `docs/player-guide.md` §7, spec `2026-10-21-plan27-shop-reputation-welcome-blind-zero-design.md` §7.
 
 **History names opponents by their recorded label.** A hand's history row stores each seat's id and
 a label. When the account behind a seat is gone, the listing falls back to that recorded label (the
@@ -283,6 +292,27 @@ Normal process pointed at the same database would empty the first one's keys whe
 *Tracked:* here; `apps/normal-server/src/repos/balance-repo.ts` and `apps/lite/server/src/repos/sqlite-repos.ts`
 (`pruneLedgerKeys`), `apps/normal-server/drizzle/0003_ledger_keys.sql`, Lite schema v3.
 
+**The reputation backfill can miscount a player who plays during it, and must not be rerun after a rule change (Plan
+27).** `reputation-backfill-cli` reads a player's `player_stats` and their live reputation events, then writes one
+`backfill` event, in that player's own transaction. A hand or a check-in that lands in the same few tens of
+milliseconds can be counted twice or not at all for that player: at the default rules about +4 (a won hand) or −10 (a
+claim). A rerun skips every credited player, so it cannot correct that; and a rerun after a GM changes
+`reputation_rules` would credit any player still without a `backfill` row (one whose first run came to 0, or a later
+account) at the new amounts.
+*Why it stays:* a one-shot step on an upgrade; locking every player for it would stall a live server for a few
+reputation points that are never points.
+*What to do:* run it once per upgrade, at a quiet moment (`/health` `"rooms":0`), dry run first, and never after the
+rules were edited.
+*Tracked:* `docs/deployment-normal.md` §7 ("Lần nâng cấp lên Plan 27"); `apps/normal-server/src/reputation/backfill.ts`.
+
+**Migration 0006's data step assumes the economy runs on `Asia/Ho_Chi_Minh` (Plan 27).** The step that lifts this
+month's check-in count to `claimed_days` (spec G) picks "this month" with `now() AT TIME ZONE 'Asia/Ho_Chi_Minh'`, because
+a migration cannot read `ECONOMY_TIMEZONE`. A deployment on another zone that upgrades in the hours where the two zones
+are in different months would lift the wrong month's rows (and leave this month's broken counts as they were).
+*Why it stays:* both live deployments (the VPS and the LAN kit) run the economy on Ho Chi Minh time, the step runs once,
+and the cost is one month's tier position for players who had missed a day.
+*Tracked:* `apps/normal-server/drizzle/0006_plan27.sql`.
+
 **`pnpm test` runs on PGlite; the real-PostgreSQL run is a step, not the default.** Every
 `apps/normal-server` test runs on in-process **PGlite** through the same driver-neutral `AppDb` the
 production code uses, so the queries under test are the production queries. PGlite is
@@ -431,6 +461,86 @@ sideways.
 *Why it stays:* the console is an operator tool read mostly on a desktop, and the numbers a GM needs (Nguồn, Bể) are in
 view.
 *Tracked:* `apps/normal-web/src/screens/gm/OverviewTab.tsx` (`ByDayPanel`), `apps/normal-web/src/screens/gm/gm.module.css`.
+
+---
+
+## Danh vọng, Cửa hàng, the welcome gift and the newcomer calendar (Plan 27)
+
+**Reputation is never taken away — not by a GM, not by an undo, not by a revoke.** `players.reputation` only rises and
+`players.rank` is the highest rank reached. A GM can add reputation ("Cộng danh vọng") and has no button to subtract it;
+"Đặt lại điểm danh" takes back a claim's points and items but leaves the 10 (or newcomer day 7's 200) reputation it
+paid; revoking a welcome or shop item leaves the reputation the welcome gave; and a GM raising a threshold above a
+player's reputation does not lower their rank.
+*Why it stays:* the user's ruling (spec Q2, R1, R15): the rank is a record of play, and a subtracting path would need a
+`≥ 0` guard, a reason and an undo of its own. A GM who granted by mistake can only say so in the log.
+*Tracked:* spec `2026-10-21-plan27-shop-reputation-welcome-blind-zero-design.md` §2 A1, R1;
+`apps/normal-server/src/reputation/reputation-service.ts`.
+
+**A GM's "Đặt lại điểm danh" does not move the newcomer calendar back.** The undo steps the month's count, the
+consecutive run and `total_login_days` back by one, but `newcomer_progress` keeps the day that claim reached, and an
+item or fallback points it paid (ref `newcomer:<pid>:<day>`, outside the undo's `latestClaim`) stay with the player. The
+reclaim the same day does not advance the newcomer calendar a second time (`last_day_key` is today).
+*Why it stays:* the newcomer calendar has its own guard (`last_day_key`), and the undo exists to let a player claim the
+month's tier again, not to replay a one-off welcome week.
+*Tracked:* spec §4 C2; `apps/normal-server/src/economy/economy-service.test.ts` → "the welcome day's own claim does not
+advance the newcomer day, and the next day's claim does"; `apps/normal-server/src/gm/gm-service.ts` (`resetCheckin`).
+
+**A welcome gift taken at 23:59 and a check-in at 00:01 move the newcomer calendar to day 2 at once.** The calendar
+counts claims on economy days after the welcome day (R7), not 24-hour periods, so two minutes apart across midnight is
+two days.
+*Why it stays:* counting by economy day is what lets a missed day cost nothing, and the same edge exists for every
+day-keyed reward.
+*Tracked:* spec §4 C2, R7; `docs/player-guide.md` ("Tuần đầu tiên").
+
+**The welcome dialog opens by itself once per account per browser.** The lobby opens "Chào mừng đến Blind Luck Poker"
+when the gift is unclaimed and `localStorage['bp.welcomeShown']` does not name this account; "Để sau" leaves the "🎁 Quà
+chào mừng" button. A second browser or device opens it once more, and a private window opens it on every sign-in until
+the gift is claimed. While the gift is unclaimed the lobby does not jump to "Điểm danh" for that session (Ruling 7).
+*Why it stays:* the server holds whether the gift was claimed, not whether the dialog was seen; a per-browser flag is
+enough to stop it opening over every later lobby visit.
+*Tracked:* `apps/normal-web/src/App.tsx` (`WELCOME_SHOWN_KEY`).
+
+**The epic shelf is thin until the gift months pass.** Of 15 epics, the achievements reward 7 and the check-in schedule
+gives 6 more in a later month (one a month from 11/2026 to 4/2027), so at launch two epics sell (`outfit_tuxedo01`, `outfit_royal_robe01`), beside 27 rares and 12 commons. A monthly epic goes on sale
+the month after its own (R20), so the shelf fills one item a month.
+*Why it stays:* the user's ruling (Q12): a gift of the current or a later month must stay a reason to check in.
+*Tracked:* spec §3 B1, R20; `apps/normal-server/src/shop/shop-service.ts` (`lockOf`).
+
+**`shop_prices` is written by code at boot, so a new catalogue item goes on sale at its rarity's seed price.** The
+migration cannot read `data/items.json`, so `seedPrices` inserts a row for every catalogue item that has none at every
+boot (`ON CONFLICT DO NOTHING`, never overwriting a GM's edit). An item added to `items.json` later therefore sells after
+the next restart at 10,000 / 30,000 / 150,000 points and rank 1 / 3 / 4, unless it is a default, `free`, an
+achievement's reward or a gift of this or a later month. The spec's "not sold until a GM prices it" (the `unpriced`
+lock) only applies to an item whose row was deleted by hand.
+*Why it stays:* the seed is what lets the shop exist on a fresh database and survive the test harness's truncation
+(Ruling 1, P3). Whoever adds an item and does not want it sold sets `enabled = false` in the GM's "Cửa hàng" tab.
+*Tracked:* `apps/normal-server/src/shop/shop-prices-seed.ts`; CHANGELOG Plan 27 deviations.
+
+**A purchase retried across a GM revoke and a server restart can charge again.** A retry with the same `purchaseId` is
+answered `repeated` because the item is found under its ref, or, once a GM has revoked that item, `PURCHASE_UNDONE`
+because the `ledger_keys` row is still there. The boot prunes `ledger_keys`, so a retry that arrives after both a revoke
+and a restart finds neither, and buys the item again.
+*Why it stays:* it needs a client to hold one unanswered request across a GM's revoke and a restart; the second charge
+is a real purchase of an item the player no longer has, and conservation holds.
+*Tracked:* `apps/normal-server/src/shop/shop-service.ts` (`buy`); the ledger-key lifetime under **Operations**.
+
+**Two GMs saving the shop's prices, the same week's shelf or the reputation tables at once: the last save wins.** Each
+`PUT` writes the rows it carries with no version check, so a GM editing a stale copy overwrites what another saved a
+moment before, row by row (a price) or whole (a week's shelf, the welcome choices, a table). Both saves are in the log
+with their reasons and `details`.
+*Why it stays:* the game has a handful of GMs, and the log shows who changed what; optimistic locking is a feature of
+its own.
+*Tracked:* `apps/normal-server/src/gm/gm-service.ts` (`setShopPrices`, `setShopFeatured`, `setWelcomeChoices`,
+`setReputationRules`, `setReputationRanks`).
+
+**The featured-week editor offers items by today's locks, not by each week's.** "Kệ tuần này" lists, for every one of
+the nine weeks, the items that sell today (`GET /api/gm/shop` reuses the shop's view for the locks), while the server
+judges each week at its own start (`requireSellable`). So this month's gift, which sells from next month (R20), is not
+offered for a week in next month, though the server would take it there.
+*Why it stays:* per-week sellable lists would be a second lock computation per week for a rare case; the GM can set
+the later week once it is the current month (B4 review, accepted).
+*Tracked:* `apps/normal-web/src/screens/gm/FeaturedEditor.tsx`; `apps/normal-server/src/gm/gm-service.ts`
+(`setShopFeatured`).
 
 ---
 
@@ -632,6 +742,39 @@ neighbour without a real JSON tokenizer; the file is short and hand-edited, and 
 restart.
 *What to do:* after editing a month, read its block once more for a tier written twice.
 *Tracked:* `docs/normal-server.md`, "Changing the daily gifts"; Plan 22 final review.
+
+**In Blind, a folder's bet chip shows the whole ante during the reveal even when part of it went back (Plan 27, D1).**
+When every seat that covered a short all-in folds, each folder's excess above the highest live commitment is returned to
+the folder inside the engine (Ruling 12), but no event tells the client reducer that `betThisStreet` shrank, so the
+chip under that seat still reads the full ante until the settlement or the next snapshot. The result card and the stacks
+are right.
+*Why it stays:* cosmetic and brief; a new event for it would be protocol surface for a few seconds of a chip.
+*Tracked:* `packages/core/src/hand/blind.ts` (`returnDeadExcess`), `packages/ui-kit/src/client/reducer.ts`.
+
+**The "Bạn đã hết điểm ở bàn này" notice points at Cứu trợ in words only (Plan 27).** `STACK_SPENT` names the relief
+threshold, but the slip has no button to the relief panel: `Toasts` carries no actions.
+*Why it stays:* a toast with a button needs focus handling and a dismissal rule of its own; the player reaches Cứu trợ
+from "Điểm danh" as before.
+*Tracked:* `packages/ui-kit/src/screens/Toasts.tsx`; CHANGELOG Plan 27 deviations.
+
+**Every locale namespace ships in the entry chunk, so the first paint carries the shop's and the GM's strings (Plan
+27).** `normal.json` (vi and en) is one resource loaded at boot; the lazy screens' strings are not split out. Plan 27's
+strings took the entry chunk to about 136 KB gzip of a 140 KB budget (under 4 KB of headroom), and the budget `MAX_ENTRY_GZIP` was raised from 130 to 140 KB
+(Ruling 13).
+*Why it stays:* splitting namespaces per lazy screen is a change to the i18n bootstrap for about 10 KB.
+*Tracked:* `apps/normal-web/test/footprint.test.ts`.
+
+**Some English strings of the monthly check-in read awkwardly (Plan 27, G2).** "Check-in 12 of 10/2026" (meaning the 12th
+claim of October) and "1 days left this month" (no singular form). The Vietnamese reads correctly.
+*Why it stays:* English copy changes only when the user asks (CLAUDE.md §6); the proposed wording ("Check-in no. 12 of
+10/2026", a `_one`/`_other` plural) is waiting for that.
+*Tracked:* `apps/normal-web/src/locales/en/normal.json` (`daily.summaryCount`, `daily.daysLeft`).
+
+**"Còn N ngày trong tháng" is counted on the browser's clock.** The Điểm danh page derives the days left from
+`nextResetAt` and the device's date, so a device whose clock or zone is more than about 12 hours off the economy's can
+show one day more or less than the server will allow. The tiles and the claim are the server's.
+*Why it stays:* a hint line; the server does not send the count.
+*Tracked:* `apps/normal-web/src/screens/DailyScreen.tsx`.
 
 ---
 

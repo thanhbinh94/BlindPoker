@@ -185,8 +185,8 @@ formatting; strings come from `useTranslation()`.
 
 | Component | Props |
 | --- | --- |
-| `LobbyScreen` | `client`, `lang`, `onEnteredRoom`, `avatar?`, `header?` — navigation and the language switch are the host app's rail (layout audit U2) |
-| `RoomScreen` | `client`, `lang`, `onLeft`, `chibiFor?`, `captionFor?`, `header?`, `layout?` |
+| `LobbyScreen` | `client`, `lang`, `onEnteredRoom`, `avatar?`, `header?`, `rank?` (Plan 27), `barLinks?` (app links on the player bar's own line, so they add no row to the lobby's height; Plan 27 fix wave) — navigation and the language switch are the host app's rail (layout audit U2) |
+| `RoomScreen` | `client`, `lang`, `onLeft`, `chibiFor?`, `captionFor?`, `rankFor?` (Plan 27), `header?`, `layout?` |
 | `Toasts` | `error`, `notifications`, `onClearError`, `onDismiss`, `lang` |
 
 `onLeft` fires the moment the room is gone — left, closed or kicked — and the app decides where that lands.
@@ -212,8 +212,8 @@ dropping the oldest, so a chatty server cannot stack slips off the top of the sc
 
 | Component | Props |
 | --- | --- |
-| `PokerTable` | `room`, `hand`, `myPlayerId`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `canSit`, `layout?`, `chibiFor?`, `expressionFor?`, `captionFor?`, `onSeatClick?`, `resultPending?`, `onReveal?` |
-| `Seat` | `seat`, `player`, `isMe`, `isActing`, `isButton`, `winnerPayout`, `showdownLabel`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `position`, `chibi`, `expression`, `bounce`, `caption?`, and for the motion and the squeeze (`PokerTable` fills them): `handId`, `dealt`, `dealIndex`, `dealCount`, `reveal`, `liftAfter`, `squeezeRoom`, `squeezeRound`, `squeezeDecides`, `restored?`, `onReveal?` |
+| `PokerTable` | `room`, `hand`, `myPlayerId`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `canSit`, `layout?`, `chibiFor?`, `expressionFor?`, `captionFor?`, `rankFor?`, `onSeatClick?`, `resultPending?`, `onReveal?` |
+| `Seat` | `seat`, `player`, `isMe`, `isActing`, `isButton`, `winnerPayout`, `showdownLabel`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `position`, `chibi`, `expression`, `bounce`, `caption?`, `rank?`, `frame?`, and for the motion and the squeeze (`PokerTable` fills them): `handId`, `dealt`, `dealIndex`, `dealCount`, `reveal`, `liftAfter`, `squeezeRoom`, `squeezeRound`, `squeezeDecides`, `restored?`, `onReveal?` |
 | `Card` | `card?`, `faceDown?`, `size?` (`sm`/`md`/`lg`), `delayMs?`, `highlighted?`, `className?`, `dealt?`, `reveal?` (`'flip'`/`'lift'`), `turnDelayMs?` |
 | `Deck` | none (`forwardRef` to its `div`) — the pile every card is dealt from; `DeckAnchorProvider` / `useDeckAnchor` (`deck-anchor.ts`) hand its ref to the cards |
 | `PeelCard` | `card`, `size?`, `open`, `onRevealed`, `dealt?`, `delayMs?`, `className?` — the viewer's own card in a squeeze room, turned by dragging it |
@@ -341,6 +341,19 @@ screen); it never runs it on the phone.
 muted, single-line, truncated line under the name (a title, a rank), and returning `null`/`undefined` leaves the
 plate exactly as it was. The caption is the plate's only decoration rather than state, so the compact plates
 (seven opponents and up in the stack layout) drop it to keep the third row on screen.
+
+**The rank (Plan 27, spec 2026-10-21 §2 A4).** A third slot, `rankFor(player)`, threads the same way and hands `Seat`
+`rank?: number | null`; `PokerTable` also passes its own `frame`, so the playground's forced frame is honoured (`Seat`
+never calls `useRoomFrame()`). The label is `RankLabel` (`table/RankLabel.tsx`): nothing for rank 1, no rank or a bot;
+the rank's name in its colour (`--rank-2` … `--rank-5` in `tokens.css`, each held to 4.5:1 on the plate by
+`theme/rank.contrast.test.ts`) on a wide plate; and, `compact`, the roman numeral in a pill of the same colour, with
+the name as its `title` and accessible name. A plate shows the pill when its text box measures under 120 px (a
+`ResizeObserver`, read by how far a growing plate may grow rather than by its current box), and always in the
+`landscape` frame. Where the pill goes is Ruling 11: on a compact plate it sits on the **stack line**, after the
+figure, not beside the name, because beside the name it cut opponents' names sooner; on a wide plate the word stays
+after the name, unless it would cut a long name, in which case it too moves to the stack line. `PlayerBar` and
+`LobbyScreen` take `rank?` the same way (the word after the player's own name), and the kit's "Mời ra" list uses the
+pill.
 
 **Under the plate, two lines at most** (review 2026-09-29, No2): the badges with the bet chip beside them, then the
 hand's name with the payout. On the ring those lines may run wider than the plate, centred under it — up to 30 % of
@@ -504,6 +517,27 @@ deterministic way. `chibiFor(player)` (on `RoomScreen` and `PokerTable`) is how 
 seat's `ChibiConfig`; a bot never asks it — `PokerTable` draws `botChibi` for a bot seat on its own. Full design:
 `docs/avatar-2d.md`.
 
+**Loading cost (plan 27 E1).** `Chibi` takes `lazy?: boolean` (off by default). A lazy chibi renders only its root —
+size, frame, `data-chibi-hash`, so the box is already right and nothing jumps — with no `<img>`, no tint render and no
+hat-clip preload until the root comes within 200 px of the viewport; then it draws every layer and keeps them. The
+watch is `useInView(ref, rootMargin = '200px', enabled = true)` (`lazy.ts`), an `IntersectionObserver` that stays
+`true` once it fires and is `true` at once where the API is missing (jsdom), so the lazy path renders like the eager one
+in unit tests unless a test stubs the observer. Use it for grids of cards (wardrobe, shop, saved outfits); the stage and
+a table seat stay eager. Every tinted render (`useTintedLayer`, also used by the wardrobe's item icons) waits in one
+page-wide queue, `enqueue(job, priority)` (`tint-queue.ts`): at most four renders at once — so at most four tint image
+loads in flight — higher priority first, first come first served within one priority, a failed job freeing its slot.
+`enqueue(job, priority, { isWanted, value })` asks `isWanted()` when the job's turn comes and, if it is false, resolves
+with `value` without running the job or taking a slot; `useTintedLayer` counts the mounts waiting on each render, so a
+render every one of whose cards unmounted (a tab switch) is passed over, uncached, and a later mount asks again. Each
+image of a tinted render gives up after `TINT_LOAD_TIMEOUT_MS` (15 s), freeing its slot and leaving the plain layer,
+again uncached. `useTintedLayer(prefix, layer, priority = -layer.order, density = tintDensity())` ranks the body and face ahead of the hat and
+frame; a lazy chibi ranks its layers 100 lower, behind every eager chibi's. A tinted render paints from the @2x files only when
+`devicePixelRatio >= 1.5` (it was `> 1`); the plain layers keep their two-density `srcset`, and a hat's hair clip is
+always @2x. One exception (Ruling 16, Plan 27): a `head` chibi with a `size` whose `size × devicePixelRatio` is at most
+208 (the crop's side in the @1x art) passes `density: 1`, so its tinted layers paint from @1x and its plain layers
+render the @1x `src` with no `srcset`. A 72 px portrait on a 2× phone is 144 device px, and @2x made a row of them
+about 440 KB.
+
 ### Lobby
 
 | Component | Props |
@@ -511,7 +545,7 @@ seat's `ChibiConfig`; a bot never asks it — `PokerTable` draws `botChibi` for 
 | `RoomList` | `rooms`, `onJoin`, `filter?`, `onFilter?`, `lang`, `busy?` |
 | `CreateRoomForm` | `onSubmit`, `busy?`, `initialMode?`, `lang` |
 | `JoinByCode` | `onJoin`, `busy?`, `lang`, `error?` |
-| `PlayerBar` | `displayName`, `balance`, `status`, `lang`, `avatar?` (the initial in a gold disc when absent) |
+| `PlayerBar` | `displayName`, `balance`, `status`, `lang`, `avatar?` (the initial in a gold disc when absent), `rank?` (`RankLabel` after the name, Plan 27), `children?` (the app's links, before the connection pill; a whole line of their own under 480 px) |
 | `LanguageSwitch` | `lang`, `onChange` |
 | `HoldemFields` | `tierIndex`, `onTierIndex`, `minBuyInBB`, `maxBuyInBB`, `onMinBuyInBB`, `onMaxBuyInBB`, `disabled`, `lang` |
 | `BlindFields` | `holeCards`, `onHoleCards`, `decisionMode`, `onDecisionMode`, `fixedWager`, `onFixedWager`, `botCount`, `onBotCount`, `maxBots`, `squeeze`, `onSqueeze`, `disabled`, `lang` |
@@ -826,13 +860,17 @@ Rules:
   not this one) — both editions, every screen.
 - Hand categories translate through `handLabel(category, t)` off `HAND_CATEGORY_KEYS`; cards through
   `cardLabel(card, t)`; protocol errors through `errorLabel(code, t)`.
-- `NOTIFICATION` slips look up `notify.<kind>` and fall back to `notify.other`. `Toasts` hands `t` exactly two
-  values off the payload — `amount` (already formatted) and `id` — so a string may use `{{amount}}` or `{{id}}`
-  and nothing else. An app wanting a *name* where the server sent an id (`ACHIEVEMENT_UNLOCKED`) rewrites the
-  notification before passing it in.
-- `TABLE_LIMIT_SPENT` (a Blind seat stood up because its table limit can no longer cover a hand; `payload.amount` is
-  what went back to the balance) reads `notify.TABLE_LIMIT_SPENT`, or `notify.TABLE_LIMIT_SPENT_none` when that amount
-  is 0 — `Toasts` picks the variant, so the string never announces a return of nothing.
+- `NOTIFICATION` slips look up `notify.<kind>` and fall back to `notify.other`. `Toasts` hands `t` five values off
+  the payload — `amount` (already formatted), `id`, `reason`, `rank` (read out as its name through `rank.N`, Plan 27)
+  and `threshold` (formatted) — so a string may use those and nothing else. An app wanting a *name* where the server
+  sent an id (`ACHIEVEMENT_UNLOCKED`) rewrites the notification before passing it in.
+- `STACK_SPENT` (Plan 27: a seat stood up at the end of a hand because its stack reached 0, in Blind or Hold'em;
+  `payload.threshold` is `ECONOMY.reliefThreshold`) reads `notify.STACK_SPENT`, which points the player at Cứu trợ
+  in words; the slip has no button (`Toasts` carries no actions). `RANK_UP` (`payload.rank`, sent by Normal when a
+  player's rank rises) reads `notify.RANK_UP`, "Bạn vừa lên bậc Cao thủ". `TABLE_LIMIT_SPENT` and its `_none` variant
+  are gone with the rule that sent them.
+- Rank names live in `game.json` as `rank.1` … `rank.5` (Tân binh, Tay bài, Cao thủ, Bậc thầy, Huyền thoại), because
+  the seat in this kit draws them.
 
 An app adds its own namespace without forking the resources:
 

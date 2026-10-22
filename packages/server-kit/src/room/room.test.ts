@@ -106,9 +106,9 @@ describe('Room seats and buy-ins', () => {
   })
 
   it('blind sit-down needs the required balance and brings the table limit, or all of a smaller balance', async () => {
-    const h = createRoomHarness(BLIND, { players: [['h', 100_000], ['poor', 1_500]] })
+    const h = createRoomHarness(BLIND, { players: [['h', 100_000], ['poor', 999]] })
     await h.room.join(h.identity('poor'), 'pw12')
-    expect(await code(h.room.sitDown('poor', 0))).toBe('INSUFFICIENT_BALANCE') // needs 2 × 1000
+    expect(await code(h.room.sitDown('poor', 0))).toBe('INSUFFICIENT_BALANCE') // needs one wager, 1000 (plan 27 D2)
     await h.room.sitDown('h', 0)
     expect(h.room.players.get('h')!.stack).toBe(5_000)
     expect(h.repos.entries.map((e) => [e.entry.playerId, e.entry.delta, e.entry.reason])).toEqual([['h', -5_000, 'buy_in']])
@@ -413,9 +413,9 @@ describe('Start with nobody but bots able to play', () => {
     const h = createRoomHarness(BLIND)
     await h.room.sitDown('h', 0)
     await h.room.setReady('h', true)
-    // Unreachable through the API since the table limit — a spent seat is stood up when its hand ends — so the stack is
-    // forced here to keep the refusal honest.
-    h.room.players.get('h')!.stack = 500
+    // Unreachable through the API — a seat at 0 is stood up when its hand ends (plan 27 D2), and any point left is
+    // dealt — so the stack is forced here to keep the refusal honest.
+    h.room.players.get('h')!.stack = 0
     expect(await code(h.room.startGame('h'))).toBe('NOT_ENOUGH_PLAYERS')
     expect(h.room.handActive).toBe(false)
     expect(h.room.status).toBe('OPEN')

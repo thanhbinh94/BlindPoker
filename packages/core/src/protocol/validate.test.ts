@@ -16,7 +16,7 @@ describe('validateRoomConfig', () => {
     const r = validateRoomConfig(blind)
     expect(r.ok).toBe(true)
     if (!r.ok) return
-    expect(roomConfigToRuleset(r.value)).toEqual({ mode: 'blind', holeCards: 3, decisionMode: 'playOrFold', fixedWager: 5000, tableFeeRate: 0.02, squeeze: false })
+    expect(roomConfigToRuleset(r.value)).toEqual({ mode: 'blind', holeCards: 3, decisionMode: 'playOrFold', fixedWager: 5000, tableFeeRate: 0, squeeze: false })
     const h = validateRoomConfig(holdem)
     if (h.ok) expect(roomConfigToRuleset(h.value)).toEqual({ mode: 'holdem', smallBlind: 100, bigBlind: 200, tableFeeRate: 0.02, tableFeeCapBB: 1 })
   })

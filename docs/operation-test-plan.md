@@ -73,7 +73,7 @@ mã phòng (nếu có), thiết bị, ảnh chụp màn hình. Claude chép vào
 | Mã | Bước | Kỳ vọng | Ưu tiên |
 |---|---|---|---|
 | S-01 | Mở địa chỉ máy chủ | Trang đăng nhập "Blind Luck Poker", tab trình duyệt cùng tên | P1 |
-| S-02 | Đăng ký tài khoản mới | Vào thẳng trang Điểm danh (lần đầu trong ngày), số dư 100.000 điểm | P1 |
+| S-02 | Đăng ký tài khoản mới | Sảnh mở cùng hộp thoại "Chào mừng đến Blind Luck Poker" (quà chào mừng, xem P-01); bấm "Để sau" thì hộp thoại đóng, sảnh còn nút "🎁 Quà chào mừng"; số dư 100.000 điểm. Trang Điểm danh tự mở ở lần đăng nhập sau khi đã nhận quà (P-01) | P1 |
 | S-03 | Bấm Nhận thưởng | Số dư +5.000, nút khoá lại; chấm vàng trên tab Điểm danh biến mất khi rời trang (xem T1 trong `docs/bug-log.md` §6) | P1 |
 | S-04 | Sảnh → Tạo phòng Blind, 3 bot | Vào bàn, 3 bot ngồi sẵn, mã phòng 6 ký tự ở đầu trang | P1 |
 | S-05 | Ngồi vào bàn → Sẵn sàng → Bắt đầu | Ngồi: số dư trừ hạn mức 5.000; ván chạy, lá chung lật, có người thắng, chồng trên bàn đổi; rời phòng: chồng về số dư | P1 |
@@ -154,16 +154,16 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 
 | Mã | Bước | Kỳ vọng | Ưu tiên |
 |---|---|---|---|
-| F-01 | Kiểu Hoàn toàn may rủi, 2 lá, 3 bot | Mỗi ván trừ đúng mức cược cố định **từ chồng trên bàn**; không có lượt quyết định; lật bài và chia pot trừ 2% phí; lá của đối thủ nhấc lên rồi lật (~0,7 giây một lá, cách nhau 0,2 giây; sau lá river thì đợi lá ấy nằm yên) rồi phiếu kết quả mới hiện — dòng kết quả dưới các ghế và số tiền trên tấm tên cũng đợi đến lúc đó; tắt khi bật giảm chuyển động | P1 |
+| F-01 | Kiểu Hoàn toàn may rủi, 2 lá, 3 bot | Mỗi ván trừ đúng mức cược cố định **từ chồng trên bàn**; không có lượt quyết định; lật bài và chia pot (Blind không thu phí bàn); lá của đối thủ nhấc lên rồi lật (~0,7 giây một lá, cách nhau 0,2 giây; sau lá river thì đợi lá ấy nằm yên) rồi phiếu kết quả mới hiện — dòng kết quả dưới các ghế và số tiền trên tấm tên cũng đợi đến lúc đó; tắt khi bật giảm chuyển động | P1 |
 | F-02 | Kiểu 3 lá | Mỗi người nhận 3 lá; xếp hạng dùng 5 lá tốt nhất trong 8 | P2 |
 | F-03 | Kiểu Chơi hoặc bỏ, 2 người thật | Hai người quyết định cùng lúc, không ai thấy lựa chọn của người kia trước khi hết pha | P1 |
 | F-04 | Cả hai chọn Bỏ | Pot chuyển sang ván sau, bàn hiện "Cộng dồn" | P1 |
-| F-05 | Sau F-04, mọi người thật bấm Tạm nghỉ (vẫn giữ ghế) để không ván nào bắt đầu, chờ > 60 giây | Pot cộng dồn chia đều cho người thật đang ngồi ghế (cùng người bị mời đứng dậy vì hết hạn mức trong lúc pot đang cộng dồn, nếu còn trong phòng), phần lẻ bị thu; nếu không còn ai để chia thì cả pot bị thu | P2 |
+| F-05 | Sau F-04, mọi người thật bấm Tạm nghỉ (vẫn giữ ghế) để không ván nào bắt đầu, chờ > 60 giây | Pot cộng dồn chia đều cho người thật đang ngồi ghế, phần lẻ bị thu; nếu không còn ai để chia thì cả pot bị thu | P2 |
 | F-06 | Chỉ một người chọn Chơi | Người đó thắng cả pot, không lật lá chung, lá riêng không lộ | P1 |
-| F-07 | (a) Bấm Ngồi vào bàn khi số dư < mức cược (kiểu A) hoặc < 2 × mức cược (kiểu B); (b) đang ngồi mà chồng trên bàn không đủ cho ván sau | (a) Bị từ chối, báo "Số dư không đủ", không bị trừ điểm (FR-R07); (b) bị mời đứng dậy sau ván, phần còn lại về số dư (xem F-10) | P2 |
+| F-07 | (a) Bấm Ngồi vào bàn khi số dư < mức cược (cả hai kiểu); (b) đang ngồi mà chồng trên bàn ít hơn mức cược | (a) Bị từ chối, báo "Số dư không đủ", không bị trừ điểm (FR-R07); (b) vẫn được chia bài và tất tay phần còn lại, chỉ bị mời đứng dậy khi về 0 (xem F-10) | P2 |
 | F-08 | Chủ phòng bấm Mời ra một bot | Bot rời ghế, ghế trống | P2 |
 | F-09 | Bật "Tự động chơi" | Tự quyết định mỗi ván cho tới khi tắt | P3 |
-| F-10 | Phòng mức cược 1.000, Chơi hoặc bỏ, 1 bot; ngồi vào bàn rồi Bỏ mọi ván | Ngồi: số dư −5.000 (hạn mức 5×), đầu phòng ghi "Hạn mức 5.000"; sau 4 ván chồng còn 1.000 < 2.000 → bị mời đứng dậy, thông báo "Bạn đã dùng hết hạn mức…", 1.000 về số dư, vẫn ở trong phòng; bấm ghế lại → hạn mức mới 5.000 | P1 |
+| F-10 | Chơi về 0 rồi bị mời đứng dậy, kèm lời nhắc Cứu trợ. Số dư 2.500 (GM chỉnh nếu cần); phòng mức cược 1.000, Chơi hoặc bỏ, 1 bot; ngồi vào bàn; ván 1 Bỏ, ván 2 bấm "Tất tay 500", sau đó Bỏ được thì Bỏ, không bỏ được thì tất tay, tối đa 30 ván | Ngồi: mang cả 2.500 vào bàn (dưới hạn mức 5.000, đủ một mức cược), đầu phòng ghi "Hạn mức 5.000"; ván 1 nút là "Chơi 1.000"; ván 2 ante chỉ để lại 500 nên nút đổi thành "Tất tay 500"; ghế còn điểm thì vẫn được chia bài; ghế hết sạch sau ante thì được chơi tự động, không bị hỏi; về đúng 0 thì bị mời đứng dậy, thông báo "Bạn đã hết điểm ở bàn này. Nhận Cứu trợ nếu số dư dưới 5.000 điểm, hoặc chọn ghế trống khi có điểm.", không có dòng trả tiền về số dư, vẫn ở trong phòng; dưới bàn hiện "Số dư không đủ để vào bàn (cần 1.000 điểm)" | P1 |
 | F-11 | Phòng Blind "Hoàn toàn may rủi" có tick "Nặn bài", 2 người thật; vào ván; người thứ nhất bóc cả hai lá bằng chuột (kéo từ mép dưới vào), người thứ hai bấm "Lật" | Đầu phòng có huy hiệu "Nặn bài"; mỗi người thấy bài của mình úp, dòng "Mời nặn bài…" và đồng hồ vòng ngay trên tấm tên của mình; bóc một lá chưa tính là đã lật (ghế kia chưa thấy "Đã lật"), bóc lá thứ hai thì ghế kia thấy "Đã lật" và khay báo "Đã lật — chờ người chơi khác"; người thứ hai bấm "Lật" thì cả hai lá mở, vòng nặn kết thúc **trước 20 giây**, lá chung ra và phiếu kết quả hiện | P1 |
 | F-12 | Như F-11 trên điện thoại 375 × 812 có cảm ứng, 1 người thật + 1 bot; bóc một lá bằng ngón tay, lá còn lại bằng "Lật" | Hai lá, nút "Lật" và đồng hồ nằm trọn trong màn hình, trên khay; trang không cuộn ngang, trang và bàn không cuộn dọc, tên người chơi hiện đủ cạnh đồng hồ vòng, không chữ nào đè lên chữ khác; cú chạm là `pointerType: touch` và bóc được lá; bot đã lật từ đầu nên vòng kết thúc ngay khi người thật lật nốt | P2 |
 | F-12b | **Tự động — `04-blind.spec.ts`, project `mobile`.** Như F-12 nhưng phòng "Chơi hoặc bỏ" có "Nặn bài" (1 người thật + 1 bot), 375 × 812 | Huy hiệu vàng "Nặn bài" nằm cạnh tên phòng trong đầu phòng; nút "Lật" nằm trên đáy hai lá bài chứ không chiếm hàng riêng; trang và bàn không cuộn dọc (trước Plan 26 bàn này cuộn thừa 11 px); không chữ đè chữ. Nút "Lật" chỉ cao 40 × 28 px: thử bóc lá bằng ngón tay thật, bắt đầu ở góc dưới bên trái lá trái (`docs/known-limitations.md`) | P2 |
@@ -190,7 +190,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 
 | Mã | Bước | Kỳ vọng | Ưu tiên |
 |---|---|---|---|
-| I-01 | Đăng nhập lần đầu trong ngày | Tự mở trang Điểm danh một lần; lần đăng nhập sau trong ngày thì vào sảnh | P2 |
+| I-01 | Đăng nhập lần đầu trong ngày | Tự mở trang Điểm danh một lần; lần đăng nhập sau trong ngày thì vào sảnh (trừ khi chưa nhận Quà chào mừng: sảnh mở hộp quà thay vào, xem S-02) | P2 |
 | I-02 | Nhận thưởng hai lần | Lần hai bị khoá | P1 |
 | I-03 | Xem "Lần điểm danh tiếp theo" | 00:00 giờ Việt Nam hôm sau | P3 |
 | I-04 | Ngày 7, 14, 21, 28 của chuỗi | Nhận thêm vật phẩm (không thử được trong một ngày — đã có test tự động; nếu có người chơi đủ chuỗi thì ghi lại) | P3 |
@@ -216,7 +216,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 | Mã | Bước | Kỳ vọng | Ưu tiên |
 |---|---|---|---|
 | K-01 | Hồ sơ: nhìn các nút dưới tên; rồi mở địa chỉ cũ `#/inventory` (dán vào thanh địa chỉ), sau đó bấm Back của trình duyệt | Hồ sơ chỉ còn hai nút: Phòng thay đồ và Thành tựu, không còn "Kho đồ". Địa chỉ cũ mở thẳng Phòng thay đồ (thanh địa chỉ đổi thành `#/avatar`); Back về trang trước đó chứ không quay lại `#/inventory` (review 29/09 No5; ngày nhận và nguồn gốc của món không còn hiện ở đâu cả, có chủ đích) | P2 |
-| K-02 | Chơi đủ 10 ván Blind (bàn có bot, bật tự động bắt đầu). Hết hạn mức thì bị mời đứng dậy (F-10) nên phải bấm ghế để ngồi lại (Sẵn sàng, bật lại Tự động chơi) thì mới đủ 10 ván | Hiện thông báo "Đạt thành tựu mới: Mười ván Blind Poker", +2.000 điểm; trang Thành tựu cập nhật | P1 |
+| K-02 | Chơi đủ 10 ván Blind (bàn có bot, bật tự động bắt đầu). Về 0 thì bị mời đứng dậy (F-10) nên phải bấm ghế để ngồi lại (Sẵn sàng, bật lại Tự động chơi) thì mới đủ 10 ván | Hiện thông báo "Đạt thành tựu mới: Mười ván Blind Poker", +2.000 điểm; trang Thành tựu cập nhật | P1 |
 | K-03 | Vào 10 phòng khác nhau | Thành tựu "Mười phòng" mở | P3 |
 | K-04 | Hồ sơ → Thống kê sau vài ván | Số ván chơi/thắng tăng đúng; "Ván gần đây" ghi "Tại bàn `<tên phòng>`" (hoặc "Tại `<tên phòng>`" khi tên phòng đã bắt đầu bằng "Bàn", không lặp chữ), đối thủ là bot hiện "Bot 1", "Bot 2"… chứ không hiện mã kiểu `bot:…` (review 29/09 No4); tên bot in nghiêng, không có huy hiệu "bot" nhìn thấy (vòng 2 R2-2) | P2 |
 | K-05 | Hồ sơ → đổi tên hiển thị | Tên mới hiện ở sảnh, bàn, cài đặt; tên trùng người khác bị từ chối | P2 |
@@ -281,6 +281,20 @@ màn nào, trạng thái nào, cỡ nào và test nào: `docs/test-matrix.md`. N
 | O-05 | Chạy exe thứ hai trên cùng thư mục dữ liệu | Từ chối: `another instance is already running (pid …)` | P2 |
 | O-06 | Tắt rồi mở lại exe | Số dư và tên còn nguyên (SQLite) | P1 |
 
+### P. Cửa hàng, danh vọng và tủ đồ (Plan 27)
+
+Cả sáu ca (P-01…P-05 và P-03b) là **tự động** — `08-shop.spec.ts` (P-02 và P-04 chạy ở project `mobile`, P-03b ở project `landscape`, còn lại
+ở `desktop`); ca đổi giá của GM là Q-04. Bộ test nâng bậc bằng lối cộng danh vọng của GM; người test làm bằng tay thì nhờ
+GM bấm "Cộng danh vọng" ở trang người chơi. Mã P- là mã ca test, khác với P1/P2 (điện thoại) và P1/P2/P3 (mức ưu tiên).
+
+| Mã | Bước | Kỳ vọng | Ưu tiên |
+|---|---|---|---|
+| P-01 | **Tự động.** Tài khoản mới: hộp thoại chào mừng hiện trên sảnh, bấm "Để sau"; rồi bấm "🎁 Quà chào mừng", chọn "Đồng phục chia bài", "Nhận", "Vào chơi". Mở Phòng thay đồ. Sau đó đăng nhập tài khoản ấy trên trình duyệt khác khi chưa nhận Điểm danh hôm nay | Hộp thoại có ba món hiếm, mỗi món vẽ trên chính nhân vật của mình; "Nhận" còn khóa cho tới khi chọn một món. Sau "Nhận": dòng "Đồng phục chia bài đã vào tủ đồ, +100 danh vọng"; "Vào chơi" đóng hộp thoại, nút "🎁 Quà chào mừng" biến mất, hình nhân vật ở sảnh mặc món vừa chọn. Phòng thay đồ có món đó, nhãn "Đang dùng". Lần đăng nhập sau: không còn hộp thoại chào mừng, app tự mở trang Điểm danh, nút "Nhận thưởng" sáng | P1 |
+| P-02 | **Tự động, điện thoại.** Sảnh → "Cửa hàng". Ở kệ Thường bấm "Mua · 10.000" của "Mũ len" → "Mua". Chuyển sang kệ Hiếm. GM cộng 400 danh vọng; tải lại trang, mua một món hiếm. Mở Hồ sơ → Lịch sử điểm | Hộp thoại "Mua món này?" ghi giá và số dư còn lại; mua xong có dòng "Mũ len đã vào tủ đồ", thẻ ghi "✓ Đã có", "Số dư: … điểm" giảm đúng 10.000. Trước khi được cộng danh vọng, thẻ hiếm ghi "🔒 cần Cao thủ" và không có nút Mua (máy chủ cũng từ chối); sau khi lên Cao thủ thì mua được. Mỗi lần mua trừ điểm đúng một lần: Lịch sử điểm có đúng hai dòng "Mua ở Cửa hàng" | P1 |
+| P-03 | **Tự động.** Người chơi đã lên Cao thủ (400 danh vọng): mở Hồ sơ, rồi tạo bàn Blind có 1 bot và ngồi vào bàn. P-03b: làm lại trên điện thoại xoay ngang | Hồ sơ ghi "Danh vọng 400 · Cao thủ · còn 1.400 tới Bậc thầy". Ở bàn, chữ "Cao thủ" đứng cạnh tên (hoặc sau số điểm khi tên dài) trên bảng tên của mình. Xoay ngang: bảng tên hẹp nên bậc hiện thành viên "III" trên dòng số điểm. Vừa được cộng danh vọng thì thanh trên của sảnh đổi sang "Cao thủ" ngay, không cần tải lại; tải lại trang cũng vẫn là Cao thủ. | P2 |
+| P-04 | **Tự động, điện thoại.** Tài khoản mới mở Phòng thay đồ; chuyển sang Trang phục → Mũ với ô "Hiện cả món chưa có" được tích; quay lại Ngoại hình | Trang chỉ tải hình của các thẻ gần màn hình (không quá 8 yêu cầu `/avatar/` cho mỗi hình nhân vật hay thẻ đang thấy), ít hơn hẳn cách tải mọi thẻ cùng lúc; chuyển tab không gây một loạt yêu cầu | P2 |
+| P-05 | **Tự động.** Mạng "3G nhanh" (1,6 Mbps, trễ 150 ms), app đang mở ở Hồ sơ, bấm sang Phòng thay đồ, ở 1366×768 và 375×812 | Sân khấu và hàng thẻ đầu tiên hiện trong 2 giây ở cả hai cỡ; hình của hàng đầu tải xong trong 2 giây ở cả hai cỡ (chân dung nhỏ luôn tải ảnh @1x) | P3 |
+
 ### Q. Quản trị (GM)
 
 Cần một tài khoản có quyền quản trị (người vận hành trao bằng `grant-gm-cli`; bộ test tự động dùng lối riêng của
@@ -291,6 +305,7 @@ server thử). Mục "Quản trị" chỉ hiện trong Cài đặt cho tài kho�
 | Q-01 | **Tự động — `06-gm.spec.ts`.** GM: Cài đặt → Quản trị → tab Người chơi → tìm một người chơi theo tên → bấm Mở → "Cộng/trừ điểm", nhập 10.000 điểm: nút Xác nhận còn khóa cho tới khi nhập lý do; nhập lý do rồi Xác nhận. Người chơi kia đang mở sảnh. Rồi GM mở tab Nhật ký | Trong danh sách, email bị che; trang người chơi hiện email đầy đủ. GM thấy "Đã cập nhật số dư". Người chơi thấy ngay thông báo "Quản trị viên: +10.000 điểm — `<lý do>`" và số dư tăng 10.000 mà không cần tải lại trang. Nhật ký có dòng "Cộng điểm" kèm lý do. Không chữ đè chữ, không cuộn ngang: test tự động kiểm một lần ở 1440×900 (project `desktop`); 1920×940, 1366×768 và 375×812 do người test nhìn bằng mắt (mục M) | P1 |
 | Q-02 | **Tự động — `06-gm.spec.ts`.** Hai người chơi vào một bàn Blind (Chơi hoặc bỏ, hai ghế, không bot), bắt đầu ván và dừng ở vòng quyết định Chơi/Bỏ. GM: Quản trị → tab Phòng → Làm mới → bàn hiện "Đang ván" → Đóng phòng, nhập lý do, Xác nhận. Rồi GM mở tab Nhật ký | Hộp thoại ghi rõ "Ván đang chơi sẽ bị hủy". GM thấy "Đã đóng phòng, hoàn cho 2 người". Cả hai người chơi tự về sảnh, điểm mỗi người bằng đúng số trước khi ngồi vào bàn (không mất cược). Nhật ký có dòng "Đóng phòng" kèm lý do | P1 |
 | Q-03 | **Tự động — `06-gm.spec.ts`.** Người chơi A bấm "Nhận thưởng" ở "Điểm danh". GM: Quản trị → Người chơi → mở A → "Đặt lại điểm danh" (hộp thoại ghi số điểm sẽ trừ lại), nhập lý do, Xác nhận; A vẫn ở trang "Điểm danh", nút "Nhận thưởng" sáng lại không cần tải lại trang, A bấm lần nữa. Rồi GM bấm "Mở thành tựu", chọn "Bảy ngày ghé bàn", nhập lý do, Xác nhận. Rồi tab "Quà tháng": chọn tháng sau, bấm "Ngày 21", chọn "Cố định", thêm một món chưa có trong lịch, "Lưu", nhập lý do; tải lại trang và mở lại tab. Cuối cùng tab "Nhật ký". Ở 1920×940, 1366×768 và 375×812 xem tab "Quà tháng" và bảng "Theo ngày" ở tab "Tổng quan" | A thấy "Lượt điểm danh hôm nay đã được mở lại: trừ lại … điểm — <lý do>" và số dư giảm đúng bằng số điểm hộp thoại đã ghi, rồi tăng lại sau lần nhận thứ hai. GM thấy "Đã mở lại lượt điểm danh hôm nay.", "Đã mở thành tựu và trả thưởng." (A thấy thông báo và +5.000) và "Đã lưu quà tháng."; sau khi tải lại, tháng có chữ "(đã sửa)" và ô ngày 21 có món vừa thêm. Nhật ký có ba dòng "Đặt lại điểm danh", "Mở thành tựu", "Đổi quà tháng". Không chữ đè chữ và không cuộn ngang ở cả ba cỡ; ở 375 px bảng "Theo ngày" cuộn ngang trong khung của nó (`docs/known-limitations.md`) | P1 |
+| Q-04 | **Tự động — `06-gm.spec.ts`.** GM: Quản trị → tab "Cửa hàng" → bảng "Giá": ô "Giá của Mũ len" sửa thành 12000, bấm "Lưu giá", nhập lý do, "Lưu giá". Người chơi A mở "Cửa hàng". GM mở tab Nhật ký, rồi đặt giá về 10000 như cũ | Trước khi lưu có dòng "Đã sửa 1 hàng, chưa lưu."; hộp thoại "Lưu 1 thay đổi giá" chỉ cho lưu khi có lý do; lưu xong GM thấy "Đã lưu 1 giá." và ô giá giữ 12000. Thẻ "Mũ len" ở kệ Thường của A ghi "Mua · 12.000". Nhật ký có dòng "Đổi giá cửa hàng" kèm lý do. Đặt lại giá thì thẻ về "Mua · 10.000" | P1 |
 
 ## 6. Kịch bản nhiều người (vòng 3, 3–4 người, ~45 phút)
 
@@ -301,7 +316,7 @@ server thử). Mục "Quản trị" chỉ hiện trong Cài đặt cho tài kho�
 4. Khi A hết stack: A đứng dậy rồi ngồi lại với mức mang vào mới — kiểm số dư A (H-01).
 5. A rời phòng khi đang là chủ phòng → kiểm chủ phòng mới (G-04).
 6. Chuyển sang phòng Blind "Chơi hoặc bỏ", mức cược 1.000, 2 lá, 1 bot. Chơi 10 ván; có ít nhất một ván
-   cả nhóm cùng Bỏ để xem pot cộng dồn (F-04). Ai tiêu hết hạn mức 5.000 bị mời đứng dậy — bấm ghế để vào lại (F-10).
+   cả nhóm cùng Bỏ để xem pot cộng dồn (F-04). Ai chơi về 0 bị mời đứng dậy — bấm ghế để vào lại khi còn điểm (F-10).
 7. Mọi người thật bấm Tạm nghỉ, chờ 60 giây → pot cộng dồn được chia (F-05). Rời hết → phòng (còn 1 bot) biến
    mất khỏi sảnh ngay (C-07); "Đang đóng…" 60 giây chỉ có ở phòng không bot (C-06).
 8. Mỗi người mở Hồ sơ → Lịch sử điểm, đối chiếu số dư (H-01), ghi lại số dư cuối.

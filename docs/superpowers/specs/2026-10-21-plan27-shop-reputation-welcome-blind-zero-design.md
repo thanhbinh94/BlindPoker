@@ -323,20 +323,21 @@ người xây quyết cách làm:
 Hôm nay `nextStreak` (`daily-rules.ts:129`) cộng 1 khi hôm qua có nhận, còn lại về 1; sang tháng mới về 1; mốc quà
 (7, 14, 21, 28) và `DAILY_REWARD_POINTS` tính theo chuỗi đó. Đổi:
 
-- **Ô thứ N của lịch sáng ở lần điểm danh thứ N trong tháng.** `day = claimed_days.length + 1` của tháng hiện tại
-  (`daily_logins.claimed_days` đã có); sang tháng mới về 1 như cũ; bỏ một hôm **không** về 1. `DAILY_REWARD_POINTS`,
+- **Ô thứ N của lịch sáng ở lần điểm danh thứ N trong tháng.** `day = claimed_days + 1` của tháng hiện tại
+  (`daily_logins.claimed_days` là một **số đếm** integer đã có, về 0 khi sang tháng); sang tháng mới về 1 như cũ; bỏ
+  một hôm **không** về 1. `DAILY_REWARD_POINTS`,
   `applyItemRule`, lịch quà tháng của GM (Plan 26), "Đặt lại điểm danh" (lùi `day` một đơn vị), và lịch tân thủ (C2)
   giữ nguyên hình dạng, chỉ đổi cách đếm. Tháng 30 ngày không có lần thứ 31, như `MAX_STREAK` hôm nay.
 - **Cột `daily_logins.streak` giữ tên, đổi nghĩa** thành "số lần đã nhận trong tháng" (nó đã về 1 mỗi tháng).
-  Migration dữ liệu trong `0006`: `streak = jsonb_array_length(claimed_days)` cho hàng có `month` = tháng hiện tại
-  (tài khoản bị gãy chuỗi trong tháng được trả lại ô đúng), idempotent.
+  Migration dữ liệu trong `0006`: `UPDATE daily_logins SET streak = claimed_days WHERE month = <tháng hiện tại> AND
+  streak < claimed_days` (tài khoản bị gãy chuỗi trong tháng được trả lại ô đúng), idempotent.
 - **Chuỗi liên tiếp vẫn tồn tại cho thành tựu** `login_streak_7` và `login_streak_28` (danh hiệu Tận tụy):
   `claimDaily` tính `consecutive = lastClaimDate == hôm qua ? consecutive + 1 : 1` vào cột mới
   `daily_logins.consecutive` và phát nó trong `DAILY_CLAIMED`; `stats-service.ts:161-168` lấy `loginStreak` /
   `bestLoginStreak` từ trường đó thay vì từ `streak`. `total_login_days` không đổi (R21).
-- **Màn Điểm danh:** câu tóm tắt đổi thành "Lần điểm danh thứ 12 của tháng 10 · không cần liên tiếp"; ô đã nhận hiện
-  ngày thật đã nhận (tooltip), ô kế tiếp là "Hôm nay"; thanh phụ "Còn 19 ngày trong tháng cho 16 ô" để người chơi thấy
-  mình còn kịp mốc nào. Copy vi/en, `docs/player-guide.md` §Điểm danh, SRS §13 sửa theo.
+- **Màn Điểm danh:** câu tóm tắt đổi thành "Lần điểm danh thứ 12 của tháng 10 · không cần liên tiếp"; ô kế tiếp là
+  "Hôm nay"; một dòng phụ "Còn 19 ngày trong tháng cho 16 ô" để người chơi thấy mình còn kịp mốc nào (không có lịch sử
+  theo ngày nên không có tooltip ngày đã nhận). Copy vi/en, `docs/player-guide.md` §Điểm danh, SRS §13 sửa theo.
 - **Kiểm thử:** `daily-rules.test.ts:82` (gãy chuỗi → hôm nay là 1) đổi thành "bỏ một hôm → lần kế tiếp"; thêm test
   "bỏ 3 hôm trong tháng 31 ngày vẫn tới ô 28, bỏ 4 hôm thì không"; test `consecutive` cho hai thành tựu; test hoàn tác
   của GM lùi `day` đúng một; test migration dữ liệu.

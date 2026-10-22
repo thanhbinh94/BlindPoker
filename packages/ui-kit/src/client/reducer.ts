@@ -172,7 +172,10 @@ function applyHandEvent(state: ClientState, hand: ClientHand, event: GameEvent &
       return withHand(state, hand, {
         seats: hand.seats.map((s) => {
           const amount = posted.get(s.seat)
-          return amount === undefined ? s : { ...s, stack: s.stack - amount, betThisStreet: s.betThisStreet + amount }
+          if (amount === undefined) return s
+          // A post that takes the whole stack leaves the seat all in (plan 27 D2: a short Blind ante), as the engine has it.
+          const stack = s.stack - amount
+          return { ...s, stack, betThisStreet: s.betThisStreet + amount, allIn: s.allIn || stack <= 0 }
         }),
       })
     }
@@ -197,9 +200,13 @@ function applyHandEvent(state: ClientState, hand: ClientHand, event: GameEvent &
     }
     case 'DECISION_PHASE': {
       const mine = hand.mySeat
-      const undecided = mine !== null && event.seats.includes(mine) && !hand.seats.find((s) => s.seat === mine)?.hasDecided
+      const seat = mine === null ? undefined : hand.seats.find((s) => s.seat === mine)
+      // A seat the ante emptied is played for it (plan 27 D1) and never asked; a short one plays what it has left,
+      // as `blindLegalActions` says: min(stack, wager), which the button reads as "Tất tay N".
+      const undecided = mine !== null && seat !== undefined && event.seats.includes(mine) && !seat.hasDecided && !seat.allIn
+      const wager = state.room?.config.blind?.fixedWager ?? 0
       const legal: LegalActions | null = undecided
-        ? { seat: mine, kinds: ['play', 'fold'], callAmount: state.room?.config.blind?.fixedWager ?? 0, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 }
+        ? { seat: mine, kinds: ['play', 'fold'], callAmount: Math.min(seat.stack, wager), minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 }
         : null
       return { ...state, deadlineAt: event.deadlineAt ?? null, hand: { ...hand, phase: 'DECISION', actingSeat: null, legal } }
     }

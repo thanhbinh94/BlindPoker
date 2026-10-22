@@ -245,6 +245,30 @@ server until **Lưu tủ đồ** is pressed. Saving is `PUT /api/me/avatar` with
 optional slot is *absent* from the object, not `''`), and on success `invalidate(myId)` so the lobby bar
 and every seat plate pick the new face up without a reload.
 
+#### Wardrobe loading (Plan 27, E2)
+
+The five reads still go out together, but in two groups: the stage and the cards draw as soon as the inventory, the
+item catalogue and the avatar catalogue have answered; the saved outfits (drawn only once they arrive, never as five
+empty slots in the meantime) and the achievements a locked card's hint names follow. If any of the five fails, the
+screen shows the same "Không tải được phòng thay đồ", and "Thử lại" asks again for the group that failed. Every picture
+below the stage waits until it is within 200 px of the screen: the saved-outfit heads and the Kiểu tóc portraits are
+`<Chibi lazy>`, and a card's icon (`ItemPreview`, in the wardrobe and the Cửa hàng alike) draws an empty box of the
+icon's size until then. A card icon's tint render queues behind every figure's, the first card of its grid first
+(priority `-200 - index`). The stage stays eager.
+
+Measured by the ops pack (`e2e/ops/08-shop.spec.ts`; Chromium, fresh HTTP cache):
+
+- **P-04** (375×812, DPR 2): opening the wardrobe asks for 16 `/avatar/` pictures (the small portraits' @1x files), for
+  the 5 figures and cards near the screen. On Mũ with "Hiện cả món chưa có" ticked, 3 requests for the 4 hats near the screen out of 8, where loading
+  every card (`IntersectionObserver` removed, the old behaviour) asks for 7. Back on Kiểu tóc it asks for none.
+- **P-05** ("fast 3G": 1.6 Mbps down, 750 kbps up, 150 ms RTT, from a tap with the app already open): the stage is
+  drawn and the first row of cards is on screen in about 850 ms at both 1366×768 and 375×812. The first row's pictures
+  arrive in about 1.7 s at both sizes. On the phone that rests on Ruling 16: a `head` chibi whose `size × DPR` is at most
+  the crop's 208 px loads its layers @1x, tinted and plain, whatever the screen's ratio. Before it, a 72 px Kiểu tóc
+  portrait at DPR 2 loaded its hair layers @2x (about 440 KB for the row) and the pictures took about 3.2 s.
+- In the desktop preview column (`overflow: auto`), the five saved-outfit heads draw on open at 1366×768 and 1920×940.
+  Nothing appears late when the column scrolls, even though `rootMargin` does not apply inside a scrolling ancestor.
+
 ### Adding an item, end to end
 
 1. **The picture.** Generate (or draw) it on the body of its gender per
@@ -292,8 +316,11 @@ have no account, so their id would be a guaranteed 404 apiece.
 `invalidate(playerId)` drops an entry and refetches; the wardrobe calls it after a save. There are
 **two** caches in the way, and it clears both: this module's Map, and the browser's own — the route
 answers `Cache-Control: private, max-age=60`, so the refetch is issued as
-`api.playerAvatar(id, { fresh: true })`, which sets `cache: 'no-store'`. Only the invalidated id is
-marked; every other seat keeps the 60 s the header is there for.
+`api.playerAvatar(id, { fresh: true })`, which sets `cache: 'reload'`: past the browser's cache, and the
+fresh answer written back over the stale one, so a reload inside the minute reads it too (`no-store` left the
+stale entry in place). Only the invalidated id is marked; every other seat keeps the 60 s the header is there
+for. Besides the wardrobe's save and the welcome gift, the app invalidates the player's own entry when a
+`RANK_UP` arrives (Plan 27), so the lobby bar and the next seat show the new rank at once.
 
 `resetAvatarCache()` empties it. One caller in the app — a session ending — because the cache is
 module scope and keyed by player id, so the account that just signed out would otherwise sit there
@@ -373,7 +400,7 @@ the lock.** A player who types `#/gm` is sent to the lobby before the chunk is r
 `window.location.replace` so Back is not trapped on a redirecting entry), and a GM demoted or locked since the page loaded
 finds out on the next call.
 
-- **Five tabs** — Tổng quan, Người chơi, Phòng, Quà tháng, Nhật ký. The Players tab stays mounted (hidden) while one player's page is
+- **Six tabs** — Tổng quan, Người chơi, Phòng, Quà tháng, Cửa hàng (Plan 27), Nhật ký. The Players tab stays mounted (hidden) while one player's page is
   open, so Back returns to the same search, results and cursor with no request.
 - **The 403 proxy.** `useAsync` swallows the cause of a failure, so a tab cannot notice that the role is gone. `GmScreen`
   wraps the api in a `Proxy` that checks each call's rejection: a `403 FORBIDDEN` calls `onForbidden` once (a tab firing
@@ -419,9 +446,33 @@ finds out on the next call.
   `GET /api/gm/stats/daily`: a table with a row per economy day (Ngày, Nguồn, Bể, Ròng) whose last column draws the day's
   sources (gold) and sinks (red) as bars on one scale, the largest single sum of the range; no chart library. At 375 px the
   table scrolls inside its wrapper (`docs/known-limitations.md`).
+- **The Cửa hàng tab (`ShopTab.tsx`, Plan 27).** One read of `GET /api/gm/shop` feeds four blocks, each with its own
+  Save behind the `ReasonDialog`: **Giá** (`PricesEditor.tsx`: every item with "Giá của …", "Bậc tối thiểu của …" and
+  "Bán …", filtered by slot and rarity, unpriced rows first; Save sends only the changed fields of the changed rows),
+  the week's shelf (`FeaturedEditor.tsx`), the welcome choices (`WelcomeEditor.tsx`) and reputation's rules and rank
+  thresholds (`ReputationEditor.tsx`). After a save the tab is read again and a status line says what landed ("Đã lưu
+  N giá."). A player's page adds "Cộng danh vọng" (a GM only ever adds reputation).
 
 Tests: `screens/gm/*.test.tsx`, `screens/DailyCalendar.test.tsx`, `notifications.test.ts`, and the ops pack's section Q
-(`e2e/ops/06-gm.spec.ts`, Q-01 to Q-03).
+(`e2e/ops/06-gm.spec.ts`, Q-01 to Q-04).
+
+---
+
+## The Cửa hàng and the welcome gift (Plan 27)
+
+`screens/shop/ShopScreen.tsx` (route `#/shop`, a lazy account chunk, reached from the lobby's "Phòng thay đồ và cửa
+hàng" links) draws `GET /api/shop`: a stage with the player's figure, their balance ("Số dư: N điểm") and their
+reputation line, "Kệ tuần này" when the week has a shelf, then one shelf per rarity ("Theo độ hiếm") filtered by slot.
+Each card (`ShopCard.tsx`) is the wardrobe's own card with the shop's footer: "Mua · N", "🔒 cần <Bậc>" under the
+player's rank, "thiếu N điểm" when short, "✓ Đã có" with a link to wear it, or why the item does not sell. A press on a
+card is a try-on; "Mua" asks "Mua món này?" and sends a fresh `purchaseId` (`purchase-id.ts`), so a retry after a
+timeout is charged once.
+
+`screens/WelcomeDialog.tsx` is the welcome gift: it opens over the lobby by itself once per account and browser
+(`bp.welcomeShown`) while `GET /api/welcome` says it is not claimed, offers three rare items drawn on the player's own
+figure, and grants the pick (worn at once) and the reputation with "Nhận"; "Để sau" leaves the lobby's "🎁 Quà chào
+mừng" button as the way back. While the gift waits the daily reminder does not open Điểm danh. Tests:
+`screens/shop/*.test.tsx`, `screens/WelcomeDialog.test.tsx`, and the ops pack's section P (`e2e/ops/08-shop.spec.ts`).
 
 ---
 
@@ -458,9 +509,9 @@ and holds four budgets:
 
 | | Budget | Today |
 |---|---:|---:|
-| entry chunk (first paint) | 130 KB | 108 KB |
-| every JS chunk together | 900 KB | 119 KB |
-| the stylesheet | 60 KB | 13 KB |
+| entry chunk (first paint) | 140 KB (Plan 27, Ruling 13) | ~136 KB |
+| every JS chunk together | 900 KB | ~174 KB |
+| the stylesheet | 60 KB | ~23 KB |
 | `public/avatar/*@2x.png`, raw bytes (design §8) | 32 MB total (design: 6 MB; raised 2026-09-24 for real art) | ~17 MB (the v4 art) |
 
 The first three are headroom rather than targets: their job is to catch a *step change* (a chart

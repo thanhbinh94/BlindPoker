@@ -21,6 +21,16 @@ export const MAX_STREAK = 31
 /** §13.2: what a day whose cosmetic tier has nothing unowned left pays instead. */
 export const NO_ITEM_FALLBACK_POINTS = 10_000
 
+/** Plan 27 C2: the newcomer calendar's length — day 1 is the welcome claim, each later day with a check-in adds one. */
+export const NEWCOMER_DAYS = 7
+
+/** What a newcomer day hands out besides the check-in (spec C2): a random unowned common on day 3, a rare on day 7. */
+export function newcomerGiftFor(day: number): 'common' | 'rare' | null {
+  if (day === 3) return 'common'
+  if (day === NEWCOMER_DAYS) return 'rare'
+  return null
+}
+
 /** Renders `nowMs` as the calendar day (`YYYY-MM-DD`) it falls on in `timeZone`. */
 export function dayKey(nowMs: number, timeZone: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(nowMs))
@@ -105,7 +115,10 @@ export function dayStartMs(key: string, timeZone: string): number {
 
 /** The stored half of a player's check-in state — the `daily_logins` row, as the rules see it. */
 export interface DailyState {
+  /** The month's claim count (§13.1 as amended by Plan 27 Part G): the calendar tile the last claim lit. */
   streak: number
+  /** The run of calendar days claimed back to back, across month boundaries too — what the login-streak achievements read. */
+  consecutive: number
   /** `YYYY-MM-DD` in the economy timezone; null before the first ever claim. */
   lastClaimDate: string | null
 }
@@ -113,33 +126,37 @@ export interface DailyState {
 export interface StreakOutcome {
   /** True when `lastClaimDate` is already today: there is nothing to claim. */
   alreadyClaimed: boolean
-  /** The streak after this claim (or the current one, when already claimed). */
+  /** The month's claim count after this claim (or the current one, when already claimed). */
   streak: number
-  /** The reward tier, i.e. the streak capped at 31. */
+  /** The run of consecutive calendar days after this claim (or the current one, when already claimed). */
+  consecutive: number
+  /** The reward tier, i.e. the month's count capped at 31. */
   day: number
   /** `dailyRewardPoints(day)`. */
   points: number
 }
 
 /**
- * §13.1, in one function: yesterday → +1, today → already claimed, anything else → 1; and a claim
- * whose month differs from the previous claim's always restarts at 1, even when it is otherwise
- * consecutive (the 1st of a month is always streak 1).
+ * §13.1 as amended by Plan 27 Part G, in one function. The tier is the month's claim count: today → already claimed,
+ * a previous claim earlier in the same month → +1 however many days were missed between, anything else (a new month,
+ * or no claim ever) → 1. Beside it runs `consecutive`, the run of calendar days: yesterday → +1, anything else → 1,
+ * and unlike the tier it carries over a month boundary (31 August → 1 September is day 1 of September but one more
+ * consecutive day), because the login-streak achievements count days, not months.
  */
 export function nextStreak(state: DailyState, todayKey: string): StreakOutcome {
-  const { streak, lastClaimDate } = state
+  const { streak, consecutive, lastClaimDate } = state
 
   if (lastClaimDate === todayKey) {
     const day = Math.min(Math.max(streak, 1), MAX_STREAK)
-    return { alreadyClaimed: true, streak, day, points: dailyRewardPoints(day) }
+    return { alreadyClaimed: true, streak, consecutive, day, points: dailyRewardPoints(day) }
   }
 
-  const consecutive =
-    lastClaimDate !== null && daysBetween(lastClaimDate, todayKey) === 1 && monthOfDayKey(lastClaimDate) === monthOfDayKey(todayKey)
-  // The cap is defensive rather than reachable: a month has at most 31 days and a new month resets
-  // the streak, so `streak + 1` can only exceed 31 if a stored row already did.
-  const next = Math.min(consecutive ? streak + 1 : 1, MAX_STREAK)
-  return { alreadyClaimed: false, streak: next, day: next, points: dailyRewardPoints(next) }
+  const sameMonth = lastClaimDate !== null && monthOfDayKey(lastClaimDate) === monthOfDayKey(todayKey)
+  const yesterday = lastClaimDate !== null && daysBetween(lastClaimDate, todayKey) === 1
+  // The cap is defensive rather than reachable: a month has at most 31 days, one claim each, and a new month resets
+  // the count, so `streak + 1` can only exceed 31 if a stored row already did.
+  const next = Math.min(sameMonth ? streak + 1 : 1, MAX_STREAK)
+  return { alreadyClaimed: false, streak: next, consecutive: yesterday ? consecutive + 1 : 1, day: next, points: dailyRewardPoints(next) }
 }
 
 /** The points for a reward tier. Days beyond 31 fold to 31 — see `dailyRewardPoints`. */

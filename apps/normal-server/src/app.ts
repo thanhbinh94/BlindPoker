@@ -62,12 +62,14 @@ import { packageRoot } from './db/migrate.js'
 import { readDailyGiftsRaw } from './economy/daily-gifts.js'
 import { createGiftScheduleStore, type GiftScheduleStore } from './economy/gift-schedule-store.js'
 import { createEconomyService, type EconomyService } from './economy/economy-service.js'
+import { createWelcomeService, type WelcomeService } from './economy/welcome-service.js'
 import { createEventBus, type AppEventBus } from './events.js'
 import { createGmRoomService, type GmRoomService } from './gm/gm-rooms.js'
 import { createGmService, type GmService } from './gm/gm-service.js'
 import { createHistoryService, type HistoryService } from './history/history-service.js'
 import { loadAliases } from './inventory/aliases.js'
 import { readAvatarConfig } from './inventory/avatar-migrate.js'
+import { wearItemWithin } from './inventory/avatar.js'
 import { loadBodies, type Bodies } from './inventory/bodies.js'
 import { createInventoryService, type InventoryService } from './inventory/inventory-service.js'
 import { loadItemCatalog, type ItemCatalog } from './inventory/items.js'
@@ -76,6 +78,9 @@ import { createOutfitsService, type OutfitsService } from './inventory/outfits-s
 import { WS_PATH } from './http/routes-catalog.js'
 import { registerRoutes } from './http/routes.js'
 import { createRepositories, pruneLedgerKeys, type NormalRepositories } from './repos/index.js'
+import { createReputationService, seedDefaults as seedReputationDefaults, type ReputationService } from './reputation/reputation-service.js'
+import { seedConfig as seedShopConfig, seedPrices as seedShopPrices } from './shop/shop-prices-seed.js'
+import { createShopService, type ShopService } from './shop/shop-service.js'
 import { sessions as sessionsTable } from './db/schema.js'
 import { createStatsService, type StatsService } from './stats/stats-service.js'
 import { createTrustedPeerCheck, upgradeAddress } from './trust-proxy.js'
@@ -216,6 +221,12 @@ export interface AppServices {
   /** What a GM may do to an account, and the façade over live rooms (Plan 25). */
   gm: GmService
   gmRooms: GmRoomService
+  /** Plan 27: reputation and the rank it reaches (spec §2). */
+  reputation: ReputationService
+  /** Plan 27: catalogue cosmetics sold for points behind a rank (spec §3). */
+  shop: ShopService
+  /** Plan 27: the welcome gift — one of three rare items, worn at once, with the first reputation (spec §4 C1). */
+  welcome: WelcomeService
   /** Old wardrobe ids, kept readable — see `inventory/aliases.ts`. */
   aliases: ReadonlyMap<string, string>
   manifest: AvatarManifest
@@ -270,6 +281,14 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
   const gifts = await createGiftScheduleStore({ db, catalog, defaults: readDailyGiftsRaw(), timezone: config.timezone, log, ...(deps.now ? { now: deps.now } : {}) })
   // Before anything reads or grants an item: every reward is a foreign key into this table.
   await catalog.seed(db)
+  // Plan 27: the reputation rules and ranks the migration seeds, put back where a row is missing (a test reset, a
+  // hand-cleared table). Never overwrites a GM's edit.
+  await seedReputationDefaults(db)
+  // Plan 27: a price row for every catalogue item that has none (a fresh database, an item added to `items.json`), and
+  // the welcome choices where the row is missing. Neither overwrites a GM's edit.
+  const priced = await seedShopPrices(db, catalog, defs)
+  if (priced > 0) log.info('shop prices seeded', { count: priced })
+  await seedShopConfig(db)
   // Before any room exists: the keys a past process claimed can never be retried — its rooms went with it.
   const pruned = await pruneLedgerKeys(db)
   if (pruned > 0) log.info('ledger keys pruned', { count: pruned })
@@ -314,6 +333,8 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
   // A saved outfit is read the way `players.avatar_config` is: repaired to v4 on the way out (spec §4.5, R6).
   const outfits = createOutfitsService(db, inventory, (stored) => readAvatarConfig(stored, catalog, aliases, bodies))
   const stats = createStatsService({ db, bus })
+  // Before the services that pay it (economy, achievements, GM): each takes it as an optional dependency.
+  const reputation = createReputationService({ db, bus, notify: (playerId, msg) => game.notify(playerId, msg), log, ...(deps.now ? { now: deps.now } : {}) })
   const economy = createEconomyService({
     db,
     repos,
@@ -328,6 +349,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     onBalanceChanged: (playerId) => void game.balanceChanged(playerId),
     // Everything an achievement has promised is off the random draw's table.
     reservedItemIds: defs.flatMap((def) => (def.reward.itemId === undefined ? [] : [def.reward.itemId])),
+    reputation,
     ...(deps.now ? { now: deps.now } : {}),
     ...(deps.rng ? { rng: deps.rng } : {}),
   })
@@ -341,14 +363,39 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     log,
     notify: (playerId, msg) => game.notify(playerId, msg),
     onBalanceChanged: (playerId) => void game.balanceChanged(playerId),
+    reputation,
+    ...(deps.now ? { now: deps.now } : {}),
+  })
+  const shop = createShopService({
+    db,
+    repos,
+    inventory,
+    catalog,
+    defs,
+    gifts,
+    reputation,
+    timezone: config.timezone,
+    // As the economy's: a purchase moves only the balance, never a table stack.
+    onBalanceChanged: (playerId) => void game.balanceChanged(playerId),
+    ...(deps.now ? { now: deps.now } : {}),
+  })
+  const welcome = createWelcomeService({
+    db,
+    inventory,
+    catalog,
+    shop,
+    reputation,
+    avatars: { wearWithin: (tx, playerId, itemId) => wearItemWithin(tx, catalog, aliases, bodies, playerId, itemId) },
+    timezone: config.timezone,
     ...(deps.now ? { now: deps.now } : {}),
   })
   const history = createHistoryService({ db, repos })
-  const gm = createGmService({ db, repos, sessions, inventory, catalog, defs, history, stats, game, log, gifts, timezone: config.timezone, ...(deps.now ? { now: deps.now } : {}) })
+  const gm = createGmService({ db, repos, sessions, inventory, catalog, defs, history, stats, game, log, gifts, timezone: config.timezone, reputation, shop, ...(deps.now ? { now: deps.now } : {}) })
   const gmRooms = createGmRoomService(game)
 
-  // Order matters: the counters must be written before the thresholds are compared against them.
-  const unsubscribes = [stats.start(), achievements.start()]
+  // Order matters: the counters must be written before the thresholds are compared against them. Reputation's
+  // per-hand listener depends on neither, so it goes last.
+  const unsubscribes = [stats.start(), achievements.start(), reputation.start()]
 
   // `config.trustProxy` is `false` or a spec string (`uniquelocal`, `10.0.0.0/8,192.168.1.7`, …),
   // never `true` — `loadConfig` refuses that. Fastify splits the string and compiles it with
@@ -377,6 +424,9 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     history,
     gm,
     gmRooms,
+    reputation,
+    shop,
+    welcome,
     catalog,
     defs,
     aliases,
@@ -497,7 +547,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
   return {
     fastify,
     game,
-    services: { bus, catalog, defs, gifts, repos, sessions, auth, inventory, outfits, stats, achievements, economy, history, gm, gmRooms, aliases, manifest, bodies },
+    services: { bus, catalog, defs, gifts, repos, sessions, auth, inventory, outfits, stats, achievements, economy, history, gm, gmRooms, reputation, shop, welcome, aliases, manifest, bodies },
     close,
   }
 }

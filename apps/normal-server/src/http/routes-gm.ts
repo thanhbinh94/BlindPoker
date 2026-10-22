@@ -49,6 +49,13 @@ const SERVICE_STATUS: Record<string, number> = {
   INVALID_ACHIEVEMENT: 400,
   INVALID_MONTH: 400,
   INVALID_GIFTS: 400,
+  INVALID_PRICES: 400,
+  INVALID_FEATURED: 400,
+  INVALID_WELCOME: 400,
+  INVALID_RULES: 400,
+  INVALID_RANKS: 400,
+  INVALID_WEEK: 400,
+  WEEK_IN_PAST: 409,
   FORBIDDEN: 403,
   SELF_TARGET: 403,
   TARGET_IS_GM: 403,
@@ -67,6 +74,8 @@ const SERVICE_STATUS: Record<string, number> = {
 }
 
 const MONTH_KEY = /^\d{4}-(0[1-9]|1[0-2])$/
+/** An ISO week, `YYYY-Www` (the shop's week key). */
+const WEEK_KEY = /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/
 
 /** A refusal that means "there was nothing to act on" — no action happened, so none is logged. */
 const LOOKUP_REFUSALS: ReadonlySet<string> = new Set(['ROOM_NOT_FOUND', 'NOT_IN_ROOM'])
@@ -188,6 +197,12 @@ export function registerGmRoutes(app: FastifyInstance, deps: GmRouteDeps): void 
     return reply.send({ actionId, undone, balance })
   })
 
+  // Plan 27: a GM only ever adds reputation (spec A5) — no route takes it away.
+  app.post('/api/gm/players/:id/reputation', gmOnly, async (req, reply) => {
+    const body = bodyOf(req)
+    return reply.send(await translated(() => deps.gm.grantReputation(actorOf(req), idOf(req), body.amount as number, body.reason as string)))
+  })
+
   app.post('/api/gm/players/:id/lock', gmOnly, async (req, reply) => {
     await translated(() => deps.gm.lock(actorOf(req), idOf(req), bodyOf(req).reason as string))
     return reply.send({ locked: true })
@@ -217,6 +232,39 @@ export function registerGmRoutes(app: FastifyInstance, deps: GmRouteDeps): void 
   app.delete('/api/gm/gifts/:month', gmOnly, async (req, reply) => {
     const reason = roomReason(req)
     return reply.send(await translated(() => deps.gm.clearGiftMonth(actorOf(req), monthOf(req), reason)))
+  })
+
+  // ---------- the shop and reputation (Plan 27, spec B4, A5) ----------
+  // Each write checks the reason first, as everywhere here, then hands the body to the service, which validates it
+  // before it writes anything or logs a line.
+
+  app.get('/api/gm/shop', gmOnly, async (req, reply) => reply.send(await translated(() => deps.gm.shopConfig(actorOf(req)))))
+
+  app.put('/api/gm/shop/prices', gmOnly, async (req, reply) => {
+    const reason = roomReason(req)
+    return reply.send(await translated(() => deps.gm.setShopPrices(actorOf(req), bodyOf(req).changes, reason)))
+  })
+
+  app.put('/api/gm/shop/featured/:week', gmOnly, async (req, reply) => {
+    const reason = roomReason(req)
+    const week = (req.params as { week: string }).week
+    if (!WEEK_KEY.test(week)) throw new HttpError(400, 'INVALID_WEEK', 'week must be YYYY-Www')
+    return reply.send(await translated(() => deps.gm.setShopFeatured(actorOf(req), week, bodyOf(req).itemIds, reason)))
+  })
+
+  app.put('/api/gm/shop/welcome', gmOnly, async (req, reply) => {
+    const reason = roomReason(req)
+    return reply.send(await translated(() => deps.gm.setWelcomeChoices(actorOf(req), bodyOf(req).itemIds, reason)))
+  })
+
+  app.put('/api/gm/reputation/rules', gmOnly, async (req, reply) => {
+    const reason = roomReason(req)
+    return reply.send(await translated(() => deps.gm.setReputationRules(actorOf(req), bodyOf(req).rules, reason)))
+  })
+
+  app.put('/api/gm/reputation/ranks', gmOnly, async (req, reply) => {
+    const reason = roomReason(req)
+    return reply.send(await translated(() => deps.gm.setReputationRanks(actorOf(req), bodyOf(req).ranks, reason)))
   })
 
   // ---------- rooms ----------

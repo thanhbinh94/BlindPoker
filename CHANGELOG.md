@@ -9,6 +9,202 @@ below are the real history.
 
 ---
 
+## Plan 27 — a shop for points behind a reputation rank, a welcome gift, Blind played to zero, a lazy wardrobe and a monthly check-in — merged `MERGE` (2026-10-2x)
+
+The round the user asked for on 2026-10-20/21 (`docs/bug-log.md` §9, K1–K5, plus Q13 from the spec review): players saw
+many outfits and no way to earn them, Blind tables threw out accounts with 5–6k left, and the wardrobe loaded slowly.
+Six parts: **A** a reputation that only rises and a rank beside the name, **B** a Cửa hàng that sells catalogue items for
+points behind that rank, **C** a welcome gift and a seven-claim newcomer calendar, **D** Blind with no table fee, played
+down to the last point, **E** a wardrobe that loads only what is on screen, **G** a check-in calendar that counts the
+month's claims; **F** wrote K1 (two devices) down as a rule. Spec
+`docs/superpowers/specs/2026-10-21-plan27-shop-reputation-welcome-blind-zero-design.md` (the Q-table is §1, Q1–Q13; the
+session's rulings are R1–R21, §10), plan `docs/superpowers/plans/2026-10-22-plan27-shop-reputation-welcome-blind-zero.md`
+(36 pre-flight amendments, P1–P36, one rejected), branch `feature/BP-27-shop-reputation-welcome-blind-zero`. Points only,
+as always: "mua" in every screen and doc here means in-game points; there is no payment, conversion or trading.
+GATE
+
+- **What a player sees first (Part C).** The first visit to the lobby — a new account or an old one — opens "Chào mừng
+  đến Blind Luck Poker": three rare items ("Đồng phục chia bài", "Áo dài Tết đỏ", "Nón lá"), each worn by the player's
+  own figure on its card. "Nhận" puts the pick in the wardrobe, wears it at once and adds **100 reputation** (rank 2,
+  Tay bài); a status line in the dialog says so and "Vào chơi" closes it. "Để sau" leaves a "🎁 Quà chào mừng" pill on
+  the lobby. An item already owned is greyed "✓ Đã có"; with all three owned the dialog offers only "Nhận 100 danh vọng".
+  The starting balance stays 100,000. From then on Điểm danh carries a **"Tuần đầu tiên"** panel under the summary: seven
+  cells (Đã nhận / Hôm nay / Chưa tới), "1 món thường" on day 3, "1 món hiếm +200 danh vọng" on day 7; one "Nhận thưởng"
+  claims both calendars and the receipt lists both. It counts claim days, so a missed day costs nothing.
+- **What a player sees (Part B).** A **"Cửa hàng"** pill beside "Phòng thay đồ" on the lobby's player bar (the same line
+  as the name and the balance, so a lobby of six still fits 1920×940) opens `#/shop`: the player's
+  own figure on the left (a 96 px strip on top at phone width) with the balance and the rank's progress, **"Kệ tuần
+  này"** (up to six items, a GM's pick or a rotation fixed from Monday), then shelves Thường / Hiếm / Cực hiếm, filtered
+  by slot ("Lọc theo ô", the wardrobe's own labels, plus "Màu sắc" for the rare and epic hair and eye colours). A tap
+  **tries the item on** the figure ("Mặc thử: …", "Về đồ đang mặc"). A card says "Mua · 30.000", "thiếu N điểm", "🔒 cần
+  Bậc thầy", "✓ Đã có" with "Mặc" (opens the wardrobe on that item), or where an unsold item comes from ("🏆 Thành tựu:
+  …", "📅 Quà tháng 11/2026", "📅 Quà điểm danh", "Miễn phí — có sẵn trong Phòng thay đồ"). "Mua" asks "Mua món này?"
+  with the price and what is left; after it the card turns "✓ Đã có", the figure keeps the item and "Mặc luôn" saves it.
+  A lost answer says "Chưa rõ đã mua được chưa…" and the next "Mua" resends the same purchase id, so nobody is charged
+  twice. Seed prices: common 10,000 at rank 1, rare 30,000 at Cao thủ, epic 150,000 at Bậc thầy (spec Q1: a rare after a
+  week of evenings, an epic after a month). At launch 2 epics, 27 rares and 12 commons sell; a month's check-in epic goes
+  on sale the month after (Q12). The ledger line is "Mua ở Cửa hàng".
+- **What a player sees (Part A).** Every dealt hand (+1), win (+3 more), check-in (+10), achievement (+50 / +150 / +500 by
+  its reward), the welcome gift (+100) and newcomer day 7 (+200) add **reputation**, which is not points and never goes
+  down. Five ranks — Tân binh 0, Tay bài 100, Cao thủ 400, Bậc thầy 1,800, Huyền thoại 5,000 — and the rank is the
+  highest reached, so a GM raising a threshold lowers nobody. From rank 2 the rank's name stands after the player's name
+  on a wide seat plate, in its colour (`--rank-2` … `--rank-5`, AA on the plate); on a narrow plate, in the landscape
+  frame and in the "Mời ra" list it is a roman-numeral pill ("III") with the name as its title. The lobby bar shows it
+  after the name, the profile reads "Danh vọng 455 · Cao thủ · còn 1.345 tới Bậc thầy" with a bar, and a rank-up toasts
+  "Bạn vừa lên bậc Cao thủ" and shows on the player's own bar and seat at once (the app reads its own avatar again,
+  past the browser's cache). A GM's grant reads "+500 danh vọng — <lý do>".
+- **What a player sees (Part D).** A Blind table takes **no fee**, and a seat plays **down to its last point**. Sitting
+  down needs one wager in both modes (play-or-fold asked for two). A seat short of the wager antes what it has and is all
+  in, winning only the pots it matched; in play-or-fold a seat the ante emptied is played for it (never asked, never
+  timed out) and a seat short for the second commit sees "Tất tay N" instead of "Chơi". A seat that ends a hand at
+  exactly 0 — Hold'em too — is stood up and told "Bạn đã hết điểm ở bàn này. Nhận Cứu trợ nếu số dư dưới 5.000 điểm,
+  hoặc chọn ghế trống khi có điểm." The old "Bạn đã dùng hết hạn mức ở bàn này" is gone. The Blind result card has no
+  "Phí bàn" line.
+- **What a player sees (Part G).** The Normal check-in counts **the month's claims**: the N-th claim of the month lights
+  tile N, and a missed day no longer sends anyone back to tile 1. The page reads "Lần điểm danh thứ 12 của tháng 10/2026 ·
+  không cần liên tiếp" and "Còn 19 ngày trong tháng cho 20 ô"; the "Hôm nay" tile follows the count. "Chuỗi 7 ngày" and
+  "Chuỗi 28 ngày" still need consecutive days. Lite keeps its consecutive streak.
+- **What a player sees (Part E).** The wardrobe draws the stage and the cards near the screen first: the saved-outfit
+  heads, the Kiểu tóc portraits and every card icon wait until they are within 200 px of the screen, tinted layers render
+  four at a time with the figures first, and a picture that stalls gives up after 15 s and leaves the plain layer.
+  Measured on "fast 3G": the stage and the first row are on screen in about 850 ms at 1366×768 and 375×812; the first
+  row's pictures arrive in about 1.7 s at both sizes, the phone's because a small portrait loads its pictures @1x
+  whatever the screen (Ruling 16; 3.2 s before). Opening the wardrobe at 375×812 asks for 16 small avatar pictures
+  instead of every layer of every card.
+- **What a GM sees.** Quản trị has six tabs: the new **Cửa hàng** tab edits prices, minimum rank and on/off per item (the
+  "chưa định giá" rows first, each row with its lock), picks "Kệ tuần này" for this week and the eight after, sets the
+  three welcome choices (outfit, head, face, aura or frame only), and holds two small **Danh vọng** tables (the eight
+  sources and the five thresholds; "Nâng ngưỡng không làm ai tụt bậc"). A player's page reads "Danh vọng: 455 (Cao thủ)"
+  with **"Cộng danh vọng"** (1 to 100,000, a reason, no button to subtract). The overview counts players per rank, the
+  ledger panel names "Mua ở Cửa hàng" and "Cửa hàng (bể)", and Nhật ký names the six new kinds.
+- **Under it (Parts A, C, G).** Migration `0006_plan27` (additive, guarded, `when` after 0005): `reputation_events`
+  (unique `(player_id, reason, ref_id)`, `delta > 0`), `reputation_rules`, `reputation_ranks`, `shop_prices`,
+  `shop_featured`, `shop_config`, `newcomer_progress` (with `last_day_key`), `players.reputation`, `players.rank`,
+  `players.welcome_claimed_at`, `daily_logins.consecutive`, and two data steps: `consecutive` starts from the old streak,
+  then this month's `streak` is lifted to `claimed_days`. `daily_logins.streak` keeps its name and now holds the month's
+  count; `DAILY_CLAIMED` carries `consecutive`, which feeds `loginStreak` / `bestLoginStreak`; "Đặt lại điểm danh" steps
+  `consecutive` back too. `ReputationService` grants inside the transactions that already pay (the claim, `unlockWithin`,
+  the welcome claim) through `tx`, and from the post-commit `HAND_SETTLED` listener for hands, one transaction per seat;
+  `players.reputation = Σ events` is an invariant test. `RANK_UP` is a notification sent after the commit. The rank
+  rides `GET /api/players/:id/avatar` and `GET /api/me` (no protocol change, R9); `PokerTable` takes `rankFor` and hands
+  `Seat` its own `frame`. `WelcomeService` claims in one transaction, guard first, and wears the item through the new
+  `wearItemWithin`; the newcomer calendar advances inside `claimDaily` only on a day after `last_day_key`, its fallback
+  under `newcomer:<pid>:<day>`, outside the GM undo's reach. New routes: `GET /api/shop`, `POST /api/shop/buy`,
+  `GET /api/welcome`, `POST /api/welcome/claim`, and seven under `/api/gm/` (22 → 29). The rules, the ranks and the
+  welcome choices are seeded both by `0006` and in code at boot; `shop_prices` only in code.
+- **Under it (Part B).** `ShopService.buy` is one transaction: a repeat is found by the item already granted under
+  `shop:<pid>:<purchaseId>` (which survives the boot-time prune of `ledger_keys`), then the key, the checks on rows read
+  through the transaction, `creditWithin` with the player's `shop_purchase` row and the `shop` sink row (debit before
+  grant), then `inventory.grant`, whose `false` rolls the debit back as `ALREADY_OWNED`. `TxReason`, `SettlementMeta.kind`,
+  `SINK_REASONS`, `REASONS` and the ledger strings gained `shop_purchase` / `shop` together. A lock is read from the live
+  gift schedule at every read and purchase. `newPurchaseId()` falls back to `getRandomValues` on a plain-http LAN host.
+- **Under it (Part D).** Core: `ECONOMY.blindTableFeeRate = 0`; `createBlindHand` deals any seat above 0 and marks a seat
+  the ante emptied `decision = 'play'`; `callAmount = min(stack, wager)`; `returnDeadExcess` gives each folder back what
+  no live seat matched (Ruling 12). Room: `requiredStack()` is 1 in both modes, the sit-down needs one wager,
+  `standUpSpent` sends `STACK_SPENT { roomId, threshold }` in both modes, `TABLE_LIMIT_SPENT` and its strings are gone,
+  and the carry-over claimant path is deleted (Ruling 14). The reducer marks a seat all in when the antes empty it; an
+  auto-played seat does not reset or add to the timeout count; bots play a short stack all in and are topped up only at
+  0. **Lite** gets all of Part D after `build:lite`: no Blind fee and no `table_fee` sink, a seat dealt with any stack
+  above 0, one wager to sit in play-or-fold, a stand-up at 0 with `STACK_SPENT` (Hold'em included), no "Phí bàn" line on
+  the Blind result card, a sit-down hint that quotes one wager. Lite's own `ECONOMY` reads do not change.
+- **Under it (Part E).** `Chibi lazy` (`useInView`, 200 px margin, `true` where `IntersectionObserver` is missing) draws
+  only its sized root until it is near; `tint-queue.ts` runs at most four tint renders, by priority, skipping a render no
+  mounted card still wants; tinted layers load @2x only at `devicePixelRatio >= 1.5` (it was `> 1`), table seats
+  included (P32); the wardrobe loads in two groups (stage and cards first, saved outfits and achievement names after) and
+  retries only the group that failed.
+- **Tests and docs.** Server: the migration (fresh, from 0005, the data steps, the constraints, no owner key), the
+  reputation service (grants, replay, high-water mark, invariant, rules cache, a failing seat), the shop (seed, locks,
+  once per purchase id, the prune, a race, `PURCHASE_UNDONE`, debit before grant, the 40-buy conservation run, the shelf
+  rotation), the welcome service, the newcomer calendar inside `claimDaily` (day 3, day 7, empty pools in one transaction,
+  the welcome day's own claim), the monthly count and `consecutive`, the backfill, the routes (route list, 29 GM routes,
+  the shop's and the welcome's refusals). Core and kit: Blind with no fee and short stacks, auto-play, the folders'
+  excess, the room's sit-down, stand-up and timeout rules, the soak (`fees === 0` for Blind), `RankLabel`, the seat's
+  rank, rank contrast, `PlayerBar`, `Toasts`, `lazy`, `tint-queue`, `tinted`. Web: `ShopScreen`, `ShopCard`, `ShopTab`,
+  `WelcomeDialog`, `NewcomerPanel`, `DailyScreen`, `ProfileScreen`, the wardrobe's lazy cards and request counts, the
+  footprint (entry chunk about 136 KB of a 140 KB budget, under 4 KB of headroom). The ops pack is at 50 cases with section P (the welcome gift, a
+  purchase and the rank lock, the rank on a seat and the profile, the wardrobe's request count, the 3G first paint) and
+  F-10 rewritten as the Blind-to-zero case. Docs: the player guide (Quà chào mừng, Tuần đầu tiên, Danh vọng và bậc, Cửa
+  hàng, Blind chơi tới điểm cuối cùng, Chơi trên hai thiết bị), `docs/known-limitations.md` (a Plan 27 section and
+  entries under Gameplay, Operations and UI), the glossary (`docs/copy-review-2026-10-10.md` §3), `docs/normal-server.md`
+  (a new section, the module map, 29 routes), `docs/server-kit.md` (playing to zero, the `shop` sink, the claimants
+  gone), `docs/ui-kit.md` (`RankLabel`, `rankFor`, `STACK_SPENT`, `RANK_UP`), `docs/security.md`,
+  `docs/deployment-normal.md` §7 (the backfill), the SRS (§8.8, §12.3, §14.1, §15 amended; §13.1 by G2), the bug log
+  (§9 answered), `docs/lessons-learned.md`, the acceptance checklist (+5 rows, P27.1–P27.5) and the test matrix, with
+  their pinned counts.
+- **Khác với spec / Deviations from the spec.**
+  - The welcome items are **rare** (R6 → Q11), and a past month's check-in gift **sells** (R20 → Q12): the user's answers
+    to the spec review.
+  - The backfill subtracts only the live events that mirror `player_stats` and `player_achievements` (`hand_played`,
+    `hand_won`, `daily_login`, `achievement`), not every live event as R18 says: subtracting `welcome`, `newcomer_day` or
+    `gm_grant` would take a player's welcome reputation back (P34, Ruling 9).
+  - `shop_prices` is seeded by code at boot (`shop-prices-seed.ts`), not by `0006`, because the catalogue grows with
+    `items.json`. As a result an item added to the catalogue later is **priced and on sale at the next boot** at its
+    rarity's seed price, not held back as "chưa định giá" until a GM prices it (spec B1); the `unpriced` lock is reached
+    only by a row deleted by hand (`docs/known-limitations.md`).
+  - Seven GM routes, not six (spec B4): the reputation rules and ranks are two routes, and `GET /api/gm/shop` is the
+    tab's one read (P19, Ruling 5). A config write from the CLI's actor is `FORBIDDEN`; a past week is 409
+    `WEEK_IN_PAST`, a malformed one 400 `INVALID_WEEK` (Rulings 17–23).
+  - No fifth Shell tab: the shop is a link beside "Phòng thay đồ" in the lobby's header slot (P20, Ruling 6).
+  - The shop's slot filter reuses the wardrobe's labels ("Phụ kiện mặt", "Quần áo"), not the spec's "Mặt" / "Trang
+    phục"; free hairstyles, skin tones and free colours are not shown in the shop at all (spec B1 said every unsold item
+    shows with its source label). A hairstyle that does sell is shown.
+  - The purchase is confirmed by an inline status line in the pinned stage, not a toast (normal-web has no HTTP toast;
+    P22). The welcome claim is confirmed the same way, inside the dialog.
+  - The welcome dialog opens by itself **once per account per browser** (`localStorage['bp.welcomeShown']`), and a session
+    that started with the gift unclaimed does not jump to Điểm danh (P25, Ruling 7).
+  - The top rank's profile line reads "Danh vọng 5.210 · Huyền thoại" (spec A4 wrote "Huyền thoại · 5 210").
+  - On a compact plate the rank pill sits on the **stack line** after the figure, and on a wide plate the word moves
+    there when it would cut a long name (spec A4 put it on the name's line; Ruling 11).
+  - `DailyClaimOk.newcomer` is `{ day, item: string | null, fallbackPoints, reputation, finished }` (spec C2 wrote
+    `{ day, item?, points?, reputation? }`).
+  - The newcomer calendar needed `newcomer_progress.last_day_key` (P2), which the spec did not name, so a check-in on
+    the welcome day does not count as day 2.
+  - A busted **Hold'em** seat also gets `STACK_SPENT` (spec D1 named Blind), and `TABLE_LIMIT_SPENT` is deleted with its
+    strings rather than kept for Hold'em (P30, Ruling 8).
+  - The Cứu trợ nudge in `STACK_SPENT` is **text only**; the spec asked for a button, and `Toasts` has no actions.
+  - "Tất tay N" reuses `actions.allIn` with the amount (en "All-in 3,000"); there is no separate `playAllIn` key.
+  - Bots play a short stack all in and are topped back up only once spent (they were topped up whenever short).
+  - A Blind folder's excess above the highest live commitment is returned to the folder (a rule the spec did not state,
+    needed once short stacks are dealt; Ruling 12). Folders' bet chips show the whole ante until the settlement (a known
+    limitation).
+  - Normal's `daily_logins.streak` is the month's claim count (Ruling 2); the "Hôm nay" tile follows the count; the days
+    left in the month are derived on the client from `nextResetAt`; `daily.dayLabel` ("NGÀY 12") is kept, shared with the
+    GM editor and the e2e suites.
+  - Tinted layers load @1x below DPR 1.5 everywhere, table seats included (P32), not only in the wardrobe.
+  - F-10 became the Blind-to-zero case (P30), and the shop's ops cases take section P (Ruling 24, amending Ruling 15; `M` is the layout section).
+  - The entry chunk's budget rose from 130 to 140 KB (Ruling 13).
+- **Deployed.** DEPLOY
+- **Still open.**
+  - **Parked minors, declined:** range checks on `players.reputation`, `players.rank` and `newcomer_progress.day`
+    (the services already keep them in range; a CHECK constraint is a migration for no behaviour); a visually hidden
+    separator between name and rank word. From the whole-branch review: a GM's reputation grant out of range answers
+    with the points-worded `INVALID_AMOUNT` (`gm-service.ts`; the editor's own check stops it first); `ReputationLine`
+    reads "còn 0 tới …" for a moment after a GM lowers a threshold below a player's reputation (the rank catches up at
+    that player's next grant).
+  - **Deploy notes.** The server now seeds its config tables (reputation rules and ranks, welcome choices, shop prices)
+    at boot and **fails to start against a database without `0006`**. The Windows LAN host lacks `0004`–`0006`, so
+    `run.ps1 -NoMigrate` would leave it down: it must run once with migrate (writes the user's Neon database; ask first),
+    then the backfill (`deploy/normal-windows/README.md` §9e). The first boot puts every catalogue item on sale at its
+    seed price while nobody holds a rank above Tân binh until the backfill runs, so the two steps go back to back.
+  - **English copy waiting for the user.** New in this plan's fix wave, written by the implementer:
+    `gm.reputation.invalidRules` / `gm.reputation.invalidRanks` (split from `gm.reputation.invalid`),
+    `gm.shop.prices.invalidItems`, `shop.failed`, `gm.notice.reputation`, and `welcome.lead` ("Pick an item to start
+    with"). Existing en strings this plan **changed**: `daily.lead`, `daily.receipt.streak`, `daily.calendarLead`; and
+    **removed**: `daily.streak`, `notify.TABLE_LIMIT_SPENT*`. Awkward ones to reword: `daily.summaryCount` ("Check-in 12
+    of 10/2026"), `daily.daysLeft` (no plural: "1 days left"), `gm.dialog.checkinBody` ("the streak is kept", now
+    wrong), `gm.gifts.lead` ("check-in streak tier", now wrong), `game:rank.2` ("Card hand"), the ledger's "Shop (sink)".
+  - **Residuals** (`docs/known-limitations.md`): reputation is never taken back; a GM's check-in reset leaves the newcomer
+    calendar; a welcome at 23:59 and a check-in at 00:01 are two newcomer days; the welcome dialog's flag is per browser;
+    the epic shelf is thin until the gift months pass; a new catalogue item sells at the next boot; a retry across a GM
+    revoke and a restart can charge again; two GMs saving at once, the last wins; the backfill's race window and "run
+    once"; the 0006 data step's fixed zone; the folder's bet chip; the text-only relief nudge; locale namespaces in the
+    entry chunk; one account on two devices with no "Tiếp quản" prompt (K1); the featured-week editor offering items by
+    today's locks rather than each week's.
+  - **Manual checks for the user:** the welcome gift on a real account, a purchase, the rank on a phone seat, a Blind
+    table played to zero, the Điểm danh page after a missed day; the Windows LAN host still needs `0004`–`0006` and the
+    backfill (the user's Neon database; ask first; see the deploy notes above).
+  - **Next round:** K6, more poses for the figure (`docs/bug-log.md` §9), an art project to brainstorm on its own.
+
 ## Plan 26 — GM round 2, a landscape table and a sign-in picture — merged `837485c` (2026-10-21)
 
 Three parts the user asked for on 2026-10-19/20. **A:** the second GM batch Plan 25 promised (unlock an achievement, undo

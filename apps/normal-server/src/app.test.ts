@@ -372,6 +372,7 @@ describe('every mutating route is guarded', () => {
       'GET /api/gm/players/:id/ledger',
       'GET /api/gm/rooms',
       'GET /api/gm/rooms/:id',
+      'GET /api/gm/shop',
       'GET /api/gm/stats/daily',
       'GET /api/me',
       'GET /api/me/achievements',
@@ -382,6 +383,8 @@ describe('every mutating route is guarded', () => {
       'GET /api/me/stats',
       'GET /api/players/:id/avatar',
       'GET /api/rewards/daily',
+      'GET /api/shop',
+      'GET /api/welcome',
       'GET /health',
       'PATCH /api/me',
       'POST /api/auth/login',
@@ -393,6 +396,7 @@ describe('every mutating route is guarded', () => {
       'POST /api/gm/players/:id/items',
       'POST /api/gm/players/:id/lock',
       'POST /api/gm/players/:id/points',
+      'POST /api/gm/players/:id/reputation',
       'POST /api/gm/players/:id/role',
       'POST /api/gm/players/:id/unlock',
       'POST /api/gm/players/search',
@@ -400,7 +404,14 @@ describe('every mutating route is guarded', () => {
       'POST /api/gm/rooms/:id/kick',
       'POST /api/me/outfits/:slot/apply',
       'POST /api/rewards/daily/claim',
+      'POST /api/shop/buy',
+      'POST /api/welcome/claim',
       'PUT /api/gm/gifts/:month',
+      'PUT /api/gm/reputation/ranks',
+      'PUT /api/gm/reputation/rules',
+      'PUT /api/gm/shop/featured/:week',
+      'PUT /api/gm/shop/prices',
+      'PUT /api/gm/shop/welcome',
       'PUT /api/me/avatar',
       'PUT /api/me/outfits/:slot',
       'DELETE /api/gm/gifts/:month',
@@ -834,7 +845,7 @@ describe('rooms joined', () => {
 })
 
 describe('a whole hand between two registered players', () => {
-  it('settles through the ledger, records a table_fee sink and moves both players’ counters', async () => {
+  it('settles through the ledger, takes no fee at a Blind table and moves both players’ counters', async () => {
     const h = await harness({ roomOptions: FAST_ROOM })
     const alice = await h.register()
     const mai = await h.register(SECOND_ACCOUNT)
@@ -873,8 +884,8 @@ describe('a whole hand between two registered players', () => {
     expect(await b.request({ t: 'STAND_UP', reqId: 'stand-b' })).toMatchObject({ t: 'ACK' })
 
     /**
-     * The hand is recorded, and every point the engine took as a fee is a sink row — which is what
-     * keeps `Σ balances + Σ sinks` constant (§12.5).
+     * The hand is recorded, and a Blind table takes no fee (plan 27 D1): no `table_fee` sink row, so
+     * `Σ balances` alone is constant (§12.5).
      *
      * All of it inside one `waitFor` because settlement, the `games` rows and the counters are
      * separate writes that follow the frame the socket has already seen.
@@ -888,25 +899,23 @@ describe('a whole hand between two registered players', () => {
       expect(hands[0]?.players).toHaveLength(2)
 
       const sinks = rowsOf<{ amount: string | number }>(await db.execute(sql`select amount from point_transactions where player_id is null and kind = 'table_fee'`))
-      expect(sinks.length).toBeGreaterThan(0)
-      expect(Number(sinks[0]?.amount)).toBeGreaterThan(0)
+      expect(sinks).toHaveLength(0)
 
-      // The table conserves points exactly: what the seats brought, what they took home and the fee
-      // that left for the sink cancel to zero. Stated over those rows rather than over the balances
-      // because the winner may also have unlocked an achievement on the way — a real credit, and
-      // one whose size depends on which hand they happened to show down.
+      // The table conserves points exactly: what the seats brought and what they took home cancel to
+      // zero. Stated over those rows rather than over the balances because the winner may also have
+      // unlocked an achievement on the way — a real credit, and one whose size depends on which hand
+      // they happened to show down.
       const settled = rowsOf<{ amount: string | number }>(
-        await db.execute(sql`select amount from point_transactions where reason in ('buy_in', 'cash_out', 'table_fee')`),
+        await db.execute(sql`select amount from point_transactions where reason in ('buy_in', 'cash_out')`),
       )
       expect(settled.reduce((sum, row) => sum + Number(row.amount), 0)).toBe(0)
 
-      // …and the balances are the whole ledger, read back: what they started with, less the fee,
-      // plus anything an achievement or a GM paid out (or took) on the way.
+      // …and the balances are the whole ledger, read back: what they started with, plus anything an
+      // achievement or a GM paid out (or took) on the way.
       const credited = rowsOf<{ amount: string | number }>(await db.execute(sql`select amount from point_transactions where reason in ('achievement', 'gm_grant', 'gm_adjust', 'gm_achievement', 'gm_checkin_undo')`))
-      const fees = sinks.reduce((sum, row) => sum + Number(row.amount), 0)
       const rewards = credited.reduce((sum, row) => sum + Number(row.amount), 0)
       const balances = await Promise.all([alice, mai].map((p) => h.app.services.repos.balances.get(p.playerId)))
-      expect(balances[0]! + balances[1]!).toBe(2 * ECONOMY.startingBalance - fees + rewards)
+      expect(balances[0]! + balances[1]!).toBe(2 * ECONOMY.startingBalance + rewards)
     }, { timeout: 10_000 })
 
     // The counters move through the bus, so they land a tick after the socket saw the hand end.
@@ -998,7 +1007,7 @@ describe('a real boot', () => {
     })
 
     // Nobody holds this promise, exactly as `onDomainEvent` publishes it.
-    void h.app.services.bus.publish({ type: 'DAILY_CLAIMED', playerId: 'p1', day: 1, streak: 1 })
+    void h.app.services.bus.publish({ type: 'DAILY_CLAIMED', playerId: 'p1', day: 1, streak: 1, consecutive: 1 })
     const closed = h.app.close().then(() => {
       // Read inside the continuation: the assertion is about ordering, not about a later poll.
       expect(landed).toBe(true)

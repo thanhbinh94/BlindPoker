@@ -1,9 +1,7 @@
 import { Button, defaultChibi, Modal, Segmented, useMediaQuery, type Expression } from '@bp/ui-kit'
-import type { TFunction } from 'i18next'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  ApiError,
   OPTIONAL_SLOTS,
   SLOTS,
   type AchievementDefDto,
@@ -22,7 +20,8 @@ import { useAvatars } from '../../avatar/useAvatars.js'
 import type { HintSources } from '../catalog.js'
 import s from '../normal.module.css'
 import { useAsync } from '../useAsync.js'
-import { counts, GROUPS, PHONE_QUERY, panelId, slotCards, subTabId, type TabId } from './categories.js'
+import { avatarRefusal } from './avatar-refusal.js'
+import { counts, GROUPS, PHONE_QUERY, panelId, slotCards, subTabId, tabOfSlot, type TabId } from './categories.js'
 import { CategoryNav } from './CategoryNav.js'
 import { ColourTab } from './ColourTab.js'
 import { EquippedList } from './EquippedList.js'
@@ -33,14 +32,6 @@ import { NATURAL_SKIN } from './natural-skin.js'
 import { SavedOutfits } from './SavedOutfits.js'
 import { StagePanel } from './StagePanel.js'
 import w from './wardrobe.module.css'
-
-/** Refusals this screen has words for; anything else is the kit's generic failure. */
-const KNOWN_CODES = new Set(['NOT_OWNED', 'WRONG_CATEGORY', 'MISSING_LAYER', 'INVALID_ITEM', 'INVALID_BASE', 'WRONG_GENDER'])
-
-export function avatarRefusal(cause: unknown, t: TFunction): string {
-  if (cause instanceof ApiError && KNOWN_CODES.has(cause.code)) return t(`avatar.errors.${cause.code}`)
-  return t('common:errors.INTERNAL')
-}
 
 /** Every tab, flattened out of `GROUPS` (design §3.1) rather than re-listed here, so a tab added to a
  * group is automatically one this screen counts and offers a panel for. */
@@ -67,16 +58,26 @@ export interface WardrobeScreenProps {
    * table and the lobby bar draw from has a minute-long entry that would otherwise keep the old face on
    * screen for up to that long. */
   playerId: string | null
+  /** `#/avatar?item=<id>` (Plan 27, P22): the shop's "Mặc" on a card the player owns. Once the wardrobe has loaded, it
+   * opens that item's tab and puts the item on the draft — unsaved, like any other pick, so "Lưu trang phục" keeps it
+   * and "Hoàn tác" takes it back. An id the catalogue does not know, or one the player does not own, opens nothing. */
+  initialItem?: string | null
 }
 
+/** What the stage and the cards need: the screen draws as soon as these four reads have answered. */
 interface WardrobeData {
   inventory: InventoryDto
   catalog: ItemDto[]
   avatarCatalog: AvatarCatalogDto
-  outfits: (OutfitDto | null)[]
-  achievements: AchievementDefDto[]
   /** What the check-in schedule names from this month on — absent from an older server, read as none. */
   gifts: DailyGiftNoticeDto[]
+  /** What a locked card's hint names: here, not later, so a hint is worded once and never changes under the player. */
+  achievements: AchievementDefDto[]
+}
+
+/** What can come a moment later (plan 27 E2): the saved outfits. */
+interface WardrobeExtras {
+  outfits: (OutfitDto | null)[]
 }
 
 /** Sets a slot, or drops it entirely when `itemId` is `undefined` — the same rule `PUT /api/me/avatar`
@@ -120,25 +121,29 @@ type Note = 'saved' | null
  * Leaving with unsaved changes is guarded twice — `beforeunload` for a reload or a closed tab, an in-app
  * confirmation for a `#/…` link elsewhere in the app — both wired up where `dirty` is computed, below.
  */
-export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
+export function WardrobeScreen({ api, playerId, initialItem = null }: WardrobeScreenProps) {
   const { t } = useTranslation('normal')
+  // Five reads, all sent at once, in two groups (plan 27 E2): the stage and the cards draw as soon as the first four
+  // answer, without waiting for the saved outfits.
   const wardrobe = useAsync<WardrobeData>(async () => {
-    const [inventory, catalogAnswer, avatarCatalog, outfitsAnswer, achievementsAnswer] = await Promise.all([
+    const [inventory, catalogAnswer, avatarCatalog, achievementsAnswer] = await Promise.all([
       api.inventory(),
       api.catalogItems(),
       api.avatarCatalog(),
-      api.outfits(),
       api.catalogAchievements(),
     ])
     return {
       inventory,
       catalog: catalogAnswer.items,
       avatarCatalog,
-      outfits: outfitsAnswer.outfits,
-      achievements: achievementsAnswer.achievements,
       // Read on every mount, so a wardrobe opened after midnight on the 1st reads the new month's list.
       gifts: catalogAnswer.dailyGifts ?? [],
+      achievements: achievementsAnswer.achievements,
     }
+  })
+  const extrasAsync = useAsync<WardrobeExtras>(async () => {
+    const outfitsAnswer = await api.outfits()
+    return { outfits: outfitsAnswer.outfits }
   })
   const { invalidate } = useAvatars(api, NO_IDS)
 
@@ -161,6 +166,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
   const desktop = useMediaQuery(DESKTOP_QUERY)
 
   const loaded = wardrobe.data
+  const extras = extrasAsync.data
   const saved = committed ?? loaded?.inventory.avatar ?? null
   const config = draft ?? saved
   const dirty = draft !== null && saved !== null && !sameConfig(draft, saved)
@@ -222,6 +228,21 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
     return map
   }, [loaded, owned, gender])
 
+  // `initialItem`, once: the first load that knows the item opens its tab and wears it on the draft. A hairstyle of the
+  // other gender is only shown — the Kiểu tóc tab lists the draft's gender's, and the server refuses the pair.
+  const initialDone = useRef(false)
+  useEffect(() => {
+    if (initialDone.current || loaded === null || initialItem === null) return
+    initialDone.current = true
+    const wanted = loaded.catalog.find((row) => row.id === initialItem)
+    if (wanted === undefined) return
+    setTab(tabOfSlot(wanted.slot))
+    const base = loaded.inventory.avatar
+    if (!owned.has(wanted.id) || base[wanted.slot] === wanted.id) return
+    if (wanted.slot === 'hairStyle' && wanted.gender !== base.gender) return
+    setDraft(withSlot(base, wanted.slot, wanted.id))
+  }, [loaded, initialItem, owned])
+
   if (wardrobe.loading && loaded === null) {
     return (
       <main className={s.page}>
@@ -232,14 +253,20 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
     )
   }
 
-  if (loaded === null || config === null) {
+  // Any of the five reads failing is still the one failure it always was; "Thử lại" asks again for the group that failed.
+  if (loaded === null || config === null || (extras === null && !extrasAsync.loading)) {
+    const retry = (): void => {
+      if (loaded === null) wardrobe.reload()
+      // Not while the saved outfits are still on their way: a second request would only race the first.
+      if (extras === null && !extrasAsync.loading) extrasAsync.reload()
+    }
     return (
       <main className={s.page}>
         <p className={s.alert} role="alert">
           {t('inventory.error')}
         </p>
         <p>
-          <Button variant="ghost" onClick={wardrobe.reload}>
+          <Button variant="ghost" onClick={retry}>
             {t('screens.retry')}
           </Button>
         </p>
@@ -349,17 +376,19 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
     />
   )
 
-  const savedNode = (
-    <SavedOutfits
-      api={api}
-      outfits={loaded.outfits}
-      draft={config}
-      items={items}
-      bodies={bodies}
-      onOutfitsChanged={(next) => wardrobe.set({ ...loaded, outfits: next })}
-      onApplied={onOutfitApplied}
-    />
-  )
+  // Nothing until the outfits have answered: five "Trống" slots in the meantime would offer to save over a filled one.
+  const savedNode =
+    extras === null ? null : (
+      <SavedOutfits
+        api={api}
+        outfits={extras.outfits}
+        draft={config}
+        items={items}
+        bodies={bodies}
+        onOutfitsChanged={(next) => extrasAsync.set({ ...extras, outfits: next })}
+        onApplied={onOutfitApplied}
+      />
+    )
 
   // The head of the look group (spec §6.1): Nữ | Nam, on every one of its tabs, and not a tab itself. A row no taller
   // than the sub-tabs' on a desktop; a thumb's `--tap` per button on a phone (`.genderSwitch`).

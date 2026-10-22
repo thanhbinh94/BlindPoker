@@ -388,6 +388,35 @@ Bản cập nhật có Plan 25 thêm migration `0004_gm`, nên lần chạy `run
 
 ---
 
+## 9e. Lần nâng cấp lên Plan 27: migration rồi tính danh vọng từ lịch sử
+
+Plan 27 thêm cửa hàng, danh vọng và quà chào mừng (migration `0006_plan27`). Máy LAN nào còn ở trước Plan 25 thì còn
+thiếu cả `0004`, `0005` và `0006`. Từ Plan 27, server ghi sẵn các bảng cấu hình (nguồn danh vọng, các bậc, giá cửa hàng)
+lúc khởi động, nên **không khởi động được** trên database chưa có `0006`: chạy `.\run.ps1 -NoMigrate` lúc này sẽ để server
+tắt. Lần chạy đầu tiên sau khi cập nhật phải **bỏ** `-NoMigrate`. Lệnh này ghi vào database Neon của bạn, nên chỉ chạy
+khi bạn đã quyết định nâng cấp (người trợ giúp phải hỏi bạn trước).
+
+1. Đợi `/health` báo `"rooms":0` (`curl.exe -s http://localhost:8080/health`), rồi `.\stop.ps1` và `.\run.ps1` (không có
+   `-NoMigrate`). Kiểm tra lại `/health` báo `"status":"ok"` và `"db":"ok"`.
+2. Ngay sau đó, khi `/health` vẫn báo `"rooms":0`, tính danh vọng cho các tài khoản cũ từ lịch sử — chạy thử trước, rồi
+   chạy thật, **một lần cho mỗi lần nâng cấp**, từ thư mục kit này:
+
+```powershell
+$env:DATABASE_URL = ((Get-Content .env) -match '^DATABASE_URL=' | Select-Object -First 1) -replace '^DATABASE_URL=', ''
+node ..\..\apps\normal-server\dist\reputation-backfill-cli.js --dry-run   # chỉ tính, không ghi gì
+node ..\..\apps\normal-server\dist\reputation-backfill-cli.js             # ghi thật
+```
+
+Mỗi lần in một dòng `players=… applied=… ranks=[…]`. Chạy lại không cộng thêm cho người đã được tính. Gõ sai tham số
+thì lệnh in dòng hướng dẫn, thoát mã 2 và không ghi gì. Chi tiết (cách tính, vì sao phải chạy lúc vắng, vì sao không
+chạy lại sau khi GM đổi nguồn danh vọng): [`docs/deployment-normal.md`](../../docs/deployment-normal.md) §7, "Lần nâng
+cấp lên Plan 27".
+
+Giữa bước 1 và bước 2, mọi món trong catalogue đã được bày bán theo giá mặc định, còn mọi tài khoản cũ vẫn ở bậc đầu
+(Tân binh) cho tới khi lệnh tính danh vọng chạy xong, nên đừng để cách nhau lâu.
+
+---
+
 ## 10. Giới hạn
 
 - **Không có HTTPS.** Mật khẩu đi qua mạng ở dạng rõ. Chỉ dùng trong mạng bạn tin được.

@@ -159,11 +159,16 @@ describe('cards', () => {
     it("tints a colour variant's icon with its own colour, from the icon's tint mask, and draws the blob without srcset", () => {
       const { container } = render(<ItemCard item={HEAD_BERET_BLUE} family={HEAD_BERET} owned wearing hint="" onPick={vi.fn()} />)
 
-      expect(tintedLayer).toHaveBeenCalledWith('/avatar/', {
-        order: 80,
-        file: ICON,
-        tints: [{ mask: `${ICON}_tintmask`, colour: '#3f6fd8', meanL: 0.5 }],
-      })
+      // The third argument is the icon's place in the tint queue (plan 27 E2, `ItemTab.test.tsx`).
+      expect(tintedLayer).toHaveBeenCalledWith(
+        '/avatar/',
+        {
+          order: 80,
+          file: ICON,
+          tints: [{ mask: `${ICON}_tintmask`, colour: '#3f6fd8', meanL: 0.5 }],
+        },
+        expect.any(Number),
+      )
       const icon = container.querySelector('img')!
       expect(icon).toHaveAttribute('src', 'blob:http://localhost/#3f6fd8')
       expect(icon.hasAttribute('srcset')).toBe(false)
@@ -183,7 +188,7 @@ describe('cards', () => {
     it('asks for no tint for an untinted item, which keeps its two-density icon', () => {
       const { container } = render(<ItemCard item={HEAD_BERET} owned wearing={false} hint="" onPick={vi.fn()} />)
 
-      expect(tintedLayer).toHaveBeenCalledWith('/avatar/', { order: 80, file: ICON })
+      expect(tintedLayer).toHaveBeenCalledWith('/avatar/', { order: 80, file: ICON }, expect.any(Number))
       const icon = container.querySelector('img')!
       expect(icon).toHaveAttribute('src', `/avatar/${ICON}@1x.png`)
       expect(icon).toHaveAttribute('srcset', `/avatar/${ICON}@1x.png 1x, /avatar/${ICON}@2x.png 2x`)
@@ -394,6 +399,51 @@ describe('cards', () => {
       expect(
         screen.getByRole('button', { name: `${viNormal.items.title_rookie}, ${viNormal.inventory.rarity.common}, ${viNormal.wardrobe.wearingBadge}` }),
       ).toHaveAttribute('aria-pressed', 'true')
+    })
+  })
+
+  /** Plan 27 (P21): the shop picks a card the player does not own (a try-on) and draws a footer under it. */
+  describe('pickable and footer', () => {
+    const footer = (
+      <button type="button" data-testid="footer-button">
+        {'footer'}
+      </button>
+    )
+
+    it.each([
+      ['ItemCard', HEAD_TOPHAT, (onPick: (id: string) => void) => <ItemCard item={HEAD_TOPHAT} owned={false} wearing={false} hint="h" pickable footer={footer} onPick={onPick} />],
+      ['ColourCard', HAIRCOLOR_RED, (onPick: (id: string) => void) => <ColourCard item={HAIRCOLOR_RED} owned={false} wearing={false} hint="h" pickable footer={footer} onPick={(id) => onPick(id!)} />],
+      ['WordCard', TITLE_ROOKIE, (onPick: (id: string) => void) => <WordCard item={TITLE_ROOKIE} owned={false} wearing={false} hint="h" pickable footer={footer} onPick={onPick} />],
+    ] as const)('%s: a pickable unowned card calls onPick, and its footer sits inside the card beside the pick button', async (_name, row, draw) => {
+      const user = userEvent.setup()
+      const onPick = vi.fn()
+      render(draw(onPick))
+
+      const pick = screen.getByRole('button', { name: new RegExp(`^${viNormal.items[row.id as keyof typeof viNormal.items]}, `) })
+      expect(pick).toHaveAttribute('aria-disabled', 'false')
+      await user.click(pick)
+      expect(onPick).toHaveBeenCalledWith(row.id)
+
+      const button = screen.getByTestId('footer-button')
+      // Beside the pick button, never inside it (a button cannot hold another), and inside the same bordered card.
+      expect(pick.contains(button)).toBe(false)
+      expect(pick.parentElement!.contains(button)).toBe(true)
+    })
+
+    it('keeps a colour card without a footer the one button it always was', () => {
+      const { container } = render(<ColourCard item={HAIRCOLOR_RED} owned wearing={false} hint="" onPick={vi.fn()} />)
+
+      expect(container.querySelectorAll('button')).toHaveLength(1)
+      expect(container.firstElementChild!.tagName).toBe('BUTTON')
+    })
+
+    it('still refuses an unowned card when pickable is left to default', async () => {
+      const user = userEvent.setup()
+      const onPick = vi.fn()
+      render(<ColourCard item={HAIRCOLOR_RED} owned={false} wearing={false} hint="h" footer={footer} onPick={onPick} />)
+
+      await user.click(screen.getByRole('button', { name: new RegExp(`^${viNormal.items.haircolor_red01}, `) }))
+      expect(onPick).not.toHaveBeenCalled()
     })
   })
 })

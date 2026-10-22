@@ -96,3 +96,17 @@ export function makeCaptionFor(avatars: AvatarCache, t: TFunction<'normal'>): (p
     )
   }
 }
+
+/**
+ * The seat's rank (Plan 27, spec 2026-10-21 §2 A4), read from the same avatar cache as the caption: a bot has none,
+ * and a player whose avatar has not arrived — or a server older than Plan 27 — answers `null`, which shows nothing.
+ * The player's own rank-up shows at once: `App` drops their entry on `RANK_UP` and asks again past the browser's cache.
+ * Another player's shows when their entry expires, within a minute (`AVATAR_TTL_MS` and the route's `max-age=60`;
+ * F5 alone does not beat the browser's cache), as an outfit does.
+ */
+export function makeRankFor(avatars: AvatarCache): (player: RoomPlayerView) => number | null {
+  return (player) => {
+    if (player.isBot) return null
+    return avatars.get(player.playerId)?.rank ?? null
+  }
+}

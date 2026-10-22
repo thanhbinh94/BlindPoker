@@ -19,6 +19,7 @@ import {
   newPlayer,
   PHONE_SCREEN,
   postApi,
+  promoteToGm,
   ready,
   resultCard,
   settled,
@@ -167,13 +168,13 @@ test('F-06: one plays, one folds — the one who played takes the pot without a 
   await expect(faceUp(mySeat(a.page, 1)), "Em's cards stay face down").toHaveCount(0)
   await leave(a.page)
   await leave(b.page)
-  // Spec §8.3: Đào's play went uncalled, so it comes straight back before the pot and the fee are figured. The pot
-  // is the two antes, 2.000; less 2 % she takes 1.960. Her balance was read after the buy-in, so what comes home
-  // when she leaves is the stack: the 5.000 she brought, less her 1.000 ante, plus the 1.960. (Plus any achievement
-  // the win completed, e.g. a third win in a row.)
+  // Spec §8.3: Đào's play went uncalled, so it comes straight back before the pot is figured. The pot is the two
+  // antes, 2.000, and she takes all of it: Blind has no table fee (plan 27). Her balance was read after the buy-in, so
+  // what comes home when she leaves is the stack: the 5.000 she brought, less her 1.000 ante, plus the 2.000. (Plus
+  // any achievement the win completed, e.g. a third win in a row.)
   await balanceWhen(a.page, (n) => n !== aBefore)
   const fresh = await ledgerSince(a.page, aRows)
-  expect(sumOf(fresh, 'cash_out'), `result card: ${cardText}`).toBe(5_000 - 1_000 + (2_000 - Math.floor(2_000 * 0.02)))
+  expect(sumOf(fresh, 'cash_out'), `result card: ${cardText}`).toBe(5_000 - 1_000 + 2_000)
   expect((await balanceOf(a.page)) - aBefore, 'the cash-out and any rewards are the whole move').toBe(sumOf(fresh))
 })
 
@@ -200,7 +201,7 @@ test('F-09: auto-play decides every hand by itself', async () => {
   await start(a.page)
   await a.page.getByRole('button', { name: 'Tự động chơi' }).click()
   const before = (await historyOf(a.page)).length
-  // Auto-play pays to play every hand, so two lost hands spend the 5.000 limit and stand the seat up (F-10):
+  // Auto-play pays to play every hand, so a run of lost hands takes the 5.000 down to 0 and stands the seat up (F-10):
   // `keepPlaying` sits back down and switches auto-play on again whenever that happens.
   await expect
     .poll(
@@ -214,41 +215,82 @@ test('F-09: auto-play decides every hand by itself', async () => {
   await leave(a.page)
 })
 
-test('F-10: the table limit — five wagers on the table, folded away, then stood up and asked to sit again', async () => {
-  test.setTimeout(300_000)
-  // Spec 2026-09-29: play-or-fold at 1.000 needs 2.000 a hand and brings 5.000 to the table. Folding costs exactly the
-  // ante, so four folds leave 1.000 — short of a hand — and the seat is stood up with that 1.000 going home.
+test('F-10: a Blind seat plays down to zero and is stood up with the Cứu trợ nudge', async ({ browser }) => {
+  test.setTimeout(360_000)
+  // Plan 27 D2: one wager seats a player, a short seat is dealt and goes all in for what it has ("Tất tay N"), and a
+  // seat is stood up only at 0 — with a notice that points at Cứu trợ. A GM first brings Em's balance down to 2.500,
+  // so the seat brings all of it: below the 5.000 limit, above the one wager it needs.
   //
   // Em plays this one, not Đào: F-09 left Đào's auto-play table mid-hand, and her stack comes home only when that hand
   // ends — a cash-out that could land inside this case's money checks. Em's last table (F-06) was left between hands.
-  // (It also keeps Đào's Blind hand count below ten for K-02, which is the case that has to reach it.)
+  // (It also keeps Đào's Blind hand count below ten for K-02, which is the case that has to reach it.) Em leaves this
+  // case at 0 (or at what an achievement paid on the way), which H-02 below wants anyway: it needs a balance under the
+  // relief line.
   const page = b.page
-  const before = await balanceOf(page)
+  const gm = await newPlayer(browser, 'GmF10')
+  try {
+    await promoteToGm(gm.page, gm.who.email)
+    const me = (await (await page.request.get('/api/me')).json()) as { playerId: string; balance: number }
+    if (me.balance !== 2_500) {
+      const adjusted = await postApi(gm.page, `/api/gm/players/${me.playerId}/points`, { amount: 2_500 - me.balance, reason: 'F-10: số dư nhỏ để chơi về 0' })
+      expect(adjusted.status, 'the GM adjustment').toBe(200)
+    }
+    expect(await balanceWhen(page, (n) => n === 2_500), 'the balance the case starts from').toBe(2_500)
+  } finally {
+    await closeAll([gm])
+  }
   const rowsBefore = (await ledgerOf(page)).length
   await createBlind(page, { name: unique('Bàn F10 '), bots: 1, mode: 'Chơi hoặc bỏ', wager: '1.000' })
   await expect(page.locator('header').first().getByText(/Hạn mức 5\.000/)).toBeVisible()
   await takeSeat(page, 0)
-  expect(await balanceWhen(page, (n) => n === before - 5_000), 'the seat took the limit').toBe(before - 5_000)
+  expect(await balanceWhen(page, (n) => n === 0), 'the seat took the whole 2.500').toBe(0)
   await ready(page)
   await start(page)
-  const notice = page.getByText(/Bạn đã dùng hết hạn mức ở bàn này/)
-  await autopilot(page, ['fold'], async () => (await notice.count()) > 0, 240_000)
-  await expect(notice).toContainText('1.000 điểm còn lại đã được trả về số dư')
+
+  // Hand 1: 1.500 is left after the ante, enough for the 1.000 play — the button is the plain "Chơi". Em folds it.
+  const bar = page.getByRole('group', { name: 'Hành động' })
+  const action = (text: RegExp) => bar.locator('button:not([aria-pressed])', { hasText: text })
+  await expect(action(/^Chơi 1\.000$/), 'a full play').toBeVisible({ timeout: 30_000 })
+  await action(/^Bỏ bài$/).click()
+  await expect(resultCard(page)).toBeVisible({ timeout: 30_000 })
+
+  // Hand 2: the ante leaves 500, short of the wager — the play goes all in for it, and the button says so.
+  const allIn = action(/^Tất tay 500$/)
+  await expect(allIn, '"Tất tay 500" instead of "Chơi"').toBeVisible({ timeout: 30_000 })
+  await expect(action(/^Chơi/)).toHaveCount(0)
+  await allIn.click()
+
+  // From here the autopilot presses "Tất tay" whenever it is shown and folds otherwise: a short seat goes all in, a
+  // seat that could make the full play folds it. Every hand costs at least its ante and the stack only grows by
+  // winning an all-in. A loss there ends it; thirty hands is the cap.
+  const notice = page.getByText(/Bạn đã hết điểm ở bàn này/)
+  const handsBefore = (await historyOf(page)).length
+  let nextLook = 0
+  let capped = false
+  await autopilot(page, ['allIn', 'fold'], async () => {
+    if ((await notice.count()) > 0) return true
+    if (Date.now() < nextLook) return false
+    nextLook = Date.now() + 5_000
+    capped = (await historyOf(page)).length - handsBefore >= 30
+    return capped
+  }, 300_000)
+  if (capped) {
+    await leave(page) // H-02 needs Em off the table
+    test.skip(true, 'thirty hands without losing an all-in: run the case again')
+  }
+  await expect(notice).toContainText('Nhận Cứu trợ nếu số dư dưới 5.000 điểm')
   await expect(page.getByRole('button', { name: 'Đứng dậy', exact: true }), 'no longer seated').toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Rời phòng' }), 'still in the room').toBeVisible()
-  const fresh = await ledgerSince(page, rowsBefore)
-  expect(fresh.filter((row) => row.reason === 'buy_in').map((row) => row.amount)).toEqual([-5_000])
-  expect(fresh.filter((row) => row.reason === 'cash_out').map((row) => row.amount)).toEqual([1_000])
-  expect(sumOf(fresh, 'buy_in') + sumOf(fresh, 'cash_out'), 'four antes').toBe(-4_000)
-  expect((await balanceOf(page)) - before, 'the rows are the whole move').toBe(sumOf(fresh))
-  // With no one left to play the bot, the room stops dealing and asks for a seat. Sitting again is a fresh buy-in of
-  // the limit. (Waiting for that, rather than sitting inside the five-second countdown, keeps the next deal from
-  // taking Em straight back into a hand.)
-  await expect(page.getByText('Chọn một ghế trống để vào chơi.'), 'the table waits for a seat').toBeVisible()
-  await takeSeat(page, 0)
-  const again = await ledgerSince(page, rowsBefore)
-  expect(again.filter((row) => row.reason === 'buy_in').map((row) => row.amount)).toEqual([-5_000, -5_000])
-  await page.getByRole('button', { name: 'Tạm nghỉ' }).click()
+  // Nothing was left on the table, so nothing came home: the buy-in is the whole move, and the balance is 0.
+  const fresh = (await ledgerSince(page, rowsBefore)).filter((row) => row.reason !== 'achievement')
+  expect(fresh.map((row) => [row.reason, row.amount])).toEqual([['buy_in', -2_500]])
+  const left = await balanceOf(page)
+  expect(left, 'all of it was played').toBe(sumOf(await ledgerSince(page, rowsBefore), 'achievement'))
+  // A spectator with less than one wager is told what a seat needs before trying. An achievement paid during the run
+  // ("Mười ván Blind Poker" or a three-win streak) can lift the balance back over one wager, and then there is no hint.
+  const hint = page.getByText('Số dư không đủ để vào bàn (cần 1.000 điểm)')
+  if (left < 1_000) await expect(hint, 'the hint under the controls').toBeVisible()
+  else await expect(hint, 'no hint: an achievement paid for a seat').toHaveCount(0)
   await leave(page)
 })
 
@@ -277,9 +319,10 @@ test('K-02: ten Blind hands unlock "Mười ván Blind Poker" and pay its 2.000'
 
 test('H-02 F-07: below 5.000 the relief tops up to 5.000 once; a stake the balance cannot cover is refused', async () => {
   test.setTimeout(420_000)
-  // Lose on purpose: one play-or-fold hand at a time, folded, each at the biggest stake the balance can still enter
-  // (play-or-fold needs twice the stake), until the balance is under the relief line. Pure luck would not do: one
-  // lucky pot at a table of six pays 294.000.
+  // Lose on purpose: one play-or-fold hand at a time, folded, each at the biggest stake the balance covers twice (one
+  // stake seats a player since plan 27, but a seat whose ante took it all would be played for, not folded), until the
+  // balance is under the relief line. Pure luck would not do: one lucky pot at a table of six pays 294.000. (F-10
+  // leaves Em at 0, so this loop usually has nothing to do.)
   const page = b.page
   const STAKES = [50_000, 20_000, 10_000, 5_000, 2_000, 1_000]
   for (let round = 0; round < 40 && (await balanceOf(page)) >= 5_000; round++) {
@@ -293,13 +336,10 @@ test('H-02 F-07: below 5.000 the relief tops up to 5.000 once; a stake the balan
     await ready(page)
     await start(page)
     await autopilot(page, ['fold'], handOver(page))
-    if (brought - stake >= 2 * stake) {
-      // Still enough for a hand: sit out, so the leave cannot land in the next deal.
-      await page.getByRole('button', { name: 'Tạm nghỉ' }).click()
-    } else {
-      // Not enough for another hand: the room stands Em up as the hand ends (F-10), the rest already on its way home.
-      await expect(page.getByRole('button', { name: 'Đứng dậy', exact: true }), 'a spent limit stands the seat up').toHaveCount(0)
-    }
+    // The fold left at least one stake on the table (the seat brought two or more), so the seat stays (F-10 stands a
+    // seat up only at 0): sit out, so the leave cannot land in the next deal.
+    expect(brought - stake, 'points left on the table').toBeGreaterThan(0)
+    await page.getByRole('button', { name: 'Tạm nghỉ' }).click()
     await leave(page)
     await balanceWhen(page, (n) => n < balanceNow)
   }
@@ -315,7 +355,7 @@ test('H-02 F-07: below 5.000 the relief tops up to 5.000 once; a stake the balan
   balance = 5_000
 
   // F-07 (FR-R07): a 10.000 stake is more than 5.000 — the seat is refused, in words, and nothing is charged. (A
-  // seated player whose table stack can no longer cover a hand is stood up instead — F-10.)
+  // seated player plays on down to 0 and is stood up there instead — F-10.)
   // "Nothing charged" is read off the ledger rather than the balance: every room Em creates counts towards "Mười
   // phòng" since T6, and the room below may be the one that pays it.
   const rowsBefore = (await ledgerOf(page)).length

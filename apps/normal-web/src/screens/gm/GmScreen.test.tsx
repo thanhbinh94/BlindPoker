@@ -20,6 +20,7 @@ const OVERVIEW: GmOverviewDto = {
       { reason: 'relief', total: 3_000 },
     ],
   },
+  reputation: { total: 900, byRank: [38, 2, 1, 0, 0] },
 }
 
 type Stub = NormalApi & Record<string, ReturnType<typeof vi.fn>>
@@ -42,19 +43,20 @@ function setup(api: Stub = stubApi()) {
 }
 
 describe('GmScreen', () => {
-  it('has the five tabs, in order, on the overview first', async () => {
+  it('has the six tabs, in order, on the overview first', async () => {
     setup()
 
     expect(screen.getByRole('heading', { name: viNormal.gm.title, level: 1 })).toBeInTheDocument()
     for (const name of Object.values(viNormal.gm.tabs)) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument()
     }
-    expect(screen.getAllByRole('button').slice(0, 5).map((tab) => tab.textContent)).toEqual([
-      viNormal.gm.tabs.overview,
-      viNormal.gm.tabs.players,
-      viNormal.gm.tabs.rooms,
-      viNormal.gm.tabs.gifts,
-      viNormal.gm.tabs.actions,
+    expect(screen.getAllByRole('button').slice(0, 6).map((tab) => tab.textContent)).toEqual([
+      'Tổng quan',
+      'Người chơi',
+      'Phòng',
+      'Quà tháng',
+      'Cửa hàng',
+      'Nhật ký',
     ])
     expect(screen.getByRole('button', { name: viNormal.gm.tabs.overview })).toHaveAttribute('aria-pressed', 'true')
     expect(await screen.findByText('41')).toBeInTheDocument()
@@ -78,6 +80,24 @@ describe('GmScreen', () => {
 
     expect(screen.getByRole('button', { name: viNormal.gm.tabs.players })).toHaveAttribute('aria-pressed', 'true')
     expect(api.gmSearch).toHaveBeenCalledWith('')
+  })
+
+  it('opens the Cửa hàng tab on one read of the shop settings', async () => {
+    const user = userEvent.setup()
+    const gmShop = vi.fn().mockResolvedValue({
+      prices: [],
+      featured: [{ weekKey: '2026-W43', itemIds: [], source: 'auto' }],
+      welcomeChoices: [],
+      welcomeSlots: ['outfit'],
+      reputation: { rules: { hand_played: 1 }, ranks: [{ rank: 1, threshold: 0 }] },
+    })
+    setup(stubApi({ gmShop }))
+    await screen.findByText('41')
+
+    await user.click(screen.getByRole('button', { name: viNormal.gm.tabs.shop }))
+
+    expect(await screen.findByText(viNormal.gm.shop.prices.title)).toBeInTheDocument()
+    expect(gmShop).toHaveBeenCalledTimes(1)
   })
 
   it('leaves the console when the server says the role is gone', async () => {

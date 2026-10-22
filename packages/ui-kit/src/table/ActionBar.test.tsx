@@ -136,6 +136,39 @@ describe('ActionBar', () => {
     await userEvent.click(play)
     expect(onAct).toHaveBeenLastCalledWith({ kind: 'play' })
   })
+  it('Tất tay 3.000: a Blind seat short of the wager plays all in for what it has, and still sends a play', async () => {
+    // Plan 27 D2: the play goes all in for the 3.000 the ante left at a 5.000 table, and the button says so.
+    const onAct = vi.fn()
+    const blindRoom = { config: { mode: 'blind', blind: { fixedWager: 5000, decisionMode: 'playOrFold' } } } as unknown as RoomView
+    render(
+      <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+        <ActionBar
+          hand={hand({ seat: 1, kinds: ['play', 'fold'], callAmount: 3000, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 }, { mode: 'blind', phase: 'DECISION' })}
+          room={blindRoom}
+          onAct={onAct}
+          lang="vi"
+        />
+      </I18nextProvider>,
+    )
+    const play = screen.getByRole('button', { name: 'Tất tay 3.000' })
+    expect(screen.queryByRole('button', { name: /^Chơi/ })).toBeNull()
+    await userEvent.click(play)
+    expect(onAct).toHaveBeenLastCalledWith({ kind: 'play' })
+  })
+  it('keeps "Chơi" when the stack covers the whole wager', () => {
+    const blindRoom = { config: { mode: 'blind', blind: { fixedWager: 5000, decisionMode: 'playOrFold' } } } as unknown as RoomView
+    render(
+      <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+        <ActionBar
+          hand={hand({ seat: 1, kinds: ['play', 'fold'], callAmount: 5000, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 }, { mode: 'blind', phase: 'DECISION' })}
+          room={blindRoom}
+          onAct={() => {}}
+          lang="vi"
+        />
+      </I18nextProvider>,
+    )
+    expect(screen.getByRole('button', { name: 'Chơi 5.000' })).toBeInTheDocument()
+  })
 })
 
 // Plan 26 (B4): a phone on its side keeps its height for the table. The betting buttons sit in a bottom-right dock, the

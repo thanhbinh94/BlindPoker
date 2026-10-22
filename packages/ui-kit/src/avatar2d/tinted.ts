@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { assetUrl } from './AvatarAssets.js'
 import { ratio, recolour, shade } from './recolour.mjs'
+import { enqueue } from './tint-queue.js'
 import type { LayerRef, TintRef } from './types.js'
 
 /** How many rendered blob URLs to keep alive at once (spec §5.2). Past this, the oldest *settled* entry is
@@ -14,6 +15,10 @@ interface CacheEntry {
   promise: Promise<string | null>
   settled: boolean
   url: string | null
+  /** How many mounted `useTintedLayer` effects are waiting on this entry (plan 27 E1 fix round). A render still in the
+   * tint queue when this falls to 0 — every card that asked for it unmounted, the tab was left — is passed over when
+   * its turn comes instead of loading images nobody will show. */
+  wanted: number
 }
 
 /** file|density|mask:colour,mask:colour… → the entry for that exact paint job. Module-level so every `Chibi` on a
@@ -29,6 +34,20 @@ export function tintKey(file: string, density: 1 | 2, tints: TintRef[]): string 
   return `${file}|${density}|${tints.map((t) => `${t.mask}:${t.colour}:${t.meanL}`).join(',')}`
 }
 
+/** The density a tinted render paints from (plan 27 E1): @2x only from a device pixel ratio of 1.5. A 1.25 laptop
+ * screen gets the @1x files — a quarter of the pixels to fetch, decode and walk on the canvas — and the browser scales
+ * them the last 25 %, where it used to pay for @2x at any ratio above 1. The plain layer's `srcset` is untouched: there
+ * the browser picks. */
+function tintDensity(): 1 | 2 {
+  return typeof window !== 'undefined' && window.devicePixelRatio >= 1.5 ? 2 : 1
+}
+
+/** How long one image of a tinted render may take to load and decode before the render gives up (plan 27 E1 fix
+ * round). A stalled request would otherwise hold one of the queue's four slots for as long as the browser keeps the
+ * connection open; giving up frees the slot, the layer stays plain, and — the failure being uncacheable — the next
+ * mount tries again. */
+export const TINT_LOAD_TIMEOUT_MS = 15_000
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   const img = new Image()
   // The avatar asset base can be a CDN origin different from the page's; without this, drawing that
@@ -36,7 +55,11 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   // of the plain layer's own failure path.
   img.crossOrigin = 'anonymous'
   img.src = src
-  return img.decode().then(() => img)
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`tint image load timed out: ${src}`)), TINT_LOAD_TIMEOUT_MS)
+  })
+  return Promise.race([img.decode().then(() => img), timeout]).finally(() => clearTimeout(timer))
 }
 
 /** The outcome of one render attempt: `cacheable` says whether `cachedRender` may keep a `null` result cached
@@ -110,26 +133,49 @@ function evictIfNeeded(): void {
   }
 }
 
+/** What a render passed over in the queue resolves to: no URL, and not cached, so a later mount asks again. */
+const UNWANTED: RenderOutcome = { url: null, cacheable: false }
+
 /** Runs `factory` for `key` at most once, caching its entry until it settles (and after) — unless the outcome
  * says `cacheable: false`, in which case the entry is dropped the moment it settles so the next caller for the
- * same key gets a fresh attempt instead of the one transient failure replayed for the rest of the session. */
-function cachedRender(key: string, factory: () => Promise<RenderOutcome>): Promise<string | null> {
-  const existing = cache.get(key)
-  if (existing !== undefined) return existing.promise
+ * same key gets a fresh attempt instead of the one transient failure replayed for the rest of the session.
+ *
+ * Counts the caller as one more consumer of the entry (`wanted`) *before* `factory` runs — the queue may start the
+ * job synchronously, and must find it wanted — and returns `release`, which the caller runs once it stops waiting.
+ * `factory` gets the entry's `isWanted` check to hand to the queue. */
+function cachedRender(
+  key: string,
+  factory: (isWanted: () => boolean) => Promise<RenderOutcome>,
+): { promise: Promise<string | null>; release: () => void } {
+  let entry = cache.get(key)
+  if (entry === undefined) {
+    // `promise` is a placeholder until `factory` has returned; nothing reads it before then.
+    const created: CacheEntry = { promise: Promise.resolve(null), settled: false, url: null, wanted: 1 }
+    entry = created
+    cache.set(key, created)
+    const outcome = factory(() => created.wanted > 0)
+    created.promise = outcome.then((result) => result.url)
+    evictIfNeeded()
 
-  const outcome = factory()
-  const promise = outcome.then((result) => result.url)
-  const entry: CacheEntry = { promise, settled: false, url: null }
-  cache.set(key, entry)
-  evictIfNeeded()
+    outcome.then(({ url, cacheable }) => {
+      created.settled = true
+      created.url = url
+      if (!cacheable && cache.get(key) === created) cache.delete(key)
+    })
+  } else {
+    entry.wanted++
+  }
 
-  outcome.then(({ url, cacheable }) => {
-    entry.settled = true
-    entry.url = url
-    if (!cacheable) cache.delete(key)
-  })
-
-  return promise
+  const held = entry
+  let released = false
+  return {
+    promise: held.promise,
+    release: () => {
+      if (released) return
+      released = true
+      held.wanted--
+    },
+  }
 }
 
 /**
@@ -143,14 +189,21 @@ function cachedRender(key: string, factory: () => Promise<RenderOutcome>): Promi
  * between each tap would read as broken rather than as loading. A *file* change (a different layer altogether)
  * gets no such grace: it drops straight back to `null` so a stale render from the old file is never shown under
  * the new one's name.
+ *
+ * Each render waits its turn in the tint queue (`tint-queue.ts`: four at a time, higher `priority` first). The
+ * default ranks a layer by `-layer.order`, so a chibi's body and face start before its hat and frame; `Chibi` passes a
+ * lower one for a lazy chibi so a card never holds up the stage. Two mounts asking for one key share the first one's
+ * render and therefore its rank.
+ *
+ * `density` defaults to the screen's (`tintDensity`); `Chibi` passes `1` for a portrait small enough that @1x already
+ * covers it (Ruling 16). It is part of the key, so the two renders of one layer never share a cache entry.
  */
-export function useTintedLayer(prefix: string, layer: LayerRef): string | null {
+export function useTintedLayer(prefix: string, layer: LayerRef, priority: number = -layer.order, density: 1 | 2 = tintDensity()): string | null {
   const [url, setUrl] = useState<string | null>(null)
   // Identifies the file (and asset prefix) the currently-shown `url`, if any, was rendered from — not necessarily
   // this render's `layer.file`, which may already have moved on to a new colour or a wholly different layer.
   const shownRef = useRef<string | null>(null)
   const tints = layer.tints
-  const density: 1 | 2 = typeof window !== 'undefined' && window.devicePixelRatio > 1 ? 2 : 1
   const key = tints === undefined || tints.length === 0 ? null : tintKey(layer.file, density, tints)
   const identity = `${prefix}|${layer.file}`
 
@@ -164,17 +217,23 @@ export function useTintedLayer(prefix: string, layer: LayerRef): string | null {
     if (shownRef.current !== identity) setUrl(null)
 
     let cancelled = false
-    cachedRender(key, () => renderTintedLayer(prefix, layer, density)).then((result) => {
+    const { promise, release } = cachedRender(key, (isWanted) =>
+      enqueue(() => renderTintedLayer(prefix, layer, density), priority, { isWanted, value: UNWANTED }),
+    )
+    promise.then((result) => {
+      release()
       if (cancelled) return
       shownRef.current = result === null ? null : identity
       setUrl(result)
     })
     return () => {
       cancelled = true
+      release()
     }
-    // `key` already encodes file, density and every tint; `identity` and `density` are both derived from
-    // `prefix`/`layer.file`, already listed — re-running on `layer`'s own (fresh-every-render) object identity
-    // or on those derived values would defeat the point of the cache.
+    // `key` already encodes file, density and every tint, so `density` needs no place of its own; `identity` is
+    // derived from `prefix`/`layer.file`, already listed — re-running on `layer`'s own (fresh-every-render) object identity
+    // or on those derived values would defeat the point of the cache. `priority` only ranks a render not yet
+    // started, so a change to it alone starts nothing new.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, prefix, layer.file])
 

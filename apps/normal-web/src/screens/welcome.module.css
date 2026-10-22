@@ -1,0 +1,142 @@
+/* The welcome dialog (Plan 27 C1/C3) and the "Tuần đầu tiên" panel on the daily page. */
+
+.lead {
+  margin: 0 0 var(--space-3);
+  color: var(--ink-muted);
+}
+
+.choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  height: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.card:hover:not(:disabled) {
+  border-color: var(--gold);
+}
+
+.card[aria-pressed='true'] {
+  border-color: var(--gold);
+  background: var(--gold-soft);
+  box-shadow: 0 0 0 1px var(--gold);
+}
+
+.card:disabled {
+  cursor: default;
+}
+
+/* Owned: dimmed and out of reach (R17). The picked card after a claim stays bright, so the receipt line has its face. */
+.card:disabled:not([aria-pressed='true']) {
+  opacity: 0.55;
+}
+
+/* `size={144}` asks for the full 6:7 frame at 144 px; a card narrower than that (the 30 rem dialog, a phone) caps it at
+   its own width, and `Chibi` crops by percentage, so the figure only shrinks. */
+.figure {
+  max-width: 100%;
+}
+
+.name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.owned {
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+}
+
+.done {
+  margin: var(--space-3) 0 0;
+  color: var(--gold);
+  font-weight: 600;
+  text-align: center;
+}
+
+/* A phone on its side has ~350 px of dialog: smaller figures and tighter air keep the cards and the answer row on one
+   screen at 915 × 412 (the dialog still scrolls inside itself on anything shorter). */
+@media (max-height: 500px) {
+  .lead {
+    margin-bottom: var(--space-2);
+  }
+
+  .card {
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .figure {
+    max-width: 68px;
+  }
+}
+
+/* ── the lobby's row: the gift, then the wardrobe and the shop ── */
+
+.lobbyNav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.gift {
+  font-family: inherit;
+  cursor: pointer;
+  border-color: var(--gold);
+}
+
+/* ── "Tuần đầu tiên" ── */
+
+.newcomerLead {
+  margin: 0 0 var(--space-3);
+}
+
+.cellMark {
+  font-size: 1.125rem;
+  line-height: 1.2;
+}
+
+.cellWord {
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.cellGift {
+  margin-top: auto;
+  color: var(--gold);
+  font-size: 0.75rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .cellMark {
+    font-size: 1rem;
+  }
+
+  .cellWord,
+  .cellGift {
+    font-size: 0.6875rem;
+  }
+}

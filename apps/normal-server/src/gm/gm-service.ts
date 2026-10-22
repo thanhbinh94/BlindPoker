@@ -32,6 +32,9 @@ import { missingWardrobe } from '../inventory/grant-wardrobe.js'
 import type { InventoryService } from '../inventory/inventory-service.js'
 import type { ItemCatalog } from '../inventory/items.js'
 import { clampLimit, creditWithin, cursorOf, isUuid, type NormalRepositories } from '../repos/index.js'
+import type { RankRow, ReputationService, RuleKey } from '../reputation/reputation-service.js'
+import { SEED_PRICES } from '../shop/shop-prices-seed.js'
+import { isoWeekKey, weekStartMs, type ShopLock, type ShopPriceChange, type ShopService } from '../shop/shop-service.js'
 import type { PlayerStats } from '../stats/player-stats.js'
 import type { StatsService } from '../stats/stats-service.js'
 import { maskEmail } from './mask-email.js'
@@ -66,7 +69,47 @@ export interface GmPlayerDetail extends Omit<GmPlayerSummary, 'emailMasked' | 'l
   inventoryCount: number
   /** Every achievement this player has unlocked, so the GM's picker can grey those out. */
   unlockedAchievementIds: string[]
+  /** Plan 27: the reputation total and the rank reached (the high-water mark). */
+  reputation: number
+  rank: number
 }
+
+/** One catalogue item as the GM's price table shows it: its stored row (or none), and why it does not sell, if it does not. */
+export interface GmShopPriceRow {
+  itemId: string
+  slot: string
+  rarity: string
+  /** False for an item with no `shop_prices` row ("chưa định giá"): the numbers are then the rarity's seed. */
+  priced: boolean
+  pricePoints: number
+  minRank: number
+  enabled: boolean
+  salePrice: number | null
+  /** As the shop judges it now; `disabled` and `unpriced` mirror `enabled` and `priced`. */
+  lock: ShopLock | null
+}
+
+/** What the Cửa hàng tab shows: the price table, nine weeks of shelves, the welcome choices and reputation's two tables. */
+export interface GmShopConfig {
+  prices: GmShopPriceRow[]
+  /** The current ISO week and the eight after it, each with the GM's shelf or the rotation it would fall back to. */
+  featured: { weekKey: string; itemIds: string[]; source: 'gm' | 'auto' }[]
+  welcomeChoices: string[]
+  /** The slots a welcome choice may come from: something every figure can wear (C1). */
+  welcomeSlots: readonly string[]
+  reputation: { rules: Record<RuleKey, number>; ranks: RankRow[] }
+}
+
+/** The slots a welcome choice may be taken from: wearable on either body (a hairstyle is cut for one, spec C1). */
+export const WELCOME_SLOTS: readonly string[] = ['outfit', 'head', 'face', 'aura', 'frame']
+/** The most reputation one GM grant may add (spec A5: positive only). */
+export const REPUTATION_GRANT_MAX = 100_000
+/** The most one reputation rule may pay (B4 review): a typo of three zeros must not hand out a rank per hand. */
+export const REPUTATION_RULE_MAX = 100_000
+/** The highest rank threshold a GM may set (B4 review): far past any reachable total, short of the integer column's end. */
+export const RANK_THRESHOLD_MAX = 1_000_000_000
+/** The current week and the eight after it (spec B4). */
+const FEATURED_WEEKS = 9
 
 export interface GmActionRow {
   id: number
@@ -89,6 +132,8 @@ export interface GmOverview {
   gms: number
   /** The ledger over the last 24 h: points created, points sunk, and every reason's total. */
   points24h: { sources: number; sinks: number; byReason: { reason: string; total: number }[] }
+  /** Plan 27: Σ reputation over every account, and how many accounts stand at each rank (index 0 is rank 1). */
+  reputation: { total: number; byRank: number[] }
 }
 
 /** One economy day of the ledger: the points created by reason (signed), the points sunk by reason, and what is left. */
@@ -138,6 +183,20 @@ export interface GmService {
   overview(): Promise<GmOverview>
   /** The ledger's sources and sinks per economy day: exactly `days` entries ascending, the last one today, empty days as zeros. */
   dailyStats(days: 7 | 30): Promise<DaySums[]>
+  /** Everything the Cửa hàng tab edits, read as it stands now. The locks are judged for `actor`'s view of the shop. */
+  shopConfig(actor: GmActor): Promise<GmShopConfig>
+  /** Edits price rows (only the fields given); effective for the next purchase. Logged with the changes. */
+  setShopPrices(actor: GmActor, changes: unknown, reason: string): Promise<{ actionId: number; changed: number }>
+  /** Sets a week's shelf (≤ 6 items that sell that Monday); `[]` hands the week back to the rotation. Refuses a past week. */
+  setShopFeatured(actor: GmActor, weekKey: string, itemIds: unknown, reason: string): Promise<{ actionId: number }>
+  /** Sets the three welcome choices: items that sell now, from `WELCOME_SLOTS`. */
+  setWelcomeChoices(actor: GmActor, itemIds: unknown, reason: string): Promise<{ actionId: number }>
+  /** Sets what some reputation sources pay (whole numbers ≥ 0). */
+  setReputationRules(actor: GmActor, patch: unknown, reason: string): Promise<{ actionId: number }>
+  /** Replaces the rank ladder (rank 1 at 0, strictly rising). Nobody loses a rank already reached (R15). */
+  setReputationRanks(actor: GmActor, ranks: unknown, reason: string): Promise<{ actionId: number }>
+  /** Adds 1..100 000 reputation to one account (spec A5: a GM only ever adds), announcing a rank-up after the commit. */
+  grantReputation(actor: GmActor, playerId: string, amount: number, reason: string): Promise<{ actionId: number; reputation: number; rank: number }>
 }
 
 /** The part of a live `Room` the service touches — narrow, so a test can hand in a stub. */
@@ -164,6 +223,10 @@ export interface GmServiceDeps {
   gifts: GiftScheduleStore
   /** The economy's time zone: "today" for a check-in is a calendar day there. */
   timezone: string
+  /** Plan 27: a GM's unlock adds reputation as the earning does. Optional for tests not about it. */
+  reputation?: ReputationService
+  /** Plan 27: the shop's prices, shelves and welcome choices (the Cửa hàng tab). Optional for tests not about it. */
+  shop?: ShopService
   log?: Pick<Logger, 'warn'>
   now?: () => number
 }
@@ -173,8 +236,11 @@ const CLAIM_REASONS = sql`('daily_login', 'daily_item_fallback')`
 
 /** Sources: the reasons that create points. Transfers (buy-in, cash-out, settlement, refund) only move them. */
 const SOURCE_REASONS: ReadonlySet<string> = new Set(['starting_balance', 'daily_reward', 'daily_login', 'daily_item_fallback', 'relief', 'achievement', 'gm_grant', 'gm_adjust', 'gm_achievement', 'gm_checkin_undo'])
-/** Sinks: a sink row's reason is its kind (`SettlementMeta.kind`). */
-const SINK_REASONS: ReadonlySet<string> = new Set(['table_fee', 'carry_over'])
+/**
+ * Sinks: a sink row's reason is its kind (`SettlementMeta.kind`). `shop` is the sink half of a purchase; its player
+ * half, `shop_purchase`, is a transfer and sits in neither set, so a purchase is counted once.
+ */
+const SINK_REASONS: ReadonlySet<string> = new Set(['table_fee', 'carry_over', 'shop'])
 const DAY_MS = 24 * 60 * 60 * 1000
 const SEARCH_LIMIT = { def: 20, max: 100 }
 const ACTIONS_LIMIT = { def: 50, max: 200 }
@@ -300,6 +366,8 @@ export function createGmService(deps: GmServiceDeps): GmService {
           balance: players.balance,
           createdAt: users.createdAt,
           lastLoginAt: users.lastLoginAt,
+          reputation: players.reputation,
+          rank: players.rank,
         })
         .from(users)
         .innerJoin(players, eq(players.id, users.id))
@@ -326,6 +394,8 @@ export function createGmService(deps: GmServiceDeps): GmService {
         room: live === undefined ? null : { roomId: live.roomId, code: live.code, name: live.name, seat: live.members.find((m) => m.playerId === playerId)?.seat ?? null },
         inventoryCount: Number(owned?.n ?? 0),
         unlockedAchievementIds: unlocked.map((u) => u.id),
+        reputation: Number(row.reputation),
+        rank: Number(row.rank),
       }
     },
 
@@ -397,14 +467,17 @@ export function createGmService(deps: GmServiceDeps): GmService {
         if (t.lockedAt !== null) throw new ServiceError('TARGET_IS_LOCKED', 'a locked account cannot be given an achievement; unlock first')
         const actionId = await logAction(tx, { actorUserId: actor.userId, action: 'unlock_achievement', targetPlayerId: t.id, itemId: def.id, amount: def.reward.points ?? null, reason: why })
         // The same code path as earning it, so the reward is the full one; a second unlock rolls the log line back too.
-        const outcome = await unlockWithin(tx, t.id, def, new Date(now()), { inventory: deps.inventory, reason: 'gm_achievement', refId: `gm:${String(actionId)}` })
-        if (outcome === 'already') throw new ServiceError('ALREADY_UNLOCKED', 'the achievement is already unlocked')
+        // Reputation rides along under the earning path's `ach:<player>:<id>` (spec A2), so it is paid once either way.
+        const unlocked = await unlockWithin(tx, t.id, def, new Date(now()), { inventory: deps.inventory, reason: 'gm_achievement', refId: `gm:${String(actionId)}`, reputation: deps.reputation })
+        if (unlocked.outcome === 'already') throw new ServiceError('ALREADY_UNLOCKED', 'the achievement is already unlocked')
         const [after] = await tx.select({ balance: players.balance }).from(players).where(eq(players.id, t.id))
-        return { actionId, reward: def.reward, balance: Number(after!.balance) }
+        return { result: { actionId, reward: def.reward, balance: Number(after!.balance) }, unlocked }
       })
       if (def.reward.points !== undefined) void deps.game.balanceChanged(playerId)
       notice(playerId, { action: 'unlock_achievement', achievementId: def.id, reason: why })
-      return result
+      // After the commit, like every other notice.
+      if (result.unlocked.rankUp) deps.game.notify(playerId, { t: 'NOTIFICATION', kind: 'RANK_UP', payload: { rank: result.unlocked.rank } })
+      return result.result
     },
 
     async checkinPreview(playerId) {
@@ -439,15 +512,22 @@ export function createGmService(deps: GmServiceDeps): GmService {
             targetPlayerId: t.id,
             amount: undone.points,
             reason: why,
-            details: { previousStreak: login.streak, previousLastClaimDate: login.lastClaimDate, undone },
+            details: { previousStreak: login.streak, previousConsecutive: login.consecutive, previousLastClaimDate: login.lastClaimDate, undone },
           })
           // The debit is the first thing that can fail: points already spent roll back the log line with it.
           if (undone.points > 0) await creditWithin(tx, [{ playerId: t.id, delta: -undone.points, reason: 'gm_checkin_undo', refId: `gm:${String(actionId)}` }])
           for (const itemId of undone.itemIds) await deps.inventory.revoke(tx, t.id, itemId)
           // Yesterday and one step back: the next claim is then exactly the one just undone (same day, same points).
+          // The consecutive run steps back too, or the reclaim — "yesterday" now — would count today twice
+          // (§13.1 as amended by Plan 27 Part G).
           await tx
             .update(dailyLogins)
-            .set({ lastClaimDate: addDaysKey(today, -1), streak: Math.max(login.streak - 1, 0), claimedDays: Math.max(login.claimedDays - 1, 0) })
+            .set({
+              lastClaimDate: addDaysKey(today, -1),
+              streak: Math.max(login.streak - 1, 0),
+              consecutive: Math.max(login.consecutive - 1, 0),
+              claimedDays: Math.max(login.claimedDays - 1, 0),
+            })
             .where(eq(dailyLogins.playerId, t.id))
           await tx.update(playerStats).set({ totalLoginDays: sql`greatest(${playerStats.totalLoginDays} - 1, 0)` }).where(eq(playerStats.playerId, t.id))
           const [after] = await tx.select({ balance: players.balance }).from(players).where(eq(players.id, t.id))
@@ -623,6 +703,16 @@ export function createGmService(deps: GmServiceDeps): GmService {
         .from(users)
       const byReason = await deps.repos.ledger.sums(now() - DAY_MS)
       const total = (set: ReadonlySet<string>) => byReason.filter((r) => set.has(r.reason)).reduce((sum, r) => sum + r.total, 0)
+      const ranks = await deps.db
+        .select({ rank: players.rank, n: count(), sum: sql<string | number>`coalesce(sum(${players.reputation}), 0)` })
+        .from(players)
+        .groupBy(players.rank)
+      const byRank = [0, 0, 0, 0, 0]
+      let reputation = 0
+      for (const r of ranks) {
+        reputation += Number(r.sum)
+        if (r.rank >= 1 && r.rank <= byRank.length) byRank[r.rank - 1] = Number(r.n)
+      }
       return {
         online: deps.game.connectionCount,
         rooms: deps.game.rooms.size,
@@ -630,6 +720,7 @@ export function createGmService(deps: GmServiceDeps): GmService {
         locked: Number(counts?.locked ?? 0),
         gms: Number(counts?.gms ?? 0),
         points24h: { sources: total(SOURCE_REASONS), sinks: total(SINK_REASONS), byReason },
+        reputation: { total: reputation, byRank },
       }
     },
 
@@ -653,5 +744,175 @@ export function createGmService(deps: GmServiceDeps): GmService {
       }
       return keys.map((day) => byDay.get(day)!)
     },
+
+    async shopConfig(actor) {
+      const shop = shopOf()
+      const reputation = repOf()
+      // The shop's own view decides the locks (gift months, achievements, free, default), so this tab and the shelf a
+      // player sees can never disagree; ownership, the one per-player part, is ignored.
+      const [view, stored, welcomeChoices, rules, ranks] = await Promise.all([
+        shop.view(editorOf(actor), now()),
+        shop.prices(),
+        shop.welcomeChoices(),
+        reputation.rules(),
+        reputation.ranks(),
+      ])
+      const byId = new Map(stored.map((p) => [p.itemId, p]))
+      const prices = view.entries.map((entry): GmShopPriceRow => {
+        const row = byId.get(entry.itemId)
+        const seed = SEED_PRICES[entry.rarity]
+        return {
+          itemId: entry.itemId,
+          slot: entry.slot,
+          rarity: entry.rarity,
+          priced: row !== undefined,
+          pricePoints: row?.pricePoints ?? seed.pricePoints,
+          minRank: row?.minRank ?? seed.minRank,
+          enabled: row?.enabled ?? false,
+          salePrice: row?.salePrice ?? null,
+          lock: entry.lock,
+        }
+      })
+      const weeks = featuredWeeks(now())
+      const featured = await Promise.all(weeks.map(async (weekKey) => ({ weekKey, ...(await shop.featuredFor(weekKey)) })))
+      return { prices, featured, welcomeChoices, welcomeSlots: WELCOME_SLOTS, reputation: { rules, ranks } }
+    },
+
+    async setShopPrices(actor, changes, reason) {
+      const why = checkReason(reason)
+      const by = editorOf(actor)
+      if (!Array.isArray(changes) || changes.length === 0) throw new ServiceError('INVALID_PRICES', 'a non-empty list of price changes is expected')
+      // The shop validates each change; the log keeps only the fields a change may carry, whatever else the body held.
+      const clean = (changes as unknown[]).map((c) => pickPriceChange(c))
+      const actionId = await deps.db.transaction(async (tx) => {
+        await shopOf().setPrices(tx, clean, by)
+        return logAction(tx, { actorUserId: actor.userId, action: 'set_shop_prices', reason: why, details: { changes: clean } })
+      })
+      return { actionId, changed: clean.length }
+    },
+
+    async setShopFeatured(actor, weekKey, itemIds, reason) {
+      const why = checkReason(reason)
+      const by = editorOf(actor)
+      // A week that is over has no shelf anyone will see again: refused rather than logged as if it mattered.
+      if (typeof weekKey === 'string' && WEEK_KEY.test(weekKey) && weekKey < isoWeekKey(now(), deps.timezone)) {
+        throw new ServiceError('WEEK_IN_PAST', `${weekKey} is over`)
+      }
+      const actionId = await deps.db.transaction(async (tx) => {
+        await shopOf().setFeatured(tx, weekKey, itemIds as string[], by)
+        return logAction(tx, { actorUserId: actor.userId, action: 'set_shop_featured', reason: why, details: { weekKey, itemIds: itemIds as string[] } })
+      })
+      return { actionId }
+    },
+
+    async setWelcomeChoices(actor, itemIds, reason) {
+      const why = checkReason(reason)
+      const by = editorOf(actor)
+      // The shop refuses anything locked; this adds the slot rule (C1): a hairstyle is cut for one body, a colour or a
+      // title is no outfit to wear on arrival.
+      if (Array.isArray(itemIds)) {
+        for (const id of itemIds) {
+          const def = typeof id === 'string' ? deps.catalog.get(id) : undefined
+          if (def !== undefined && !WELCOME_SLOTS.includes(def.slot)) throw new ServiceError('INVALID_WELCOME', `${def.id} is a ${def.slot}; a welcome choice is one of ${WELCOME_SLOTS.join(', ')}`)
+        }
+      }
+      const actionId = await deps.db.transaction(async (tx) => {
+        await shopOf().setWelcomeChoices(tx, itemIds as string[], by)
+        return logAction(tx, { actorUserId: actor.userId, action: 'set_welcome_choices', reason: why, details: { itemIds: itemIds as string[] } })
+      })
+      return { actionId }
+    },
+
+    async setReputationRules(actor, patch, reason) {
+      const why = checkReason(reason)
+      const by = editorOf(actor)
+      if (typeof patch !== 'object' || patch === null || Array.isArray(patch) || Object.keys(patch).length === 0) {
+        throw new ServiceError('INVALID_RULES', 'an object of rule amounts is expected')
+      }
+      const rules = patch as Partial<Record<RuleKey, number>>
+      for (const [key, amount] of Object.entries(rules)) {
+        if (typeof amount === 'number' && amount > REPUTATION_RULE_MAX) {
+          throw new ServiceError('INVALID_RULES', `${key} pays at most ${String(REPUTATION_RULE_MAX)}`)
+        }
+      }
+      const reputation = repOf()
+      const actionId = await deps.db.transaction(async (tx) => {
+        await reputation.setRules(tx, rules, by)
+        return logAction(tx, { actorUserId: actor.userId, action: 'set_reputation_rules', reason: why, details: { rules } })
+      })
+      // After the commit: the cache dropped inside the transaction may have been refilled from the rows before it.
+      reputation.invalidate()
+      return { actionId }
+    },
+
+    async setReputationRanks(actor, ranks, reason) {
+      const why = checkReason(reason)
+      const by = editorOf(actor)
+      if (!Array.isArray(ranks) || ranks.some((r) => typeof r !== 'object' || r === null)) {
+        throw new ServiceError('INVALID_RANKS', 'a list of { rank, threshold } is expected')
+      }
+      const ladder = (ranks as { rank: unknown; threshold: unknown }[]).map((r) => ({ rank: r.rank, threshold: r.threshold }) as RankRow)
+      if (ladder.some((r) => typeof r.threshold === 'number' && r.threshold > RANK_THRESHOLD_MAX)) {
+        throw new ServiceError('INVALID_RANKS', `a threshold is at most ${String(RANK_THRESHOLD_MAX)}`)
+      }
+      const reputation = repOf()
+      const actionId = await deps.db.transaction(async (tx) => {
+        await reputation.setRanks(tx, ladder, by)
+        return logAction(tx, { actorUserId: actor.userId, action: 'set_reputation_ranks', reason: why, details: { ranks: [...ladder].sort((a, b) => a.rank - b.rank) } })
+      })
+      reputation.invalidate()
+      return { actionId }
+    },
+
+    async grantReputation(actor, playerId, amount, reason) {
+      const why = checkReason(reason)
+      if (!Number.isInteger(amount) || amount < 1 || amount > REPUTATION_GRANT_MAX) {
+        throw new ServiceError('INVALID_AMOUNT', `reputation is granted in whole numbers from 1 to ${String(REPUTATION_GRANT_MAX)}`)
+      }
+      const reputation = repOf()
+      const result = await deps.db.transaction(async (tx) => {
+        const t = await target(tx, playerId)
+        const actionId = await logAction(tx, { actorUserId: actor.userId, action: 'grant_reputation', targetPlayerId: t.id, amount, reason: why })
+        // The event's ref is the action's, so the log line and the reputation ledger point at each other.
+        const grant = await reputation.grantWithin(tx, t.id, amount, 'gm_grant', `gm:${String(actionId)}`)
+        return { actionId, grant }
+      })
+      notice(playerId, { action: 'grant_reputation', amount, reason: why })
+      if (result.grant.rankUp) reputation.announceRankUp(playerId, result.grant.rank)
+      return { actionId: result.actionId, reputation: result.grant.reputation, rank: result.grant.rank }
+    },
   }
+
+  function shopOf(): ShopService {
+    if (deps.shop === undefined) throw new Error('the GM service was built without the shop')
+    return deps.shop
+  }
+
+  function repOf(): ReputationService {
+    if (deps.reputation === undefined) throw new Error('the GM service was built without reputation')
+    return deps.reputation
+  }
+
+  /** The `updated_by` of a config row: a GM's account. The server's CLI (no account) edits none of these tables. */
+  function editorOf(actor: GmActor): string {
+    if (actor.userId === null) throw new ServiceError('FORBIDDEN', 'a shop or reputation setting is changed from a GM account')
+    return actor.userId
+  }
+
+  /** The current ISO week and the eight after it, stepping from each week's Thursday so a week is never skipped. */
+  function featuredWeeks(nowMs: number): string[] {
+    const first = isoWeekKey(nowMs, deps.timezone)
+    const thursday = weekStartMs(first, deps.timezone) + 3 * DAY_MS + DAY_MS / 2
+    return Array.from({ length: FEATURED_WEEKS }, (_, i) => isoWeekKey(thursday + i * 7 * DAY_MS, deps.timezone))
+  }
+}
+
+const WEEK_KEY = /^\d{4}-W\d{2}$/
+
+/** The fields a price change may carry, kept as given (the shop judges them); anything else is dropped. */
+function pickPriceChange(raw: unknown): ShopPriceChange {
+  const c = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
+  const out: Record<string, unknown> = { itemId: c.itemId }
+  for (const key of ['pricePoints', 'minRank', 'enabled', 'salePrice'] as const) if (key in c) out[key] = c[key]
+  return out as ShopPriceChange
 }

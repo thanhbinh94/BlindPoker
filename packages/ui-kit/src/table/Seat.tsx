@@ -1,5 +1,5 @@
 import type { RoomPlayerView } from '@bp/core'
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Chibi, type ChibiSubject, type Expression } from '../avatar2d/index.js'
 import type { ClientSeat } from '../client/types.js'
@@ -8,11 +8,80 @@ import { Badge, type BadgeTone } from '../primitives/Badge.js'
 import { cx } from '../primitives/cx.js'
 import { Card } from './Card.js'
 import { SHOWDOWN_STAGGER_MS, dealStaggerMs } from './motion.js'
+import type { RoomFrame } from './frame.js'
 import { PeelCard } from './PeelCard.js'
+import { RankLabel } from './RankLabel.js'
 import { TurnTimer } from './TurnTimer.js'
 import s from './table.module.css'
 
 const DEALER_GLYPH = 'D'
+/** Under this many pixels of plate text the rank's name gives way to its numeral (spec 2026-10-21 §2 A4). */
+export const RANK_WORD_MIN_PX = 120
+
+/** The gap between the name and its rank (`.seatName`'s `gap`). */
+const RANK_GAP_PX = 5
+/** What the name's line keeps free at its end, so the rank's word never touches the plate's curve. */
+const RANK_BREATH_PX = 4
+
+/**
+ * Where a seat's rank stands: its word after the name (`name`); its word after the stack, when beside the name it would
+ * cut the name short (`stackWord`); its numeral in a pill after the stack (`stackPill`) — a compact plate, whose name's
+ * line is the name's alone (Ruling 11).
+ */
+export type RankPlace = 'name' | 'stackWord' | 'stackPill'
+
+/**
+ * Measures where the rank goes. A plate that grows to its content — the viewer's own on the ring, which has a `max-width`
+ * — is measured by how far it may grow (its cap less its disc, padding and gap); any other by its text box. Under
+ * `RANK_WORD_MIN_PX` the numeral; otherwise the word beside the name if the whole name, the gap and the word fit with
+ * `RANK_BREATH_PX` to spare, else after the stack. Nothing laid out (jsdom: a 0 px box): the word beside the name.
+ * The name's `scrollWidth` and the word's width are the same on either line, and the box measured never depends on where
+ * the rank sits, so the answers cannot chase each other.
+ */
+function placeRank(text: HTMLElement, nameText: HTMLElement): RankPlace {
+  const plate = text.parentElement
+  const cap = plate === null ? Number.NaN : parseFloat(getComputedStyle(plate).maxWidth)
+  const grows = plate !== null && Number.isFinite(cap) && cap > 0
+  const available = grows ? cap - (plate.offsetWidth - text.offsetWidth) : text.clientWidth
+  const box = grows ? available : text.getBoundingClientRect().width
+  if (box > 0 && box < RANK_WORD_MIN_PX) return 'stackPill'
+  const word = text.querySelector<HTMLElement>(`.${s.rankLabel}`)
+  // From the pill there is no word to measure yet: it goes beside the name, and the next pass measures it there.
+  if (word === null || available <= 0) return 'name'
+  const line = nameText.scrollWidth + RANK_GAP_PX + word.getBoundingClientRect().width
+  return line <= available - RANK_BREATH_PX ? 'name' : 'stackWord'
+}
+
+/**
+ * `placeRank` before the first paint, again after each answer (the label may have changed lines or form), on every
+ * resize of the text box and of the window (a content-sized plate's cap is a share of the table). In the landscape frame
+ * the numeral is the rule whatever the width, and nothing is measured.
+ */
+function useRankPlace(
+  textRef: RefObject<HTMLElement>,
+  nameRef: RefObject<HTMLElement>,
+  rank: number | null,
+  landscape: boolean,
+  name: string,
+): RankPlace {
+  const [place, setPlace] = useState<RankPlace>('name')
+  const active = rank !== null && !landscape
+  useLayoutEffect(() => {
+    const text = textRef.current
+    const nameText = nameRef.current
+    if (!active || text === null || nameText === null) return
+    const measure = (): void => setPlace(placeRank(text, nameText))
+    measure()
+    window.addEventListener('resize', measure)
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => measure())
+    observer?.observe(text)
+    return () => {
+      window.removeEventListener('resize', measure)
+      observer?.disconnect()
+    }
+  }, [textRef, nameRef, active, place, rank, name])
+  return landscape ? 'stackPill' : active ? place : 'name'
+}
 /** Marks the host's badge apart from "you" when both are gold (layout audit C4). */
 const CROWN_GLYPH = '♛ '
 
@@ -45,6 +114,15 @@ export interface SeatProps {
    * a couple of words belongs somewhere else on the screen.
    */
   caption?: ReactNode
+  /**
+   * The player's reputation rank 1..5 (Plan 27, spec 2026-10-21 §2 A4): the rank's name after the player's on a wide
+   * plate — after the stack instead when beside the name it would cut the name short — and its roman numeral after the
+   * stack when the plate's text box is under 120 px or the room is in the `landscape` frame. Rank 1, `null` and a bot's
+   * seat show nothing.
+   */
+  rank?: number | null
+  /** The room's frame, as `PokerTable` has it: `landscape` always shortens the rank to its numeral. */
+  frame?: RoomFrame
   /** The hand the cards belong to: each hand's cards are new cards, dealt afresh even when the count is the same. */
   handId: string | null
   /**
@@ -120,6 +198,8 @@ export function Seat({
   expression,
   bounce,
   caption,
+  rank = null,
+  frame = 'desktop',
   handId,
   dealt,
   dealIndex,
@@ -209,6 +289,15 @@ export function Seat({
   // seat itself, before the browser drops it.
   const seatRef = useRef<HTMLDivElement>(null)
   const pillRef = useRef<HTMLButtonElement>(null)
+
+  // The rank (Plan 27): a bot has none, rank 1 says nothing. The plate is measured only while there is a rank to fit: its
+  // word after the name when the whole name still fits beside it, else after the stack; a compact plate's numeral after
+  // the stack, so no name is ever cut by its rank (`useRankPlace`).
+  const shownRank = seat.isBot || rank === null || rank < 2 ? null : rank
+  const plateTextRef = useRef<HTMLSpanElement>(null)
+  const nameTextRef = useRef<HTMLSpanElement>(null)
+  const rankPlace = useRankPlace(plateTextRef, nameTextRef, shownRank, frame === 'landscape', name)
+  const rankLabel = shownRank === null ? null : <RankLabel rank={shownRank} lang={lang} compact={rankPlace === 'stackPill'} />
   useLayoutEffect(() => {
     if (!toTurn && pillRef.current !== null && document.activeElement === pillRef.current) seatRef.current?.focus({ preventScroll: true })
   }, [toTurn])
@@ -289,13 +378,24 @@ export function Seat({
         <span className={s.avatar} data-face={seat.isBot ? 'bot' : chibi === null ? 'default' : 'app'} aria-hidden="true">
           {chibi === null ? initial : <Chibi subject={chibi} expression={expression} frame="head" bounce={bounce} />}
         </span>
-        <span className={s.plateText}>
-          <span className={s.seatName}>{name}</span>
+        <span ref={plateTextRef} className={s.plateText}>
+          <span className={s.seatName}>
+            <span ref={nameTextRef} className={s.seatNameText}>
+              {name}
+            </span>
+            {rankPlace === 'name' ? rankLabel : null}
+          </span>
           {caption === undefined || caption === null ? null : <span className={s.seatCaption}>{caption}</span>}
           {/* A bot's stack is virtual — a table limit (5 × the wager) that is topped back up whenever it runs low, so
               a figure beside it would only read as a real balance to compare against. The Bot badge below says what
-              the seat is; its bets and payouts still show like anyone else's. */}
-          {seat.isBot ? null : <span className={s.seatStack}>{formatPoints(seat.stack, lang)}</span>}
+              the seat is; its bets and payouts still show like anyone else's. A bot has no rank either, so it has no
+              stack line at all. */}
+          {seat.isBot ? null : (
+            <span className={s.stackLine}>
+              <span className={s.seatStack}>{formatPoints(seat.stack, lang)}</span>
+              {rankPlace === 'name' ? null : rankLabel}
+            </span>
+          )}
         </span>
         {ring ? <TurnTimer deadlineAt={deadlineAt} serverNow={serverNow} totalMs={turnTimerMs} size={38} /> : null}
         {isButton ? (

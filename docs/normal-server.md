@@ -25,6 +25,8 @@ src/
   migrate-cli.ts     the same config load, then migrations only, then exit
   grant-wardrobe-cli.ts  operator tool: give one account every catalogue item (DATABASE_URL only)
   grant-gm-cli.ts    operator tool: make an account a GM, or take the role back (--revoke); DATABASE_URL only
+  reputation-backfill-cli.ts  operator tool, once per Plan 27 upgrade: credit every account the reputation its
+                     history earned (--dry-run first); DATABASE_URL only — see "Reputation, the shop and the welcome gift"
   e2e-entry.ts       the e2e server's own entry; e2e-promote.ts is its one extra route (never in dist/)
   app.ts             buildApp(): wiring, in the one order that works (below)
   config.ts          loadConfig(env) — reports every problem at once, then throws
@@ -46,7 +48,10 @@ src/
     index.ts         createRepositories(db) → NormalRepositories
 
   auth/              password.ts (argon2id) · session-service.ts · cookie.ts · auth-service.ts
-  economy/           daily-rules.ts (pure) · daily-gifts.ts (the gift schedule, loaded and checked) · gift-schedule-store.ts (the file plus a GM's months) · economy-service.ts (daily claim, relief)
+  economy/           daily-rules.ts (pure) · daily-gifts.ts (the gift schedule, loaded and checked) · gift-schedule-store.ts (the file plus a GM's months) · economy-service.ts (daily claim with the newcomer calendar, relief)
+                     · welcome-service.ts (the welcome gift, Plan 27)
+  reputation/        reputation-service.ts (rules, ranks, grants, the HAND_SETTLED listener) · backfill.ts (the CLI's logic)
+  shop/              shop-service.ts (the shelves, locks, the purchase, the GM's edits) · shop-prices-seed.ts (seeded at boot)
   inventory/         slots.ts (the slot and gender vocabulary) · manifest.ts (loads avatar-manifest.json)
                      bodies.ts (the v4 bodies, one per gender, held against the manifest) · items.ts (catalogue)
                      aliases.ts (old wardrobe ids → current ones, or null when dropped)
@@ -58,13 +63,15 @@ src/
   history/           history-service.ts (writes a settled hand, reads a player's last N)
   gm/                gm-service.ts (points, items, lock, role, reads, the action log) · gm-rooms.ts (list, kick, close:
                      a thin layer over the live rooms) · grant-gm.ts (the CLI's logic) · mask-email.ts
-  http/              routes.ts + routes-auth/-me/-rewards/-catalog/-outfits/-gm.ts · auth-guard.ts · types.ts
+  http/              routes.ts + routes-auth/-me/-rewards/-catalog/-outfits/-gm/-shop/-welcome.ts · auth-guard.ts · types.ts
 
 data/                items.json, item-aliases.json, avatar-bodies.json, achievements.json, daily-gifts.json — content, not code
                       avatar-manifest.json — Task 1's asset pipeline output, mirrored from normal-web
 drizzle/             committed migration SQL (0000 generated; 0001_avatar_v2, 0002_outfits hand-written, data only;
                       0003_ledger_keys generated, then guarded with IF NOT EXISTS — the keys `balances.apply` claims;
-                      0004_gm generated, then guarded with IF NOT EXISTS — users.role, locked_at, locked_reason and gm_actions)
+                      0004_gm generated, then guarded with IF NOT EXISTS — users.role, locked_at, locked_reason and gm_actions;
+                      0005_plan26 — gift_months, inventory.ref; 0006_plan27 — reputation, shop, newcomer and welcome tables,
+                      players.reputation/rank/welcome_claimed_at, daily_logins.consecutive, and the month-count data step)
 test/build.test.ts   the build itself, as a test
 ```
 
@@ -78,7 +85,7 @@ whose `package.json` is named `@bp/normal-server` — which works from `src/` un
 
 ## The wiring order in `buildApp`
 
-Most of it is arbitrary. Three steps are not, and each one is a bug if moved:
+Most of it is arbitrary. Four steps are not, and each one is a bug if moved:
 
 1. **`catalog.seed(db)` runs before any service exists.** Every cosmetic reward is a foreign key
    into `items`; a daily claim on the 7th against an unseeded table is a constraint violation.
@@ -90,6 +97,10 @@ Most of it is arbitrary. Three steps are not, and each one is a bug if moved:
    draw: an item somebody was supposed to earn, or one the schedule promises for a month.
    `loadDailyGifts` runs right after `loadAchievements` and before `seed`, so a bad schedule stops
    the boot before anything is written.
+4. **The Plan 27 seeds run at boot, next to `catalog.seed`** (`seedReputationDefaults`, `seedShopPrices`,
+   `seedShopConfig`, all `ON CONFLICT DO NOTHING`): the test harness truncates `users … cascade` between tests, and
+   `shop_prices` needs one row per catalogue item, which a migration cannot read. `reputation.start()` subscribes
+   after `achievements.start()`, so a hand's reputation is granted after its counters and unlocks.
 
 `buildApp` does not listen — `main.ts` calls `fastify.listen`. The WebSocket upgrade handler is
 already attached when it returns.
@@ -106,7 +117,7 @@ what lets `stats` be written without ever naming `achievements`.
 ```ts
 type AppEvent =
   | DomainEvent                                                        // from server-kit
-  | { type: 'DAILY_CLAIMED'; playerId; day; streak }
+  | { type: 'DAILY_CLAIMED'; playerId; day; streak; consecutive }   // streak = the month's claims (Plan 27)
   | { type: 'STATS_UPDATED'; playerId; changedMetrics: StatMetric[] }
 ```
 
@@ -431,8 +442,10 @@ The points column is not — it is `DAILY_REWARD_POINTS` in `@bp/core`, shared w
 }
 ```
 
-- A key under `default` or a month is a **streak tier** (1–31), not a calendar date. The streak restarts every month,
-  so tier 28 is claimed on the 28th to the 31st, depending on when the streak began.
+- A key under `default` or a month is a **tier** (1–31), not a calendar date: since Plan 27 (spec G) tier N is the
+  player's N-th claim of the month, consecutive or not (`daily_logins.streak` keeps its name and holds that count). The
+  count restarts every month, so tier 28 is claimed on the 28th to the 31st, depending on how many days were missed.
+  The consecutive run lives in `daily_logins.consecutive` and feeds only the two streak achievements.
 - A rule is `{ "draw": "common" | "rare" }` — an unowned item of that rarity from `DAILY_DRAW_SLOTS`, minus every
   reserved id, or `NO_ITEM_FALLBACK_POINTS` under `daily_item_fallback` when none is left — or `{ "fixed": [ids] }`,
   exactly those items, skipping any the player owns and never paid for.
@@ -454,7 +467,7 @@ The points column is not — it is `DAILY_REWARD_POINTS` in `@bp/core`, shared w
 - Each `draw` tier pays `NO_ITEM_FALLBACK_POINTS` (10,000, `daily_item_fallback`) to a player who owns its whole pool:
   adding draw tiers raises what a month can pay (conservation is unaffected).
 - The calendar always shows 31 tiers, so a `default` tier 29–31 is advertised in a 30-day month and in February, where
-  the streak never reaches it. Prefer month entries for those tiers.
+  the month's count never reaches it. Prefer month entries for those tiers.
 
 To add or change a month:
 
@@ -547,11 +560,11 @@ kick that happened, the route warns (`gm kick not logged`) and still answers `20
 the room becomes a 4xx; anything else is rethrown and stays a 500. The GM's reason stays in the
 log; the broadcast reason is the fixed string `closed_by_gm`.
 
-**Routes.** `http/routes-gm.ts` mounts twenty-two routes under `/api/gm/` behind `requireGm`, with CSRF and the `/api/*`
-rate limits as usual. `GET /api/gm/rooms/:id` returns the `AdminRoomSummary` (members included), not `room.view()`.
+**Routes.** `http/routes-gm.ts` mounts twenty-nine routes under `/api/gm/` behind `requireGm` (fifteen from Plan 25,
+seven from Plan 26, seven from Plan 27), with CSRF and the `/api/*` rate limits as usual. `GET /api/gm/rooms/:id` returns the `AdminRoomSummary` (members included), not `room.view()`.
 Search is a `POST` so an address never sits in a URL or an access log.
 
-**The second batch (Plan 26, spec 2026-10-20 Part A).** Four capabilities, seven of the twenty-two routes, all through the
+**The second batch (Plan 26, spec 2026-10-20 Part A).** Four capabilities, seven of the twenty-nine routes, all through the
 same door as the first batch: a reason of 3 to 200 characters first, the effect and its `gm_actions` row in one
 transaction, the player's `BALANCE` and `GM_NOTICE` only after the commit.
 
@@ -565,9 +578,10 @@ transaction, the player's `BALANCE` and `GM_NOTICE` only after the commit.
   **latest** one for the ref `daily:<playerId>:<date>`: its `daily_login` / `daily_item_fallback` rows are taken back as one
   negative row `gm_checkin_undo` (a **negative source**, like `gm_adjust`: balance and ledger fall by the same amount, so
   `Σ balances + Σ sinks` is conserved), its items are revoked (`InventoryService.revoke`, which also clears the slot, the
-  equipped title or badge, and strips the item from the player's saved outfits), `last_claim_date` is cleared and
-  `total_login_days` steps back by one (never below 0); the streak keeps its value, so the next claim is the same day and
-  draws afresh. Items found by `inventory.ref` (`findByRef`, set since migration 0005). Refused whole, nothing written, no
+  equipped title or badge, and strips the item from the player's saved outfits), `last_claim_date` goes back to
+  yesterday, and `streak` (the month's count), `consecutive` (Plan 27), `claimed_days` and `total_login_days` each step
+  back by one (never below 0), so the next claim is the same tier and draws afresh. The reset leaves the newcomer
+  calendar and any reputation the claim paid alone (Plan 27; `docs/known-limitations.md`). Items found by `inventory.ref` (`findByRef`, set since migration 0005). Refused whole, nothing written, no
   log row: `NOT_CLAIMED_TODAY`, `INSUFFICIENT_BALANCE` (the player has spent the points). A second reset after a reclaim
   takes back one claim, not two.
 - **Edit the gift schedule.** The three `/api/gm/gifts` routes above, backed by `gift_months` and `GiftScheduleStore`.
@@ -602,6 +616,94 @@ usage or configuration problem. It writes the user's database, so the operator r
 
 A GM then promotes and demotes others on the "Quản trị" screen. A GM cannot change their own role, and the last GM cannot
 be demoted.
+
+---
+
+## Reputation, the shop and the welcome gift (Plan 27)
+
+Spec: `docs/superpowers/specs/2026-10-21-plan27-shop-reputation-welcome-blind-zero-design.md` (Parts A, B, C, G);
+plan `docs/superpowers/plans/2026-10-22-plan27-shop-reputation-welcome-blind-zero.md` with its amendments P1–P36.
+Migration `drizzle/0006_plan27.sql` is additive and guarded; its config seeds are repeated **in code at boot** (wiring
+step 4), and `shop_prices` is seeded only there.
+
+**Reputation (`reputation/reputation-service.ts`).** A whole number per account, `players.reputation`, that only
+rises, and `players.rank` 1..5, the **highest rank reached** (`GREATEST(rank, rankOf(reputation))`, so a GM raising a
+threshold never lowers anyone). It is not points: not a `TxReason`, not in the conservation sum, never bought,
+transferred or taken back — a GM can only add. Every rise is a row of `reputation_events(player_id, delta > 0,
+reason, ref_id)` with a unique `(player_id, reason, ref_id)`, written in the **same transaction** as the total, so a
+replayed event adds nothing; `players.reputation = Σ delta` is pinned by an invariant test. The amounts are
+`reputation_rules` (eight keys; defaults `hand_played` 1, `hand_won` 3 more, `daily_login` 10, `achievement_small` 50
+(reward ≤ 5,000 points), `achievement_big` 150, `achievement_item` 500, `welcome` 100, `newcomer_day7` 200; a rule set
+to 0 grants nothing), and the ladder is `reputation_ranks` (0 · 100 · 400 · 1,800 · 5,000; rank 1 at 0, thresholds
+strictly rising, `INVALID_RANKS` otherwise). Where the grants happen:
+
+- A hand: the `HAND_SETTLED` listener, after commit like `stats` (R13), one transaction **per seat** (a seat that fails is
+  logged and the next is still paid), human seats only, never a cancelled hand or a failed settlement; ref = handId.
+- A check-in: inside `claimDaily`'s transaction, ref `daily:<pid>:<day>`. An achievement: inside `unlockWithin`, so a GM
+  unlock pays it too, ref `ach:<pid>:<id>`. The welcome gift and newcomer day 7: inside their own transactions.
+- Inside a caller's transaction the amount and the ladder are read **through `tx`** (`grantRuleWithin`; Ruling 3,
+  P7 — PGlite has one connection). `rules()` / `ranks()` are cached for views only (≤ 5 s; a GM save calls
+  `invalidate()`).
+- A rise in rank sends `NOTIFICATION { kind: 'RANK_UP', payload: { rank } }` after the commit, once per claim even when
+  two grants land in it. `GET /api/me` carries `reputation`, `rank` and `ranks`; `GET /api/players/:id/avatar` carries
+  `rank` only (R9) — the seat, the lobby bar and the GM's room members read it from the web's avatar cache.
+
+**The shop (`shop/shop-service.ts`).** `GET /api/shop` → `{ weekKey, featured, featuredSource: 'gm' | 'auto', entries,
+me: { balance, reputation, rank, ranks } }`, one entry per catalogue item with its price, `minRank`, `owned` and
+`lock`. A lock, in precedence order: `default`, `free`, `achievement` (an achievement's reward), `gift_month` /
+`gift_default` (read from the **live** gift schedule at every read and every purchase: an item of the current or a later
+month does not sell, a past month's does — R20), `unpriced` (no `shop_prices` row: an item added to `items.json` later
+does not sell until a GM prices it), `disabled`. The seed (`shop-prices-seed.ts`): common 10,000 at rank 1, rare 30,000
+at rank 3, epic 150,000 at rank 4; off sale for defaults, `free` items and achievement rewards. "Kệ tuần này" is
+`shop_featured[weekKey]` when a GM set it, else six sellable items rotated by ISO week and judged as of the week's
+Monday, so a lock lifting mid-week does not reshuffle it.
+
+`POST /api/shop/buy { itemId, purchaseId }` (`purchaseId` a lower-case UUID per click, resent on a retry) runs in one
+transaction: an item already granted under `shop:<pid>:<purchaseId>` → `repeated: true` (this survives the boot-time
+prune of `ledger_keys`, P15); then the key; then the price, lock and rank checks; then `creditWithin` with the player's
+row `shop_purchase` (−price, ref = itemId) and the sink row `shop` (`SettlementMeta.kind`), **debit before grant**;
+then `inventory.grant(…, 'shop', ref)`, whose `false` (a racing buy) rolls the debit back as `ALREADY_OWNED`. Refusals:
+`UNKNOWN_ITEM` 404; `SHOP_DISABLED`, `RANK_TOO_LOW`, `ALREADY_OWNED`, `INSUFFICIENT_POINTS`, `PURCHASE_UNDONE` (the id
+was used for an item a GM has since revoked) 409, each with a message of its own; a malformed body 400 `BAD_REQUEST`. `shop` is in `SINK_REASONS` and
+`shop_purchase` is a transfer like `buy_in`, so the overview and "Theo ngày" count a purchase once. Conservation: 40
+random buys across three players keep `Σ balances + Σ sinks`, and the shop sink equals what was paid.
+
+**The welcome gift (`economy/welcome-service.ts`).** `GET /api/welcome` → `{ claimed, choices: [{ itemId, owned }], reputation }` (`reputation` is what `rules.welcome` pays now, so the dialog announces a GM's change);
+`POST /api/welcome/claim { itemId: string | null }`. One transaction, guard first (`UPDATE players SET
+welcome_claimed_at … WHERE welcome_claimed_at IS NULL RETURNING id`): grant the item (source `welcome`), wear it
+(`wearItemWithin`, `inventory/avatar.ts`, through `tx`), `+rules.welcome` reputation (ref `welcome`), and day 1 of the
+newcomer calendar with `last_day_key` = today. `null` is allowed only when every choice is owned (reputation only,
+R17). Refusals, each 409: `WELCOME_CLAIMED`, `NOT_A_CHOICE`, `ALREADY_OWNED`; a body without `itemId` (or a bad one) 400
+`BAD_REQUEST`. The choices are
+`shop_config.welcome_choices` (default `outfit_dealer01`, `outfit_tet_red01`, `head_conical_hat01`).
+
+**The newcomer calendar (`claimDaily`).** `newcomer_progress(player_id, day, claimed_days, last_day_key, finished_at)`.
+A claim on a later economy day than `last_day_key` advances `day` by one **inside the claim's transaction**: day 3 pays
+an unowned common, day 7 an unowned rare plus `rules.newcomer_day7` reputation and finishes; an empty pool pays
+`NO_ITEM_FALLBACK_POINTS` under `daily_item_fallback` with ref `newcomer:<pid>:<day>` — outside the GM undo's reach.
+`DailyClaimOk.newcomer` is `{ day, item: string | null, fallbackPoints, reputation, finished }`, present only when the
+claim advanced the calendar; `GET /api/rewards/daily` carries `newcomer: { day, claimedDays, finished, day7Reputation }`
+until it finishes (`day7Reputation` is what `rules.newcomer_day7` pays now, for the panel's day-7 tile).
+
+**The GM's seven routes.** `POST /api/gm/players/:id/reputation` (1 to 100,000, a reason; `gm_actions` kind
+`grant_reputation`, event `gm_grant` with ref `gm:<actionId>`; a locked account can receive it), `GET /api/gm/shop`
+(prices with each row's lock, the featured weeks, the welcome choices, the rules and the ranks), `PUT
+/api/gm/shop/prices` (a non-empty change list, else `INVALID_PRICES`; `sale_price` refused this round, R5), `PUT
+/api/gm/shop/featured/:week` (`YYYY-Www`, ≤ 6 sellable items, `[]` hands the week back to the rotation; a malformed key
+400 `INVALID_WEEK`, a past week 409 `WEEK_IN_PAST`), `PUT /api/gm/shop/welcome` (three distinct sellable items of the
+outfit, head, face, aura or frame slots, else `INVALID_WELCOME`), `PUT /api/gm/reputation/rules` and `PUT
+/api/gm/reputation/ranks` (`INVALID_RULES` / `INVALID_RANKS`, then `invalidate()`). Each write logs one `gm_actions`
+row with its reason (`set_shop_prices`, `set_shop_featured`, `set_welcome_choices`, `set_reputation_rules`,
+`set_reputation_ranks`). A config write with no GM account behind it (the CLI's actor) is `FORBIDDEN`. The overview
+adds the number of players at each rank.
+
+**The backfill (`reputation-backfill-cli.ts`, `reputation/backfill.ts`).** For each player without a `backfill`
+event: (hands played × `hand_played`) + (hands won × `hand_won`) + (login days × `daily_login`) + each unlocked
+achievement's rule, minus the live events whose reason mirrors those counters (`hand_played`, `hand_won`,
+`daily_login`, `achievement` — never `welcome`, `newcomer_day` or `gm_grant`; Ruling 9), clamped at 0, written as one
+event `('backfill', 'plan27')` per player. No `RANK_UP`. A rerun skips every credited player. Prints
+`players=<n> applied=<n> ranks=[r1,…,r5]`, prefixed `(dry run) ` under `--dry-run`; exit 0, 2 without `DATABASE_URL`
+or on an unknown flag (with the usage line, nothing written), 1 on an error. Run it once per upgrade at a quiet moment (the operator's steps: `docs/deployment-normal.md` §7).
 
 ---
 

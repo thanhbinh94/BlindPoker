@@ -40,12 +40,24 @@ export function markClaimedToday(): void {
   for (const listener of claimListeners) listener()
 }
 
+/**
+ * Whether the arrival move may happen (Plan 27, P25): the welcome gift comes before the daily reward, so a session that
+ * starts with the gift unclaimed stays in the lobby, where the gift's dialog opens.
+ *
+ * - `go`: the gift is taken (or its status could not be read) — the move happens as it always did.
+ * - `skip`: the gift was waiting when the session started — no move this session; the tab's dot still shows.
+ * - `wait`: not known yet — a move that is due is held, then made on `go` or dropped on `skip`.
+ */
+export type NudgeArrival = 'go' | 'skip' | 'wait'
+
 export interface DailyNudgeArgs {
   api: NormalApi
   /** The signed-in account, or `null` — the hook asks once per account, not once per render. */
   playerId: string | null
   path: string
   navigate: (path: string) => void
+  /** `go` when omitted. */
+  arrival?: NudgeArrival
 }
 
 /**
@@ -57,10 +69,16 @@ export interface DailyNudgeArgs {
  * - **The dot on the tab:** `ready` is `true` while a reward is claimable. `/daily` is the one place it can
  *   change, so the daily page reports a claim through `markClaimedToday` and the dot goes out right then; it
  *   is also re-read when the player leaves `/daily`.
+ *
+ * The arrival move also waits on `arrival` (see `NudgeArrival`): a fresh account meets its welcome gift first.
  */
-export function useDailyNudge({ api, playerId, path, navigate }: DailyNudgeArgs): { ready: boolean } {
+export function useDailyNudge({ api, playerId, path, navigate, arrival = 'go' }: DailyNudgeArgs): { ready: boolean } {
   const [ready, setReady] = useState(false)
   const pathRef = useRef(path)
+  const arrivalRef = useRef(arrival)
+  arrivalRef.current = arrival
+  /** The day of an arrival move held while `arrival` is `wait`. */
+  const held = useRef<string | null>(null)
   /** The account the standing answer was asked for; a new account asks again. */
   const asked = useRef<string | null>(null)
   /** Which request is current, so a late reply cannot open the reward page under the next player. */
@@ -84,6 +102,7 @@ export function useDailyNudge({ api, playerId, path, navigate }: DailyNudgeArgs)
     pathRef.current = path
     if (playerId === null) {
       asked.current = null
+      held.current = null
       epoch.current += 1
       setReady(false)
       return
@@ -94,6 +113,7 @@ export function useDailyNudge({ api, playerId, path, navigate }: DailyNudgeArgs)
     // which cannot have claimed anything.
     if (!signingIn && !leftDaily) return
     asked.current = playerId
+    if (signingIn) held.current = null
     const mine = ++epoch.current
     void api
       .daily()
@@ -103,6 +123,11 @@ export function useDailyNudge({ api, playerId, path, navigate }: DailyNudgeArgs)
         if (!status.claimable || !signingIn) return
         const stamp = String(status.nextResetAt)
         if (readNudged() === stamp || !HOME_ROUTES.includes(pathRef.current)) return
+        if (arrivalRef.current === 'skip') return
+        if (arrivalRef.current === 'wait') {
+          held.current = stamp
+          return
+        }
         writeNudged(stamp)
         navigate('/daily')
       })
@@ -110,6 +135,18 @@ export function useDailyNudge({ api, playerId, path, navigate }: DailyNudgeArgs)
         if (mine === epoch.current) setReady(false)
       })
   }, [api, playerId, path, navigate])
+
+  // The welcome status landed: a held move is made — if the player is still where a session lands and the gift is
+  // taken — or dropped. Either way it is spent; nothing is held past one answer.
+  useEffect(() => {
+    if (arrival === 'wait') return
+    const stamp = held.current
+    held.current = null
+    if (stamp === null || arrival === 'skip') return
+    if (readNudged() === stamp || !HOME_ROUTES.includes(pathRef.current)) return
+    writeNudged(stamp)
+    navigate('/daily')
+  }, [arrival, navigate])
 
   return { ready }
 }

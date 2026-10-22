@@ -28,7 +28,8 @@ export interface ReasonDialogProps {
   body?: string
   /** Which extra inputs the action needs; the reason is always asked. */
   fields: {
-    amount?: boolean
+    /** `true`: points, ±10 000 000 and never 0. A range (reputation, Plan 27): a whole number within it, under its own label. */
+    amount?: boolean | AmountRange
     item?: boolean
     /** A picker of definitions; the ids in `disabledIds` (already unlocked) are listed but cannot be chosen. */
     achievement?: { options: AchievementDefDto[]; disabledIds: ReadonlySet<string> }
@@ -39,12 +40,21 @@ export interface ReasonDialogProps {
   onClose: () => void
 }
 
-/** The amount as a number, or `null` when it is anything but a whole, non-zero count within the cap. */
-function parseAmount(text: string): number | null {
+/** An amount field bounded both ways, with the label that says so. */
+export interface AmountRange {
+  min: number
+  max: number
+  label: string
+}
+
+/** The amount as a number, or `null` when it is anything but a whole, non-zero count within the cap (or within `range`). */
+function parseAmount(text: string, range?: AmountRange): number | null {
   const trimmed = text.trim()
   if (!/^[+-]?\d+$/u.test(trimmed)) return null
   const value = Number(trimmed)
-  if (!Number.isSafeInteger(value) || value === 0 || Math.abs(value) > MAX_POINTS) return null
+  if (!Number.isSafeInteger(value)) return null
+  if (range !== undefined) return value >= range.min && value <= range.max ? value : null
+  if (value === 0 || Math.abs(value) > MAX_POINTS) return null
   return value
 }
 
@@ -76,18 +86,20 @@ export function ReasonDialog({ open, title, body, fields, confirmLabel, onConfir
   }, [open])
 
   const cleanReason = reason.trim()
-  const amount = fields.amount === true ? parseAmount(amountText) : undefined
+  const range = typeof fields.amount === 'object' ? fields.amount : undefined
+  const wantsAmount = fields.amount !== undefined && fields.amount !== false
+  const amount = wantsAmount ? parseAmount(amountText, range) : undefined
   const cleanItem = itemId.trim()
   const valid =
     cleanReason.length >= MIN_REASON &&
-    (fields.amount !== true || amount !== null) &&
+    (!wantsAmount || amount !== null) &&
     (fields.item !== true || cleanItem !== '') &&
     (fields.achievement === undefined || achievementId !== '')
 
   const submit = async (): Promise<void> => {
     if (!valid || busy) return
     const values: ReasonValues = { reason: cleanReason }
-    if (fields.amount === true && amount !== null && amount !== undefined) values.amount = amount
+    if (wantsAmount && amount !== null && amount !== undefined) values.amount = amount
     if (fields.item === true) values.itemId = cleanItem
     if (fields.achievement !== undefined) values.achievementId = achievementId
     setBusy(true)
@@ -131,16 +143,18 @@ export function ReasonDialog({ open, title, body, fields, confirmLabel, onConfir
       <div className={s.form}>
         {body === undefined ? null : <p className={s.footnote}>{body}</p>}
 
-        {fields.amount === true ? (
+        {wantsAmount ? (
           <div className={g.field}>
             <label className={s.label} htmlFor={amountId}>
-              {t('gm.dialog.amount')}
+              {range === undefined ? t('gm.dialog.amount') : range.label}
             </label>
             <input
               id={amountId}
               className={s.input}
               type="text"
-              // No `inputMode`: iOS's numeric keypad has no minus sign, and a deduction is a minus.
+              // No `inputMode` for points: iOS's numeric keypad has no minus sign, and a deduction is a minus. A range
+              // that starts above zero has no minus to type.
+              inputMode={range !== undefined && range.min > 0 ? 'numeric' : undefined}
               autoComplete="off"
               value={amountText}
               onChange={(event) => setAmountText(event.target.value)}

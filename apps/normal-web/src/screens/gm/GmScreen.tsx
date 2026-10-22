@@ -10,9 +10,10 @@ import { OverviewTab } from './OverviewTab.js'
 import { PlayerDetail } from './PlayerDetail.js'
 import { PlayersTab } from './PlayersTab.js'
 import { RoomsTab } from './RoomsTab.js'
+import { ShopTab } from './ShopTab.js'
 
-type Tab = 'overview' | 'players' | 'rooms' | 'gifts' | 'actions'
-const TABS: readonly Tab[] = ['overview', 'players', 'rooms', 'gifts', 'actions']
+type Tab = 'overview' | 'players' | 'rooms' | 'gifts' | 'shop' | 'actions'
+const TABS: readonly Tab[] = ['overview', 'players', 'rooms', 'gifts', 'shop', 'actions']
 
 /** The one refusal that means "you are not a game master any more", as opposed to "not this target" or "not now". */
 function roleGone(cause: unknown): boolean {
@@ -30,7 +31,7 @@ export interface GmScreenProps {
 }
 
 /**
- * The game master's console: five tabs, and one player's page inside the second.
+ * The game master's console: six tabs, and one player's page inside the second.
  *
  * Every tab reads through `useAsync`, which swallows the cause of a failure, so a tab cannot be the one to notice
  * that the role is gone. The notice therefore lives on the api instead: `guarded` is the app's api with each call's
@@ -111,6 +112,7 @@ export function GmScreen({ api, lang, onForbidden }: GmScreenProps) {
       ) : null}
       {tab === 'rooms' ? <RoomsTab {...shared} /> : null}
       {tab === 'gifts' ? <GiftsTab {...shared} /> : null}
+      {tab === 'shop' ? <ShopTab {...shared} /> : null}
       {tab === 'actions' ? <ActionsTab {...shared} /> : null}
     </main>
   )

@@ -23,8 +23,8 @@
  * Reads are forgiving where writes are strict, and that half lives next door in `avatar-migrate.ts`:
  * `readAvatarConfig` repairs anything that does not validate here — a v1, v2 or v3 config, or a v4 one an
  * edit to the catalogue has left stale — so an old account renders as a complete v4 figure without a jsonb
- * column being rewritten in place. This module stays the one that decides what *valid* means, and does not
- * import that one.
+ * column being rewritten in place. This module stays the one that decides what *valid* means; it reaches into that
+ * one only from `wearItemWithin`, at call time (Plan 27).
  *
  * This is the HTTP wire (Plan 19, A5): `PUT /api/me/avatar` and `PUT /api/me/outfits/:slot` validate with
  * `validateAvatarConfig`, a new account is registered wearing `defaultAvatar`, and every read answers v4.
@@ -35,9 +35,11 @@
  * `applyAvatarConfig` rather than here.
  */
 import { eq } from 'drizzle-orm'
-import type { AppDb } from '../db/client.js'
+import type { AppDb, AppTx } from '../db/client.js'
 import { ServiceError } from '../errors.js'
 import { players } from '../db/schema.js'
+import { readAvatarConfig } from './avatar-migrate.js'
+import type { Bodies } from './bodies.js'
 import type { InventoryService } from './inventory-service.js'
 import type { ItemCatalog } from './items.js'
 import type { Gender, RequiredSlot } from './slots.js'
@@ -169,6 +171,51 @@ export async function applyAvatarConfig(
     .where(eq(players.id, playerId))
 
   return { config }
+}
+
+/**
+ * Puts one item on the figure inside the caller's transaction (Plan 27, the welcome gift's "worn at once", P23).
+ *
+ * The stored config is read through `tx` and repaired exactly as every read is (`readAvatarConfig`), the item goes
+ * into its own slot — an outfit replaces the outfit, a hat the hat — and the result must still pass
+ * `validateAvatarConfig` before it is written, with the denormalised title and badge in the same statement, as
+ * `applyAvatarConfig` and `inventory.revoke` write them. Everything else on the figure stays as it was.
+ *
+ * Ownership is not asked: the caller has just granted the item in this same transaction, and `missingOf` reads on
+ * `db`, which a transaction holding the only PGlite connection would wait on forever.
+ *
+ * Returns false, writing nothing, when there is nothing to wear it on or it cannot be worn: no such player, no such
+ * item, or a figure it would not validate on (a hairstyle drawn for the other body). A gift a player cannot wear is
+ * still theirs — the caller's grant stands — so this is an answer rather than a throw that would roll the grant back.
+ *
+ * The one place this module reads through `avatar-migrate.ts` (which imports this one): the cycle is call-time only,
+ * neither module touches the other's bindings while it is being evaluated.
+ */
+export async function wearItemWithin(
+  tx: AppTx,
+  catalog: ItemCatalog,
+  aliases: ReadonlyMap<string, string>,
+  bodies: Bodies,
+  playerId: string,
+  itemId: string,
+): Promise<boolean> {
+  const def = catalog.get(itemId)
+  if (def === undefined) return false
+  const [row] = await tx.select({ config: players.avatarConfig }).from(players).where(eq(players.id, playerId))
+  if (row === undefined) return false
+  const next: Record<string, unknown> = { ...readAvatarConfig(row.config, catalog, aliases, bodies), [def.slot]: itemId }
+  const checked = validateAvatarConfig(next, catalog)
+  if (!checked.ok) return false
+  const config = checked.value
+  await tx
+    .update(players)
+    .set({
+      avatarConfig: config as unknown as Record<string, unknown>,
+      equippedTitle: config.title ?? null,
+      equippedBadge: config.badge ?? null,
+    })
+    .where(eq(players.id, playerId))
+  return true
 }
 
 /**

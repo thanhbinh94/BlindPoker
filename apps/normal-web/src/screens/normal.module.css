@@ -813,6 +813,37 @@
   margin: 0;
 }
 
+/* The reputation line (Plan 27): the words, then a thin bar from this rank's threshold to the next one's, as wide as
+   the words may run. The fill takes the rank's own colour (`--rank-N`, set inline). */
+.repLine {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-width: 28rem;
+}
+
+.repText {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.repBar {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--line);
+}
+
+.repFill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: inherit;
+}
+
 .quickNav {
   display: flex;
   gap: var(--space-2);

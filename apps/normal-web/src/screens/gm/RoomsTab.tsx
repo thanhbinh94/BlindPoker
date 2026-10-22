@@ -1,7 +1,8 @@
-import { Badge, Button, formatPoints } from '@bp/ui-kit'
-import { Fragment, useState } from 'react'
+import { Badge, Button, RankLabel, formatPoints } from '@bp/ui-kit'
+import { Fragment, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { GmRoomDto } from '../../api.js'
+import type { GmRoomDto, NormalApi } from '../../api.js'
+import { useAvatars } from '../../avatar/useAvatars.js'
 import s from '../normal.module.css'
 import { useAsync } from '../useAsync.js'
 import { CopyId } from './CopyId.js'
@@ -169,7 +170,7 @@ export function RoomsTab({ api, lang }: GmTabProps) {
                     {expanded ? (
                       <tr id={membersId}>
                         <td colSpan={COLUMNS} className={g.members}>
-                          <MemberList room={room} lang={lang} onKick={(member) => ask({ kind: 'kick', room, member })} />
+                          <MemberList api={api} room={room} lang={lang} onKick={(member) => ask({ kind: 'kick', room, member })} />
                         </td>
                       </tr>
                     ) : null}
@@ -200,8 +201,12 @@ export function RoomsTab({ api, lang }: GmTabProps) {
   )
 }
 
-function MemberList({ room, lang, onKick }: { room: GmRoomDto; lang: GmTabProps['lang']; onKick: (member: Member) => void }) {
+function MemberList({ api, room, lang, onKick }: { api: NormalApi; room: GmRoomDto; lang: GmTabProps['lang']; onKick: (member: Member) => void }) {
   const { t } = useTranslation('normal')
+  // Each human's rank, as a numeral after the name (Plan 27, P13): the members list carries no rank, so it is read
+  // from the same avatar cache the table uses — one request per player a minute, none for a bot.
+  const humanIds = useMemo(() => room.members.filter((m) => !m.isBot).map((m) => m.playerId), [room.members])
+  const { avatars } = useAvatars(api, humanIds)
   return (
     <table className={`${g.table} ${g.cards}`} aria-label={`${t('gm.rooms.members')}: ${room.name}`}>
       <thead>
@@ -222,7 +227,12 @@ function MemberList({ room, lang, onKick }: { room: GmRoomDto; lang: GmTabProps[
       <tbody>
         {room.members.map((member) => (
           <tr key={member.playerId}>
-            <td className={g.rowName}>{member.displayName}</td>
+            <td className={g.rowName}>
+              <span className={g.nameWithRank}>
+                {member.displayName}
+                {member.isBot ? null : <RankLabel rank={avatars.get(member.playerId)?.rank} lang={lang} compact />}
+              </span>
+            </td>
             <td className={g.num} data-label={t('gm.rooms.seat')}>
               {member.seat === null ? null : member.seat + 1}
             </td>

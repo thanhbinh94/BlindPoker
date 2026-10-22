@@ -7,7 +7,9 @@ import { rowsOf, type AppDb } from '../db/client.js'
 import { createTestDb, type TestDb } from '../db/test-db.js'
 import { ServiceError } from '../errors.js'
 import { buildTestApp, ORIGIN, resetDb, START, testConfig, type Account, type Harness } from '../test-harness.js'
-import { createGmService, GM_ITEM_SOURCE, POINTS_CAP, type GmActor, type GmService, type GmServiceDeps } from './gm-service.js'
+import { seedDefaults as seedReputationDefaults } from '../reputation/reputation-service.js'
+import { seedConfig as seedShopConfig } from '../shop/shop-prices-seed.js'
+import { createGmService, GM_ITEM_SOURCE, POINTS_CAP, WELCOME_SLOTS, type GmActor, type GmService, type GmServiceDeps } from './gm-service.js'
 
 /** A Blind room nobody plays in: the lock test only needs the player seated, with a stack on the table. */
 const BLIND_ROOM: RoomConfig = {
@@ -163,6 +165,20 @@ describe('GmService — achievements', () => {
     await expect(gm.unlockAchievement(actor(boss), me.playerId, other.id, 'đang khóa')).rejects.toMatchObject({ code: 'TARGET_IS_LOCKED' })
     expect((await gm.get(me.playerId))?.unlockedAchievementIds).not.toContain(other.id)
   })
+
+  it('a GM unlock adds reputation too', async () => {
+    const notified = vi.spyOn(h.app.game, 'notify')
+    await gm.unlockAchievement(actor(boss), me.playerId, 'login_days_100', 'quà dài hạn')
+
+    // The earning path's ref, not the GM action's: a GM unlock and a later earning of the same achievement are one event.
+    const events = rowsOf<{ delta: number; reason: string; ref_id: string }>(
+      await db.execute(sql`select delta, reason, ref_id from reputation_events where player_id = ${me.playerId} order by id`),
+    )
+    expect(events).toEqual([{ delta: 500, reason: 'achievement', ref_id: `ach:${me.playerId}:login_days_100` }])
+    const [row] = rowsOf<{ reputation: number; rank: number }>(await db.execute(sql`select reputation, rank from players where id = ${me.playerId}`))
+    expect(row).toEqual({ reputation: 500, rank: 3 })
+    expect(notified).toHaveBeenCalledWith(me.playerId, { t: 'NOTIFICATION', kind: 'RANK_UP', payload: { rank: 3 } })
+  })
 })
 
 describe('GmService — check-in', () => {
@@ -178,9 +194,15 @@ describe('GmService — check-in', () => {
   })
 
   /** Day 7 of a streak: points 15,000 and a random common, so one claim moves points, an item and the counters. */
-  async function seedStreak(playerId: string, streak: number, lastClaimDate: string): Promise<void> {
-    await db.execute(sql`update daily_logins set streak = ${streak}, last_claim_date = ${lastClaimDate}, month = '2026-09', claimed_days = ${streak} where player_id = ${playerId}`)
+  async function seedStreak(playerId: string, streak: number, lastClaimDate: string, consecutive = streak): Promise<void> {
+    await db.execute(
+      sql`update daily_logins set streak = ${streak}, consecutive = ${consecutive}, last_claim_date = ${lastClaimDate}, month = '2026-09', claimed_days = ${streak} where player_id = ${playerId}`,
+    )
   }
+  const consecutiveOf = async (playerId: string) =>
+    Number((rowsOf<{ n: number | string }>(await db.execute(sql`select consecutive as n from daily_logins where player_id = ${playerId}`)))[0]?.n)
+  const loginStreakOf = async (playerId: string) =>
+    Number((rowsOf<{ n: number | string }>(await db.execute(sql`select login_streak as n from player_stats where player_id = ${playerId}`)))[0]?.n)
   const loginRow = async (playerId: string) =>
     (rowsOf<{ streak: number; last: string | null; days: number }>(await db.execute(sql`select streak, to_char(last_claim_date, 'YYYY-MM-DD') as last, claimed_days as days from daily_logins where player_id = ${playerId}`)))[0]
   const loginDays = async (playerId: string) =>
@@ -350,6 +372,128 @@ describe('GmService — check-in', () => {
     expect(await h.app.services.repos.balances.get(me.playerId)).toBe(base)
     expect(await itemRows(me.playerId)).toEqual([])
     expect(await loginRow(me.playerId)).toEqual({ streak: 6, last: YESTERDAY, days: 6 })
+  })
+
+  it('resetCheckin steps the consecutive run back with the month count and logs it, so a reclaim counts the run once', async () => {
+    // Day 7 of the month after eleven days in a row (the run began last month).
+    await seedStreak(me.playerId, 6, YESTERDAY, 11)
+    await settle()
+    const claim = await h.app.services.economy.claimDaily(me.playerId, clock)
+    if (!claim.ok) throw new Error('the claim was refused')
+    expect(claim).toMatchObject({ day: 7, streak: 7, consecutive: 12 })
+    expect(await consecutiveOf(me.playerId)).toBe(12)
+
+    const r = await gmAt.resetCheckin(actor(boss), me.playerId, 'điểm danh nhầm tài khoản')
+    expect(await consecutiveOf(me.playerId)).toBe(11)
+    expect(await loginRow(me.playerId)).toEqual({ streak: 6, last: YESTERDAY, days: 6 })
+    const [log] = rowsOf<{ details: Record<string, unknown> }>(await db.execute(sql`select details from gm_actions where id = ${r.actionId}`))
+    expect(log?.details).toMatchObject({ previousStreak: 7, previousConsecutive: 12, previousLastClaimDate: TODAY })
+
+    clock += 60_000
+    h.setNow(clock)
+    const again = await h.app.services.economy.claimDaily(me.playerId, clock)
+    expect(again).toMatchObject({ ok: true, day: 7, streak: 7, consecutive: 12 })
+    expect(await consecutiveOf(me.playerId)).toBe(12)
+    expect(await loginStreakOf(me.playerId)).toBe(12)
+  })
+
+  it('resetCheckin never steps a run of one below zero, and the reclaim starts the run at one again', async () => {
+    // Claimed on the 1st, missed the 2nd and 3rd: today's claim is day 7 of the month but day 1 of a run.
+    await seedStreak(me.playerId, 6, '2026-09-01', 4)
+    await settle()
+    const claim = await h.app.services.economy.claimDaily(me.playerId, clock)
+    expect(claim).toMatchObject({ ok: true, day: 7, consecutive: 1 })
+
+    const r = await gmAt.resetCheckin(actor(boss), me.playerId, 'điểm danh nhầm tài khoản')
+    expect(await consecutiveOf(me.playerId)).toBe(0)
+    const [log] = rowsOf<{ details: Record<string, unknown> }>(await db.execute(sql`select details from gm_actions where id = ${r.actionId}`))
+    expect(log?.details).toMatchObject({ previousConsecutive: 1 })
+
+    clock += 60_000
+    h.setNow(clock)
+    expect(await h.app.services.economy.claimDaily(me.playerId, clock)).toMatchObject({ ok: true, day: 7, consecutive: 1 })
+    expect(await consecutiveOf(me.playerId)).toBe(1)
+  })
+
+  /** Newcomer day 2 was yesterday, so today's claim reaches day 3, which draws a common or pays its fallback. */
+  const seedNewcomerDay2 = (playerId: string) =>
+    db.execute(sql`insert into newcomer_progress (player_id, day, claimed_days, last_day_key) values (${playerId}, 2, '[1,2]'::jsonb, ${YESTERDAY})`)
+  /** Owning every common empties both draws, so day 3 pays the 10,000 fallback deterministically. */
+  const ownEveryCommon = (playerId: string) =>
+    db.execute(sql`insert into inventory (player_id, item_id, source) select ${playerId}, id, 'gm' from items where rarity = 'common' on conflict do nothing`)
+  const newcomerOf = async () =>
+    (rowsOf<{ day: number; claimed: number[]; last: string; finished: string | null }>(
+      await db.execute(sql`select day, claimed_days as claimed, last_day_key as last, finished_at as finished from newcomer_progress where player_id = ${me.playerId}`),
+    ))[0]
+  const newcomerGifts = async () => ({
+    items: rowsOf<{ item_id: string }>(await db.execute(sql`select item_id from inventory where player_id = ${me.playerId} and source = 'newcomer'`)),
+    points: rowsOf<{ amount: string | number }>(await db.execute(sql`select amount from point_transactions where ref_id = ${`newcomer:${me.playerId}:3`}`))
+      .map((p) => ({ amount: Number(p.amount) })),
+  })
+
+  it('resetCheckin does not touch newcomer_progress', async () => {
+    await seedNewcomerDay2(me.playerId)
+    await ownEveryCommon(me.playerId)
+    const base = await h.app.services.repos.balances.get(me.playerId)
+
+    const claim = await h.app.services.economy.claimDaily(me.playerId, clock)
+    if (!claim.ok) throw new Error('the claim was refused')
+    // Month day 1 has no item rule, so its only fallback is the newcomer's.
+    expect(claim).toMatchObject({ day: 1, items: [], fallbackPoints: 0 })
+    expect(claim.newcomer).toMatchObject({ day: 3, item: null, fallbackPoints: 10_000, finished: false })
+    const calendar = await newcomerOf()
+    expect(calendar).toEqual({ day: 3, claimed: [1, 2, 3], last: TODAY, finished: null })
+    const gifts = await newcomerGifts()
+    expect(gifts.points).toEqual([{ amount: 10_000 }])
+    expect(gifts.items).toEqual([])
+
+    const r = await gmAt.resetCheckin(actor(boss), me.playerId, 'điểm danh nhầm tài khoản')
+    // The undo takes back the check-in only: the newcomer day and its fallback stay where the claim put them.
+    expect(r.undone).toEqual({ points: claim.points, itemIds: [] })
+    expect(r.balance).toBe(base + 10_000)
+    const books = await totals()
+    expect(books.balances).toBe(books.ledger)
+    expect(await newcomerOf()).toEqual(calendar)
+    expect(await newcomerGifts()).toEqual(gifts)
+
+    // The reclaim is the same day: the calendar already advanced today, so it does not advance again.
+    const again = await h.app.services.economy.claimDaily(me.playerId, clock)
+    expect(again).toMatchObject({ ok: true, day: claim.day })
+    expect(again).not.toHaveProperty('newcomer')
+    expect(await newcomerOf()).toEqual(calendar)
+    expect(await newcomerGifts()).toEqual(gifts)
+  })
+
+  it('resetCheckin on a day both draws come up empty takes back the month\'s fallback and leaves the newcomer\'s', async () => {
+    // Month day 7 draws a common too: with every common owned, one claim writes three ledger rows — the tier's
+    // 15,000 and the month's 10,000 fallback under `daily:`, and the newcomer's 10,000 fallback under `newcomer:`.
+    await seedStreak(me.playerId, 6, YESTERDAY)
+    await seedNewcomerDay2(me.playerId)
+    await ownEveryCommon(me.playerId)
+    const base = await settle()
+
+    const claim = await h.app.services.economy.claimDaily(me.playerId, clock)
+    if (!claim.ok) throw new Error('the claim was refused')
+    expect(claim).toMatchObject({ day: 7, points: 15_000, items: [], fallbackPoints: 10_000 })
+    expect(claim.newcomer).toMatchObject({ day: 3, item: null, fallbackPoints: 10_000 })
+    const rows = rowsOf<{ amount: string | number; reason: string; ref_id: string }>(
+      await db.execute(sql`select amount, reason, ref_id from point_transactions where player_id = ${me.playerId} and (ref_id like 'daily:%' or ref_id like 'newcomer:%') order by id`),
+    ).map((row) => ({ ...row, amount: Number(row.amount) }))
+    expect(rows).toEqual([
+      { amount: 15_000, reason: 'daily_login', ref_id: `daily:${me.playerId}:${TODAY}` },
+      { amount: 10_000, reason: 'daily_item_fallback', ref_id: `daily:${me.playerId}:${TODAY}` },
+      { amount: 10_000, reason: 'daily_item_fallback', ref_id: `newcomer:${me.playerId}:3` },
+    ])
+    const calendar = await newcomerOf()
+    const gifts = await newcomerGifts()
+
+    const r = await gmAt.resetCheckin(actor(boss), me.playerId, 'rút lại cả tiền bù')
+    expect(r.undone).toEqual({ points: claim.points + 10_000, itemIds: [] })
+    expect(r.balance).toBe(base + 10_000)
+    const books = await totals()
+    expect(books.balances).toBe(books.ledger)
+    expect(await newcomerOf()).toEqual(calendar)
+    expect(await newcomerGifts()).toEqual(gifts)
   })
 })
 
@@ -578,6 +722,168 @@ describe('GmService — daily stats', () => {
     expect(days[5]).toEqual({ day: '2026-09-03', sources: { gm_adjust: -2_000, gm_checkin_undo: -1_500 }, sinks: {}, net: -3_500 })
     expect(days[6]).toEqual({ day: '2026-09-04', sources: { gm_grant: 5_000 }, sinks: {}, net: 5_000 })
     expect(await gmAt.dailyStats(30)).toHaveLength(30)
+  })
+
+  it('a shop purchase counts once: its sink row under sinks.shop, its player row (shop_purchase) in neither column', async () => {
+    const gmAt = createGmService(deps({ now: () => START })) // 2026-09-04 10:00 in Ho Chi Minh, 03:00 UTC
+    await stamp('starting_balance', '2026-08-28T10:00:00Z')
+    const before = await gmAt.dailyStats(7)
+    const overviewBefore = await gmAt.overview()
+    expect(overviewBefore.points24h).toMatchObject({ sources: 0, sinks: 0 })
+    try {
+      // The two halves of one purchase, as `ShopService.buy` writes them through `creditWithin`.
+      await db.execute(sql`insert into point_transactions (player_id, amount, reason, ref_id) values (${me.playerId}, -10000, 'shop_purchase', 'head_beanie01')`)
+      await db.execute(sql`insert into point_transactions (player_id, amount, reason, ref_id, kind) values (null, 10000, 'shop', 'head_beanie01', 'shop')`)
+      await stamp('shop_purchase', '2026-09-04T02:00:00Z')
+      await stamp('shop', '2026-09-04T02:00:00Z')
+
+      const days = await gmAt.dailyStats(7)
+      expect(days[6]).toEqual({ day: '2026-09-04', sources: {}, sinks: { shop: 10_000 }, net: before[6]!.net - 10_000 })
+      for (const d of days) {
+        expect(d.sources).not.toHaveProperty('shop_purchase')
+        expect(d.sinks).not.toHaveProperty('shop_purchase')
+      }
+      expect(days.slice(0, 6)).toEqual(before.slice(0, 6))
+
+      const o = await gmAt.overview()
+      expect(o.points24h.sinks).toBe(10_000)
+      expect(o.points24h.sources).toBe(0)
+      expect(o.points24h.byReason.find((s) => s.reason === 'shop')?.total).toBe(10_000)
+    } finally {
+      await db.execute(sql`delete from point_transactions where reason in ('shop_purchase', 'shop')`)
+    }
+  })
+})
+
+describe('GmService — shop and reputation (Plan 27 B4)', () => {
+  /** The config tables `resetDb` leaves alone go back to their seeds, so no test leaks an edit into the next. */
+  afterEach(async () => {
+    await db.execute(sql`delete from reputation_rules`)
+    await db.execute(sql`delete from reputation_ranks`)
+    await db.execute(sql`delete from shop_config where key = 'welcome_choices'`)
+    await seedReputationDefaults(db)
+    await seedShopConfig(db)
+    h.app.services.reputation.invalidate()
+  })
+
+  const logged = async (action: string) =>
+    rowsOf<{ id: number; action: string; target_player_id: string | null; amount: string | number | null; reason: string; details: Record<string, unknown> | null }>(
+      await db.execute(sql`select id, action, target_player_id, amount, reason, details from gm_actions where action = ${action} order by id`),
+    )
+
+  it('shopConfig lists every catalogue item with its row and lock, nine weeks of shelves, the welcome choices and both reputation tables', async () => {
+    const gmAt = createGmService(deps({ now: () => START }))
+    const config = await gmAt.shopConfig(actor(boss))
+    expect(config.prices).toHaveLength(h.app.services.catalog.all().length)
+    const anAchievementItem = config.prices.find((p) => p.itemId === 'head_crown_gold01')
+    expect(anAchievementItem?.lock?.kind).toBe('achievement')
+    expect(config.prices.some((p) => p.lock === null && p.priced && p.enabled)).toBe(true)
+    // START is Friday 4 September 2026: ISO week 36, then 37 … 44.
+    expect(config.featured.map((f) => f.weekKey)).toEqual(['2026-W36', '2026-W37', '2026-W38', '2026-W39', '2026-W40', '2026-W41', '2026-W42', '2026-W43', '2026-W44'])
+    expect(config.featured.every((f) => f.source === 'auto' && f.itemIds.length <= 6)).toBe(true)
+    expect(config.welcomeChoices).toEqual(['outfit_dealer01', 'outfit_tet_red01', 'head_conical_hat01'])
+    expect(config.welcomeSlots).toEqual(WELCOME_SLOTS)
+    expect(config.reputation.rules.daily_login).toBe(10)
+    expect(config.reputation.ranks.map((r) => r.threshold)).toEqual([0, 100, 400, 1_800, 5_000])
+  })
+
+  it('setShopPrices writes only the fields given, logs set_shop_prices with the changes, and refuses a bad row with no log line', async () => {
+    const before = (await gm.shopConfig(actor(boss))).prices.find((p) => p.itemId === 'outfit_dealer01')!
+    const r = await gm.setShopPrices(actor(boss), [{ itemId: 'outfit_dealer01', pricePoints: 12_345, junk: 'dropped' }], 'giảm giá')
+    expect(r.changed).toBe(1)
+    const after = (await h.app.services.shop.prices()).find((p) => p.itemId === 'outfit_dealer01')!
+    expect(after).toMatchObject({ pricePoints: 12_345, minRank: before.minRank, enabled: before.enabled })
+    const [row] = await logged('set_shop_prices')
+    expect(row).toMatchObject({ id: r.actionId, target_player_id: null, reason: 'giảm giá', details: { changes: [{ itemId: 'outfit_dealer01', pricePoints: 12_345 }] } })
+
+    await expect(gm.setShopPrices(actor(boss), [{ itemId: 'outfit_dealer01', minRank: 9 }], 'bậc sai')).rejects.toMatchObject({ code: 'INVALID_PRICES' })
+    await expect(gm.setShopPrices(actor(boss), [], 'trống')).rejects.toMatchObject({ code: 'INVALID_PRICES' })
+    await expect(gm.setShopPrices(actor(boss), [{ itemId: 'outfit_dealer01', pricePoints: 1 }], 'no')).rejects.toMatchObject({ code: 'INVALID_REASON' })
+    await expect(gm.setShopPrices({ userId: null }, [{ itemId: 'outfit_dealer01', pricePoints: 1 }], 'từ CLI')).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(await logged('set_shop_prices')).toHaveLength(1)
+  })
+
+  it('setShopFeatured sets a week’s shelf and clears it, logging both; a past week, a seventh item and a locked one are refused', async () => {
+    const gmAt = createGmService(deps({ now: () => START }))
+    const sellable = (await gmAt.shopConfig(actor(boss))).prices.filter((p) => p.lock === null).map((p) => p.itemId)
+    const set = await gmAt.setShopFeatured(actor(boss), '2026-W37', sellable.slice(0, 2), 'kệ tuần sau')
+    expect(await h.app.services.shop.featuredFor('2026-W37')).toEqual({ itemIds: sellable.slice(0, 2), source: 'gm' })
+    await gmAt.setShopFeatured(actor(boss), '2026-W37', [], 'về tự xoay')
+    expect((await h.app.services.shop.featuredFor('2026-W37')).source).toBe('auto')
+    const rows = await logged('set_shop_featured')
+    expect(rows.map((r) => r.details)).toEqual([{ weekKey: '2026-W37', itemIds: sellable.slice(0, 2) }, { weekKey: '2026-W37', itemIds: [] }])
+    expect(rows[0]!.id).toBe(set.actionId)
+
+    await expect(gmAt.setShopFeatured(actor(boss), '2026-W35', sellable.slice(0, 1), 'tuần đã qua')).rejects.toMatchObject({ code: 'WEEK_IN_PAST' })
+    await expect(gmAt.setShopFeatured(actor(boss), '2026-W38', sellable.slice(0, 7), 'quá sáu món')).rejects.toMatchObject({ code: 'INVALID_FEATURED' })
+    await expect(gmAt.setShopFeatured(actor(boss), '2026-W38', ['head_crown_gold01'], 'món thành tựu')).rejects.toMatchObject({ code: 'INVALID_FEATURED' })
+    expect(await logged('set_shop_featured')).toHaveLength(2)
+  })
+
+  it('setWelcomeChoices takes exactly three wearable items that sell, logs them, and refuses a colour or a hairstyle', async () => {
+    const prices = (await gm.shopConfig(actor(boss))).prices
+    const wearable = prices.filter((p) => p.lock === null && WELCOME_SLOTS.includes(p.slot)).map((p) => p.itemId)
+    const other = prices.find((p) => p.lock === null && !WELCOME_SLOTS.includes(p.slot))!
+    const r = await gm.setWelcomeChoices(actor(boss), wearable.slice(0, 3), 'đổi quà chào mừng')
+    expect(await h.app.services.shop.welcomeChoices()).toEqual(wearable.slice(0, 3))
+    expect(await logged('set_welcome_choices')).toEqual([expect.objectContaining({ id: r.actionId, details: { itemIds: wearable.slice(0, 3) } })])
+
+    await expect(gm.setWelcomeChoices(actor(boss), [...wearable.slice(0, 2), other.itemId], 'một màu tóc')).rejects.toMatchObject({ code: 'INVALID_WELCOME' })
+    await expect(gm.setWelcomeChoices(actor(boss), wearable.slice(0, 2), 'thiếu một')).rejects.toMatchObject({ code: 'INVALID_WELCOME' })
+    expect(await logged('set_welcome_choices')).toHaveLength(1)
+  })
+
+  it('setReputationRules and setReputationRanks apply at once (the cache is dropped) and log their kind; a non-rising ladder is refused', async () => {
+    expect((await h.app.services.reputation.rules()).daily_login).toBe(10)
+    await gm.setReputationRules(actor(boss), { daily_login: 15 }, 'tăng điểm danh')
+    expect((await h.app.services.reputation.rules()).daily_login).toBe(15)
+    await expect(gm.setReputationRules(actor(boss), { daily_login: -1 }, 'số âm')).rejects.toMatchObject({ code: 'INVALID_RULES' })
+    await expect(gm.setReputationRules(actor(boss), { daily_login: 2.5 }, 'số lẻ')).rejects.toMatchObject({ code: 'INVALID_RULES' })
+
+    const ladder = [{ rank: 1, threshold: 0 }, { rank: 2, threshold: 150 }, { rank: 3, threshold: 450 }, { rank: 4, threshold: 2_000 }, { rank: 5, threshold: 6_000 }]
+    await gm.setReputationRanks(actor(boss), ladder, 'giãn bậc')
+    expect(await h.app.services.reputation.ranks()).toEqual(ladder)
+    const bad = [0, 100, 50, 1_800, 5_000].map((threshold, i) => ({ rank: i + 1, threshold }))
+    await expect(gm.setReputationRanks(actor(boss), bad, 'bậc lùi')).rejects.toMatchObject({ code: 'INVALID_RANKS' })
+    await expect(gm.setReputationRanks(actor(boss), [null], 'dữ liệu rác')).rejects.toMatchObject({ code: 'INVALID_RANKS' })
+    expect(await h.app.services.reputation.ranks()).toEqual(ladder)
+
+    // The caps (B4 review): a rule pays at most 100 000, a threshold is at most 1 000 000 000; one past either is refused.
+    await expect(gm.setReputationRules(actor(boss), { daily_login: 100_001 }, 'quá tay')).rejects.toMatchObject({ code: 'INVALID_RULES' })
+    const tooHigh = ladder.map((row) => (row.rank === 5 ? { rank: 5, threshold: 1_000_000_001 } : row))
+    await expect(gm.setReputationRanks(actor(boss), tooHigh, 'quá cao')).rejects.toMatchObject({ code: 'INVALID_RANKS' })
+    expect(await h.app.services.reputation.ranks()).toEqual(ladder)
+    expect((await h.app.services.reputation.rules()).daily_login).toBe(15)
+
+    expect((await logged('set_reputation_rules')).map((r) => r.details)).toEqual([{ rules: { daily_login: 15 } }])
+    expect((await logged('set_reputation_ranks')).map((r) => r.details)).toEqual([{ ranks: ladder }])
+  })
+
+  it('grantReputation adds a gm_grant event under gm:<actionId>, ranks up and announces RANK_UP after the commit; refuses 0, a fraction and over 100 000', async () => {
+    const notified = vi.spyOn(h.app.game, 'notify')
+    const r = await gm.grantReputation(actor(boss), me.playerId, 500, 'thưởng giải đấu')
+    expect(r).toEqual({ actionId: expect.any(Number), reputation: 500, rank: 3 })
+    const events = rowsOf<{ delta: number; reason: string; ref_id: string }>(
+      await db.execute(sql`select delta, reason, ref_id from reputation_events where player_id = ${me.playerId}`),
+    )
+    expect(events).toEqual([{ delta: 500, reason: 'gm_grant', ref_id: `gm:${String(r.actionId)}` }])
+    const [row] = await logged('grant_reputation')
+    expect(row).toMatchObject({ id: r.actionId, target_player_id: me.playerId, reason: 'thưởng giải đấu' })
+    expect(Number(row!.amount)).toBe(500)
+    expect(notified).toHaveBeenCalledWith(me.playerId, { t: 'NOTIFICATION', kind: 'RANK_UP', payload: { rank: 3 } })
+    expect((await gm.get(me.playerId))).toMatchObject({ reputation: 500, rank: 3 })
+
+    for (const amount of [0, -5, 1.5, 100_001]) {
+      await expect(gm.grantReputation(actor(boss), me.playerId, amount, 'sai số')).rejects.toMatchObject({ code: 'INVALID_AMOUNT' })
+    }
+    await expect(gm.grantReputation(actor(boss), 'not-a-uuid', 5, 'không có')).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(await logged('grant_reputation')).toHaveLength(1)
+  })
+
+  it('overview counts the accounts at each rank and sums reputation', async () => {
+    expect((await gm.overview()).reputation).toEqual({ total: 0, byRank: [2, 0, 0, 0, 0] })
+    await gm.grantReputation(actor(boss), me.playerId, 500, 'thưởng')
+    expect((await gm.overview()).reputation).toEqual({ total: 500, byRank: [1, 0, 1, 0, 0] })
   })
 })
 

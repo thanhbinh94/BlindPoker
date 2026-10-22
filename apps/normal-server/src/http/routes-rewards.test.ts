@@ -9,7 +9,7 @@ import { ECONOMY } from '@bp/core'
 import { eq } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { AppDb } from '../db/client.js'
-import { dailyLogins } from '../db/schema.js'
+import { dailyLogins, newcomerProgress } from '../db/schema.js'
 import { createTestDb, type TestDb } from '../db/test-db.js'
 import { buildTestApp, resetDb, START, XRW, type Account, type Harness } from '../test-harness.js'
 
@@ -127,6 +127,19 @@ describe('the daily reward', () => {
 
     const stats = await h.app.fastify.inject({ url: '/api/me/stats', headers: { cookie: me.cookie } })
     expect(stats.json()).toMatchObject({ totalLoginDays: 2, loginStreak: 2, bestLoginStreak: 2 })
+  })
+
+  it('carries the newcomer day on the claim and the newcomer calendar on the status', async () => {
+    // Newcomer day 2 was counted yesterday (START is 2026-09-04), so today's claim advances the calendar to day 3.
+    await db.insert(newcomerProgress).values({ playerId: me.playerId, day: 2, claimedDays: [1, 2], lastDayKey: '2026-09-03' })
+
+    const claim = await h.app.fastify.inject({ method: 'POST', url: '/api/rewards/daily/claim', headers: h.auth(me) })
+    expect(claim.statusCode).toBe(200)
+    expect((claim.json() as { newcomer?: { day: number; finished: boolean } }).newcomer).toMatchObject({ day: 3, finished: false })
+
+    const status = await h.app.fastify.inject({ url: '/api/rewards/daily', headers: { cookie: me.cookie } })
+    expect(status.statusCode).toBe(200)
+    expect((status.json() as { newcomer?: unknown }).newcomer).toEqual({ day: 3, claimedDays: [1, 2, 3], finished: false, day7Reputation: 200 })
   })
 
   it('requires a session and the CSRF header', async () => {

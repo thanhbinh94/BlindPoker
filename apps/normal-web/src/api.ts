@@ -240,6 +240,7 @@ export interface CalendarEntryDto {
 export interface DailyStatusDto {
   claimable: boolean
   day: number
+  /** The month's claim count (Plan 27 Part G), not a run of consecutive days: a missed day keeps it. */
   streak: number
   reward: number
   item: string | null
@@ -248,6 +249,34 @@ export interface DailyStatusDto {
   /** `YYYY-MM` in the server's economy timezone: the month `calendar` describes. */
   month: string
   calendar: CalendarEntryDto[]
+  /** Plan 27 C2: the newcomer calendar while it runs; absent with no welcome claim, once finished, and from an older server. */
+  newcomer?: NewcomerStatusDto
+}
+
+/** `apps/normal-server/src/economy/economy-service.ts`'s `NewcomerStatus`, verbatim. */
+export interface NewcomerStatusDto {
+  /** The newcomer day today's claim is (or was) for: in `claimedDays` means already counted today, otherwise the one today's claim reaches. */
+  day: number
+  /** The newcomer days (1–7) already counted, ascending; day 1 is the welcome claim. */
+  claimedDays: number[]
+  /** Always false while reported: a finished calendar is left out. */
+  finished: boolean
+  /** What day 7 pays now (`rules.newcomer_day7`); absent from a server older than the Plan 27 fix wave. */
+  day7Reputation?: number
+}
+
+/** `NewcomerClaim`: what a check-in added to the newcomer calendar, present only when it advanced it. */
+export interface NewcomerClaimDto {
+  /** The newcomer day reached, 2–7. */
+  day: number
+  /** The item day 3 or day 7 handed out, or null. */
+  item: string | null
+  /** The substitute when day 3 or day 7 had nothing unowned left; 0 otherwise. Already in `balance`. */
+  fallbackPoints: number
+  /** Reputation day 7 added; 0 on other days. */
+  reputation: number
+  /** True when this claim completed day 7. */
+  finished: boolean
 }
 
 /**
@@ -278,7 +307,10 @@ export interface DailyClaimDto {
   /** §13.2's substitute when a random tier had nothing unowned left; 0 otherwise. */
   fallbackPoints: number
   balance: number
+  /** The month's claim count after this claim (Plan 27 Part G), not a run of consecutive days. */
   streak: number
+  /** Plan 27 C2: present only when this claim advanced the newcomer calendar. */
+  newcomer?: NewcomerClaimDto
 }
 
 export type ReliefRefusal = 'balance' | 'cooldown'
@@ -312,6 +344,81 @@ export interface MeDto {
   relief: ReliefStatusDto
   createdAt: number
   lastLoginAt: number | null
+  /** Plan 27: lifetime reputation — only ever grows, never points (spec 2026-10-21 §2 A1). */
+  reputation: number
+  /** Plan 27: the highest rank 1..5 reached — a high-water mark, so it may sit above what `ranks` gives today (R15). */
+  rank: number
+  /** Plan 27: the ladder, ascending by rank, for the profile's "còn N tới <next>" bar. */
+  ranks: RankThresholdDto[]
+}
+
+/** One step of the reputation ladder (`reputation_ranks`). */
+export interface RankThresholdDto {
+  rank: number
+  threshold: number
+}
+
+/**
+ * Plan 27: why an item is not for sale, in the server's precedence order (spec 2026-10-21 §3 B1) — the source label a
+ * shop card shows in place of "Mua".
+ */
+export type ShopLockDto =
+  | { kind: 'achievement'; achievementId: string }
+  | { kind: 'gift_month'; month: string }
+  | { kind: 'gift_default' }
+  | { kind: 'free' }
+  | { kind: 'default' }
+  | { kind: 'disabled' }
+  | { kind: 'unpriced' }
+
+/** One catalogue item as the shop sees it, for the player asking. */
+export interface ShopEntryDto {
+  itemId: string
+  slot: ItemSlot
+  rarity: Rarity
+  /** Points; 0 for an `unpriced` item, which is locked, not free. */
+  price: number
+  /** The rank 1..5 the item needs, judged against `me.rank` (the high-water mark). */
+  minRank: number
+  /** `lock === null && !owned` — rank and balance are for the client to show and the server to judge. */
+  purchasable: boolean
+  owned: boolean
+  lock: ShopLockDto | null
+}
+
+/** `GET /api/shop`: every catalogue item, the week's shelf (≤ 6 ids) and the player's standing. */
+export interface ShopViewDto {
+  /** ISO week in the economy's zone, `YYYY-Www`. */
+  weekKey: string
+  featured: string[]
+  /** `gm` when a GM arranged this week's shelf, `auto` for the server's weekly rotation. */
+  featuredSource: 'gm' | 'auto'
+  entries: ShopEntryDto[]
+  me: { balance: number; reputation: number; rank: number; ranks: RankThresholdDto[] }
+}
+
+/** `POST /api/shop/buy`: the balance after the purchase; `repeated` when this `purchaseId` had already bought it. */
+export interface BuyResultDto {
+  balance: number
+  itemId: string
+  repeated: boolean
+}
+
+/** `GET /api/welcome`: whether the welcome gift is taken, and its three choices with which ones the player owns. */
+export interface WelcomeStatusDto {
+  claimed: boolean
+  choices: { itemId: string; owned: boolean }[]
+  /** What the gift's reputation is now (`rules.welcome`); absent from a server older than the Plan 27 fix wave. */
+  reputation?: number
+}
+
+/** `POST /api/welcome/claim`: the item granted and worn (`null` for reputation only), and the standing after it. */
+export interface WelcomeClaimDto {
+  ok: true
+  itemId: string | null
+  reputation: number
+  rank: number
+  rankUp: boolean
 }
 
 /** `GET /api/me/stats` — all sixteen counters of §10.3. */
@@ -407,6 +514,8 @@ export interface PlayerAvatarDto {
   playerId: string
   displayName: string
   avatar: AvatarConfigDto
+  /** Plan 27: the player's rank 1..5, shown beside the name on their seat. Absent from a server older than Plan 27. */
+  rank?: number
 }
 
 /** One saved outfit slot (design §5.3) — `apps/normal-server/src/inventory/outfits-service.ts`'s row. */
@@ -458,6 +567,43 @@ export interface GmPlayerDetailDto {
   inventoryCount: number
   /** Ids of every achievement this player has unlocked, so the GM's picker can disable them. */
   unlockedAchievementIds: string[]
+  /** Plan 27: the reputation total, and the rank 1..5 reached (the high-water mark). */
+  reputation: number
+  rank: number
+}
+
+/** One catalogue item in the GM's price table (`GET /api/gm/shop`): its stored row, or the rarity's seed when it has none. */
+export interface GmShopPriceRowDto {
+  itemId: string
+  slot: ItemSlot
+  rarity: Rarity
+  /** False for an item with no price row yet ("chưa định giá"). */
+  priced: boolean
+  pricePoints: number
+  minRank: number
+  enabled: boolean
+  salePrice: number | null
+  /** Why the item does not sell now, as the shop judges it; `null` when it does. */
+  lock: ShopLockDto | null
+}
+
+/** `GET /api/gm/shop`: what the Cửa hàng tab edits. */
+export interface GmShopConfigDto {
+  prices: GmShopPriceRowDto[]
+  /** The current ISO week and the eight after it: the GM's shelf (`gm`), or the rotation the week falls back to (`auto`). */
+  featured: { weekKey: string; itemIds: string[]; source: 'gm' | 'auto' }[]
+  welcomeChoices: string[]
+  /** The slots a welcome choice may come from. */
+  welcomeSlots: ItemSlot[]
+  reputation: { rules: Record<string, number>; ranks: RankThresholdDto[] }
+}
+
+/** One edit of a price row: the item, and only the fields that change. */
+export interface GmPriceChangeDto {
+  itemId: string
+  pricePoints?: number
+  minRank?: number
+  enabled?: boolean
 }
 
 /** A room as the console lists it — `GET /api/gm/rooms` rows and `GET /api/gm/rooms/:id` alike. */
@@ -501,6 +647,8 @@ export interface GmOverviewDto {
   gms: number
   /** The last 24 hours of the ledger: what came into the economy, what left it, and the same by reason. */
   points24h: { sources: number; sinks: number; byReason: { reason: string; total: number }[] }
+  /** Plan 27: Σ reputation, and how many accounts stand at each rank (index 0 is rank 1). */
+  reputation: { total: number; byRank: number[] }
 }
 
 /** One economy day of the ledger: sources signed per reason, sinks positive per reason, and what is left (`net`). */
@@ -624,6 +772,25 @@ export interface NormalApi {
   claimDaily(): Promise<DailyClaimDto>
   relief(): Promise<ReliefDto>
 
+  /** Plan 27: the shop's shelves, locks and the player's standing. */
+  shop(): Promise<ShopViewDto>
+  /**
+   * Buys one item for points. `purchaseId` is a fresh lower-case UUID per press of "Mua" (`crypto.randomUUID()`), and
+   * the *same* one on a retry: the server charges once per id and answers a repeat `repeated: true`. A malformed id is
+   * `400 BAD_REQUEST`. A refusal rejects with an `ApiError` whose `status` is 409 and whose `code` is `SHOP_DISABLED`,
+   * `RANK_TOO_LOW`, `ALREADY_OWNED`, `INSUFFICIENT_POINTS` or `PURCHASE_UNDONE` (read from the `{ error: { code } }` envelope by `failure`;
+   * there are no side fields), or 404 `UNKNOWN_ITEM`.
+   */
+  shopBuy(itemId: string, purchaseId: string): Promise<BuyResultDto>
+  /** Plan 27: the welcome gift's state — the lobby opens the dialog while `claimed` is false. */
+  welcome(): Promise<WelcomeStatusDto>
+  /**
+   * Takes the welcome gift: one unowned choice, granted and worn at once, with the `welcome` reputation; `null` only
+   * when every choice is already owned (reputation alone). A refusal rejects with an `ApiError` of status 409 and
+   * code `WELCOME_CLAIMED`, `NOT_A_CHOICE` or `ALREADY_OWNED`; a malformed body is 400 `BAD_REQUEST`.
+   */
+  welcomeClaim(itemId: string | null): Promise<WelcomeClaimDto>
+
   /** The five saved-outfit slots (design §5.3); a `null` entry is an empty slot. */
   outfits(): Promise<{ outfits: (OutfitDto | null)[] }>
   /** Saves the current draft into one slot, replacing whatever was there. */
@@ -666,6 +833,19 @@ export interface NormalApi {
   gmKick(roomId: string, playerId: string, reason: string): Promise<{ effective: 'now' | 'after_hand' }>
   gmCloseRoom(roomId: string, reason: string): Promise<{ closed: true; refunded: number }>
   gmActions(opts?: { limit?: number; before?: number; player?: string; room?: string }): Promise<{ actions: GmActionDto[]; nextBefore: number | null }>
+  /** Plan 27: the price table, nine weeks of shelves, the welcome choices and reputation's rules and ranks. */
+  gmShop(): Promise<GmShopConfigDto>
+  /** Edits price rows (only the fields given); refused `INVALID_PRICES` for a bad row. */
+  gmSetShopPrices(changes: GmPriceChangeDto[], reason: string): Promise<{ actionId: number; changed: number }>
+  /** Sets a week's shelf (≤ 6 items); `[]` hands the week back to the rotation. */
+  gmSetShopFeatured(weekKey: string, itemIds: string[], reason: string): Promise<{ actionId: number }>
+  /** Sets the three welcome choices. */
+  gmSetWelcomeChoices(itemIds: string[], reason: string): Promise<{ actionId: number }>
+  gmSetReputationRules(rules: Record<string, number>, reason: string): Promise<{ actionId: number }>
+  /** Replaces the ladder; refused `INVALID_RANKS` unless rank 1 is 0 and the thresholds rise. */
+  gmSetReputationRanks(ranks: RankThresholdDto[], reason: string): Promise<{ actionId: number }>
+  /** Adds 1..100 000 reputation; there is no call that takes it away. */
+  gmGrantReputation(playerId: string, amount: number, reason: string): Promise<{ actionId: number; reputation: number; rank: number }>
 }
 
 interface Call {
@@ -764,9 +944,10 @@ export function createApi(fetchImpl?: typeof fetch, base = ''): NormalApi {
       call<PlayerAvatarDto>({
         method: 'GET',
         path: `/api/players/${encodeURIComponent(playerId)}/avatar`,
-        // `no-store` rather than `reload`: the answer this request exists to replace is already known wrong,
-        // so there is nothing worth writing back into the cache either.
-        ...(opts?.fresh === true ? { cache: 'no-store' as const } : {}),
+        // `reload` rather than `no-store`: past the browser's cache to the server, and the fresh answer written back
+        // over the stale one, so a reload or another screen inside the `max-age` reads it too (Plan 27: a rank-up,
+        // then F5, seated the old rank while `no-store` left the stale entry in place).
+        ...(opts?.fresh === true ? { cache: 'reload' as const } : {}),
       }),
 
     achievements: () => call<AchievementProgressDto[]>({ method: 'GET', path: '/api/me/achievements' }),
@@ -774,6 +955,11 @@ export function createApi(fetchImpl?: typeof fetch, base = ''): NormalApi {
     daily: () => call<DailyStatusDto>({ method: 'GET', path: '/api/rewards/daily' }),
     claimDaily: () => call<DailyClaimDto>({ method: 'POST', path: '/api/rewards/daily/claim' }),
     relief: () => call<ReliefDto>({ method: 'POST', path: '/api/economy/relief' }),
+
+    shop: () => call<ShopViewDto>({ method: 'GET', path: '/api/shop' }),
+    shopBuy: (itemId, purchaseId) => call<BuyResultDto>({ method: 'POST', path: '/api/shop/buy', body: { itemId, purchaseId } }),
+    welcome: () => call<WelcomeStatusDto>({ method: 'GET', path: '/api/welcome' }),
+    welcomeClaim: (itemId) => call<WelcomeClaimDto>({ method: 'POST', path: '/api/welcome/claim', body: { itemId } }),
 
     outfits: () => call<{ outfits: (OutfitDto | null)[] }>({ method: 'GET', path: '/api/me/outfits' }),
     saveOutfit: (slot, name, config) =>
@@ -831,6 +1017,20 @@ export function createApi(fetchImpl?: typeof fetch, base = ''): NormalApi {
       call<{ actions: GmActionDto[]; nextBefore: number | null }>({
         method: 'GET',
         path: `/api/gm/actions${query({ player: opts?.player, room: opts?.room, limit: opts?.limit, before: opts?.before })}`,
+      }),
+    gmShop: () => call<GmShopConfigDto>({ method: 'GET', path: '/api/gm/shop' }),
+    gmSetShopPrices: (changes, reason) =>
+      call<{ actionId: number; changed: number }>({ method: 'PUT', path: '/api/gm/shop/prices', body: { changes, reason } }),
+    gmSetShopFeatured: (weekKey, itemIds, reason) =>
+      call<{ actionId: number }>({ method: 'PUT', path: `/api/gm/shop/featured/${encodeURIComponent(weekKey)}`, body: { itemIds, reason } }),
+    gmSetWelcomeChoices: (itemIds, reason) => call<{ actionId: number }>({ method: 'PUT', path: '/api/gm/shop/welcome', body: { itemIds, reason } }),
+    gmSetReputationRules: (rules, reason) => call<{ actionId: number }>({ method: 'PUT', path: '/api/gm/reputation/rules', body: { rules, reason } }),
+    gmSetReputationRanks: (ranks, reason) => call<{ actionId: number }>({ method: 'PUT', path: '/api/gm/reputation/ranks', body: { ranks, reason } }),
+    gmGrantReputation: (playerId, amount, reason) =>
+      call<{ actionId: number; reputation: number; rank: number }>({
+        method: 'POST',
+        path: `/api/gm/players/${encodeURIComponent(playerId)}/reputation`,
+        body: { amount, reason },
       }),
   }
 }

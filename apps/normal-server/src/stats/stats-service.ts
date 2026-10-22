@@ -160,11 +160,13 @@ export function createStatsService(deps: StatsServiceDeps): StatsService {
         return
       case 'DAILY_CLAIMED':
         // The check-in is what a "login day" means (ruling for §10.3): signing in twice in one day
-        // is not two days, and the claim is the once-a-day event that already knows the streak.
+        // is not two days, and the claim is the once-a-day event that already knows the streak. The streak is the
+        // run of consecutive days, not the month's claim count (§13.1 as amended by Plan 27 Part G): a missed day no
+        // longer sets the calendar back, but it still breaks the run `login_streak_7` and `login_streak_28` count.
         await apply(e.playerId, {
           totalLoginDays: inc('totalLoginDays'),
-          loginStreak: e.streak,
-          bestLoginStreak: atLeast('bestLoginStreak', e.streak),
+          loginStreak: e.consecutive,
+          bestLoginStreak: atLeast('bestLoginStreak', e.consecutive),
         })
         return
       default:

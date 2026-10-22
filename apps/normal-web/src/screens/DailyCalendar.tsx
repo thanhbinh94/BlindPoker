@@ -89,23 +89,27 @@ export interface DailyCalendarProps {
 export function DailyCalendar({ entries, month, day = null, claimable = false, onPick, lockedThrough = 0, showPoints = true, lang }: DailyCalendarProps) {
   const { t } = useTranslation('normal')
   // `day` is the tier this claim is *for*: the one about to be taken while it is claimable, and the one already
-  // taken once it is not. So the line between claimed and unclaimed moves with it.
+  // taken once it is not. So the line between claimed and unclaimed moves with it. Since Plan 27 G it is the month's
+  // claim count, not a date and not a run of days: after twelve claims tile 13 is today, whatever the date and however
+  // many days were missed. Once today's claim is taken no tile is today — the next one waits for tomorrow.
   const claimedThrough = day === null ? 0 : claimable ? day - 1 : day
+  const todayTier = claimable && day !== null ? day : null
 
   return (
     <>
       <ol className={s.calendar} aria-label={t('daily.calendarTitle')}>
         {entries.map((entry) => {
           const claimed = entry.day <= claimedThrough
+          const isToday = entry.day === todayTier
           const marker = markerOf(entry, t)
-          const mark = claimed ? t('daily.claimedMark') : entry.day === day ? t('daily.todayMark') : null
+          const mark = claimed ? t('daily.claimedMark') : isToday ? t('daily.todayMark') : null
           const locked = onPick !== undefined && entry.day <= lockedThrough
           return (
             <li
               className={s.calCell}
               key={entry.day}
               data-claimed={String(claimed)}
-              {...(entry.day === day ? { 'aria-current': 'date' as const } : {})}
+              {...(isToday ? { 'aria-current': 'date' as const } : {})}
               {...(locked ? { 'aria-disabled': true, title: t('gm.gifts.locked') } : {})}
             >
               <span className={s.calDay}>{t('daily.dayLabel', { day: entry.day })}</span>

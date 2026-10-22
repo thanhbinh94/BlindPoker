@@ -9,7 +9,9 @@ import type { TestDb } from '../db/test-db.js'
 import { createTestDb } from '../db/test-db.js'
 import { ServiceError } from '../errors.js'
 import type { AvatarConfigV4 } from './avatar.js'
-import { applyAvatarConfig, defaultAvatar, itemIdsOf, validateAvatarConfig } from './avatar.js'
+import { loadAliases } from './aliases.js'
+import { applyAvatarConfig, defaultAvatar, itemIdsOf, validateAvatarConfig, wearItemWithin } from './avatar.js'
+import { loadBodies } from './bodies.js'
 import type { InventoryService } from './inventory-service.js'
 import { createInventoryService } from './inventory-service.js'
 import type { ItemCatalog } from './items.js'
@@ -274,6 +276,53 @@ describe('applyAvatarConfig', () => {
     // With the shipped catalogue's free ids — what `app.ts` builds the service with — nothing needs a row.
     const withFree = createInventoryService(db, undefined, catalog.freeIds())
     await expect(applyAvatarConfig(db, withFree, playerId, { ...CASUAL, skinColor: 'skin_tan01' })).resolves.toEqual({ config: { ...CASUAL, skinColor: 'skin_tan01' } })
+  })
+})
+
+describe('wearItemWithin', () => {
+  const aliases = loadAliases()
+  const bodies = loadBodies()
+
+  async function dress(playerId: string, config: AvatarConfigV4): Promise<void> {
+    await db
+      .update(players)
+      .set({ avatarConfig: config as unknown as Record<string, unknown>, equippedTitle: config.title ?? null, equippedBadge: config.badge ?? null })
+      .where(eq(players.id, playerId))
+  }
+  const wear = (playerId: string, itemId: string): Promise<boolean> => db.transaction((tx) => wearItemWithin(tx, catalog, aliases, bodies, playerId, itemId))
+  const rowOf = async (playerId: string) => (await db.select().from(players).where(eq(players.id, playerId)))[0]!
+
+  it('puts a head item in the head slot and keeps the rest of the figure', async () => {
+    const playerId = await seedPlayer()
+    await dress(playerId, DRESSED)
+
+    expect(await wear(playerId, 'head_conical_hat01')).toBe(true)
+    const row = await rowOf(playerId)
+    expect(row.avatarConfig).toEqual({ ...DRESSED, head: 'head_conical_hat01' })
+    expect(row).toMatchObject({ equippedTitle: 'title_devoted', equippedBadge: 'badge_monthly' })
+  })
+
+  it('a title sets equipped_title as well as the config', async () => {
+    const playerId = await seedPlayer()
+    await dress(playerId, CASUAL)
+
+    expect(await wear(playerId, 'title_rookie')).toBe(true)
+    const row = await rowOf(playerId)
+    expect(row.avatarConfig).toEqual({ ...CASUAL, title: 'title_rookie' })
+    expect(row).toMatchObject({ equippedTitle: 'title_rookie', equippedBadge: null })
+  })
+
+  it('an outfit replaces the required outfit; an item the figure cannot wear changes nothing', async () => {
+    const playerId = await seedPlayer()
+    await dress(playerId, CASUAL)
+
+    expect(await wear(playerId, 'outfit_dealer01')).toBe(true)
+    expect((await rowOf(playerId)).avatarConfig).toEqual({ ...CASUAL, outfit: 'outfit_dealer01' })
+
+    // A man's hairstyle on a woman's figure would not validate, and an unknown id is no slot at all.
+    expect(await wear(playerId, 'hair_m_tousled01')).toBe(false)
+    expect(await wear(playerId, 'hat_that_never_was')).toBe(false)
+    expect((await rowOf(playerId)).avatarConfig).toEqual({ ...CASUAL, outfit: 'outfit_dealer01' })
   })
 })
 

@@ -60,12 +60,12 @@ database) and **Lite** (one Windows `.exe` with SQLite). Internal ids keep the o
 | Avatar art | `pnpm --filter @bp/normal-web avatar:check` | There is no root alias. `pnpm avatar:check` fails, and the root `avatar:assets` script is a dead alias left from Plan 8. |
 | e2e Normal | `pnpm build:normal`, then `pnpm e2e:normal` | 24 tests, about 2.5 min, port 8091, throwaway PGlite. A stale `dist` fails every test. |
 | e2e Lite | `pnpm build:lite`, then `pnpm --filter @bp/lite e2e` | 4 tests, about 40 s, port 8090. |
-| Ops pack | `pnpm --filter @bp/normal-web e2e:ops` | 43 cases, about 10 min, port 8093, throwaway PGlite. Projects are `desktop` (1440×900), `mobile` (375×812 touch; titles tagged `@mobile`) and `landscape` (915×412 touch; titles tagged `@landscape`). |
+| Ops pack | `pnpm --filter @bp/normal-web e2e:ops` | 50 cases, about 10 min, port 8093, throwaway PGlite. Projects are `desktop` (1440×900), `mobile` (375×812 touch; titles tagged `@mobile`) and `landscape` (915×412 touch; titles tagged `@landscape`). |
 
 - **The doc-citation rule.** In `docs/acceptance-checklist.md`, every `` `path` → `title` `` pair must occur verbatim in
   the cited file. In `docs/test-matrix.md`, every test-name fragment must occur verbatim in one of the files its row
   names. If you rename a test, update both docs in the same commit. If you add a row, bump the pinned counts in
-  `tooling/arch/acceptance-links.test.ts`: today the checklist is `64 + 3 + 2 + 3 + 3` and the matrix `43 + 10 + 4 + 7 + 5 + 8 + 3`.
+  `tooling/arch/acceptance-links.test.ts`: today the checklist is `64 + 3 + 2 + 3 + 3 + 5` and the matrix `43 + 10 + 4 + 7 + 5 + 8 + 3 + 5 + 5`.
 - **Sign-ups are rate-limited.** The server allows 10 sign-ups a minute per address. `pnpm e2e:normal` already
   registers close to that many accounts, so never add a test there that registers unless you remove one. In the ops
   pack, make new accounts only through `newPlayer` / `registerPatiently` (`apps/normal-web/e2e/ops/ops-helpers.ts`),

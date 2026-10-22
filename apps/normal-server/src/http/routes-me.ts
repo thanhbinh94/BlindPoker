@@ -30,6 +30,7 @@ import type { Bodies } from '../inventory/bodies.js'
 import type { InventoryService } from '../inventory/inventory-service.js'
 import type { ItemCatalog } from '../inventory/items.js'
 import { clampLimit, cursorOf, DisplayNameTakenError, type NormalRepositories } from '../repos/index.js'
+import type { ReputationService } from '../reputation/reputation-service.js'
 import type { StatsService } from '../stats/stats-service.js'
 import { currentUser, type RequireUser } from './auth-guard.js'
 import './types.js'
@@ -51,6 +52,8 @@ export interface MeRouteDeps {
   defs: AchievementDef[]
   /** The live socket side: a rename reaches the player's connection so the next room they enter uses it. */
   game: Pick<GameServer, 'renameIdentity'>
+  /** Plan 27: the rank ladder `/api/me` hands the profile. */
+  reputation: Pick<ReputationService, 'ranks'>
   requireUser: RequireUser
 }
 
@@ -103,10 +106,11 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
       .select({ email: users.email, lastLoginAt: users.lastLoginAt })
       .from(users)
       .where(eq(users.id, playerId))
-    const [daily, relief, stats] = await Promise.all([
+    const [daily, relief, stats, ranks] = await Promise.all([
       deps.economy.dailyStatus(playerId),
       deps.economy.reliefStatus(playerId),
       deps.stats.get(playerId),
+      deps.reputation.ranks(),
     ])
     return reply.send({
       playerId: player.playerId,
@@ -125,6 +129,11 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
       relief,
       createdAt: player.createdAt.getTime(),
       lastLoginAt: account?.lastLoginAt?.getTime() ?? null,
+      // Plan 27 (spec §2 A1, A4): the reputation, the rank it has reached (a high-water mark, so it may sit above
+      // what the ladder would give today) and the ladder itself, for the profile's "còn N tới <next>" bar.
+      reputation: player.reputation,
+      rank: player.rank,
+      ranks,
     })
   })
 
@@ -247,6 +256,9 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
       playerId: player.playerId,
       displayName: player.displayName,
       avatar: readAvatarConfig(player.avatarConfig, deps.catalog, deps.aliases, deps.bodies),
+      // Plan 27 (spec §2 A4): the rank shown beside the name on a seat. Not the reputation itself — that number is
+      // the player's own, on their profile.
+      rank: player.rank,
     })
   })
 

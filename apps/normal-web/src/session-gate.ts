@@ -22,6 +22,9 @@ export type SessionState = 'checking' | 'anonymous' | 'signedIn'
  */
 export const RECONNECT_PROBE_MS = 10_000
 
+/** The longest the boot probe waits on a 429's `retry-after` before its one retry; a player stares at `checking`. */
+export const BOOT_RETRY_CAP_MS = 5_000
+
 export interface SessionGate {
   state: SessionState
   /** True exactly when `state === 'signedIn'`; the socket and the shell key off this. */
@@ -111,24 +114,37 @@ export function useSessionGate({ api, socketStatus, onEnded }: SessionGateOption
       })
   }, [onUnauthenticated])
 
-  // The boot probe. One request, and the answer decides which half of the app renders at all.
+  // The boot probe. One request, and the answer decides which half of the app renders at all — with one retry
+  // for a 429: the read limit is per address, so a busy shared address can refuse the very first request, and
+  // that says nothing about the session. The gate waits the server's `retry-after` (capped) and asks once more.
   useEffect(() => {
     let live = true
-    void apiRef.current
-      .authMe()
-      .then((account) => {
-        if (!live) return
-        setMe(account)
-        setState('signedIn')
-      })
-      .catch(() => {
-        // A 401 is the ordinary answer for a visitor and says nothing worth showing; any other failure (the
-        // server is down) also lands on the sign-in card, because there is nothing else to show. Neither is
-        // an *expiry*: nothing was lost, so the card carries no notice.
-        if (live) setState('anonymous')
-      })
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const probe = (retried: boolean): void => {
+      void apiRef.current
+        .authMe()
+        .then((account) => {
+          if (!live) return
+          setMe(account)
+          setState('signedIn')
+        })
+        .catch((cause: unknown) => {
+          if (!live) return
+          if (!retried && cause instanceof ApiError && cause.status === 429) {
+            const waitMs = Math.min((cause.retryAfterSec ?? 1) * 1_000, BOOT_RETRY_CAP_MS)
+            timer = setTimeout(() => probe(true), waitMs)
+            return
+          }
+          // A 401 is the ordinary answer for a visitor and says nothing worth showing; any other failure (the
+          // server is down) also lands on the sign-in card, because there is nothing else to show. Neither is
+          // an *expiry*: nothing was lost, so the card carries no notice.
+          setState('anonymous')
+        })
+    }
+    probe(false)
     return () => {
       live = false
+      clearTimeout(timer)
     }
   }, [])
 

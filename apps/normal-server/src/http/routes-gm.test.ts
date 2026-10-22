@@ -12,6 +12,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import type { AppDb } from '../db/client.js'
 import { createTestDb, type TestDb } from '../db/test-db.js'
 import { POINTS_CAP } from '../gm/gm-service.js'
+import { seedDefaults as seedReputationDefaults } from '../reputation/reputation-service.js'
+import { seedConfig as seedShopConfig } from '../shop/shop-prices-seed.js'
 import { buildTestApp, GOOD_ACCOUNT, ORIGIN, resetDb, XRW, type Account, type Harness } from '../test-harness.js'
 
 let test: TestDb
@@ -74,13 +76,14 @@ afterEach(async () => {
 describe('the guard', () => {
   it('answers 401 to nobody and 403 FORBIDDEN to a player on every /api/gm/ route the app serves', async () => {
     const routes = enumerateRoutes(h.app.fastify).filter((r) => r.path.startsWith('/api/gm/'))
-    // The twenty-two `/api/gm/` labels `app.test.ts` pins in the exact surface: a route added there must be guarded here.
-    expect(routes).toHaveLength(22)
+    // The twenty-nine `/api/gm/` labels `app.test.ts` pins in the exact surface: a route added there must be guarded here.
+    expect(routes).toHaveLength(29)
     for (const route of routes) {
       const url = route.path
         .replace(':id', route.path.startsWith('/api/gm/rooms/') ? 'some-room' : me.playerId)
         .replace(':achievementId', 'login_streak_7')
         .replace(':month', '2026-11')
+        .replace(':week', '2026-W40')
       const label = `${route.method} ${route.path}`
       // Every GM route is a GET or a write (`app.test.ts` pins the surface); narrowed for `inject`'s own method type.
       expect(['GET', 'POST', 'PUT', 'DELETE'], label).toContain(route.method)
@@ -112,6 +115,7 @@ describe('reasons', () => {
       `/api/gm/players/${me.playerId}/role`,
       `/api/gm/players/${me.playerId}/achievements/login_streak_7/unlock`,
       `/api/gm/players/${me.playerId}/checkin/reset`,
+      `/api/gm/players/${me.playerId}/reputation`,
       '/api/gm/rooms/nope/kick',
       '/api/gm/rooms/nope/close',
     ]
@@ -187,6 +191,101 @@ describe('the gift schedule', () => {
     // None of the refusals wrote a line.
     const log = (await gmReq('GET', '/api/gm/actions')).json().actions as unknown[]
     expect(log).toEqual([])
+  })
+})
+
+describe('the shop and reputation (Plan 27 B4)', () => {
+  /** The config tables `resetDb` leaves alone go back to their seeds. */
+  afterEach(async () => {
+    await db.execute(sql`delete from reputation_rules`)
+    await db.execute(sql`delete from reputation_ranks`)
+    await db.execute(sql`delete from shop_config where key = 'welcome_choices'`)
+    await seedReputationDefaults(db)
+    await seedShopConfig(db)
+    // The rows went back behind the service's back: drop its few-second cache too, so nothing after reads the old ones.
+    h.app.services.reputation.invalidate()
+  })
+
+  interface ShopConfigBody {
+    prices: { itemId: string; slot: string; lock: unknown; priced: boolean; pricePoints: number }[]
+    featured: { weekKey: string; itemIds: string[]; source: string }[]
+    welcomeChoices: string[]
+    welcomeSlots: string[]
+    reputation: { rules: Record<string, number>; ranks: { rank: number; threshold: number }[] }
+  }
+  const config = async (): Promise<ShopConfigBody> => (await gmReq('GET', '/api/gm/shop')).json() as ShopConfigBody
+
+  it('every write is 400 INVALID_REASON without a reason, before its body or week is looked at', async () => {
+    for (const url of ['/api/gm/shop/prices', '/api/gm/shop/featured/2026-W40', '/api/gm/shop/featured/not-a-week', '/api/gm/shop/welcome', '/api/gm/reputation/rules', '/api/gm/reputation/ranks']) {
+      const res = await gmReq('PUT', url, { changes: [], itemIds: [], rules: {}, ranks: [] })
+      expect([res.statusCode, code(res)], url).toEqual([400, 'INVALID_REASON'])
+    }
+  })
+
+  it('GET /api/gm/shop: every item, nine weeks of shelves from this one, the welcome choices and both reputation tables', async () => {
+    const res = await gmReq('GET', '/api/gm/shop')
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as ShopConfigBody
+    expect(body.prices).toHaveLength(h.app.services.catalog.all().length)
+    expect(body.featured).toHaveLength(9)
+    expect(body.featured[0]!.weekKey).toBe('2026-W36')
+    expect(body.welcomeChoices).toHaveLength(3)
+    expect(body.reputation.ranks).toHaveLength(5)
+    expect(Object.keys(body.reputation.rules)).toHaveLength(8)
+  })
+
+  it('PUT /api/gm/shop/prices changes a row and answers how many', async () => {
+    const res = await gmReq('PUT', '/api/gm/shop/prices', { changes: [{ itemId: 'outfit_dealer01', pricePoints: 22_000, minRank: 2 }], reason: 'chỉnh giá' })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ actionId: expect.any(Number), changed: 1 })
+    expect((await config()).prices.find((p) => p.itemId === 'outfit_dealer01')).toMatchObject({ pricePoints: 22_000, priced: true })
+    const bad = await gmReq('PUT', '/api/gm/shop/prices', { changes: [{ itemId: 'no_such_item', pricePoints: 1 }], reason: 'món lạ' })
+    expect([bad.statusCode, code(bad)]).toEqual([400, 'INVALID_PRICES'])
+  })
+
+  it('PUT /api/gm/shop/featured/:week sets the shelf; a malformed week is 400 INVALID_WEEK, a past one 409', async () => {
+    const sellable = (await config()).prices.filter((p) => p.lock === null).map((p) => p.itemId)
+    const res = await gmReq('PUT', '/api/gm/shop/featured/2026-W38', { itemIds: sellable.slice(0, 3), reason: 'kệ tuần 38' })
+    expect(res.statusCode).toBe(200)
+    expect((await config()).featured.find((f) => f.weekKey === '2026-W38')).toEqual({ weekKey: '2026-W38', itemIds: sellable.slice(0, 3), source: 'gm' })
+    const malformed = await gmReq('PUT', '/api/gm/shop/featured/2026-38', { itemIds: [], reason: 'tuần sai' })
+    expect([malformed.statusCode, code(malformed)]).toEqual([400, 'INVALID_WEEK'])
+    const past = await gmReq('PUT', '/api/gm/shop/featured/2026-W30', { itemIds: [], reason: 'tuần cũ' })
+    expect([past.statusCode, code(past)]).toEqual([409, 'WEEK_IN_PAST'])
+  })
+
+  it('PUT /api/gm/shop/welcome sets the three choices; two are a 400', async () => {
+    const wearable = (await config()).prices.filter((p) => p.lock === null && ['outfit', 'head', 'face', 'aura', 'frame'].includes(p.slot)).map((p) => p.itemId)
+    const res = await gmReq('PUT', '/api/gm/shop/welcome', { itemIds: wearable.slice(0, 3), reason: 'quà chào mừng mới' })
+    expect(res.statusCode).toBe(200)
+    expect((await config()).welcomeChoices).toEqual(wearable.slice(0, 3))
+    const two = await gmReq('PUT', '/api/gm/shop/welcome', { itemIds: wearable.slice(0, 2), reason: 'thiếu một' })
+    expect([two.statusCode, code(two)]).toEqual([400, 'INVALID_WELCOME'])
+  })
+
+  it('PUT /api/gm/reputation/rules and /ranks apply at once; a falling ladder is 400 INVALID_RANKS', async () => {
+    const rules = await gmReq('PUT', '/api/gm/reputation/rules', { rules: { hand_won: 4 }, reason: 'thắng được hơn' })
+    expect(rules.statusCode).toBe(200)
+    expect((await config()).reputation.rules.hand_won).toBe(4)
+    const ladder = [0, 120, 420, 1_900, 5_100].map((threshold, i) => ({ rank: i + 1, threshold }))
+    const ranks = await gmReq('PUT', '/api/gm/reputation/ranks', { ranks: ladder, reason: 'giãn bậc' })
+    expect(ranks.statusCode).toBe(200)
+    expect((await config()).reputation.ranks).toEqual(ladder)
+    const falling = await gmReq('PUT', '/api/gm/reputation/ranks', { ranks: [0, 100, 50, 1_800, 5_000].map((threshold, i) => ({ rank: i + 1, threshold })), reason: 'bậc lùi' })
+    expect([falling.statusCode, code(falling)]).toEqual([400, 'INVALID_RANKS'])
+    const negative = await gmReq('PUT', '/api/gm/reputation/rules', { rules: { hand_won: -1 }, reason: 'số âm' })
+    expect([negative.statusCode, code(negative)]).toEqual([400, 'INVALID_RULES'])
+  })
+
+  it('POST /api/gm/players/:id/reputation adds reputation, the detail shows it, and 0 is a 400', async () => {
+    const res = await gmReq('POST', `/api/gm/players/${me.playerId}/reputation`, { amount: 150, reason: 'thưởng sự kiện' })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ actionId: expect.any(Number), reputation: 150, rank: 2 })
+    expect((await gmReq('GET', `/api/gm/players/${me.playerId}`)).json()).toMatchObject({ reputation: 150, rank: 2 })
+    const zero = await gmReq('POST', `/api/gm/players/${me.playerId}/reputation`, { amount: 0, reason: 'không cộng' })
+    expect([zero.statusCode, code(zero)]).toEqual([400, 'INVALID_AMOUNT'])
+    const log = (await gmReq('GET', `/api/gm/actions?player=${me.playerId}`)).json().actions as { action: string; amount: number }[]
+    expect(log[0]).toMatchObject({ action: 'grant_reputation', amount: 150 })
   })
 })
 

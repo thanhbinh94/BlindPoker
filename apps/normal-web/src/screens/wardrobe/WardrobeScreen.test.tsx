@@ -281,6 +281,66 @@ describe('WardrobeScreen', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
+  // Plan 27 E2: the stage and the cards need the inventory, the two catalogues and the achievements a locked card's hint
+  // names (in the first group, so a hint never changes its words under the player); the saved outfits come in after,
+  // without holding the screen up.
+  it('draws the stage and the cards before the saved outfits answer', async () => {
+    let answerOutfits: (value: { outfits: (OutfitDto | null)[] }) => void = () => {}
+    const outfits = vi.fn(() => new Promise((resolve) => (answerOutfits = resolve)))
+    const catalogAchievements = vi.fn().mockResolvedValue({ achievements: ACHIEVEMENTS })
+    renderScreen(stubApi({ outfits, catalogAchievements } as Partial<NormalApi>))
+
+    await opened()
+    expect(stage()).not.toBeNull()
+    expect(card(viNormal.items.hair_f_bob01)).toBeInTheDocument()
+    // Asked at once, alongside the other four — only the drawing waits less.
+    expect(outfits).toHaveBeenCalledTimes(1)
+    expect(catalogAchievements).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('heading', { name: viNormal.outfits.title })).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+
+    answerOutfits({ outfits: noOutfits })
+    expect(await screen.findByRole('heading', { name: viNormal.outfits.title })).toBeInTheDocument()
+  })
+
+  it('waits for the achievements before drawing the cards, so a locked card’s hint is worded once', async () => {
+    let answerAchievements: (value: { achievements: AchievementDefDto[] }) => void = () => {}
+    const catalogAchievements = vi.fn(() => new Promise((resolve) => (answerAchievements = resolve)))
+    renderScreen(stubApi({ catalogAchievements } as Partial<NormalApi>))
+
+    expect(await screen.findByRole('status')).toHaveTextContent(viNormal.screens.loading)
+    expect(stage()).toBeNull()
+    answerAchievements({ achievements: ACHIEVEMENTS })
+    await opened()
+  })
+
+  it('does not ask for the saved outfits again on "Thử lại" while they are still on their way', async () => {
+    const inventory = vi.fn().mockRejectedValueOnce(new ApiError(500, 'INTERNAL', 'nope')).mockResolvedValue(INVENTORY)
+    const outfits = vi.fn(() => new Promise<never>(() => undefined))
+    const user = userEvent.setup()
+    renderScreen(stubApi({ inventory, outfits } as Partial<NormalApi>))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.inventory.error)
+    await user.click(screen.getByRole('button', { name: viNormal.screens.retry }))
+
+    await waitFor(() => expect(inventory).toHaveBeenCalledTimes(2))
+    expect(outfits).toHaveBeenCalledTimes(1)
+  })
+
+  it('says so when the saved outfits cannot be read, and asks again only for them', async () => {
+    const outfits = vi.fn().mockRejectedValueOnce(new ApiError(500, 'INTERNAL', 'nope')).mockResolvedValue({ outfits: noOutfits })
+    const api = stubApi({ outfits })
+    const user = userEvent.setup()
+    renderScreen(api)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.inventory.error)
+    await user.click(screen.getByRole('button', { name: viNormal.screens.retry }))
+
+    expect(await screen.findByRole('heading', { name: viNormal.outfits.title })).toBeInTheDocument()
+    expect(outfits).toHaveBeenCalledTimes(2)
+    expect(api.inventory).toHaveBeenCalledTimes(1)
+  })
+
   // Plan 19 (avatar v4, spec §6.1): the base tab is gone. The look group opens on Kiểu tóc, under the Nữ | Nam switch,
   // and the wearing list's first row says which body the figure is drawn on.
   it('opens on Kiểu tóc under the Nữ | Nam switch, with Giới tính: Nữ first in Đang dùng', async () => {
@@ -1078,6 +1138,42 @@ describe('WardrobeScreen', () => {
       expect(undoButton).toBeDisabled()
       expect(screen.queryByText(viNormal.wardrobe.dirty)).toBeNull()
       expect(setAvatar).not.toHaveBeenCalled()
+    })
+  })
+
+  /** Plan 27 (P22): `#/avatar?item=<id>`, the shop's "Mặc" on an owned card. */
+  describe('initialItem', () => {
+    it('opens the item’s tab and puts it on the draft, unsaved, for "Lưu trang phục" to keep', async () => {
+      const user = userEvent.setup()
+      const api = stubApi()
+      renderWithI18n(<WardrobeScreen api={api} playerId="p1" initialItem="head_beret_blue01" />, makeI18n('vi'))
+      await opened()
+
+      const subList = await screen.findByRole('tablist', { name: viNormal.wardrobe.groups.wear })
+      expect(within(subList).getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.head}`) })).toHaveAttribute('aria-selected', 'true')
+      expect(card(viNormal.items.head_beret_blue01)).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByText(viNormal.wardrobe.dirty)).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: viNormal.wardrobe.save }))
+      await waitFor(() => expect(api.setAvatar).toHaveBeenCalledWith({ ...AVATAR, head: 'head_beret_blue01' }))
+    })
+
+    it('opens the tab of an item the player does not own without wearing it', async () => {
+      renderWithI18n(<WardrobeScreen api={stubApi()} playerId="p1" initialItem="head_tophat01" />, makeI18n('vi'))
+      await opened()
+
+      const subList = await screen.findByRole('tablist', { name: viNormal.wardrobe.groups.wear })
+      expect(within(subList).getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.head}`) })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.queryByText(viNormal.wardrobe.dirty)).toBeNull()
+    })
+
+    it('ignores an id the catalogue does not know', async () => {
+      renderWithI18n(<WardrobeScreen api={stubApi()} playerId="p1" initialItem="hat_from_the_future" />, makeI18n('vi'))
+      await opened()
+
+      const subList = screen.getByRole('tablist', { name: viNormal.wardrobe.groups.look })
+      expect(within(subList).getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.hairStyle}`) })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.queryByText(viNormal.wardrobe.dirty)).toBeNull()
     })
   })
 

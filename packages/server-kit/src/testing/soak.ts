@@ -99,6 +99,13 @@ interface Seat {
   ready: boolean
   status: 'OPEN' | 'IN_GAME'
   balance: number
+  /**
+   * The seat's table stack, as the frames tell it (`PLAYER_SAT`, `SETTLEMENT`, `HAND_CANCELLED`): Blind deals a short
+   * seat (plan 27 D2), and a seat whose ante took the whole stack is played for it — it must not answer the decision.
+   */
+  stack: number
+  /** This hand's ante emptied the seat, so its decision is the server's (`DECISION_MADE` right after the phase). */
+  autoPlayed: boolean
   lastSeq: number
   pending: { reqId: string; sentAt: number } | null
   timers: NodeJS.Timeout[]
@@ -114,7 +121,7 @@ export async function runSoak(server: TestServer, opts: SoakOptions): Promise<So
   const tolerated: string[] = []
   const latencies: number[] = []
   const config = roomConfig(opts.mode, perRoom)
-  const needed = opts.mode === 'holdem' ? HOLDEM_BUY_IN : 2_000 // blind: 2 × the fixed wager (§8.2)
+  const needed = opts.mode === 'holdem' ? HOLDEM_BUY_IN : 1_000 // blind: one fixed wager seats a player (plan 27 D2)
   let seqGaps = 0
   let resyncs = 0
   let actions = 0
@@ -128,7 +135,7 @@ export async function runSoak(server: TestServer, opts: SoakOptions): Promise<So
     const welcome = await client.hello(`tok:${id}`)
     seats.push({
       id, client, rng: seededRng(opts.seed + i), room: Math.floor(i / perRoom), seat: i % perRoom, leader: i % perRoom === 0,
-      seated: false, ready: false, status: 'OPEN', balance: welcome.balance, lastSeq: -1, pending: null, timers: [],
+      seated: false, ready: false, status: 'OPEN', balance: welcome.balance, stack: 0, autoPlayed: false, lastSeq: -1, pending: null, timers: [],
     })
   }
   const inRoom = (room: number) => seats.filter((s) => s.room === room)
@@ -191,12 +198,26 @@ export async function runSoak(server: TestServer, opts: SoakOptions): Promise<So
   const onEvent = (s: Seat, m: Extract<ServerMessage, { t: 'GAME_EVENT' | 'ROOM_EVENT' }>) => {
     if (m.t === 'GAME_EVENT') {
       const e = m.event
+      // The seat's stack, followed from the frames, so the driver knows when an ante took all of it (plan 27 D2).
+      if (e.type === 'HAND_STARTED') s.autoPlayed = false
+      else if (e.type === 'BLINDS_POSTED') {
+        const posted = e.posts.filter((p) => p.seat === s.seat).reduce((sum, p) => sum + p.amount, 0)
+        if (posted > 0) {
+          s.stack -= posted
+          s.autoPlayed = opts.mode === 'blind' && s.stack <= 0
+        }
+      } else if (e.type === 'SETTLEMENT') s.stack = e.stacks.find((x) => x.seat === s.seat)?.stack ?? s.stack
+      else if (e.type === 'HAND_CANCELLED') s.stack += e.refunds.find((x) => x.seat === s.seat)?.amount ?? 0
+      if (e.type === 'PLAYER_ACTED' && e.seat === s.seat) s.stack = e.stack
+
       if (e.type === 'TURN_CHANGED' && e.seat === s.seat) act(s, e.legal.kinds, m.seq)
       // Blind's legal set is a literal, unlike the branch above: `DECISION_PHASE` is
       // `{ seats, turnSeq }` (`packages/core/src/hand/types.ts`) and carries no `legal`, so there is
-      // nothing server-advertised to read. play/fold is the whole of §8.2's decision.
-      else if (e.type === 'DECISION_PHASE' && e.seats.includes(s.seat)) act(s, ['play', 'fold'], m.seq)
-      else if ((e.type === 'DECISION_MADE' && e.seat === s.seat) || (e.type === 'PLAYER_ACTED' && e.seat === s.seat)) {
+      // nothing server-advertised to read. play/fold is the whole of §8.2's decision — unless the ante emptied the
+      // seat, which the server then plays all in itself and never asks (spec R14).
+      else if (e.type === 'DECISION_PHASE' && e.seats.includes(s.seat)) {
+        if (!s.autoPlayed) act(s, ['play', 'fold'], m.seq)
+      } else if ((e.type === 'DECISION_MADE' && e.seat === s.seat) || (e.type === 'PLAYER_ACTED' && e.seat === s.seat)) {
         // A timed-out seat's PLAYER_ACTED is the timer's work, not ours: it is not a latency sample.
         const timedOut = e.type === 'PLAYER_ACTED' && e.timedOut
         if (s.pending && !timedOut) latencies.push(Date.now() - s.pending.sentAt)
@@ -213,6 +234,7 @@ export async function runSoak(server: TestServer, opts: SoakOptions): Promise<So
     const e = m.event
     if (e.type === 'PLAYER_SAT' && e.playerId === s.id) {
       s.seated = true
+      s.stack = e.stack
       s.ready = false
       sitAndReady(s)
     } else if (e.type === 'PLAYER_STOOD' && e.playerId === s.id) {
@@ -236,6 +258,7 @@ export async function runSoak(server: TestServer, opts: SoakOptions): Promise<So
       s.status = m.room.status
       const me = m.room.players.find((p) => p.playerId === s.id)
       s.seated = me !== undefined && me.seat !== null
+      if (me !== undefined) s.stack = me.stack
       return
     }
     if (m.t === 'BALANCE') {

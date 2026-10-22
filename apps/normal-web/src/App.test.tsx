@@ -2,7 +2,7 @@ import { FakeSocket, fakeSocketFactory } from '@bp/ui-kit'
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import { ACCOUNT_ROUTES, App, websocketUrl } from './App.js'
+import { ACCOUNT_ROUTES, App, WELCOME_SHOWN_KEY, websocketUrl } from './App.js'
 import { ApiError, type AuthMeDto, type NormalApi } from './api.js'
 import { DAILY_NUDGE_KEY } from './daily-nudge.js'
 import { resetAvatarCache } from './avatar/useAvatars.js'
@@ -34,6 +34,9 @@ function stubApi(overrides: Partial<NormalApi> = {}): NormalApi {
     // case in this file — none of them ever look at a face.
     avatarCatalog: vi.fn().mockResolvedValue({ frame: { w: 384, h: 448 }, crop: { x: 88, y: 40, size: 208 }, bodies: [], manifestVersion: 1 }),
     catalogItems: vi.fn().mockResolvedValue({ items: [] }),
+    // The lobby asks whether the welcome gift is taken (Plan 27, P25). Taken, by default: the dialog it would
+    // otherwise open over the lobby is the business of its own block below, not of every case in this file.
+    welcome: vi.fn().mockResolvedValue({ claimed: true, choices: [] }),
     ...overrides,
   } as unknown as NormalApi
 }
@@ -329,6 +332,39 @@ describe('App — the shell', () => {
     expect(screen.getByRole('navigation', { name: viNormal.nav.main })).toBeInTheDocument()
   })
 
+  /** Plan 27 (P20): the shop is a lazy account route, reached from the lobby beside the wardrobe — not a fifth tab. */
+  it('routes #/shop to the Cửa hàng, which the lobby links beside the wardrobe and the rail does not', async () => {
+    expect(ACCOUNT_ROUTES).toEqual(['/profile', '/avatar', '/achievements', '/daily', '/settings', '/gm', '/shop'])
+    window.history.replaceState(null, '', '/#/lobby')
+    const avatar = { v: 4, gender: 'f', hairStyle: 'hair_f_bob01', outfit: 'outfit_casual01' }
+    renderApp(
+      stubApi({
+        shop: vi.fn().mockResolvedValue({
+          weekKey: '2026-W43',
+          featured: [],
+          featuredSource: 'auto',
+          entries: [],
+          me: { balance: 123_000, reputation: 0, rank: 1, ranks: [{ rank: 1, threshold: 0 }] },
+        }),
+        inventory: vi.fn().mockResolvedValue({ items: [], avatar }),
+      }),
+    )
+    await settled()
+    await welcome()
+
+    const doors = await screen.findByRole('navigation', { name: viNormal.shop.lobbyLinks })
+    expect(within(doors).getAllByRole('link').map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+      [viNormal.wardrobe.title, '#/avatar'],
+      [viNormal.shop.title, '#/shop'],
+    ])
+    const rail = screen.getByRole('navigation', { name: viNormal.nav.main })
+    expect(within(rail).queryByRole('link', { name: new RegExp(viNormal.shop.title) })).toBeNull()
+
+    await userEvent.setup().click(within(doors).getByRole('link', { name: viNormal.shop.title }))
+    expect(await screen.findByRole('heading', { name: viNormal.shop.title, level: 1 })).toBeInTheDocument()
+    expect(window.location.hash).toBe('#/shop')
+  })
+
   it('keeps the rail balance on the routes that print none of their own', async () => {
     window.history.replaceState(null, '', '/#/daily')
     const { container } = renderApp()
@@ -501,6 +537,38 @@ describe('App — a session that ends under the player', () => {
     await user.click(screen.getByRole('button', { name: viNormal.auth.submitSignIn }))
 
     await waitFor(() => expect(playerAvatar).toHaveBeenCalledTimes(1))
+  })
+})
+
+describe('App — a rank-up reaches the player’s own bar at once', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    FakeSocket.reset()
+    resetAvatarCache()
+    window.history.replaceState(null, '', '/')
+  })
+
+  it('asks for the player’s own avatar again, past the browser cache, when RANK_UP arrives', async () => {
+    const avatar = { v: 2, body: 'male', skin: '#e0ac81', eyes: '#3b2415', hairColor: '#2b2b2b', hair: 'hair_short', top: 'top_tee', bottom: 'bottom_jeans', shoes: 'shoes_sneakers' }
+    const playerAvatar = vi
+      .fn()
+      .mockResolvedValueOnce({ playerId: 'p1', displayName: 'Bình', avatar, rank: 1 })
+      .mockResolvedValue({ playerId: 'p1', displayName: 'Bình', avatar, rank: 3 })
+    renderApp(stubApi({ playerAvatar }))
+    await settled()
+    await welcome()
+    await screen.findByRole('heading', { name: ROOMS_HEADING })
+    await waitFor(() => expect(playerAvatar).toHaveBeenCalledTimes(1))
+    expect(screen.queryByText('Cao thủ', { selector: '[data-rank]' })).toBeNull()
+
+    await act(async () => {
+      socket().receive({ t: 'NOTIFICATION', kind: 'RANK_UP', payload: { rank: 3 } })
+    })
+
+    // The route is served `private, max-age=60`: without `fresh` the browser would answer with the rank it held.
+    await waitFor(() => expect(playerAvatar).toHaveBeenCalledTimes(2))
+    expect(playerAvatar).toHaveBeenLastCalledWith('p1', { fresh: true })
+    expect(await screen.findByText('Cao thủ', { selector: '[data-rank]' })).toBeInTheDocument()
   })
 })
 
@@ -697,6 +765,183 @@ describe('App — the daily reminder', () => {
     expect(await screen.findByRole('heading', { name: viNormal.settings.title })).toBeInTheDocument()
     expect(window.location.hash).toBe('#/settings')
     expect(await screen.findByText(viNormal.nav.dailyReady)).toBeInTheDocument()
+    expect(localStorage.getItem(DAILY_NUDGE_KEY)).toBeNull()
+  })
+})
+
+describe('App — the welcome gift (Plan 27, C3)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    FakeSocket.reset()
+    window.history.replaceState(null, '', '/')
+  })
+
+  const UNCLAIMED = {
+    claimed: false,
+    choices: [
+      { itemId: 'outfit_dealer01', owned: false },
+      { itemId: 'outfit_tet_red01', owned: false },
+      { itemId: 'head_conical_hat01', owned: false },
+    ],
+  }
+  const welcomeDialog = () => screen.queryByRole('dialog', { name: viNormal.welcome.title })
+  const giftButton = () => screen.queryByRole('button', { name: viNormal.welcome.lobbyButton })
+
+  it('opens the dialog once on the lobby while the gift is unclaimed, and keeps a way back to it', async () => {
+    const api = stubApi({ welcome: vi.fn().mockResolvedValue(UNCLAIMED) })
+    const user = userEvent.setup()
+    renderApp(api)
+    await settled()
+    await welcome()
+
+    expect(await screen.findByRole('dialog', { name: viNormal.welcome.title })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: viNormal.welcome.later }))
+    expect(welcomeDialog()).toBeNull()
+    expect(giftButton()).toBeInTheDocument()
+
+    // Away and back: the lobby asks again, the gift is still there, and the dialog does not jump out a second time.
+    const calls = vi.mocked(api.welcome).mock.calls.length
+    act(() => {
+      window.location.hash = '#/daily'
+    })
+    await screen.findByRole('heading', { name: viNormal.daily.title })
+    act(() => {
+      window.location.hash = '#/lobby'
+    })
+    await screen.findByRole('heading', { name: ROOMS_HEADING })
+    await waitFor(() => expect(vi.mocked(api.welcome).mock.calls.length).toBeGreaterThan(calls))
+    expect(welcomeDialog()).toBeNull()
+
+    // The lobby's button is the way back in.
+    await user.click(await screen.findByRole('button', { name: viNormal.welcome.lobbyButton }))
+    expect(await screen.findByRole('dialog', { name: viNormal.welcome.title })).toBeInTheDocument()
+  })
+
+  it('opens by itself once per account in this browser: a reload keeps it shut, and the button still leads back', async () => {
+    const api = stubApi({ welcome: vi.fn().mockResolvedValue(UNCLAIMED) })
+    const user = userEvent.setup()
+    const first = renderApp(api)
+    await settled()
+    await welcome()
+    expect(await screen.findByRole('dialog', { name: viNormal.welcome.title })).toBeInTheDocument()
+    expect(localStorage.getItem(WELCOME_SHOWN_KEY)).toBe('p1')
+    await user.click(screen.getByRole('button', { name: viNormal.welcome.later }))
+
+    // A reload, or a second tab: the same account, the gift still waiting.
+    first.unmount()
+    FakeSocket.reset()
+    const calls = vi.mocked(api.welcome).mock.calls.length
+    renderApp(api)
+    await settled()
+    await welcome()
+    expect(await screen.findByRole('heading', { name: ROOMS_HEADING })).toBeInTheDocument()
+    await waitFor(() => expect(vi.mocked(api.welcome).mock.calls.length).toBeGreaterThan(calls))
+    expect(await screen.findByRole('button', { name: viNormal.welcome.lobbyButton })).toBeInTheDocument()
+    expect(welcomeDialog()).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: viNormal.welcome.lobbyButton }))
+    expect(await screen.findByRole('dialog', { name: viNormal.welcome.title })).toBeInTheDocument()
+  })
+
+  it('still opens by itself for another account that signs in on the same browser', async () => {
+    localStorage.setItem(WELCOME_SHOWN_KEY, 'p0')
+    renderApp(stubApi({ welcome: vi.fn().mockResolvedValue(UNCLAIMED) }))
+    await settled()
+    await welcome()
+
+    expect(await screen.findByRole('dialog', { name: viNormal.welcome.title })).toBeInTheDocument()
+    expect(localStorage.getItem(WELCOME_SHOWN_KEY)).toBe('p1')
+  })
+
+  it('opens once a session even where the browser keeps no storage', async () => {
+    const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('storage is off')
+    })
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('storage is off')
+    })
+    onTestFinished(() => {
+      getItem.mockRestore()
+      setItem.mockRestore()
+    })
+    const user = userEvent.setup()
+    renderApp(stubApi({ welcome: vi.fn().mockResolvedValue(UNCLAIMED) }))
+    await settled()
+    await welcome()
+
+    expect(await screen.findByRole('dialog', { name: viNormal.welcome.title })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: viNormal.welcome.later }))
+    expect(welcomeDialog()).toBeNull()
+    expect(giftButton()).toBeInTheDocument()
+  })
+
+  it('shuts a dialog left open when the lobby goes off screen, so the next visit does not bring it back', async () => {
+    const api = stubApi({ welcome: vi.fn().mockResolvedValue(UNCLAIMED) })
+    renderApp(api)
+    await settled()
+    await welcome()
+    expect(await screen.findByRole('dialog', { name: viNormal.welcome.title })).toBeInTheDocument()
+
+    // Taken off the lobby with the dialog still open — a link, a redirect into a room, the address bar.
+    const calls = vi.mocked(api.welcome).mock.calls.length
+    act(() => {
+      window.location.hash = '#/daily'
+    })
+    await screen.findByRole('heading', { name: viNormal.daily.title })
+    act(() => {
+      window.location.hash = '#/lobby'
+    })
+    await screen.findByRole('heading', { name: ROOMS_HEADING })
+    await waitFor(() => expect(vi.mocked(api.welcome).mock.calls.length).toBeGreaterThan(calls))
+    expect(await screen.findByRole('button', { name: viNormal.welcome.lobbyButton })).toBeInTheDocument()
+    expect(welcomeDialog()).toBeNull()
+  })
+
+  it('opens nothing and holds nothing back when the gift’s status cannot be read', async () => {
+    const status = { claimable: true, day: 1, streak: 1, reward: 5000, item: null, nextResetAt: 1_800_000_000_000, month: '2027-01', calendar: [] }
+    const api = stubApi({
+      welcome: vi.fn().mockRejectedValue(new ApiError(500, 'INTERNAL', 'boom')),
+      daily: vi.fn().mockResolvedValue(status),
+    })
+    renderApp(api)
+    await settled()
+    await welcome()
+
+    // The arrival move goes ahead as if the gift were taken.
+    await waitFor(() => expect(window.location.hash).toBe('#/daily'))
+    expect(localStorage.getItem(DAILY_NUDGE_KEY)).toBe(String(status.nextResetAt))
+    act(() => {
+      window.location.hash = '#/lobby'
+    })
+    expect(await screen.findByRole('heading', { name: ROOMS_HEADING })).toBeInTheDocument()
+    await waitFor(() => expect(vi.mocked(api.welcome).mock.calls.length).toBeGreaterThan(1))
+    expect(welcomeDialog()).toBeNull()
+    expect(giftButton()).toBeNull()
+  })
+
+  it('never opens the dialog, nor shows the button, once the gift is taken', async () => {
+    const api = stubApi()
+    renderApp(api)
+    await settled()
+    await welcome()
+
+    expect(await screen.findByRole('heading', { name: ROOMS_HEADING })).toBeInTheDocument()
+    await waitFor(() => expect(api.welcome).toHaveBeenCalled())
+    expect(welcomeDialog()).toBeNull()
+    expect(giftButton()).toBeNull()
+  })
+
+  it('keeps a new player in the lobby with the gift, rather than sending them to the waiting daily reward', async () => {
+    const status = { claimable: true, day: 1, streak: 1, reward: 5000, item: null, nextResetAt: 1_800_000_000_000, month: '2027-01', calendar: [] }
+    const api = stubApi({ welcome: vi.fn().mockResolvedValue(UNCLAIMED), daily: vi.fn().mockResolvedValue(status) })
+    renderApp(api)
+    await settled()
+    await welcome()
+
+    expect(await screen.findByRole('dialog', { name: viNormal.welcome.title })).toBeInTheDocument()
+    const nav = screen.getByRole('navigation', { name: viNormal.nav.main })
+    expect(await within(nav).findByText(viNormal.nav.dailyReady)).toBeInTheDocument()
+    expect(window.location.hash).not.toBe('#/daily')
     expect(localStorage.getItem(DAILY_NUDGE_KEY)).toBeNull()
   })
 })

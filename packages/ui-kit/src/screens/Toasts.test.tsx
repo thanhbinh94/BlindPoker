@@ -170,32 +170,51 @@ describe('Toasts', () => {
     expect(screen.getByRole('status')).not.toHaveTextContent('undefined')
   })
 
-  it('tells a player whose table limit is spent what came home, and what to do', () => {
+  it('tells a player whose stack is spent how to get back to a table, with the relief threshold', () => {
     wrap(
       <Toasts
         error={null}
-        notifications={[{ id: 1, kind: 'TABLE_LIMIT_SPENT', payload: { roomId: 'r', limit: 5_000, amount: 1_500 }, at: 0 }]}
+        notifications={[{ id: 1, kind: 'STACK_SPENT', payload: { roomId: 'r', threshold: 5_000 }, at: 0 }]}
         onClearError={vi.fn()}
         onDismiss={vi.fn()}
         lang="en"
       />,
     )
     expect(
-      screen.getByText('You have used up your table limit here — the 1,500 left went back to your balance. Pick an empty seat to play again.'),
+      screen.getByText('You are out of points at this table. Claim relief if your balance is under 5,000 points, or take an empty seat once you have points.'),
     ).toBeInTheDocument()
   })
 
-  it('leaves out the "went back" part when nothing was left', () => {
-    wrap(
-      <Toasts
-        error={null}
-        notifications={[{ id: 1, kind: 'TABLE_LIMIT_SPENT', payload: { roomId: 'r', limit: 5_000, amount: 0 }, at: 0 }]}
-        onClearError={vi.fn()}
-        onDismiss={vi.fn()}
-        lang="en"
-      />,
+  it('says the same in Vietnamese, naming Cứu trợ', () => {
+    render(
+      <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+        <Toasts
+          error={null}
+          notifications={[{ id: 1, kind: 'STACK_SPENT', payload: { roomId: 'r', threshold: 5_000 }, at: 0 }]}
+          onClearError={vi.fn()}
+          onDismiss={vi.fn()}
+          lang="vi"
+        />
+      </I18nextProvider>,
     )
-    expect(screen.getByText('You have used up your table limit here. Pick an empty seat to play again.')).toBeInTheDocument()
+    expect(
+      screen.getByText('Bạn đã hết điểm ở bàn này. Nhận Cứu trợ nếu số dư dưới 5.000 điểm, hoặc chọn ghế trống khi có điểm.'),
+    ).toBeInTheDocument()
+  })
+
+  it('names the rank a RANK_UP reached, in the player’s language', () => {
+    render(
+      <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+        <Toasts
+          error={null}
+          notifications={[{ id: 1, kind: 'RANK_UP', payload: { rank: 3 }, at: 0 }]}
+          onClearError={vi.fn()}
+          onDismiss={vi.fn()}
+          lang="vi"
+        />
+      </I18nextProvider>,
+    )
+    expect(screen.getByRole('status')).toHaveTextContent('Bạn vừa lên bậc Cao thủ')
   })
 
   it('falls back to a generic line for a notification kind it does not know', () => {

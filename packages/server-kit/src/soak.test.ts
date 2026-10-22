@@ -82,10 +82,10 @@ describe('multiplayer soak (§29.3)', () => {
     const r = await runSoak(ts, { clients: CLIENTS, rooms: ROOMS, handsPerRoom: HANDS, mode: 'blind', seed: 4_242, actionDelayMs: [0, 3] })
     report('blind', r)
     expectHealthy(r)
-    // Bots hold a virtual balance no repository ever sees, so their net is the third term; the
-    // sinks cover both the table fees and any indivisible carry-over remainder released at shutdown.
+    // Bots hold a virtual balance no repository ever sees, so their net is the third term. Blind takes no table fee
+    // (plan 27 D1), so the only sink left is an indivisible carry-over remainder released at shutdown.
     expect(r.endBalances + r.botNet + r.sinks).toBe(r.startBalances)
-    expect(r.sinks).toBeGreaterThanOrEqual(r.fees)
+    expect(r.fees).toBe(0)
   }, 90_000)
 })
 

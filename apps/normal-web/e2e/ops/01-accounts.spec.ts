@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { account, register, signIn } from '../support.js'
+import { account, dismissWelcome, register, signIn } from '../support.js'
 import { balanceOf, closeAll, postApi, type Player } from './ops-helpers.js'
 
 /**
@@ -23,8 +23,9 @@ test('S-01 S-02 S-03 I-01 I-02 I-03: first visit, first sign-in, first reward', 
   await expect(probe).toHaveTitle('Blind Luck Poker')
   await probe.close()
 
-  // S-02 + I-01 (first half): `../support.js`'s `register` itself asserts the app opens on the daily page for a
-  // fresh account (unlike `registerPatiently`, which only needs a signed-in player).
+  // S-02 + I-01 (first half): since Plan 27 a fresh account's first visit opens the welcome gift over the lobby, not the
+  // daily page, and `../support.js`'s `register` closes it with "Để sau". The daily jump itself — a sign-in with the
+  // gift taken and today's reward waiting — is walked by P-01 (`08-shop.spec.ts`).
   const context = await browser.newContext({ locale: 'vi-VN', timezoneId: 'Asia/Ho_Chi_Minh', colorScheme: 'dark' })
   const page = await context.newPage()
   const who = account('Ops')
@@ -36,7 +37,7 @@ test('S-01 S-02 S-03 I-01 I-02 I-03: first visit, first sign-in, first reward', 
   await page.goto('/#/daily')
   const claim = page.getByRole('button', { name: 'Nhận thưởng' })
   await expect(claim).toBeEnabled()
-  await expect(page.getByText('Chuỗi hiện tại: 0 ngày')).toBeVisible()
+  await expect(page.getByText(/^Lần điểm danh thứ 1 của tháng \d{2}\/\d{4} · không cần liên tiếp$/u)).toBeVisible()
   await claim.click()
   await expect(claim).toBeDisabled()
   await expect.poll(() => balanceOf(page)).toBe(105_000)
@@ -168,6 +169,8 @@ test('A-08 B-02 B-03 S-07 S-08: language and theme stick; every account screen o
   await page.getByLabel('Password', { exact: true }).fill(main.who.password)
   await page.getByRole('button', { name: 'Enter the lobby' }).click()
   await expect(page.getByRole('heading', { name: 'Rooms', level: 1 })).toBeVisible()
+  // A fresh context has no `bp.welcomeShown`, so the welcome gift opens over the lobby (Plan 27, C3): "Later" closes it.
+  await dismissWelcome(page)
 
   // B-03: the lobby, the create dialog and the rail are English.
   await page.getByRole('button', { name: 'Create room' }).click()

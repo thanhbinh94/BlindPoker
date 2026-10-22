@@ -38,7 +38,8 @@ export default defineConfig({
     timeout: 120_000,
     stdout: 'pipe',
     stderr: 'pipe',
-    env: { E2E_PORT: String(PORT) },
+    // Every ops browser reads from the one loopback address, so the shipped 240 reads a minute overflowed (P-02 flake).
+    env: { E2E_PORT: String(PORT), E2E_READ_LIMIT: '2400' },
   },
   projects: [
     {

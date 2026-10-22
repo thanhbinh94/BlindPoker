@@ -143,18 +143,21 @@ describe('RoomScreen', () => {
           onLeft={vi.fn()}
           chibiFor={(p) => (p.playerId === 'a' ? defaultChibi(p.playerId) : null)}
           captionFor={(p) => (p.playerId === 'a' ? 'Hot Hand' : null)}
+          rankFor={(p) => (p.playerId === 'a' ? 4 : null)}
         />
       </I18nextProvider>,
     )
 
     // Ann's plate draws the app's chibi (data-face="app"); Mai's answered `null`, so hers falls back to her
     // initial the way a seat with no `chibiFor` at all would.
-    const ann = screen.getByText('Ann').parentElement
-    expect(within(ann!).getByText('Hot Hand')).toBeInTheDocument()
+    const ann = screen.getByText('Ann').closest(`.${s.plateText}`)
+    expect(within(ann as HTMLElement).getByText('Hot Hand')).toBeInTheDocument()
+    expect(within(ann as HTMLElement).getByText('Master')).toBeInTheDocument()
     expect(screen.getByText('Ann').closest(`.${s.plate}`)!.querySelector(`.${s.avatar}`)).toHaveAttribute('data-face', 'app')
     // Mai answered `null`, so her plate keeps the two lines it always had and falls back to her initial.
-    const mai = screen.getByText('Mai').parentElement
-    expect(within(mai!).queryByText('Hot Hand')).toBeNull()
+    const mai = screen.getByText('Mai').closest(`.${s.plateText}`)
+    expect(within(mai as HTMLElement).queryByText('Hot Hand')).toBeNull()
+    expect(mai!.querySelector(`.${s.rankLabel}, .${s.rankPill}`)).toBeNull()
     expect(screen.getByText('Mai').closest(`.${s.plate}`)!.querySelector(`.${s.avatar}`)).toHaveAttribute('data-face', 'default')
   })
 
@@ -266,6 +269,18 @@ describe('RoomScreen', () => {
     const dialog = screen.getByRole('dialog', { name: 'People in the room' })
     await userEvent.click(within(dialog).getByRole('button', { name: 'Kick — Ann' }))
     expect(client.kick).toHaveBeenCalledWith('a')
+  })
+
+  it('shows each human’s rank as a numeral in the kick roster', async () => {
+    const client = fakeClient(makeState({ room: readyRoom }))
+    render(
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <RoomScreen client={client} lang="en" onLeft={vi.fn()} rankFor={(p) => (p.playerId === 'a' ? 3 : null)} />
+      </I18nextProvider>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Manage table' }))
+    const dialog = screen.getByRole('dialog', { name: 'People in the room' })
+    expect(within(dialog).getByRole('img', { name: 'Sharp' })).toHaveTextContent('III')
   })
 
   it("lists a bot in the kick roster without its virtual bankroll", async () => {
@@ -382,9 +397,10 @@ describe('RoomScreen', () => {
         ],
       })
 
-    it('tells a spectator whose balance cannot cover a hand what sitting down needs', () => {
-      wrap(fakeClient(makeState({ balance: 7_000, room: blindRoom({}) })))
-      expect(screen.getByText('Not enough points to take a seat (need 10,000)')).toBeInTheDocument()
+    it('tells a spectator whose balance cannot cover one wager what sitting down needs: the wager, in play-or-fold too', () => {
+      // Plan 27 D2 (R11): one wager seats a player; the play goes all in for whatever the ante leaves.
+      wrap(fakeClient(makeState({ balance: 4_000, room: blindRoom({}) })))
+      expect(screen.getByText('Not enough points to take a seat (need 5,000)')).toBeInTheDocument()
       expect(screen.queryByText('Take a seat to play.')).toBeNull()
     })
 
@@ -395,8 +411,8 @@ describe('RoomScreen', () => {
 
     it('says it between hands too, while the table plays on without them', () => {
       const room = { ...blindRoom({}), status: 'IN_GAME' as const, nextHandAt: 1_005_000 }
-      wrap(fakeClient(makeState({ balance: 7_000, room })))
-      expect(screen.getByText('Not enough points to take a seat (need 10,000)')).toBeInTheDocument()
+      wrap(fakeClient(makeState({ balance: 4_000, room })))
+      expect(screen.getByText('Not enough points to take a seat (need 5,000)')).toBeInTheDocument()
     })
 
     it('never says it to a seated player: their points are on the table, and a short seat is stood up', () => {
@@ -405,8 +421,8 @@ describe('RoomScreen', () => {
       expect(screen.getByText('Press Ready to start — a hand needs at least one real player.')).toBeInTheDocument()
     })
 
-    it('keeps the usual hint once the balance covers a hand', () => {
-      wrap(fakeClient(makeState({ balance: 10_000, room: blindRoom({}) })))
+    it('keeps the usual hint once the balance covers one wager, though not the two a whole play-or-fold hand takes', () => {
+      wrap(fakeClient(makeState({ balance: 7_000, room: blindRoom({}) })))
       expect(screen.queryByText(/Not enough points/)).toBeNull()
       expect(screen.getByText('Take a seat to play.')).toBeInTheDocument()
     })
@@ -414,10 +430,10 @@ describe('RoomScreen', () => {
     it('writes the amount the way the app writes points, in Vietnamese too', () => {
       render(
         <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
-          <RoomScreen client={fakeClient(makeState({ balance: 7_000, room: blindRoom({}) }))} lang="vi" onLeft={vi.fn()} />
+          <RoomScreen client={fakeClient(makeState({ balance: 4_000, room: blindRoom({}) }))} lang="vi" onLeft={vi.fn()} />
         </I18nextProvider>,
       )
-      expect(screen.getByText('Số dư không đủ để vào bàn (cần 10.000 điểm)')).toBeInTheDocument()
+      expect(screen.getByText('Số dư không đủ để vào bàn (cần 5.000 điểm)')).toBeInTheDocument()
     })
 
     it('shows the wager and the table limit in the header', () => {
@@ -1189,12 +1205,12 @@ describe('RoomScreen', () => {
             makePlayer({ playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, isHost: true, seat: 3, status: 'READY', stack: 25_000, ready: true }),
           ],
         })
-      const short = 'Số dư không đủ để vào bàn (cần 10.000 điểm)'
-      const open = landscape(fakeClient(makeState({ balance: 7_000, room: blind('OPEN') })))
+      const short = 'Số dư không đủ để vào bàn (cần 5.000 điểm)'
+      const open = landscape(fakeClient(makeState({ balance: 4_000, room: blind('OPEN') })))
       expect(within(screen.getByRole('region', { name: 'Bàn' })).getByText(short)).toBeInTheDocument()
       open.unmount()
 
-      landscape(fakeClient(makeState({ balance: 7_000, room: blind('IN_GAME') })))
+      landscape(fakeClient(makeState({ balance: 4_000, room: blind('IN_GAME') })))
       expect(within(screen.getByRole('region', { name: 'Bàn' })).queryByText(short)).toBeNull()
     })
 

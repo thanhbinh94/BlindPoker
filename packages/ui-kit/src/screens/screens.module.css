@@ -249,12 +249,23 @@
   opacity: 0.6;
 }
 
+/* The name keeps to its own width, so the rank's pill sits beside it; whichever of the two comes last takes the row's
+   free space, which keeps the stack and the button at the right edge. */
 .rosterName {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
+  margin-right: auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.rosterName:has(+ [data-rank]) {
+  margin-right: 0;
+}
+
+.rosterName + [data-rank] {
+  margin-right: auto;
 }
 
 .rosterStack {

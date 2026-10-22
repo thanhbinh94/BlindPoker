@@ -2,6 +2,8 @@ export const ECONOMY = {
   startingBalance: 100_000,
   tableFeeRate: 0.02,
   tableFeeCapBB: 1,
+  /** Blind Poker takes no table fee (plan 27 D1); `tableFeeRate` stays Hold'em's. */
+  blindTableFeeRate: 0,
   reliefThreshold: 5_000,
   reliefTarget: 5_000,
   reliefCooldownHours: 24,

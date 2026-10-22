@@ -20,6 +20,8 @@ const DETAIL: GmPlayerDetailDto = {
   room: null,
   inventoryCount: 7,
   unlockedAchievementIds: [],
+  reputation: 455,
+  rank: 3,
 }
 
 const ACHIEVEMENTS: AchievementDefDto[] = [
@@ -49,6 +51,7 @@ function stubApi(detail: GmPlayerDetailDto = DETAIL, overrides: Partial<Record<k
     gmUnlockAchievement: vi.fn().mockResolvedValue({ actionId: 11, reward: { points: 5_000 }, balance: 128_000 }),
     gmResetCheckin: vi.fn().mockResolvedValue({ actionId: 12, undone: { points: 2_000, itemIds: [] }, balance: 121_000 }),
     catalogAchievements: vi.fn().mockResolvedValue({ achievements: ACHIEVEMENTS }),
+    gmGrantReputation: vi.fn().mockResolvedValue({ actionId: 13, reputation: 1_955, rank: 4 }),
     ...overrides,
   } as unknown as Stub
 }
@@ -98,6 +101,37 @@ describe('PlayerDetail', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Đã cập nhật số dư')
     expect(api.gmPlayer).toHaveBeenCalledTimes(2)
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('shows the reputation with the rank reached (Plan 27)', async () => {
+    setup()
+
+    expect(await screen.findByText('Danh vọng: 455 (Cao thủ)')).toBeInTheDocument()
+  })
+
+  it('adds reputation with an amount of 1 to 100 000 and a reason, then reads the account again', async () => {
+    const user = userEvent.setup()
+    const { api } = setup()
+    await screen.findByText('binh@example.com')
+
+    await user.click(action(viNormal.gm.actions.grantReputation))
+    expect(dialog().getByText(viNormal.gm.dialog.reputationBody)).toBeInTheDocument()
+    const amount = dialog().getByLabelText(viNormal.gm.dialog.reputationAmount)
+    const confirm = dialog().getByRole('button', { name: viNormal.gm.dialog.confirm })
+    await user.type(dialog().getByLabelText(viNormal.gm.dialog.reason), 'thưởng giải')
+    // Never a deduction, never over the cap.
+    for (const bad of ['-5', '0', '100001']) {
+      await user.clear(amount)
+      await user.type(amount, bad)
+      expect(confirm).toBeDisabled()
+    }
+    await user.clear(amount)
+    await user.type(amount, '1500')
+    await user.click(confirm)
+
+    expect(api.gmGrantReputation).toHaveBeenCalledWith('p1', 1_500, 'thưởng giải')
+    expect(await screen.findByText(`Đã cộng danh vọng: ${formatPoints(1_955, 'vi')} (Bậc thầy)`)).toBeInTheDocument()
+    expect(api.gmPlayer).toHaveBeenCalledTimes(2)
   })
 
   it('reloads the ledger after an action so the new row is there', async () => {

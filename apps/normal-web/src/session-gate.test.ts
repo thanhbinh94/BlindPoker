@@ -138,3 +138,84 @@ describe('useSessionGate', () => {
     expect(result.current.expired).toBe(false)
   })
 })
+
+describe('useSessionGate — a rate-limited boot probe', () => {
+  const limited = (retryAfterSec?: number): ApiError =>
+    new ApiError(429, 'RATE_LIMITED', 'too many requests', retryAfterSec === undefined ? {} : { retryAfterSec })
+
+  // A shared address (a household, a café, the ops pack) can meet the read limit on the very first request. A 429 says
+  // nothing about the session, so the gate waits the server's retry-after once rather than show a signed-in player
+  // the sign-in card.
+  it('asks once more after retry-after and signs in when the second answer is the account', async () => {
+    vi.useFakeTimers()
+    try {
+      const authMe = vi.fn().mockRejectedValueOnce(limited(2)).mockResolvedValueOnce(ME)
+      const { result } = mount(authMe)
+      await settle()
+      expect(result.current.state).toBe('checking')
+      expect(authMe).toHaveBeenCalledTimes(1)
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_999)
+      })
+      expect(authMe).toHaveBeenCalledTimes(1)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1)
+      })
+      await settle()
+
+      expect(authMe).toHaveBeenCalledTimes(2)
+      expect(result.current.state).toBe('signedIn')
+      expect(result.current.me).toEqual(ME)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('waits no longer than five seconds, and falls to anonymous when the retry is refused too', async () => {
+    vi.useFakeTimers()
+    try {
+      const authMe = vi.fn().mockRejectedValue(limited(60))
+      const { result } = mount(authMe)
+      await settle()
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000)
+      })
+      await settle()
+
+      expect(authMe).toHaveBeenCalledTimes(2)
+      expect(result.current.state).toBe('anonymous')
+      expect(result.current.expired).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('retries after a second when the server named no wait, and stops trying once unmounted', async () => {
+    vi.useFakeTimers()
+    try {
+      const authMe = vi.fn().mockRejectedValueOnce(limited()).mockResolvedValueOnce(ME)
+      const { result, unmount } = mount(authMe)
+      await settle()
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000)
+      })
+      await settle()
+      expect(authMe).toHaveBeenCalledTimes(2)
+      expect(result.current.state).toBe('signedIn')
+
+      const again = vi.fn().mockRejectedValueOnce(limited(1))
+      const second = mount(again)
+      await settle()
+      second.unmount()
+      unmount()
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000)
+      })
+      expect(again).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
