@@ -77,6 +77,8 @@ import { WS_PATH } from './http/routes-catalog.js'
 import { registerRoutes } from './http/routes.js'
 import { createRepositories, pruneLedgerKeys, type NormalRepositories } from './repos/index.js'
 import { createReputationService, seedDefaults as seedReputationDefaults, type ReputationService } from './reputation/reputation-service.js'
+import { seedConfig as seedShopConfig, seedPrices as seedShopPrices } from './shop/shop-prices-seed.js'
+import { createShopService, type ShopService } from './shop/shop-service.js'
 import { sessions as sessionsTable } from './db/schema.js'
 import { createStatsService, type StatsService } from './stats/stats-service.js'
 import { createTrustedPeerCheck, upgradeAddress } from './trust-proxy.js'
@@ -219,6 +221,8 @@ export interface AppServices {
   gmRooms: GmRoomService
   /** Plan 27: reputation and the rank it reaches (spec §2). */
   reputation: ReputationService
+  /** Plan 27: catalogue cosmetics sold for points behind a rank (spec §3). */
+  shop: ShopService
   /** Old wardrobe ids, kept readable — see `inventory/aliases.ts`. */
   aliases: ReadonlyMap<string, string>
   manifest: AvatarManifest
@@ -276,6 +280,11 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
   // Plan 27: the reputation rules and ranks the migration seeds, put back where a row is missing (a test reset, a
   // hand-cleared table). Never overwrites a GM's edit.
   await seedReputationDefaults(db)
+  // Plan 27: a price row for every catalogue item that has none (a fresh database, an item added to `items.json`), and
+  // the welcome choices where the row is missing. Neither overwrites a GM's edit.
+  const priced = await seedShopPrices(db, catalog, defs)
+  if (priced > 0) log.info('shop prices seeded', { count: priced })
+  await seedShopConfig(db)
   // Before any room exists: the keys a past process claimed can never be retried — its rooms went with it.
   const pruned = await pruneLedgerKeys(db)
   if (pruned > 0) log.info('ledger keys pruned', { count: pruned })
@@ -351,6 +360,19 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     notify: (playerId, msg) => game.notify(playerId, msg),
     onBalanceChanged: (playerId) => void game.balanceChanged(playerId),
     reputation,
+    ...(deps.now ? { now: deps.now } : {}),
+  })
+  const shop = createShopService({
+    db,
+    repos,
+    inventory,
+    catalog,
+    defs,
+    gifts,
+    reputation,
+    timezone: config.timezone,
+    // As the economy's: a purchase moves only the balance, never a table stack.
+    onBalanceChanged: (playerId) => void game.balanceChanged(playerId),
     ...(deps.now ? { now: deps.now } : {}),
   })
   const history = createHistoryService({ db, repos })
@@ -509,7 +531,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
   return {
     fastify,
     game,
-    services: { bus, catalog, defs, gifts, repos, sessions, auth, inventory, outfits, stats, achievements, economy, history, gm, gmRooms, reputation, aliases, manifest, bodies },
+    services: { bus, catalog, defs, gifts, repos, sessions, auth, inventory, outfits, stats, achievements, economy, history, gm, gmRooms, reputation, shop, aliases, manifest, bodies },
     close,
   }
 }

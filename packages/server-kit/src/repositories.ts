@@ -30,6 +30,12 @@ export type TxReason =
   /** Plan 26: points a GM paid for unlocking an achievement (positive), or took back when undoing a check-in (`gm_checkin_undo`, negative). Both sources, signed, a player row each. */
   | 'gm_achievement'
   | 'gm_checkin_undo'
+  /**
+   * Plan 27: a cosmetic bought in the shop. `shop_purchase` is the player's row (negative, a transfer like `buy_in`);
+   * `shop` is the sink row's reason (`SettlementMeta.kind`), the points that left every balance.
+   */
+  | 'shop_purchase'
+  | 'shop'
 
 export interface BalanceEntry {
   playerId: string
@@ -44,11 +50,12 @@ export interface BalanceEntry {
  * - `table_fee` — the rake taken out of a settled hand (`refId` = handId).
  * - `carry_over` — an undistributable remainder of a released carry-over pot, or the whole
  *   pot when nobody was seated to receive it (`refId` = roomId).
+ * - `shop` — the price of a cosmetic bought in the shop (Plan 27, `refId` = itemId).
  */
 export interface SettlementMeta {
   refId: string
   fee: number
-  kind: 'table_fee' | 'carry_over'
+  kind: 'table_fee' | 'carry_over' | 'shop'
 }
 
 /** A `RoomConfig` safe to hand to clients, history and analytics: the password is replaced by a flag. */

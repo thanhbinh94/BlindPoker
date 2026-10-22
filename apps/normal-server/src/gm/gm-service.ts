@@ -176,8 +176,11 @@ const CLAIM_REASONS = sql`('daily_login', 'daily_item_fallback')`
 
 /** Sources: the reasons that create points. Transfers (buy-in, cash-out, settlement, refund) only move them. */
 const SOURCE_REASONS: ReadonlySet<string> = new Set(['starting_balance', 'daily_reward', 'daily_login', 'daily_item_fallback', 'relief', 'achievement', 'gm_grant', 'gm_adjust', 'gm_achievement', 'gm_checkin_undo'])
-/** Sinks: a sink row's reason is its kind (`SettlementMeta.kind`). */
-const SINK_REASONS: ReadonlySet<string> = new Set(['table_fee', 'carry_over'])
+/**
+ * Sinks: a sink row's reason is its kind (`SettlementMeta.kind`). `shop` is the sink half of a purchase; its player
+ * half, `shop_purchase`, is a transfer and sits in neither set, so a purchase is counted once.
+ */
+const SINK_REASONS: ReadonlySet<string> = new Set(['table_fee', 'carry_over', 'shop'])
 const DAY_MS = 24 * 60 * 60 * 1000
 const SEARCH_LIMIT = { def: 20, max: 100 }
 const ACTIONS_LIMIT = { def: 50, max: 200 }

@@ -429,6 +429,8 @@
       "gm_adjust": "Points taken by the game master",
       "gm_achievement": "GM unlocked an achievement",
       "gm_checkin_undo": "GM undid a check-in",
+      "shop_purchase": "Shop purchase",
+      "shop": "Shop (sink)",
       "other": "Other"
     }
   },
