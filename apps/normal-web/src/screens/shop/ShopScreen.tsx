@@ -1,4 +1,4 @@
-import { Button, defaultChibi, formatPoints, Modal, Segmented, useMediaQuery, type Language } from '@bp/ui-kit'
+import { Button, defaultChibi, formatPoints, Modal, nextReaction, Segmented, useMediaQuery, type ChibiReaction, type Language } from '@bp/ui-kit'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -139,6 +139,10 @@ export function ShopScreen({ api, lang, balance, playerId }: ShopScreenProps) {
   const [wearBusy, setWearBusy] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [alert, setAlert] = useState<string | null>(null)
+  /** The stage's cheer (BP-30, spec K6 §3.2, P15): bumped when a card puts something new on try-on and when a purchase
+   * goes through, and by nothing else — not a shelf or a filter, "Về đồ đang mặc", "Mặc luôn", a refused or unanswered
+   * purchase, or the page opening. */
+  const [stageReact, setStageReact] = useState<ChibiReaction | null>(null)
   /**
    * Set, afresh, by each purchase: the dialog hands focus back to the "Mua" that opened it, which the purchase just replaced
    * with "✓ Đã có", so focus would fall to `<body>`. The effect runs after the dialog's cleanup and lands it on
@@ -203,7 +207,11 @@ export function ShopScreen({ api, lang, balance, playerId }: ShopScreenProps) {
   const trying = Object.keys(tryOn).length > 0
   const nameOf = (id: string): string => itemName(id, t)
 
+  const cheer = (): void => setStageReact((prev) => nextReaction(prev, 'cheer'))
+
   const tryItem = (item: ItemDto): void => {
+    // A card already on try-on, pressed again, changes nothing worth a cheer.
+    if (tryOn[item.slot] !== item.id) cheer()
     setTryOn((current) => ({ ...current, [item.slot]: item.id }))
     setLastTried(item)
     setJustBought(null)
@@ -236,6 +244,7 @@ export function ShopScreen({ api, lang, balance, playerId }: ShopScreenProps) {
       }
       setJustBought(result.itemId)
       setStatus(t('shop.bought', { item: nameOf(result.itemId) }))
+      cheer()
       setConfirm(null)
       setFocusWear({ itemId: result.itemId })
     } catch (cause) {
@@ -331,6 +340,7 @@ export function ShopScreen({ api, lang, balance, playerId }: ShopScreenProps) {
           onReset={trying ? reset : undefined}
           onWearNow={justBought !== null && owned.has(justBought) ? () => void wearNow() : undefined}
           wearBusy={wearBusy}
+          react={stageReact}
           notice={
             alert === null && status === null ? null : (
               <>

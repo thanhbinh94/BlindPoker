@@ -1,8 +1,8 @@
-import { useTintedLayer } from '@bp/ui-kit'
-import { screen, waitFor, within } from '@testing-library/react'
+import { CHIBI_LIFE, useTintedLayer } from '@bp/ui-kit'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent, { type UserEvent } from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ApiError,
   NETWORK_ERROR_CODE,
@@ -515,6 +515,147 @@ describe('ShopScreen', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.shop.error)
     await user.click(screen.getByRole('button', { name: viNormal.screens.retry }))
     expect(await opened()).toBeInTheDocument()
+  })
+
+  // BP-30 (spec K6 §3.2, P15): the stage cheers when a card goes on try-on and when a purchase goes through, and at
+  // nothing else. A cheer lasts `CHIBI_LIFE.cheerFaceMs` and a second one inside it keeps `data-reacting` at "cheer",
+  // so each test lets the first one end on fake timers before it looks for the next: no wall-clock wait to flake.
+  describe('the live stage', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    const setup = (): UserEvent => userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    /** The stage's figure, by the name the ops pack finds it by. */
+    const figure = (container: HTMLElement): HTMLElement =>
+      within(container.querySelector(`section[aria-label="${viNormal.shop.figure}"]`) as HTMLElement).getByRole('img', { name: viNormal.shop.figure })
+    /** Runs the cheer under way to its end. */
+    const cheerEnds = (): void => {
+      act(() => {
+        vi.advanceTimersByTime(CHIBI_LIFE.cheerFaceMs + 50)
+      })
+    }
+
+    /** Counts each time the figure starts a cheer: its `data-reacting` turning to "cheer". The records the observer has
+     * not delivered yet are taken when the count is read, so it never waits on the observer's microtask. A record
+     * holds the old value only: its new value is the next record's old one, or — for the latest — the attribute now. */
+    function countCheers(root: HTMLElement): { readonly count: number; stop: () => void } {
+      let count = 0
+      /** The old values in order, the latest one's new value still unknown until the next record or a read. */
+      let latestOld: string | null | undefined
+      const step = (old: string | null, next: string | null): void => {
+        if (old !== 'cheer' && next === 'cheer') count += 1
+      }
+      const tally = (records: MutationRecord[]): void => {
+        for (const record of records) {
+          if (latestOld !== undefined) step(latestOld, record.oldValue)
+          latestOld = record.oldValue
+        }
+      }
+      const observer = new MutationObserver(tally)
+      observer.observe(root, { attributes: true, attributeFilter: ['data-reacting'], attributeOldValue: true })
+      return {
+        get count() {
+          tally(observer.takeRecords())
+          if (latestOld !== undefined) step(latestOld, root.getAttribute('data-reacting'))
+          latestOld = undefined
+          return count
+        },
+        stop: () => observer.disconnect(),
+      }
+    }
+
+    it('trying a card cheers the stage; a successful buy cheers again', async () => {
+      const user = setup()
+      const { container } = renderShop()
+      await opened()
+      const stage = figure(container)
+      expect(stage).toHaveAttribute('data-live', 'idle')
+      expect(stage).not.toHaveAttribute('data-reacting')
+      const cheers = countCheers(stage)
+
+      await user.click(pickButton(featuredShelf(container), viNormal.items.outfit_tuxedo01))
+      expect(figure(container)).toBe(stage)
+      expect(stage).toHaveAttribute('data-reacting', 'cheer')
+      expect(cheers.count).toBe(1)
+      cheerEnds()
+      expect(stage).not.toHaveAttribute('data-reacting')
+
+      await buyDealer(user, container)
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      expect(figure(container)).toBe(stage)
+      expect(stage).toHaveAttribute('data-reacting', 'cheer')
+      expect(cheers.count).toBe(2)
+      cheers.stop()
+    })
+
+    it('trying the same card again does not cheer', async () => {
+      const user = setup()
+      const { container } = renderShop()
+      await opened()
+      const stage = figure(container)
+      const cheers = countCheers(stage)
+
+      await user.click(pickButton(featuredShelf(container), viNormal.items.outfit_tuxedo01))
+      expect(cheers.count).toBe(1)
+      cheerEnds()
+
+      // The same card, already on try-on: the figure does not change, and neither does its mood.
+      await user.click(pickButton(featuredShelf(container), viNormal.items.outfit_tuxedo01))
+      expect(stage).not.toHaveAttribute('data-reacting')
+      expect(cheers.count).toBe(1)
+
+      // Another card in the same slot does change it.
+      await user.click(pickButton(featuredShelf(container), viNormal.items.outfit_dealer01))
+      expect(cheers.count).toBe(2)
+      cheers.stop()
+    })
+
+    it('a failed buy does not cheer', async () => {
+      const user = setup()
+      const shopBuy = vi
+        .fn()
+        .mockRejectedValueOnce(new ApiError(409, 'INSUFFICIENT_POINTS', 'no'))
+        .mockRejectedValueOnce(new ApiError(503, 'UNAVAILABLE', 'down'))
+      const { container } = renderShop(stubApi({ shopBuy }))
+      await opened()
+      const cheers = countCheers(figure(container))
+
+      // Refused: the dialog closes and says why.
+      await buyDealer(user, container)
+      expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.shop.refusal.INSUFFICIENT_POINTS)
+      // No answer: the dialog stays with its retry line.
+      await buyDealer(user, container)
+      expect(await within(screen.getByRole('dialog')).findByText(viNormal.shop.retry)).toBeInTheDocument()
+
+      expect(figure(container)).not.toHaveAttribute('data-reacting')
+      expect(cheers.count).toBe(0)
+      cheers.stop()
+    })
+
+    it('switching a shelf or a filter, or taking the try-on back, does not cheer', async () => {
+      const user = setup()
+      const { container } = renderShop()
+      await opened()
+      const stage = figure(container)
+      const cheers = countCheers(stage)
+
+      await toShelf(user, 'rare')
+      await user.click(within(screen.getByRole('group', { name: viNormal.shop.slotFilter })).getByRole('button', { name: viNormal.shop.slot.colour }))
+      expect(cheers.count).toBe(0)
+
+      await user.click(pickButton(rarityShelf(container), viNormal.items.haircolor_blue01))
+      expect(cheers.count).toBe(1)
+      cheerEnds()
+
+      await user.click(screen.getByRole('button', { name: viNormal.shop.reset }))
+      expect(stage).not.toHaveAttribute('data-reacting')
+      expect(cheers.count).toBe(1)
+      cheers.stop()
+    })
   })
 })
 

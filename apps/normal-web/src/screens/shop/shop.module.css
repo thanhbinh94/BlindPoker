@@ -103,6 +103,13 @@
   justify-content: center;
 }
 
+/* BP-30 (spec K6 §3.2, P15): "Xoay" turns the live figure. In the column it sits centred under the stage, outside its
+   clipped box; in the phone's strip it is the row's last item (below). */
+.stageTurn {
+  flex: none;
+  align-self: center;
+}
+
 .trying {
   margin: 0;
   overflow-wrap: anywhere;
@@ -148,10 +155,11 @@
   box-shadow: var(--shadow-1);
 }
 
+/* 8 px gaps, not 12: the text between the figure and Xoay (BP-30) needs every pixel of the row. */
 .strip {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-height: 96px;
 }
 
@@ -173,6 +181,16 @@
   flex-direction: column;
   gap: var(--space-1);
   min-width: 0;
+}
+
+/* Xoay at the strip's end (P15): a thumb's `--tap` tall, well inside the 96 px band. Every pixel of its width comes off
+   the text beside it, and a wrapped balance or a third reputation line makes the sticky band taller (at 375 px the
+   stock 12 px padding and gaps wrapped both: 96 → 127 px). So the strip's gaps are 8 px (`.strip`) and Xoay is slim,
+   8 px of padding: the text keeps ~164 px and a new player's band stays 96 px. A seven-digit balance or a longer
+   reputation line ("… còn 1.345 tới Bậc thầy") takes one more line there: 104 px, where it was 96 without Xoay. */
+.strip .stageTurn {
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
 }
 
 /* ── the shelves ───────────────────────────────────────────────────────────── */
