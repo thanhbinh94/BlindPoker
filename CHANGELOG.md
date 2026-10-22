@@ -38,6 +38,9 @@ screenshot taken before Plan 27 was deployed. Branch `bugfix/BP-29-chibi-over-ra
   `docs/ui-kit.md` and `docs/avatar-2d.md` (the token and the isolation), `CLAUDE.md` §3.
 - **Khác với spec / Deviations from the spec.** None. E5 took option (a) of the bug log (toasts above dialogs) rather than
   a refusal line inside the buy-in dialog.
+- **Deployed.** VPS (`play.14-225-254-250.sslip.io`) on 2026-10-23: `backup.sh` (`bp-2026-10-23-0056.dump`), `git pull`
+  to `39fbef2`, no new migration, `docker compose up -d --build`, health `ok` with 0 rooms before and after. The Windows
+  LAN host was not deployed (it still lacks `0004`–`0006`, see Plan 27).
 - **Still open.** E3 waits for the user to play a Blind hand on the deployed build. E1/E2 (the short landscape table) are
   BP-28's. The GM player page's chibi was not screenshotted (it takes the same root rule).
 
