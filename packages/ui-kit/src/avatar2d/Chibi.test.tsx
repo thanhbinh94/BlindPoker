@@ -2,6 +2,7 @@ import { render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AvatarAssets } from './AvatarAssets.js'
 import AVATAR2D_CSS from './avatar2d.module.css?raw'
+import s from './avatar2d.module.css'
 import { Chibi } from './Chibi.js'
 import { resetLoadedClips } from './clip.js'
 import { defaultChibi } from './defaults.js'
@@ -316,5 +317,105 @@ describe('Chibi', () => {
       expect(img, layer.file).not.toBeUndefined()
       expect(img!.getAttribute('src')).toBe(`/avatar/${layer.file}@1x.png`)
     }
+  })
+})
+
+/**
+ * BP-30 P1: the markup a chibi rendered before it learned to live, pinned on the untouched component. Every place that
+ * leaves `live` unset (the table, the PlayerBar, seats, cards, portraits, GM screens) must keep producing exactly this,
+ * so the snapshot is never updated to make a change pass. Hashed class names are mapped back to their source names
+ * through the imported module object, so the snapshot does not depend on the hash.
+ */
+describe('live off renders the same markup as before', () => {
+  const sourceName = new Map(Object.entries(s as Record<string, string>).map(([name, hashed]) => [hashed, name]))
+  const serialise = (root: Element): string => {
+    const copy = root.cloneNode(true) as Element
+    for (const el of [copy, ...copy.querySelectorAll('[class]')]) {
+      const names = (el.getAttribute('class') ?? '').split(/\s+/).filter(Boolean)
+      el.setAttribute('class', names.map((name) => sourceName.get(name) ?? name).join(' '))
+    }
+    return copy.outerHTML.replace(/></g, '>\n<')
+  }
+
+  /** An observer that never reports anything: a lazy chibi under it stays off screen. */
+  class SilentObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return []
+    }
+  }
+
+  beforeEach(() => resetLoadedClips())
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('a 72 px head-frame human with tints, a hair-clipping hat and a frame item', () => {
+    const subject: ChibiConfig = {
+      ...SUBJECT,
+      body: { ...SUBJECT.body, tint: { skin: { meanL: 0.78, files: [SUBJECT.body.body, SUBJECT.body.faces.neutral] }, eyes: { meanL: 0.3, files: [SUBJECT.body.faces.neutral] } } },
+      hair: { ...SUBJECT.hair, tint: { meanL: 0.4, files: [SUBJECT.hair.back, SUBJECT.hair.front] } },
+      head: { id: 'head_snapshot_hat', order: 80, file: 'item_head_snapshot_hat_L80', clipsHair: true },
+      frame: FRAME_ITEM,
+      skinColor: '#5c3a28',
+      eyeColor: '#2f7fd6',
+      hairColor: '#b3261e',
+    }
+    const { container } = render(<Chibi subject={subject} frame="head" size={72} label="Ann" />)
+    expect(serialise(container.firstElementChild!)).toMatchInlineSnapshot(`
+      "<div class="chibi head" style="width: 72px; height: 72px;" data-chibi-hash="bf1a7dac" data-expression="neutral" data-frame="head" role="img" aria-label="Ann">
+      <div class="clip">
+      <div class="crop headCrop">
+      <img class="layer" style="z-index: 20;" loading="lazy" decoding="async" alt="" draggable="false" src="/avatar/item_hair_f_bob01_L20@1x.png">
+      <img class="layer" style="z-index: 30;" loading="lazy" decoding="async" alt="" draggable="false" src="/avatar/body_f_L30@1x.png">
+      <img class="layer" style="z-index: 40;" loading="lazy" decoding="async" alt="" draggable="false" src="/avatar/item_outfit_casual01_L40@1x.png">
+      <img class="layer" style="z-index: 50;" loading="lazy" decoding="async" alt="" draggable="false" src="/avatar/body_f_face_neutral_L50@1x.png">
+      <img class="layer" style="z-index: 60;" loading="lazy" decoding="async" alt="" draggable="false" src="/avatar/item_hair_f_bob01_L60@1x.png">
+      <img class="layer" style="z-index: 80;" loading="lazy" decoding="async" alt="" draggable="false" src="/avatar/item_head_snapshot_hat_L80@1x.png">
+      </div>
+      </div>
+      <img class="layer headCrop" style="z-index: 90;" loading="lazy" decoding="async" alt="" draggable="false" src="/avatar/item_frame_gold_L90@1x.png">
+      </div>"
+    `)
+  })
+
+  it('a full-frame human with an aura', () => {
+    const subject: ChibiConfig = { ...SUBJECT, aura: { id: 'aura_snapshot', order: 10, file: 'item_aura_snapshot_L10' } }
+    const { container } = render(<Chibi subject={subject} size={290} className="stage-figure" />)
+    expect(serialise(container.firstElementChild!)).toMatchInlineSnapshot(`
+      "<div class="chibi full stage-figure" style="width: 290px;" data-chibi-hash="dc14c25e" data-expression="neutral" data-frame="full" aria-hidden="true">
+      <div class="crop">
+      <img class="layer" style="z-index: 10;" loading="lazy" decoding="async" alt="" draggable="false" src="/avatar/item_aura_snapshot_L10@1x.png" srcset="/avatar/item_aura_snapshot_L10@1x.png 1x, /avatar/item_aura_snapshot_L10@2x.png 2x">
+      <img class="layer" style="z-index: 20;" loading="lazy" decoding="async" alt="" draggable="false" src="/avatar/item_hair_f_bob01_L20@1x.png" srcset="/avatar/item_hair_f_bob01_L20@1x.png 1x, /avatar/item_hair_f_bob01_L20@2x.png 2x">
+      <img class="layer" style="z-index: 30;" loading="lazy" decoding="async" alt="" draggable="false" src="/avatar/body_f_L30@1x.png" srcset="/avatar/body_f_L30@1x.png 1x, /avatar/body_f_L30@2x.png 2x">
+      <img class="layer" style="z-index: 40;" loading="lazy" decoding="async" alt="" draggable="false" src="/avatar/item_outfit_casual01_L40@1x.png" srcset="/avatar/item_outfit_casual01_L40@1x.png 1x, /avatar/item_outfit_casual01_L40@2x.png 2x">
+      <img class="layer" style="z-index: 50;" loading="lazy" decoding="async" alt="" draggable="false" src="/avatar/body_f_face_neutral_L50@1x.png" srcset="/avatar/body_f_face_neutral_L50@1x.png 1x, /avatar/body_f_face_neutral_L50@2x.png 2x">
+      <img class="layer" style="z-index: 60;" loading="lazy" decoding="async" alt="" draggable="false" src="/avatar/item_hair_f_bob01_L60@1x.png" srcset="/avatar/item_hair_f_bob01_L60@1x.png 1x, /avatar/item_hair_f_bob01_L60@2x.png 2x">
+      </div>
+      </div>"
+    `)
+  })
+
+  it('a bot', () => {
+    const { container } = render(<Chibi subject={{ kind: 'bot', index: 3 }} expression="happy" frame="head" bounce label="Bot" />)
+    expect(serialise(container.firstElementChild!)).toMatchInlineSnapshot(`
+      "<div class="chibi head bounce" data-chibi-hash="d3fcf82d" data-expression="happy" data-frame="head" role="img" aria-label="Bot">
+      <div class="clip">
+      <div class="crop headCrop">
+      <img class="layer" style="z-index: 30;" loading="lazy" decoding="async" alt="" draggable="false" src="/avatar/bot_3_L30@1x.png" srcset="/avatar/bot_3_L30@1x.png 1x, /avatar/bot_3_L30@2x.png 2x">
+      <img class="layer" style="z-index: 50;" loading="lazy" decoding="async" alt="" draggable="false" src="/avatar/bot_3_face_happy_L50@1x.png" srcset="/avatar/bot_3_face_happy_L50@1x.png 1x, /avatar/bot_3_face_happy_L50@2x.png 2x">
+      </div>
+      </div>
+      </div>"
+    `)
+  })
+
+  it('a lazy chibi not yet in view', () => {
+    vi.stubGlobal('IntersectionObserver', SilentObserver)
+    const { container } = render(<Chibi subject={SUBJECT} size={96} lazy />)
+    expect(serialise(container.firstElementChild!)).toMatchInlineSnapshot(`
+      "<div class="chibi full" style="width: 96px;" data-chibi-hash="c1598b6e" data-expression="neutral" data-frame="full" aria-hidden="true">
+      </div>"
+    `)
   })
 })
