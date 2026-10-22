@@ -176,13 +176,14 @@ async function settleAfterSignIn(page: Page, submit: () => Promise<void>): Promi
  * account whose gift is taken never sees it. The gift stays unclaimed, so the lobby keeps its "🎁 Quà chào mừng".
  */
 export async function dismissWelcome(page: Page, timeout = 5_000): Promise<void> {
-  const dialog = page.getByRole('dialog', { name: 'Chào mừng đến Blind Luck Poker' })
+  // Either language: A-08 signs in with English chosen, so the box reads "Welcome to Blind Luck Poker" / "Later".
+  const dialog = page.getByRole('dialog', { name: /Chào mừng đến Blind Luck Poker|Welcome to Blind Luck Poker/ })
   try {
     await dialog.waitFor({ state: 'visible', timeout })
   } catch {
     return
   }
-  await dialog.getByRole('button', { name: 'Để sau' }).click()
+  await dialog.getByRole('button', { name: /^(Để sau|Later)$/ }).click()
   await expect(dialog).toBeHidden()
 }
 

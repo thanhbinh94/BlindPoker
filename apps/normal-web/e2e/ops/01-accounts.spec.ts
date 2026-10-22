@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { account, register, signIn } from '../support.js'
+import { account, dismissWelcome, register, signIn } from '../support.js'
 import { balanceOf, closeAll, postApi, type Player } from './ops-helpers.js'
 
 /**
@@ -169,6 +169,8 @@ test('A-08 B-02 B-03 S-07 S-08: language and theme stick; every account screen o
   await page.getByLabel('Password', { exact: true }).fill(main.who.password)
   await page.getByRole('button', { name: 'Enter the lobby' }).click()
   await expect(page.getByRole('heading', { name: 'Rooms', level: 1 })).toBeVisible()
+  // A fresh context has no `bp.welcomeShown`, so the welcome gift opens over the lobby (Plan 27, C3): "Later" closes it.
+  await dismissWelcome(page)
 
   // B-03: the lobby, the create dialog and the rail are English.
   await page.getByRole('button', { name: 'Create room' }).click()
