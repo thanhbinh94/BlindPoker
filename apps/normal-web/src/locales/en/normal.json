@@ -75,7 +75,26 @@
       "item": "Item",
       "fallback": "This tier had no new item left for you — {{amount}} instead of an item.",
       "balance": "New balance",
-      "streak": "Streak after this claim: {{streak}} days"
+      "streak": "Streak after this claim: {{streak}} days",
+      "newcomer": {
+        "title": "First week",
+        "day": "Day {{day}}/7",
+        "item": "First-week gift",
+        "fallback": "You already own every item of this step — {{amount}} instead.",
+        "reputation": "Reputation",
+        "reputationValue": "+{{amount}}",
+        "finished": "You have finished your first week."
+      }
+    },
+    "newcomer": {
+      "title": "First week",
+      "lead": "Your first seven check-ins carry extra gifts. Missing a day loses nothing.",
+      "day": "Day {{day}}",
+      "today": "Today",
+      "claimed": "Claimed",
+      "locked": "Not yet",
+      "common": "1 common item",
+      "rare": "1 rare item +{{amount}} reputation"
     },
     "errors": {
       "ALREADY_CLAIMED": "Today's reward has already been claimed, possibly on another device. The calendar has been reloaded."
@@ -550,6 +569,25 @@
     "rename": "Rename",
     "delete": "Delete",
     "error": "Could not complete that action — please try again"
+  },
+  "welcome": {
+    "title": "Welcome to Blind Luck Poker",
+    "lead": "Pick an outfit to start with",
+    "leadAllOwned": "You already own all three welcome gifts, so take the reputation instead.",
+    "choices": "Welcome gifts",
+    "owned": "✓ Owned",
+    "claim": "Take it",
+    "claimReputationOnly": "Take {{amount}} reputation",
+    "later": "Later",
+    "close": "Close",
+    "start": "Let's play",
+    "done": "{{item}} is in your wardrobe, +{{amount}} reputation",
+    "doneReputationOnly": "{{amount}} reputation added",
+    "lobbyButton": "🎁 Welcome gift",
+    "refusal": {
+      "ALREADY_OWNED": "You already own this one — pick another",
+      "NOT_A_CHOICE": "This item is no longer a welcome gift — pick another"
+    }
   },
   "shop": {
     "title": "Shop",

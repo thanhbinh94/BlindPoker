@@ -75,7 +75,26 @@
       "item": "Vật phẩm",
       "fallback": "Bạn đã có hết vật phẩm của mốc này nên được nhận {{amount}} thay vào đó.",
       "balance": "Số dư mới",
-      "streak": "Chuỗi điểm danh: {{streak}} ngày"
+      "streak": "Chuỗi điểm danh: {{streak}} ngày",
+      "newcomer": {
+        "title": "Tuần đầu tiên",
+        "day": "Ngày {{day}}/7",
+        "item": "Quà tuần đầu",
+        "fallback": "Bạn đã có hết các món của mốc này nên được nhận {{amount}} thay vào đó.",
+        "reputation": "Danh vọng",
+        "reputationValue": "+{{amount}}",
+        "finished": "Bạn đã hoàn thành tuần đầu tiên."
+      }
+    },
+    "newcomer": {
+      "title": "Tuần đầu tiên",
+      "lead": "Bảy lần điểm danh đầu tiên có thêm quà. Bỏ một hôm cũng không mất lượt.",
+      "day": "Ngày {{day}}",
+      "today": "Hôm nay",
+      "claimed": "Đã nhận",
+      "locked": "Chưa tới",
+      "common": "1 món common",
+      "rare": "1 món rare +{{amount}} danh vọng"
     },
     "errors": {
       "ALREADY_CLAIMED": "Hôm nay bạn đã nhận thưởng rồi (có thể trên thiết bị khác)."
@@ -550,6 +569,25 @@
     "rename": "Đổi tên",
     "delete": "Xóa",
     "error": "Không thực hiện được thao tác, vui lòng thử lại"
+  },
+  "welcome": {
+    "title": "Chào mừng đến Blind Luck Poker",
+    "lead": "Chọn một bộ đồ để bắt đầu",
+    "leadAllOwned": "Bạn đã có đủ ba món quà chào mừng, nên nhận danh vọng thay vào đó.",
+    "choices": "Quà chào mừng",
+    "owned": "✓ Đã có",
+    "claim": "Nhận",
+    "claimReputationOnly": "Nhận {{amount}} danh vọng",
+    "later": "Để sau",
+    "close": "Đóng",
+    "start": "Vào chơi",
+    "done": "{{item}} đã vào tủ đồ, +{{amount}} danh vọng",
+    "doneReputationOnly": "Đã cộng {{amount}} danh vọng",
+    "lobbyButton": "🎁 Quà chào mừng",
+    "refusal": {
+      "ALREADY_OWNED": "Bạn đã có món này, hãy chọn món khác",
+      "NOT_A_CHOICE": "Món này không còn trong quà chào mừng, hãy chọn món khác"
+    }
   },
   "shop": {
     "title": "Cửa hàng",

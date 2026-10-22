@@ -14,7 +14,7 @@ import {
 } from '@bp/ui-kit'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { AvatarCatalogDto, ItemDto, NormalApi } from './api.js'
+import type { AvatarCatalogDto, ItemDto, NormalApi, WelcomeStatusDto } from './api.js'
 import a from './avatar/avatar.module.css'
 import { chibiFromApi } from './avatar/chibi.js'
 import { resetAvatarCache, useAvatars } from './avatar/useAvatars.js'
@@ -24,9 +24,10 @@ import { useLanguagePref } from './prefs.js'
 import { AuthScreen, type AuthMode } from './screens/AuthScreen.js'
 import { Shell } from './screens/Shell.js'
 import { UpdateBoundary } from './screens/UpdateBoundary.js'
-import { useDailyNudge } from './daily-nudge.js'
+import { useDailyNudge, type NudgeArrival } from './daily-nudge.js'
 import { makeCaptionFor, makeChibiFor, makeRankFor } from './screens/TableChrome.js'
 import s from './screens/normal.module.css'
+import w from './screens/welcome.module.css'
 import { clearLastEmail } from './session.js'
 import { useSessionGate } from './session-gate.js'
 import { lazyScreen } from './stale-chunk.js'
@@ -60,6 +61,8 @@ const DailyScreen = lazyScreen(async () => ({ default: (await import('./screens/
 const SettingsScreen = lazyScreen(async () => ({ default: (await import('./screens/SettingsScreen.js')).SettingsScreen }))
 const GmScreen = lazyScreen(async () => ({ default: (await import('./screens/gm/GmScreen.js')).GmScreen }))
 const ShopScreen = lazyScreen(async () => ({ default: (await import('./screens/shop/ShopScreen.js')).ShopScreen }))
+/** Once in an account's life, so it is a chunk of its own too, asked for only when it opens. */
+const WelcomeDialog = lazyScreen(async () => ({ default: (await import('./screens/WelcomeDialog.js')).WelcomeDialog }))
 
 /** The routes served by a lazy chunk rather than by the entry bundle. */
 export const ACCOUNT_ROUTES = ['/profile', '/avatar', '/achievements', '/daily', '/settings', '/gm', '/shop']
@@ -74,6 +77,71 @@ const INVENTORY_ROUTE = '/inventory'
 /** Normal is served by the same origin as the socket, so the origin is never configured. */
 export function websocketUrl(loc: Pick<Location, 'protocol' | 'host'> = window.location): string {
   return `${loc.protocol === 'https:' ? 'wss:' : 'ws:'}//${loc.host}/ws`
+}
+
+/** The routes that draw the lobby once signed in. */
+const LOBBY_ROUTES = ['/', '/lobby', '/login', '/register']
+
+/** The welcome gift as this session knows it: the last status read, and what it meant for the arrival move. */
+interface WelcomeState {
+  playerId: string
+  status: WelcomeStatusDto | null
+  arrival: NudgeArrival
+}
+
+/**
+ * The welcome gift's status (Plan 27, C3 + P24/P25), read each time the lobby comes on screen until it says the gift
+ * is taken — so the lobby's button goes even when the gift was taken in another tab.
+ *
+ * `arrival` is fixed by the session's first answer: a gift waiting when the session began keeps the daily reminder
+ * from moving the player off the lobby for the rest of it, even after the gift is taken (the dialog's own "done" line
+ * would otherwise be yanked away). A status that cannot be read never blocks anything: it counts as taken.
+ */
+function useWelcome(api: NormalApi, playerId: string | null, onLobby: boolean): { welcome: WelcomeState | null; reload: () => void } {
+  const [state, setState] = useState<WelcomeState | null>(null)
+  const epoch = useRef(0)
+  /** The account whose gift is known to be taken: no more reads for it once it is. */
+  const taken = useRef<string | null>(null)
+
+  const load = useCallback(
+    (id: string) => {
+      const mine = ++epoch.current
+      // Through `then` so that an api without the route (an older test stub, say) is a refusal, not a throw.
+      Promise.resolve()
+        .then(() => api.welcome())
+        .then((status) => {
+          if (mine !== epoch.current) return
+          taken.current = status.claimed ? id : null
+          setState((prev) => ({
+            playerId: id,
+            status,
+            arrival: prev !== null && prev.playerId === id && prev.arrival !== 'wait' ? prev.arrival : status.claimed ? 'go' : 'skip',
+          }))
+        })
+        .catch(() => {
+          if (mine !== epoch.current) return
+          setState((prev) => (prev !== null && prev.playerId === id ? { ...prev, arrival: prev.arrival === 'wait' ? 'go' : prev.arrival } : { playerId: id, status: null, arrival: 'go' }))
+        })
+    },
+    [api],
+  )
+
+  useEffect(() => {
+    if (playerId === null) {
+      epoch.current += 1
+      taken.current = null
+      setState(null)
+      return
+    }
+    if (!onLobby || taken.current === playerId) return
+    load(playerId)
+  }, [playerId, onLobby, load])
+
+  const reload = useCallback(() => {
+    if (playerId !== null) load(playerId)
+  }, [playerId, load])
+
+  return { welcome: state !== null && state.playerId === playerId ? state : null, reload }
 }
 
 /** `#/register` opens the register tab; every other route reached while signed out opens sign-in. */
@@ -188,7 +256,7 @@ export function App({ api, socketFactory }: AppProps) {
     const ids = (seatedIds ?? []).filter((p) => !p.isBot).map((p) => p.playerId)
     return [myId, ...ids]
   }, [gate.signedIn, myId, seatedIds])
-  const { avatars } = useAvatars(guarded, watched)
+  const { avatars, invalidate: invalidateAvatar } = useAvatars(guarded, watched)
   const captionFor = useMemo(() => makeCaptionFor(avatars, t), [avatars, t])
   const rankFor = useMemo(() => makeRankFor(avatars), [avatars])
   const myAvatar = myId === null ? null : (avatars.get(myId)?.avatar ?? null)
@@ -271,9 +339,37 @@ export function App({ api, socketFactory }: AppProps) {
     if (routePath === INVENTORY_ROUTE) window.location.replace('#/avatar')
   }, [routePath])
 
+  // The welcome gift (Plan 27, C3): read whenever the lobby comes on screen until it is taken. The dialog opens by
+  // itself once per session while the gift waits; after "Để sau" the lobby's button is the way back to it.
+  const sessionId = gate.signedIn ? gateId : null
+  const onLobby = sessionId !== null && LOBBY_ROUTES.includes(path)
+  const { welcome: welcomeState, reload: reloadWelcome } = useWelcome(guarded, sessionId, onLobby)
+  const welcomeStatus = welcomeState?.status ?? null
+  const giftWaiting = welcomeStatus !== null && !welcomeStatus.claimed
+  const [welcomeOpen, setWelcomeOpen] = useState(false)
+  /** The account the dialog has already opened by itself for, this session. */
+  const welcomeShownFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (sessionId === null) {
+      welcomeShownFor.current = null
+      setWelcomeOpen(false)
+      return
+    }
+    if (!giftWaiting || !onLobby || welcomeShownFor.current === sessionId) return
+    welcomeShownFor.current = sessionId
+    setWelcomeOpen(true)
+  }, [sessionId, giftWaiting, onLobby])
+  const onWelcomeClaimed = useCallback(() => {
+    reloadWelcome()
+    // The item is worn at once: the lobby bar's face is the old one until the cache asks again.
+    if (myId !== null) invalidateAvatar(myId)
+  }, [reloadWelcome, invalidateAvatar, myId])
+
   // Today's reward, as a reminder rather than a claim: a sign-in that lands on the lobby with a reward waiting
-  // opens `/daily` once a day, and the rail's tab carries a dot while the reward is still there.
-  const { ready: dailyReady } = useDailyNudge({ api: guarded, playerId: gate.signedIn ? gateId : null, path, navigate })
+  // opens `/daily` once a day, and the rail's tab carries a dot while the reward is still there. A session that
+  // starts with the welcome gift waiting stays in the lobby instead (P25): the gift comes first.
+  const arrival: NudgeArrival = welcomeState?.arrival ?? 'wait'
+  const { ready: dailyReady } = useDailyNudge({ api: guarded, playerId: sessionId, path, navigate, arrival })
 
   // Still in a room when the socket came up (a reload, a tab reopened after a drop): that room is where the player
   // is, whichever screen they landed on — the lobby cannot take them anywhere else until they leave it.
@@ -312,7 +408,7 @@ export function App({ api, socketFactory }: AppProps) {
   }
 
   const inRoom = path === '/room' || path.startsWith('/room/')
-  const inLobby = path === '/' || path === '/lobby' || path === '/login' || path === '/register'
+  const inLobby = LOBBY_ROUTES.includes(path)
   const { state } = client
 
   return (
@@ -387,6 +483,7 @@ export function App({ api, socketFactory }: AppProps) {
               />
             </>
           ) : (
+            <>
             <LobbyScreen
               client={viewClient}
               lang={lang}
@@ -400,17 +497,40 @@ export function App({ api, socketFactory }: AppProps) {
               }
               rank={myId === null ? null : (avatars.get(myId)?.rank ?? null)}
               // The wardrobe and the shop, by name, under the bar (Plan 27, P20): the rail holds four tabs and no more.
+              // While the welcome gift waits, its button leads the row (C3) — the way back after "Để sau".
               header={
-                <nav className={a.lobbyLinks} aria-label={t('shop.lobbyLinks')}>
-                  <a className={a.lobbyLink} href="#/avatar">
-                    {t('wardrobe.title')}
-                  </a>
-                  <a className={a.lobbyLink} href="#/shop">
-                    {t('shop.title')}
-                  </a>
-                </nav>
+                <div className={a.lobbyLinks}>
+                  {giftWaiting ? (
+                    <button type="button" className={`${a.lobbyLink} ${w.gift}`} onClick={() => setWelcomeOpen(true)}>
+                      {t('welcome.lobbyButton')}
+                    </button>
+                  ) : null}
+                  <nav className={w.lobbyNav} aria-label={t('shop.lobbyLinks')}>
+                    <a className={a.lobbyLink} href="#/avatar">
+                      {t('wardrobe.title')}
+                    </a>
+                    <a className={a.lobbyLink} href="#/shop">
+                      {t('shop.title')}
+                    </a>
+                  </nav>
+                </div>
               }
             />
+            {welcomeOpen && welcomeStatus !== null ? (
+              <Suspense fallback={null}>
+                <WelcomeDialog
+                  api={guarded}
+                  lang={lang}
+                  status={welcomeStatus}
+                  avatar={myAvatar}
+                  items={items}
+                  bodies={bodies}
+                  onClaimed={onWelcomeClaimed}
+                  onClose={() => setWelcomeOpen(false)}
+                />
+              </Suspense>
+            ) : null}
+            </>
           )}
         </Shell>
       </GameClientProvider>

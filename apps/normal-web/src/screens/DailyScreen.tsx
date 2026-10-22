@@ -6,6 +6,7 @@ import {
   ApiError,
   type DailyClaimDto,
   type DailyStatusDto,
+  type NewcomerClaimDto,
   type NormalApi,
   type ReliefDto,
   type ReliefStatusDto,
@@ -14,6 +15,7 @@ import { itemName } from '../catalog-i18n.js'
 import { markClaimedToday } from '../daily-nudge.js'
 import { DailyCalendar } from './DailyCalendar.js'
 import { formatMoment } from './format.js'
+import { NewcomerPanel } from './NewcomerPanel.js'
 import s from './normal.module.css'
 import { refusalText } from './refusal.js'
 import { useAsync, type AsyncHandle } from './useAsync.js'
@@ -142,6 +144,47 @@ function ReliefPanel({ api, lang, handle }: ReliefPanelProps) {
         </>
       )}
     </Panel>
+  )
+}
+
+/* ── the first week's lines on the receipt ─────────────────────────────────── */
+
+/**
+ * What a check-in added to the newcomer calendar (Plan 27 C2): the day it reached, the item of day 3 or day 7 — or the
+ * points that stood in for it — and day 7's reputation. The claim that finishes the week says so here, because the
+ * panel above is gone once the status is read again.
+ */
+function NewcomerReceipt({ newcomer, lang }: { newcomer: NewcomerClaimDto; lang: Language }) {
+  const { t } = useTranslation('normal')
+  return (
+    <>
+      <li className={s.ledgerRow}>
+        <span className={s.rowTitle}>{t('daily.receipt.newcomer.title')}</span>
+        <span className={s.rowValue}>{t('daily.receipt.newcomer.day', { day: newcomer.day })}</span>
+      </li>
+      {newcomer.item === null ? null : (
+        <li className={s.ledgerRow}>
+          <span className={s.rowTitle}>{t('daily.receipt.newcomer.item')}</span>
+          <span className={s.rowValue}>{itemName(newcomer.item, t)}</span>
+        </li>
+      )}
+      {newcomer.fallbackPoints > 0 ? (
+        <li className={s.ledgerRow}>
+          <span className={s.rowMeta}>{t('daily.receipt.newcomer.fallback', { amount: pointsText(newcomer.fallbackPoints, lang, t) })}</span>
+        </li>
+      ) : null}
+      {newcomer.reputation > 0 ? (
+        <li className={s.ledgerRow}>
+          <span className={s.rowTitle}>{t('daily.receipt.newcomer.reputation')}</span>
+          <span className={s.rowValue}>{t('daily.receipt.newcomer.reputationValue', { amount: formatPoints(newcomer.reputation, lang) })}</span>
+        </li>
+      ) : null}
+      {newcomer.finished ? (
+        <li className={s.ledgerRow}>
+          <span className={s.rowMeta}>{t('daily.receipt.newcomer.finished')}</span>
+        </li>
+      ) : null}
+    </>
   )
 }
 
@@ -312,10 +355,13 @@ export function DailyScreen({ api, lang, checkinResets = 0 }: DailyScreenProps) 
                 <li className={s.ledgerRow}>
                   <span className={s.rowMeta}>{t('daily.receipt.streak', { streak: receipt.streak })}</span>
                 </li>
+                {receipt.newcomer === undefined ? null : <NewcomerReceipt newcomer={receipt.newcomer} lang={lang} />}
               </ul>
             </Panel>
             </div>
           )}
+
+          <NewcomerPanel newcomer={status.newcomer} lang={lang} />
 
           <Panel title={t('daily.calendarTitle')}>
             <p className={s.footnote}>{t('daily.calendarLead')}</p>

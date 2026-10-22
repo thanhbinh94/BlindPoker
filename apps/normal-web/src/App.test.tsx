@@ -34,6 +34,9 @@ function stubApi(overrides: Partial<NormalApi> = {}): NormalApi {
     // case in this file — none of them ever look at a face.
     avatarCatalog: vi.fn().mockResolvedValue({ frame: { w: 384, h: 448 }, crop: { x: 88, y: 40, size: 208 }, bodies: [], manifestVersion: 1 }),
     catalogItems: vi.fn().mockResolvedValue({ items: [] }),
+    // The lobby asks whether the welcome gift is taken (Plan 27, P25). Taken, by default: the dialog it would
+    // otherwise open over the lobby is the business of its own block below, not of every case in this file.
+    welcome: vi.fn().mockResolvedValue({ claimed: true, choices: [] }),
     ...overrides,
   } as unknown as NormalApi
 }
@@ -730,6 +733,81 @@ describe('App — the daily reminder', () => {
     expect(await screen.findByRole('heading', { name: viNormal.settings.title })).toBeInTheDocument()
     expect(window.location.hash).toBe('#/settings')
     expect(await screen.findByText(viNormal.nav.dailyReady)).toBeInTheDocument()
+    expect(localStorage.getItem(DAILY_NUDGE_KEY)).toBeNull()
+  })
+})
+
+describe('App — the welcome gift (Plan 27, C3)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    FakeSocket.reset()
+    window.history.replaceState(null, '', '/')
+  })
+
+  const UNCLAIMED = {
+    claimed: false,
+    choices: [
+      { itemId: 'outfit_dealer01', owned: false },
+      { itemId: 'outfit_tet_red01', owned: false },
+      { itemId: 'head_conical_hat01', owned: false },
+    ],
+  }
+  const welcomeDialog = () => screen.queryByRole('dialog', { name: viNormal.welcome.title })
+  const giftButton = () => screen.queryByRole('button', { name: viNormal.welcome.lobbyButton })
+
+  it('opens the dialog once on the lobby while the gift is unclaimed, and keeps a way back to it', async () => {
+    const api = stubApi({ welcome: vi.fn().mockResolvedValue(UNCLAIMED) })
+    const user = userEvent.setup()
+    renderApp(api)
+    await settled()
+    await welcome()
+
+    expect(await screen.findByRole('dialog', { name: viNormal.welcome.title })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: viNormal.welcome.later }))
+    expect(welcomeDialog()).toBeNull()
+    expect(giftButton()).toBeInTheDocument()
+
+    // Away and back: the lobby asks again, the gift is still there, and the dialog does not jump out a second time.
+    const calls = vi.mocked(api.welcome).mock.calls.length
+    act(() => {
+      window.location.hash = '#/daily'
+    })
+    await screen.findByRole('heading', { name: viNormal.daily.title })
+    act(() => {
+      window.location.hash = '#/lobby'
+    })
+    await screen.findByRole('heading', { name: ROOMS_HEADING })
+    await waitFor(() => expect(vi.mocked(api.welcome).mock.calls.length).toBeGreaterThan(calls))
+    expect(welcomeDialog()).toBeNull()
+
+    // The lobby's button is the way back in.
+    await user.click(await screen.findByRole('button', { name: viNormal.welcome.lobbyButton }))
+    expect(await screen.findByRole('dialog', { name: viNormal.welcome.title })).toBeInTheDocument()
+  })
+
+  it('never opens the dialog, nor shows the button, once the gift is taken', async () => {
+    const api = stubApi()
+    renderApp(api)
+    await settled()
+    await welcome()
+
+    expect(await screen.findByRole('heading', { name: ROOMS_HEADING })).toBeInTheDocument()
+    await waitFor(() => expect(api.welcome).toHaveBeenCalled())
+    expect(welcomeDialog()).toBeNull()
+    expect(giftButton()).toBeNull()
+  })
+
+  it('keeps a new player in the lobby with the gift, rather than sending them to the waiting daily reward', async () => {
+    const status = { claimable: true, day: 1, streak: 1, reward: 5000, item: null, nextResetAt: 1_800_000_000_000, month: '2027-01', calendar: [] }
+    const api = stubApi({ welcome: vi.fn().mockResolvedValue(UNCLAIMED), daily: vi.fn().mockResolvedValue(status) })
+    renderApp(api)
+    await settled()
+    await welcome()
+
+    expect(await screen.findByRole('dialog', { name: viNormal.welcome.title })).toBeInTheDocument()
+    const nav = screen.getByRole('navigation', { name: viNormal.nav.main })
+    expect(await within(nav).findByText(viNormal.nav.dailyReady)).toBeInTheDocument()
+    expect(window.location.hash).not.toBe('#/daily')
     expect(localStorage.getItem(DAILY_NUDGE_KEY)).toBeNull()
   })
 })

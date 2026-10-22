@@ -231,6 +231,59 @@ describe('DailyScreen — claiming', () => {
     await waitFor(() => expect(api.me).toHaveBeenCalledTimes(2))
   })
 
+  it('adds the first week’s lines to the receipt when the claim moved the newcomer calendar', async () => {
+    const claimDaily = vi.fn().mockResolvedValue({
+      ...CLAIM,
+      newcomer: { day: 3, item: 'head_beanie01', fallbackPoints: 0, reputation: 0, finished: false },
+    })
+    const user = userEvent.setup()
+    renderScreen(stubApi({ claimDaily }))
+    await screen.findByRole('list', { name: viNormal.daily.calendarTitle })
+
+    await user.click(screen.getByRole('button', { name: viNormal.daily.claim }))
+
+    const head = await screen.findByRole('heading', { name: interpolate(viNormal.daily.receipt.title, { day: '5' }) })
+    const receipt = within(head.closest('[role="status"]') as HTMLElement)
+    expect(receipt.getByText(viNormal.daily.receipt.newcomer.title)).toBeInTheDocument()
+    expect(receipt.getByText(interpolate(viNormal.daily.receipt.newcomer.day, { day: '3' }))).toBeInTheDocument()
+    expect(receipt.getByText(viNormal.daily.receipt.newcomer.item)).toBeInTheDocument()
+    expect(receipt.getByText(viNormal.items.head_beanie01)).toBeInTheDocument()
+    expect(receipt.queryByText(viNormal.daily.receipt.newcomer.reputation)).toBeNull()
+    expect(receipt.queryByText(viNormal.daily.receipt.newcomer.finished)).toBeNull()
+  })
+
+  it('prints day 7’s substitute points, its reputation and the end of the first week', async () => {
+    const claimDaily = vi.fn().mockResolvedValue({
+      ...CLAIM,
+      newcomer: { day: 7, item: null, fallbackPoints: 5_000, reputation: 200, finished: true },
+    })
+    const user = userEvent.setup()
+    const { i18n } = renderScreen(stubApi({ claimDaily }))
+    await screen.findByRole('list', { name: viNormal.daily.calendarTitle })
+
+    await user.click(screen.getByRole('button', { name: viNormal.daily.claim }))
+
+    const head = await screen.findByRole('heading', { name: interpolate(viNormal.daily.receipt.title, { day: '5' }) })
+    const receipt = within(head.closest('[role="status"]') as HTMLElement)
+    const unit = i18n.t('common:units.pointsShort')
+    expect(receipt.getByText(interpolate(viNormal.daily.receipt.newcomer.fallback, { amount: `5.000 ${unit}` }))).toBeInTheDocument()
+    expect(receipt.getByText(viNormal.daily.receipt.newcomer.reputation)).toBeInTheDocument()
+    expect(receipt.getByText(interpolate(viNormal.daily.receipt.newcomer.reputationValue, { amount: '200' }))).toBeInTheDocument()
+    expect(receipt.getByText(viNormal.daily.receipt.newcomer.finished)).toBeInTheDocument()
+    expect(receipt.queryByText(viNormal.daily.receipt.newcomer.item)).toBeNull()
+  })
+
+  it('shows the first-week panel while the newcomer calendar runs, and not otherwise', async () => {
+    renderScreen(stubApi({ daily: vi.fn().mockResolvedValue({ ...STATUS, newcomer: { day: 2, claimedDays: [1], finished: false } }) }))
+    expect(await screen.findByRole('list', { name: viNormal.daily.newcomer.title })).toBeInTheDocument()
+  })
+
+  it('leaves the first-week panel out when the status carries no newcomer calendar', async () => {
+    renderScreen()
+    await screen.findByRole('list', { name: viNormal.daily.calendarTitle })
+    expect(screen.queryByRole('list', { name: viNormal.daily.newcomer.title })).toBeNull()
+  })
+
   it('explains the substitute when the tier had no new item left', async () => {
     const claimDaily = vi.fn().mockResolvedValue({ ...CLAIM, items: [], fallbackPoints: 10_000 })
     const user = userEvent.setup()

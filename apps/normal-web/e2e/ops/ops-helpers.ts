@@ -2,6 +2,7 @@ import { expect, type Browser, type BrowserContext, type CDPSession, type Locato
 import {
   account,
   closeRoomMenu,
+  dismissWelcome,
   expectMyNameWhole,
   expectMySeatLines,
   expectNoSidewaysScroll,
@@ -75,6 +76,8 @@ export async function registerPatiently(page: Page, who: Account): Promise<void>
       await page.waitForTimeout(500)
       await page.goto('/#/lobby')
       await expect(page.getByRole('button', { name: 'Tạo phòng' })).toBeVisible()
+      // A new account's welcome gift opens over the lobby (Plan 27, C3); "Để sau" leaves it for later.
+      await dismissWelcome(page)
       return
     }
     const seconds = Number(/(\d+) giây/.exec(await limited.innerText())?.[1] ?? '30')
