@@ -106,6 +106,7 @@ mã phòng (nếu có), thiết bị, ảnh chụp màn hình. Claude chép vào
 | B-02 | Cài đặt → Sáng / Tối | Đổi ngay, giữ sau khi tải lại | P2 |
 | B-03 | Cài đặt → English | Mọi chữ đổi sang tiếng Anh, kể cả trong bàn và hộp thoại | P2 |
 | B-04 | Để một tab mở, người vận hành deploy bản mới, rồi bấm sang Hồ sơ | Trang tự tải lại một lần; nếu vẫn lỗi thì hiện "Đã có phiên bản mới" + nút Tải lại, không bao giờ trang trắng | P1 |
+| B-05 | Điện thoại dọc: ở Sảnh chờ, rồi ở Hồ sơ, cuộn xuống từ từ cho hình đại diện trượt dưới thanh điều hướng | Thanh điều hướng luôn nằm trên: tóc, mũ, khung của hình đại diện không vẽ đè lên "Sảnh chờ" hay các ô khác (bug log §10 E4) | P2 |
 
 ### C. Sảnh
 
@@ -149,6 +150,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 | E-10 | Rời phòng giữa ván | Coi như bỏ bài; stack về số dư khi ván kết thúc | P1 |
 | E-11 | Đứng dậy giữa hai ván | Stack về số dư ngay | P1 |
 | E-12 | Ván sau tự bắt đầu | Khoảng 5 giây sau khi ván trước kết thúc, nếu còn ≥ 2 người có stack | P2 |
+| E-13 | Tạo bàn Hold'em mức 2.500/5.000 (mang vào tối thiểu 250.000) với số dư dưới mức đó; bấm Ngồi vào bàn rồi Ngồi vào bàn trong hộp | Bị từ chối, thông báo "Số dư không đủ" hiện rõ **trên** hộp thoại (không bị lớp nền mờ che), hộp vẫn mở để chọn lại, không bị trừ điểm (bug log §10 E5) | P2 |
 
 ### F. Bàn Blind Poker
 
@@ -223,7 +225,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 
 ### L. Bàn trên điện thoại xoay ngang (Plan 26)
 
-Chạy trên P3 (điện thoại xoay ngang). Cả năm ca là **tự động** — `07-landscape.spec.ts`, project `landscape` (915 × 412,
+Chạy trên P3 (điện thoại xoay ngang). Cả sáu ca là **tự động** — `07-landscape.spec.ts`, project `landscape` (915 × 412,
 cảm ứng, thẻ `@landscape`) — và kết thúc bằng hai phép đo: trang và bàn không cuộn, không chữ đè chữ. Người test vẫn thử
 trên máy thật, vì máy chỉ chạy Chromium và không có bàn phím ảo hay ngón tay thật.
 
@@ -234,6 +236,7 @@ trên máy thật, vì máy chỉ chạy Chromium và không có bàn phím ảo
 | L-03 | Hết ván, thẻ kết quả ở 915 × 412 và 844 × 390 | Thẻ gọn một khối, "Đóng" cao ít nhất 44 px và bấm được ở mép trên, "Ván tiếp theo sau…" đủ chữ, không chữ đè chữ; thẻ che các ghế hai bên (xem `docs/known-limitations.md`) | P1 |
 | L-04 | Hai người thật; đến lượt mình ở Hold'em: bấm "Tố" | Hai lần chạm: lần đầu mở các mức Min · ½ · Pot · Max · ✎ ở góc trái, không có thanh trượt; ✎ mở hộp thoại "Nhập số điểm" ở đầu màn hình, vẫn dùng được ở 915 × 260; nhập 600 rồi "Xác nhận" thì nút ghi "Tố 600"; chạm lần hai thì người kia có 400 để theo | P1 |
 | L-05 | Bàn Blind "Hoàn toàn may rủi" có "Nặn bài" và 1 bot: bóc một lá bằng ngón tay, bấm "Lật" cho lá còn lại, rồi "Rời phòng" ở header | Lá bóc mở; "Lật" mở nốt; vòng nặn kết thúc và người thắng hiện; "Rời phòng" ở header đưa về sảnh | P2 |
+| L-06 | Điện thoại xoay ngang **còn thanh địa chỉ** (855 × 319, sân khấu 255 px — bậc "nằm ngang thấp", BP-28): bàn Blind "Chơi hoặc bỏ" 7 ghế (6 bot), chờ ván rồi chơi tới khi mọi bot "Đã chọn"; rồi bàn Hold'em 8 ghế hai người tới vòng flop | Bàn thành hình sân vận động rộng hết màn hình: ghế mình ở giữa đáy, bài mình nằm cạnh khung tên; hai ghế cạnh mình ở hai đầu bàn; các ghế còn lại một hàng phía trên. Không ghế nào chạm ghế khác, bài chung hay bài mình; dưới ghế bot chỉ còn chip cược và một chấm màu thay cho "Đã chọn". Lúc chờ, câu gợi ý "Bấm Sẵn sàng để bắt đầu — ván cần ít nhất một người chơi thật." nằm trong khung góc dưới bên phải, dưới "N/M sẵn sàng", không nằm trên bàn; góc dưới bên trái có nhắc "Dùng Toàn màn hình để bàn rộng hơn" (chỉ một lần, bấm ✕ thì không hiện lại). Không chữ đè chữ. Trên máy thật: thử cả khi bật "Toàn màn hình" (bàn về bố cục bình thường) | P1 |
 
 Việc máy chưa làm được và người test thử bằng tay (`docs/known-limitations.md`, mục UI): xoay máy thật, mở ✎ và nhìn bàn
 phím ảo; chạm ghế trống bằng ngón tay; đọc thẻ kết quả khi nó che ghế hai bên.

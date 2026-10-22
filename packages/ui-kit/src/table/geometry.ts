@@ -84,3 +84,62 @@ export function ringPositions(
   }
   return out
 }
+
+/**
+ * The short ring's seat, as `table.module.css` sizes it (`[data-tier='short'] .seat`): 11 % of the ring's width, never
+ * under 92 px. `edge` is what a seat keeps from the ring's side, `gap` what two seats keep between them.
+ */
+export const SHORT_SEAT = { share: 0.11, minPx: 92, edgePx: 4, gapPx: 4 } as const
+/** The short ring's box until it is measured (and in jsdom): the stage of the user's 855 × 319 phone (bug log §10). */
+export const SHORT_DEFAULT_BOX = { w: 831, h: 255 } as const
+
+/**
+ * The seats of the landscape frame's `short` tier (BP-28, R1): a stage under 300 px tall, where an ellipse of the
+ * stage's height put two seats on top of each other at each flank and the viewer's cards on the board. The table is a
+ * stadium as wide as the stage, and the seats sit on three lines of it — no seat has another above or below it, and the
+ * board has the middle to itself:
+ *
+ * - the viewer at the bottom centre (`y` 100), standing on the stage's foot between the two corner docks;
+ * - with three opponents or more, the next seat clockwise and the last one at the stadium's two ends (`y` 50), against
+ *   the ring's sides (`SHORT_SEAT.edgePx` in), beside the board;
+ * - everyone else on the top line (`y` 0), hung from the stage's top edge, left to right in clockwise order, evenly
+ *   spaced between the end seats — clear of them across, so the two lines never meet whatever either holds — and never
+ *   more than a quarter of the width apart. Too many for that (nine seats on a narrow phone), the line takes the
+ *   whole width and passes over the end seats, whose blocks the CSS keeps below it.
+ *
+ * Distances are pixels, so the box's width is an input (`PokerTable` measures the ring); `x` and `y` come back as
+ * percentages of it, as `ringPositions` gives them. The short tier's CSS hangs a `y < 50` seat from its point, centres an
+ * end seat on its own line and stands the viewer's on the foot. A spectator (`anchorSeat` null) sees the first seat in
+ * the viewer's place, as on the ellipse.
+ */
+export function shortRingPositions(
+  seatOrder: number[],
+  anchorSeat: number | null,
+  box: { w: number; h: number } = SHORT_DEFAULT_BOX,
+): Map<number, { x: number; y: number }> {
+  const n = seatOrder.length
+  const out = new Map<number, { x: number; y: number }>()
+  if (n === 0) return out
+  const w = box.w > 0 ? box.w : SHORT_DEFAULT_BOX.w
+  const pct = (px: number): number => (px / w) * 100
+  const seatW = Math.max(SHORT_SEAT.share * w, SHORT_SEAT.minPx)
+  const anchorIdx = anchorSeat === null ? 0 : Math.max(0, seatOrder.indexOf(anchorSeat))
+  const at = (rel: number): number => seatOrder[(anchorIdx + rel) % n]!
+  out.set(at(0), { x: 50, y: 100 })
+  const others = n - 1
+  const ends = others >= 3
+  const endX = seatW / 2 + SHORT_SEAT.edgePx
+  if (ends) {
+    out.set(at(1), { x: pct(endX), y: 50 })
+    out.set(at(n - 1), { x: 100 - pct(endX), y: 50 })
+  }
+  const first = ends ? 2 : 1
+  const top = ends ? others - 2 : others
+  // The outermost centres of the top line: clear of the end seats when the line fits between them, else the whole width.
+  const pitch = seatW + SHORT_SEAT.gapPx
+  const between = ends ? endX + seatW / 2 + SHORT_SEAT.gapPx + seatW / 2 : endX
+  const inner = top <= 1 || (w - 2 * between) / (top - 1) >= pitch ? between : endX
+  const step = top <= 1 ? 0 : Math.min((w - 2 * inner) / (top - 1), w / 4)
+  for (let k = 0; k < top; k++) out.set(at(first + k), { x: 50 + pct((k - (top - 1) / 2) * step), y: 0 })
+  return out
+}

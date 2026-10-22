@@ -636,7 +636,7 @@ Tokens live in `src/theme/tokens.css` and are all an app needs to restyle the ki
 | Type | `--font-display`, `--font-body` |
 | Space | `--space-1`…`--space-8` (4 px scale), `--radius-sm/md/lg/pill`, `--tap` (44 px), `--measure-wide` (1180 px: lobby, wardrobe) and `--measure-narrow` (44rem: pages read top to bottom) — content widths, padding not included |
 | Motion | `--dur-1`, `--dur-2`, `--dur-flip` (a card's turn), `--dur-deal` (the slide out of the deck), `--dur-lift` (the showdown's lift and turn), `--ease`, `--ease-lift` |
-| Misc | `--focus`, `--shadow-1`, `--shadow-2`, `--z-modal` |
+| Misc | `--focus`, `--shadow-1`, `--shadow-2`, `--z-modal` (dialogs and their backdrop), `--z-toast` (the toast strip, above every dialog since BP-29) |
 
 **Dark is the default**; `data-theme="light"` on the root swaps the page to parchment. The felt does not follow it —
 a card table is a physical object and stays night-side in both themes. Anything printed on it therefore has to keep
@@ -795,13 +795,53 @@ of it. So the room has two **frames**, `RoomFrame = 'desktop' | 'landscape'` (`t
   head, one-line winners, the fee and the countdown in a one-line foot, leaving the dock row free. Its live region clips
   (`overflow: hidden`), and the head and foot do not shrink; both are root fixes for every frame, not only this one
   (bug log, mục 8, N3).
-- **The playground** forces a frame without resizing: `#worst/<state>/<seats>/<lang>[/long][/landscape|/desktop]`, with
-  `blindS` (the squeeze table) among the states.
+- **The playground** forces a frame without resizing: `#worst/<state>/<seats>/<lang>[/long][/landscape|/desktop][/short]`,
+  with `blindS` (the squeeze table), `blindP` (a Blind play-or-fold table of bots after every bot has chosen) and
+  `blindW` (the same table taking seats, the hint showing) among the states; `/short` lays the room out in an 855 × 319
+  box in the landscape frame, the user's phone with its address bar.
 - **What pins it.** `table/frame.test.ts` (the query, the override), `RoomScreen.test.tsx` and `HandResult.test.tsx` (the
   stamps, the menu, the dock), `MenuButton.test.tsx`, `geometry.test.ts`, `PokerTable.test.tsx`, `ActionBar.test.tsx`; in a
   browser, the ops pack's `landscape` project (915 × 412, touch; titles tagged `@landscape`), `07-landscape.spec.ts`
   L-01 … L-05, each ending with `expectRoomFits` and `expectNoTextOverlapAt`. The rows are in `docs/test-matrix.md`
   (Plan 26, Part B).
+
+#### The short tier (BP-28)
+
+A phone whose browser keeps its address bar has less height than Plan 26 drew for: the user's Android at 855 × 319 leaves
+a 255 px stage, where the 10 : 3 ellipse came out 500 × 150 px, the flank seats stood on each other, the top seat's cards
+reached the board and the viewer's 50 px cards covered it (bug log §10, E1/E2). The landscape frame has two tiers since,
+`FrameTier = 'normal' | 'short'` (`table/frame.ts`):
+
+- **The trigger** is the *stage*, not the viewport: `useStageTier(stageRef, frame, mounted)` measures `.roomMain` before
+  the first paint and on every resize (full screen, a rotation, the browser's bars), and `stageTier` answers `short` under
+  `SHORT_STAGE_PX = 300` in the landscape frame. `LANDSCAPE_PHONE` still decides the frame. 300, not 290: at 915 × 355 the
+  stage is 291 px and the ellipse laid a bot's "Bot · Đã chọn · 2.000" over the pot's figure; from 915 × 365 (301 px) it is
+  clear. `RoomScreen` stamps `data-tier` on the room and hands `tier` to `PokerTable`, which stamps it on the ring.
+- **The seats** (`shortRingPositions(seatOrder, anchor, box)`, the `[data-tier='short']` rules in `table.module.css`): the
+  ring is the whole stage, drawn as a stadium. The viewer stands 2 px above the stage's foot between the corner docks, the
+  cards *beside* the plate (`.seatTop`, a box that is `display: contents` everywhere else, is a row here) and the line
+  under both, at most 30 % of the table wide. The two seats beside the viewer sit at the stadium's ends, against the
+  sides, centred beside the board (at `max(130px, 50% + 6px)`). Everyone else hangs from the top edge on one line spaced
+  evenly *between* the end seats, so the two lines never meet across; when they cannot fit there (nine seats on a 716 px
+  stage) the line takes the whole width and passes over the end seats, whose blocks stay below it. Distances are pixels
+  (`SHORT_SEAT`: a seat is 11 % of the width, at least 92 px), so the measured box is an input. An empty seat in the short
+  tier carries `data-half` / `data-edge` too, so it hangs or stands like an occupied one.
+- **The compact seat**: every plate loses its caption, the opponents' cards are 16 px wide (aspect kept), the viewer's
+  `clamp(40px, 16cqh, 56px)` and a peel card 48 px. An opponent's line under the plate is its bet only: the host's and the
+  bot's badges (`.tagWho`) go, and the state pill (`.tagState`: Đã chọn, Đã lật, Đã bỏ bài, Tất tay, Mất kết nối, Tạm nghỉ)
+  becomes a 9 px dot of its colour whose words stay in the tree for a screen reader. A showdown's line is one line, the hand
+  name cut short before the payout is. The board row sits at `50% + 3px`, its cards `clamp(26px, 11cqh, 34px)`.
+- **The hint and the nudge** (R2, R3): the felt has no bare band for the pre-hand hint, so in the short tier it is the
+  dock's second line, under the ready count (the dock wraps, capped at `min(38%, 20rem)` to stay clear of the viewer's
+  plate). Where `document.fullscreenEnabled`, a slim pill in the bottom-left corner offers "Dùng Toàn màn hình để bàn rộng
+  hơn" while no tray holds that corner: its words go full screen, its ✕ ("Ẩn gợi ý Toàn màn hình") does not, and either
+  is kept in `localStorage` under `bp.fullscreenNudge` (`screens/fullscreen-nudge.ts`; storage that refuses counts as not
+  dismissed). It has no motion. The result card and the menu's Toàn màn hình are unchanged.
+- **What pins it**: `frame.test.ts` (`stageTier`, `useStageTier`), `geometry.test.ts` (the positions, and a block model at
+  855 × 319 and 915 × 355 with six and eight seats: no block meets another, the board row or the tray's corners),
+  `PokerTable.test.tsx`, `Seat.test.tsx`, `RoomScreen.test.tsx` (the tier stamps, the hint in the dock, the nudge), the
+  playground's `scenarios.test.ts`, and in a browser L-06 (855 × 319: a seven-seat Blind table after every bot has chosen,
+  an eight-seat Hold'em flop). L-02 runs at 915 × 355, which is in the short tier now.
 
 ---
 
@@ -980,12 +1020,12 @@ full-viewport, for measuring a layout against a screen size.
   badge up beside the room's name and laid the "Lật" pill over the foot of the cards, and F-12 / F-12b assert that both
   fit.) A ring↔stack switch in the middle of a round can send a second, harmless `REVEAL`. The three are written up in
   `docs/known-limitations.md`.
-- **The landscape frame is driven in Chromium only, at 915 × 412, 915 × 355 and 844 × 390** (740 × 360 fits, with thin
-  margins), never on a real phone. The query is a viewport test, so a portrait phone with its soft keyboard up can read as
+- **The landscape frame is driven in Chromium only, at 915 × 412, 915 × 355, 855 × 319 and 844 × 390** (740 × 360 fits,
+  with thin margins), never on a real phone. The query is a viewport test, so a portrait phone with its soft keyboard up can read as
   landscape; the only text field on the table is the top-anchored "Nhập số điểm" dialog. The result card is opaque and
   covers the side seats, and at 844 × 390 the top of the viewer's plate. A Hold'em table with nine occupied plates in
-  landscape (a room seats nine) has no browser test, only the playground's `#worst/…/9/…/landscape`, which is crowded
-  on the left at 915 × 355. All in `docs/known-limitations.md`.
+  landscape (a room seats nine) has no browser test, only the playground's `#worst/…/9/…/short`; on a stage narrower than
+  about 800 px its top line passes over the end seats (BP-28). All in `docs/known-limitations.md`.
 - **The badge test measures the grounds a badge sits on today** (see Theming → Badge text). A badge on a ground it
   does not list is not measured, and one place is tight: teal under a dark `.panel.ink`'s highlight. The test holds
   that highlight at 2 %, above anywhere a badge is (Lite's "claimed" badge: 0.8–1.4 %, none on a phone; titled panels put

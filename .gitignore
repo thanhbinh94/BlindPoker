@@ -55,3 +55,6 @@ docs/vps*.*
 vps*.*
 docs/my_root.txt
 my_root.txt
+
+# tasteskill inspector output (screenshots, report.json); the review doc keeps its own copies
+.taste-skill/

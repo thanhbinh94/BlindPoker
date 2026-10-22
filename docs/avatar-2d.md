@@ -1139,7 +1139,9 @@ positioned by CSS `z-index` rather than draw order, inside a box that is either 
 (`frame="full"`) or the round head-crop (`frame="head"`, cut to the 208×208 window by a percentage
 `left`/`top`/`width`/`height` on the layer stack, not `object-position` — a fixed geometry computed once
 from the `size` prop stayed wrong once an ancestor shrank the rendered box below `size`; a percentage of
-the root's own box is correct at whatever size it actually renders).
+the root's own box is correct at whatever size it actually renders). The root is `isolation: isolate` (BP-29), so those
+z-indexes (10–90) are ranked only against each other and never against the page: before it, the lobby's head drew over
+the sticky rail (z-index 20) when scrolled under it.
 Where a colour is set, `layersFor` also lists the paint job on the layer (`LayerRef.tints`: the mask, the colour, the
 region's `meanL` — `skinColor` on the body and the faces its skin set lists, `eyeColor` on the faces its eye set lists,
 `hairColor` on both hair layers, an item's own tint on its layer), and `Chibi` repaints that layer through

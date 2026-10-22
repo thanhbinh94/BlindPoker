@@ -7,7 +7,7 @@ import { defaultChibi, type ChibiConfig, type ChibiSubject, type WearRef } from 
 import type { ClientHand } from '../client/types.js'
 import { createI18n } from '../i18n/index.js'
 import { holdemHand as hand, holdemRoom as room, makePlayer, makeRoom, makeSeat } from '../test-fixtures.js'
-import { ringPositions } from './geometry.js'
+import { ringPositions, shortRingPositions } from './geometry.js'
 import { BOARD_STAGGER_MS, DEAL_MS, DEAL_SPAN_MS, DEAL_STAGGER_MS, FLIP_MS, SHOWDOWN_STAGGER_MS, dealStaggerMs } from './motion.js'
 import { PokerTable } from './PokerTable.js'
 import s from './table.module.css'
@@ -801,6 +801,47 @@ describe('PokerTable', () => {
       // the observer never fired: the seats already stand on the 3:1 box the layout effect read synchronously
       expect(left(1)).toBe(`${ringPositions(order, 0, { w: 750, h: 250 }).get(1)!.x}%`)
       expect(left(1)).not.toBe(`${ringPositions(order, 0).get(1)!.x}%`)
+    } finally {
+      rect.mockRestore()
+      vi.unstubAllGlobals()
+    }
+  })
+
+  // BP-28: the short landscape tier seats the table on a stadium as wide as the stage, from the ring's measured box.
+  it('in the short landscape tier stamps data-tier and seats the table with shortRingPositions on the measured box', () => {
+    const order = Array.from({ length: 9 }, (_, i) => i)
+    const at = (seat: number) => {
+      const el = document.querySelector<HTMLElement>(`[data-seat="${seat}"]`)!
+      return { left: el.style.left, top: el.style.top }
+    }
+    class SilentObserver {
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    }
+    vi.stubGlobal('ResizeObserver', SilentObserver)
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ width: 831, height: 255 } as DOMRect)
+    const props = { room: fullRoom, hand: null, myPlayerId: 'p0', deadlineAt: null, serverNow: () => 0, turnTimerMs: 30000, lang: 'en' as const, canSit: false }
+    try {
+      const short = wrap(<PokerTable {...props} frame="landscape" tier="short" />)
+      const ring = document.querySelector('[data-seats="9"]')!
+      expect(ring).toHaveAttribute('data-frame', 'landscape')
+      expect(ring).toHaveAttribute('data-tier', 'short')
+      const expected = shortRingPositions(order, 0, { w: 831, h: 255 })
+      for (const seat of order) expect(at(seat), `seat ${seat}`).toEqual({ left: `${expected.get(seat)!.x}%`, top: `${expected.get(seat)!.y}%` })
+      // the two end seats are the flanks: their lines run onto the felt from the stage's sides
+      expect(document.querySelector('[data-seat="1"]')).toHaveAttribute('data-edge', 'left')
+      expect(document.querySelector('[data-seat="8"]')).toHaveAttribute('data-edge', 'right')
+      short.unmount()
+
+      // the normal tier keeps the ellipse; the desktop frame carries no tier at all, whatever it is handed
+      const normal = wrap(<PokerTable {...props} frame="landscape" />)
+      expect(document.querySelector('[data-seats="9"]')).toHaveAttribute('data-tier', 'normal')
+      expect(at(1).left).toBe(`${ringPositions(order, 0, { w: 831, h: 255 }).get(1)!.x}%`)
+      normal.unmount()
+      wrap(<PokerTable {...props} layout="ring" tier="short" />)
+      expect(document.querySelector('[data-seats="9"]')).not.toHaveAttribute('data-tier')
+      expect(at(1).left).toBe(`${ringPositions(order, 0, { w: 831, h: 255 }).get(1)!.x}%`)
     } finally {
       rect.mockRestore()
       vi.unstubAllGlobals()

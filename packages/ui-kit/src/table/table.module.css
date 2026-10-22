@@ -466,6 +466,12 @@
   gap: 3px;
 }
 
+/* The cards and the plate together: no box of its own, so both stay the seat's own flex items, except in the short
+   landscape tier's viewer's seat (BP-28), where they are one row. */
+.seatTop {
+  display: contents;
+}
+
 /* seats on the top rim read plate-first so their cards fall towards the felt */
 .seat[data-half='top'] .plate {
   order: -1;
@@ -531,7 +537,8 @@
   height: var(--seat-disc, 40px);
   overflow: visible;
   /* The chibi stacks its layers with z-indexes up to 90. On the ring each seat's transform keeps them in; in the
-     phone's stacked strip nothing did, and the faces were painted over the result card dealt above the strip. */
+     phone's stacked strip nothing did, and the faces were painted over the result card dealt above the strip. The chibi
+     root isolates itself since BP-29; this stays as a second guard. */
   isolation: isolate;
   border-radius: 50%;
   border: 2px solid rgba(217, 164, 65, 0.78);
@@ -1116,6 +1123,157 @@
 /* a card that is dragged open needs a thumb's width under it */
 .ring[data-frame='landscape'] .seatMe .peel {
   --card-w: 60px;
+}
+
+/* The landscape frame's short tier (BP-28, R1): a stage under 300 px tall (`useStageTier`) — 855 × 319 on a phone whose
+   browser keeps its address bar (a 255 px stage), and 915 × 355 (291 px). The 10 : 3 ellipse above, sized from the
+   stage's height, came out 500 × 150 px at 855 × 319: its flank seats stood on each other, the top seat's cards reached
+   the board and the viewer's 50 px cards covered it (bug log §10, E1/E2). So the short ring is the whole stage, a
+   stadium, and `shortRingPositions` seats it on three lines:
+   - the top line, every seat hung `--top-gap` under the stage's top edge: plate, 16 px cards, the bet — `--top-block`
+     (80 px) at most in a hand;
+   - the two end seats (`data-edge`, `data-half='bottom'`), against the stage's sides beside the board, centred at the
+     stage's middle or, on a stage too short for that, just under the top line's blocks (`--end-centre`: the top gap, the
+     top block, 4 px and half an end block). The top line keeps clear of them across, so the two never meet;
+   - the viewer, standing 2 px above the stage's foot between the corner docks: the cards *beside* the plate (`.seatTop`
+     is a row here), the line under both — one card and one line tall, at most 30 % of the table wide.
+   The board sits halfway between the top line's blocks (top gap + top block = 86 px) and the viewer's block with a
+   showdown's line under it: `50 % + 3 px`. Every plate is compact and captionless, and an opponent's line under it keeps
+   its bet: the host's and the bot's badges go, the state ("Đã chọn") shrinks to a dot of its colour, and a showdown's
+   hand name is cut short before the payout is. */
+.ring[data-frame='landscape'][data-tier='short'] {
+  --top-gap: 6px;
+  --top-block: 80px;
+  --end-centre: 130px;
+  top: 0;
+  height: 100%;
+  width: 100%;
+  max-width: none;
+  aspect-ratio: auto;
+}
+
+.ring[data-frame='landscape'][data-tier='short'] .felt {
+  inset: 20px 1% 30px;
+  border-radius: 9999px;
+}
+
+.ring[data-frame='landscape'][data-tier='short'] .centre {
+  top: calc(50% + 3px);
+  --card-lg: clamp(26px, 11cqh, 34px);
+}
+
+.ring[data-frame='landscape'][data-tier='short'] .seat {
+  --seat-w: 11%;
+  --seat-min: 92px;
+  --seat-disc: 28px;
+  --seat-line: 100%;
+}
+
+.ring[data-frame='landscape'][data-tier='short'] .seatCaption {
+  display: none;
+}
+
+.ring[data-frame='landscape'][data-tier='short'] .cardSm {
+  --card-w: 16px;
+}
+
+.ring[data-frame='landscape'][data-tier='short'] .seat:not(.seatMe) .seatCards {
+  gap: 2px;
+}
+
+.ring[data-frame='landscape'][data-tier='short'] .seat:not(.seatMe) .tags {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+.ring[data-frame='landscape'][data-tier='short'] .seat:not(.seatMe) .tagWho {
+  display: none;
+}
+
+/* after a showdown, one line too: the payout whole, the hand's name cut short when the seat is too narrow for it */
+.ring[data-frame='landscape'][data-tier='short'] .seat:not(.seatMe) .seatResult {
+  flex-wrap: nowrap;
+  column-gap: 4px;
+}
+
+.ring[data-frame='landscape'][data-tier='short'] .seat:not(.seatMe) .handTag {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ring[data-frame='landscape'][data-tier='short'] .seat:not(.seatMe) .payout {
+  flex: none;
+}
+
+/* the state's words stay in the tree, for a screen reader; on screen, a dot of the state's colour */
+.ring[data-frame='landscape'][data-tier='short'] .seat:not(.seatMe) .tagState {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: currentColor;
+  font-size: 0;
+  line-height: 0;
+}
+
+.ring[data-frame='landscape'][data-tier='short'] .seat[data-half='top'] {
+  transform: translate(-50%, var(--top-gap));
+}
+
+/* the bottom centre: the viewer's seat, or — for a spectator — the first seat, standing 2 px above the stage's foot */
+.ring[data-frame='landscape'][data-tier='short'] .seat[data-half='bottom']:not([data-edge]) {
+  transform: translate(-50%, calc(-100% - 2px));
+}
+
+.ring[data-frame='landscape'][data-tier='short'] .seat[data-edge][data-half='bottom'] {
+  transform: translate(-50%, calc(-50% + max(var(--end-centre) - 50cqh, 6px)));
+}
+
+/* The viewer's block: the cards and the plate as one row, the lines under it centred below — as wide as the widest of
+   them and never wider than the 30 % of the table between the corner docks, where the plate gives way first. */
+.ring[data-frame='landscape'][data-tier='short'] .seat.seatMe {
+  --seat-line: 100%;
+  width: max-content;
+  max-width: 30cqw;
+  transform: translate(-50%, calc(-100% - 2px));
+}
+
+.ring[data-frame='landscape'][data-tier='short'] .seatMe .seatTop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.ring[data-frame='landscape'][data-tier='short'] .seatMe .seatCards {
+  flex: none;
+}
+
+/* the plate takes what the cards leave of the row, at most 22 % of the table: a long name ends in "…" */
+.ring[data-frame='landscape'][data-tier='short'] .seatMe .plate {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 0;
+  max-width: 22cqw;
+}
+
+/* A plate as wide as its text ends where the name ends, and the dealer disc hangs over its right edge: leave the
+   name room under it, so the D never covers the name's last letter. */
+.ring[data-frame='landscape'][data-tier='short'] .seatMe .plate:has(.dealer) {
+  padding-right: 16px;
+}
+
+.ring[data-frame='landscape'][data-tier='short'] .seatMe .cardMd {
+  --card-w: clamp(40px, 16cqh, 56px);
+}
+
+.ring[data-frame='landscape'][data-tier='short'] .seatMe .peel {
+  --card-w: 48px;
 }
 
 /* vertical layout under 768 px: opponents / board / me (spec §27.1 two-row grid, §27.3 "must show" list).

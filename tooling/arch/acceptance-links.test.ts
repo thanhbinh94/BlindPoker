@@ -266,8 +266,10 @@ describe('docs/test-matrix.md', () => {
     // gifts, spec 2026-10-12), the seven of Plan 25's (the GM role, spec 2026-10-18) and the five of Plan 26's Part A (the GM's
     // second batch, spec 2026-10-20), the eight of Plan 26's Part B (the landscape frame and the portrait debts, same spec)
     // and the three of its Part C (the sign-in screen), and Plan 27's five invariant rows (the shop, Blind to zero,
-    // reputation, the check-in count, the newcomer calendar) and five browser rows (spec 2026-10-21)
-    expect(rows).toBe(43 + 10 + 4 + 7 + 5 + 8 + 3 + 5 + 5)
+    // reputation, the check-in count, the newcomer calendar) and five browser rows (spec 2026-10-21), BP-29's three
+    // (bug log §10 E3–E5: the chibi under the rail, the refusal over the dialog, the Blind fee in a browser) and BP-28's
+    // three (the short landscape tier: the tier and the seats, the hint and the nudge, L-06 in a browser)
+    expect(rows).toBe(43 + 10 + 4 + 7 + 5 + 8 + 3 + 5 + 5 + 3 + 3)
     expect(citations.length).toBeGreaterThanOrEqual(40)
   })
 
