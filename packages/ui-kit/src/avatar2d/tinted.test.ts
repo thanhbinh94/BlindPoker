@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TINT_CONCURRENCY, enqueue, tintQueueStats } from './tint-queue.js'
-import { TINT_LOAD_TIMEOUT_MS, tintKey, useTintedLayer } from './tinted.js'
+import { TINT_LOAD_TIMEOUT_MS, tintKey, useTintedLayer, useTintedLayerState } from './tinted.js'
 import type { LayerRef, TintRef } from './types.js'
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
@@ -131,6 +131,26 @@ describe('useTintedLayer — with a faked canvas pipeline', () => {
 
     await waitFor(() => expect(result.current).not.toBe(firstUrl))
     expect(result.current).not.toBeNull()
+  })
+
+  it('useTintedLayerState: settled once the render for these tints resolves, unsettled again on a colour change, and at once with no tints', async () => {
+    const layer: LayerRef = { order: 30, file: 'tint_stub_settled', tints: [RED] }
+    const { result, rerender } = renderHook(({ layer }) => useTintedLayerState('/avatar/', layer), { initialProps: { layer } })
+    expect(result.current).toEqual({ url: null, settled: false })
+
+    await waitFor(() => expect(result.current.settled).toBe(true))
+    const firstUrl = result.current.url
+    expect(firstUrl).not.toBeNull()
+
+    rerender({ layer: { ...layer, tints: [BLUE] } })
+    // The previous colour still shows, but it is not this colour's render: not settled.
+    expect(result.current).toEqual({ url: firstUrl, settled: false })
+    await waitFor(() => expect(result.current.settled).toBe(true))
+    expect(result.current.url).not.toBe(firstUrl)
+
+    rerender({ layer: { order: 30, file: 'tint_stub_settled' } })
+    expect(result.current.settled).toBe(true)
+    await waitFor(() => expect(result.current.url).toBeNull())
   })
 
   it('returns null immediately when the layer file changes, even though it still has tints', async () => {

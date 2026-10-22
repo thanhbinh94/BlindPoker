@@ -199,7 +199,24 @@ function cachedRender(
  * covers it (Ruling 16). It is part of the key, so the two renders of one layer never share a cache entry.
  */
 export function useTintedLayer(prefix: string, layer: LayerRef, priority: number = -layer.order, density: 1 | 2 = tintDensity()): string | null {
+  return useTintedLayerState(prefix, layer, priority, density).url
+}
+
+/** What `useTintedLayerState` reports: the URL `useTintedLayer` returns, and whether the render for the layer's
+ * current tints has finished (BP-30). */
+export interface TintedLayerState {
+  url: string | null
+  /** `true` for a layer with no tints, and once the render for exactly these tints has resolved — to a URL or to
+   * `null` (no canvas, a failed load: the plain layer is then what shows, and that is final for this key). `false`
+   * while it is queued or running, including after a colour change, when `url` may still be the previous colour's. */
+  settled: boolean
+}
+
+/** `useTintedLayer` plus whether its current render has settled — what a live `Chibi` waits for before it blinks to a
+ * face it mounted hidden, so the face it shows is never one still drawn in the art's own colours. */
+export function useTintedLayerState(prefix: string, layer: LayerRef, priority: number = -layer.order, density: 1 | 2 = tintDensity()): TintedLayerState {
   const [url, setUrl] = useState<string | null>(null)
+  const [settledKey, setSettledKey] = useState<string | null>(null)
   // Identifies the file (and asset prefix) the currently-shown `url`, if any, was rendered from — not necessarily
   // this render's `layer.file`, which may already have moved on to a new colour or a wholly different layer.
   const shownRef = useRef<string | null>(null)
@@ -225,6 +242,7 @@ export function useTintedLayer(prefix: string, layer: LayerRef, priority: number
       if (cancelled) return
       shownRef.current = result === null ? null : identity
       setUrl(result)
+      setSettledKey(key)
     })
     return () => {
       cancelled = true
@@ -237,5 +255,5 @@ export function useTintedLayer(prefix: string, layer: LayerRef, priority: number
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, prefix, layer.file])
 
-  return url
+  return { url, settled: key === null || settledKey === key }
 }
