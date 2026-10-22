@@ -62,12 +62,14 @@ import { packageRoot } from './db/migrate.js'
 import { readDailyGiftsRaw } from './economy/daily-gifts.js'
 import { createGiftScheduleStore, type GiftScheduleStore } from './economy/gift-schedule-store.js'
 import { createEconomyService, type EconomyService } from './economy/economy-service.js'
+import { createWelcomeService, type WelcomeService } from './economy/welcome-service.js'
 import { createEventBus, type AppEventBus } from './events.js'
 import { createGmRoomService, type GmRoomService } from './gm/gm-rooms.js'
 import { createGmService, type GmService } from './gm/gm-service.js'
 import { createHistoryService, type HistoryService } from './history/history-service.js'
 import { loadAliases } from './inventory/aliases.js'
 import { readAvatarConfig } from './inventory/avatar-migrate.js'
+import { wearItemWithin } from './inventory/avatar.js'
 import { loadBodies, type Bodies } from './inventory/bodies.js'
 import { createInventoryService, type InventoryService } from './inventory/inventory-service.js'
 import { loadItemCatalog, type ItemCatalog } from './inventory/items.js'
@@ -223,6 +225,8 @@ export interface AppServices {
   reputation: ReputationService
   /** Plan 27: catalogue cosmetics sold for points behind a rank (spec §3). */
   shop: ShopService
+  /** Plan 27: the welcome gift — one of three rare items, worn at once, with the first reputation (spec §4 C1). */
+  welcome: WelcomeService
   /** Old wardrobe ids, kept readable — see `inventory/aliases.ts`. */
   aliases: ReadonlyMap<string, string>
   manifest: AvatarManifest
@@ -375,6 +379,16 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     onBalanceChanged: (playerId) => void game.balanceChanged(playerId),
     ...(deps.now ? { now: deps.now } : {}),
   })
+  const welcome = createWelcomeService({
+    db,
+    inventory,
+    catalog,
+    shop,
+    reputation,
+    avatars: { wearWithin: (tx, playerId, itemId) => wearItemWithin(tx, catalog, aliases, bodies, playerId, itemId) },
+    timezone: config.timezone,
+    ...(deps.now ? { now: deps.now } : {}),
+  })
   const history = createHistoryService({ db, repos })
   const gm = createGmService({ db, repos, sessions, inventory, catalog, defs, history, stats, game, log, gifts, timezone: config.timezone, reputation, ...(deps.now ? { now: deps.now } : {}) })
   const gmRooms = createGmRoomService(game)
@@ -412,6 +426,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     gmRooms,
     reputation,
     shop,
+    welcome,
     catalog,
     defs,
     aliases,
@@ -532,7 +547,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
   return {
     fastify,
     game,
-    services: { bus, catalog, defs, gifts, repos, sessions, auth, inventory, outfits, stats, achievements, economy, history, gm, gmRooms, reputation, shop, aliases, manifest, bodies },
+    services: { bus, catalog, defs, gifts, repos, sessions, auth, inventory, outfits, stats, achievements, economy, history, gm, gmRooms, reputation, shop, welcome, aliases, manifest, bodies },
     close,
   }
 }

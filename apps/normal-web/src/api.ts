@@ -372,6 +372,21 @@ export interface BuyResultDto {
   repeated: boolean
 }
 
+/** `GET /api/welcome`: whether the welcome gift is taken, and its three choices with which ones the player owns. */
+export interface WelcomeStatusDto {
+  claimed: boolean
+  choices: { itemId: string; owned: boolean }[]
+}
+
+/** `POST /api/welcome/claim`: the item granted and worn (`null` for reputation only), and the standing after it. */
+export interface WelcomeClaimDto {
+  ok: true
+  itemId: string | null
+  reputation: number
+  rank: number
+  rankUp: boolean
+}
+
 /** `GET /api/me/stats` — all sixteen counters of §10.3. */
 export interface PlayerStatsDto {
   handsPlayedHoldem: number
@@ -694,6 +709,14 @@ export interface NormalApi {
    * there are no side fields), or 404 `UNKNOWN_ITEM`.
    */
   shopBuy(itemId: string, purchaseId: string): Promise<BuyResultDto>
+  /** Plan 27: the welcome gift's state — the lobby opens the dialog while `claimed` is false. */
+  welcome(): Promise<WelcomeStatusDto>
+  /**
+   * Takes the welcome gift: one unowned choice, granted and worn at once, with the `welcome` reputation; `null` only
+   * when every choice is already owned (reputation alone). A refusal rejects with an `ApiError` of status 409 and
+   * code `WELCOME_CLAIMED`, `NOT_A_CHOICE` or `ALREADY_OWNED`; a malformed body is 400 `INVALID_BODY`.
+   */
+  welcomeClaim(itemId: string | null): Promise<WelcomeClaimDto>
 
   /** The five saved-outfit slots (design §5.3); a `null` entry is an empty slot. */
   outfits(): Promise<{ outfits: (OutfitDto | null)[] }>
@@ -848,6 +871,8 @@ export function createApi(fetchImpl?: typeof fetch, base = ''): NormalApi {
 
     shop: () => call<ShopViewDto>({ method: 'GET', path: '/api/shop' }),
     shopBuy: (itemId, purchaseId) => call<BuyResultDto>({ method: 'POST', path: '/api/shop/buy', body: { itemId, purchaseId } }),
+    welcome: () => call<WelcomeStatusDto>({ method: 'GET', path: '/api/welcome' }),
+    welcomeClaim: (itemId) => call<WelcomeClaimDto>({ method: 'POST', path: '/api/welcome/claim', body: { itemId } }),
 
     outfits: () => call<{ outfits: (OutfitDto | null)[] }>({ method: 'GET', path: '/api/me/outfits' }),
     saveOutfit: (slot, name, config) =>
