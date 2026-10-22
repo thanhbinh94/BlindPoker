@@ -13,6 +13,7 @@ const OVERVIEW: GmOverviewDto = {
   locked: 0,
   gms: 1,
   points24h: { sources: 1000, sinks: 400, byReason: [{ reason: 'daily_login', total: 1000 }] },
+  reputation: { total: 2_400, byRank: [30, 6, 3, 1, 0] },
 }
 
 function day(n: number, sources: number, sinks: number): DaySumsDto {
@@ -109,5 +110,13 @@ describe('OverviewTab by day', () => {
     setup(vi.fn().mockRejectedValue(new Error('down')))
 
     expect(await screen.findByText(t.byDayError)).toBeInTheDocument()
+  })
+})
+
+describe('OverviewTab reputation', () => {
+  it('says how many accounts stand at each rank, by the rank names', async () => {
+    setup()
+
+    expect(await screen.findByText('Danh vọng, số người ở mỗi bậc: Tân binh 30 · Tay bài 6 · Cao thủ 3 · Bậc thầy 1 · Huyền thoại 0')).toBeInTheDocument()
   })
 })

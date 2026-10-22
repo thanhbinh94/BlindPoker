@@ -390,7 +390,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     ...(deps.now ? { now: deps.now } : {}),
   })
   const history = createHistoryService({ db, repos })
-  const gm = createGmService({ db, repos, sessions, inventory, catalog, defs, history, stats, game, log, gifts, timezone: config.timezone, reputation, ...(deps.now ? { now: deps.now } : {}) })
+  const gm = createGmService({ db, repos, sessions, inventory, catalog, defs, history, stats, game, log, gifts, timezone: config.timezone, reputation, shop, ...(deps.now ? { now: deps.now } : {}) })
   const gmRooms = createGmRoomService(game)
 
   // Order matters: the counters must be written before the thresholds are compared against them. Reputation's

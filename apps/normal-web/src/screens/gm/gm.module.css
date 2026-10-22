@@ -335,6 +335,53 @@ td.members {
   }
 }
 
+/* ── the shop (Plan 27) ───────────────────────────────────────────────────── */
+
+/* A number typed into a table cell: wide enough for 1 000 000 000, no wider. */
+.numInput {
+  width: 7.5rem;
+  max-width: 100%;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* "5 · Huyền thoại" whole, with room for the kit select's chevron. */
+.rankCell {
+  min-width: 11rem;
+}
+
+/* The price list is a hundred rows: it scrolls inside its own box (on a wide screen under a heading that stays), so
+   the three blocks after it are a short scroll away rather than twenty screens down. */
+.priceScroll {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+@media (min-width: 641px) {
+  .priceScroll {
+    max-height: 32rem;
+  }
+
+  .priceScroll thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--bg-elev);
+  }
+}
+
+.check {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: var(--gold);
+}
+
+.welcomeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-3);
+}
+
 /* ── segmented choices that outgrow a phone ────────────────────────────────
    The kit pill is one unbroken row. The console's five tabs and the gift editor's four rules are ~460 and ~520 px of
    label at 375 px, so on a phone the pill wraps onto a second row and its buttons share each row (the element in

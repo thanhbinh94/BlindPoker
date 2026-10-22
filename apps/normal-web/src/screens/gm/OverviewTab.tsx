@@ -47,6 +47,15 @@ export function OverviewTab({ api, lang }: GmTabProps) {
         ))}
       </dl>
 
+      {/* Plan 27: how many accounts stand at each rank — "Tân binh 12 · Tay bài 5 · …". */}
+      <p className={s.footnote}>
+        {t('gm.overview.reputation', {
+          counts: data.reputation.byRank
+            .map((count, i) => t('gm.overview.rankCount', { rank: t(`game:rank.${i + 1}`, { defaultValue: String(i + 1) }), n: formatPoints(count, lang) }))
+            .join(' · '),
+        })}
+      </p>
+
       <Panel title={t('gm.overview.points24h')}>
         <div className={g.stack}>
           <dl className={g.tiles}>

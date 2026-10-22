@@ -561,6 +561,43 @@ export interface GmPlayerDetailDto {
   inventoryCount: number
   /** Ids of every achievement this player has unlocked, so the GM's picker can disable them. */
   unlockedAchievementIds: string[]
+  /** Plan 27: the reputation total, and the rank 1..5 reached (the high-water mark). */
+  reputation: number
+  rank: number
+}
+
+/** One catalogue item in the GM's price table (`GET /api/gm/shop`): its stored row, or the rarity's seed when it has none. */
+export interface GmShopPriceRowDto {
+  itemId: string
+  slot: ItemSlot
+  rarity: Rarity
+  /** False for an item with no price row yet ("chưa định giá"). */
+  priced: boolean
+  pricePoints: number
+  minRank: number
+  enabled: boolean
+  salePrice: number | null
+  /** Why the item does not sell now, as the shop judges it; `null` when it does. */
+  lock: ShopLockDto | null
+}
+
+/** `GET /api/gm/shop`: what the Cửa hàng tab edits. */
+export interface GmShopConfigDto {
+  prices: GmShopPriceRowDto[]
+  /** The current ISO week and the eight after it: the GM's shelf (`gm`), or the rotation the week falls back to (`auto`). */
+  featured: { weekKey: string; itemIds: string[]; source: 'gm' | 'auto' }[]
+  welcomeChoices: string[]
+  /** The slots a welcome choice may come from. */
+  welcomeSlots: ItemSlot[]
+  reputation: { rules: Record<string, number>; ranks: RankThresholdDto[] }
+}
+
+/** One edit of a price row: the item, and only the fields that change. */
+export interface GmPriceChangeDto {
+  itemId: string
+  pricePoints?: number
+  minRank?: number
+  enabled?: boolean
 }
 
 /** A room as the console lists it — `GET /api/gm/rooms` rows and `GET /api/gm/rooms/:id` alike. */
@@ -604,6 +641,8 @@ export interface GmOverviewDto {
   gms: number
   /** The last 24 hours of the ledger: what came into the economy, what left it, and the same by reason. */
   points24h: { sources: number; sinks: number; byReason: { reason: string; total: number }[] }
+  /** Plan 27: Σ reputation, and how many accounts stand at each rank (index 0 is rank 1). */
+  reputation: { total: number; byRank: number[] }
 }
 
 /** One economy day of the ledger: sources signed per reason, sinks positive per reason, and what is left (`net`). */
@@ -788,6 +827,19 @@ export interface NormalApi {
   gmKick(roomId: string, playerId: string, reason: string): Promise<{ effective: 'now' | 'after_hand' }>
   gmCloseRoom(roomId: string, reason: string): Promise<{ closed: true; refunded: number }>
   gmActions(opts?: { limit?: number; before?: number; player?: string; room?: string }): Promise<{ actions: GmActionDto[]; nextBefore: number | null }>
+  /** Plan 27: the price table, nine weeks of shelves, the welcome choices and reputation's rules and ranks. */
+  gmShop(): Promise<GmShopConfigDto>
+  /** Edits price rows (only the fields given); refused `INVALID_PRICES` for a bad row. */
+  gmSetShopPrices(changes: GmPriceChangeDto[], reason: string): Promise<{ actionId: number; changed: number }>
+  /** Sets a week's shelf (≤ 6 items); `[]` hands the week back to the rotation. */
+  gmSetShopFeatured(weekKey: string, itemIds: string[], reason: string): Promise<{ actionId: number }>
+  /** Sets the three welcome choices. */
+  gmSetWelcomeChoices(itemIds: string[], reason: string): Promise<{ actionId: number }>
+  gmSetReputationRules(rules: Record<string, number>, reason: string): Promise<{ actionId: number }>
+  /** Replaces the ladder; refused `INVALID_RANKS` unless rank 1 is 0 and the thresholds rise. */
+  gmSetReputationRanks(ranks: RankThresholdDto[], reason: string): Promise<{ actionId: number }>
+  /** Adds 1..100 000 reputation; there is no call that takes it away. */
+  gmGrantReputation(playerId: string, amount: number, reason: string): Promise<{ actionId: number; reputation: number; rank: number }>
 }
 
 interface Call {
@@ -958,6 +1010,20 @@ export function createApi(fetchImpl?: typeof fetch, base = ''): NormalApi {
       call<{ actions: GmActionDto[]; nextBefore: number | null }>({
         method: 'GET',
         path: `/api/gm/actions${query({ player: opts?.player, room: opts?.room, limit: opts?.limit, before: opts?.before })}`,
+      }),
+    gmShop: () => call<GmShopConfigDto>({ method: 'GET', path: '/api/gm/shop' }),
+    gmSetShopPrices: (changes, reason) =>
+      call<{ actionId: number; changed: number }>({ method: 'PUT', path: '/api/gm/shop/prices', body: { changes, reason } }),
+    gmSetShopFeatured: (weekKey, itemIds, reason) =>
+      call<{ actionId: number }>({ method: 'PUT', path: `/api/gm/shop/featured/${encodeURIComponent(weekKey)}`, body: { itemIds, reason } }),
+    gmSetWelcomeChoices: (itemIds, reason) => call<{ actionId: number }>({ method: 'PUT', path: '/api/gm/shop/welcome', body: { itemIds, reason } }),
+    gmSetReputationRules: (rules, reason) => call<{ actionId: number }>({ method: 'PUT', path: '/api/gm/reputation/rules', body: { rules, reason } }),
+    gmSetReputationRanks: (ranks, reason) => call<{ actionId: number }>({ method: 'PUT', path: '/api/gm/reputation/ranks', body: { ranks, reason } }),
+    gmGrantReputation: (playerId, amount, reason) =>
+      call<{ actionId: number; reputation: number; rank: number }>({
+        method: 'POST',
+        path: `/api/gm/players/${encodeURIComponent(playerId)}/reputation`,
+        body: { amount, reason },
       }),
   }
 }

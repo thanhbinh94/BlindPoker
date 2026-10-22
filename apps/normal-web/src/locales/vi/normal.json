@@ -152,11 +152,115 @@
     "title": "Quản trị",
     "copyId": "Chép mã",
     "copied": "Đã chép",
-    "tabs": { "overview": "Tổng quan", "players": "Người chơi", "rooms": "Phòng", "gifts": "Quà tháng", "actions": "Nhật ký" },
+    "tabs": { "overview": "Tổng quan", "players": "Người chơi", "rooms": "Phòng", "gifts": "Quà tháng", "shop": "Cửa hàng", "actions": "Nhật ký" },
+    "shop": {
+      "lead": "Giá, kệ tuần và quà chào mừng có hiệu lực ngay cho lần mua sau. Mỗi lần lưu cần một lý do và vào Nhật ký.",
+      "error": "Không tải được cấu hình cửa hàng",
+      "slot": {
+        "hairStyle": "Kiểu tóc",
+        "head": "Mũ",
+        "face": "Phụ kiện mặt",
+        "outfit": "Quần áo",
+        "aura": "Hào quang",
+        "frame": "Khung",
+        "hairColor": "Màu tóc",
+        "eyeColor": "Màu mắt",
+        "skinColor": "Màu da",
+        "title": "Danh hiệu",
+        "badge": "Huy hiệu"
+      },
+      "lock": {
+        "achievement": "🏆 Thành tựu: {{name}}",
+        "gift_month": "📅 Quà tháng {{month}}",
+        "gift_default": "📅 Quà điểm danh",
+        "free": "Miễn phí",
+        "default": "Đồ mặc định",
+        "disabled": "Đang tắt",
+        "unpriced": "Chưa định giá",
+        "none": "Đang bán"
+      },
+      "prices": {
+        "title": "Giá",
+        "filterSlot": "Ô",
+        "filterRarity": "Độ hiếm",
+        "all": "Tất cả",
+        "colItem": "Món",
+        "colRarity": "Độ hiếm",
+        "colLock": "Tình trạng",
+        "colPrice": "Giá (điểm)",
+        "colRank": "Bậc tối thiểu",
+        "colEnabled": "Bán",
+        "priceOf": "Giá của {{item}}",
+        "rankOf": "Bậc tối thiểu của {{item}}",
+        "enabledOf": "Bán {{item}}",
+        "rankOption": "{{n}} · {{rank}}",
+        "unpriced": "chưa định giá",
+        "empty": "Không có món nào khớp bộ lọc.",
+        "changed": "Đã sửa {{count}} hàng, chưa lưu.",
+        "invalid": "Giá là số nguyên từ 0 tới 1.000.000.000.",
+        "save": "Lưu giá",
+        "saveTitle": "Lưu {{count}} thay đổi giá",
+        "achievementNote": "Bật bán một món thành tựu hay quà tháng cũng không làm nó lên kệ: nhãn bên cạnh là lý do."
+      },
+      "featured": {
+        "title": "Kệ tuần này",
+        "week": "Tuần",
+        "weekOption": "Tuần {{week}}/{{year}}",
+        "current": "(tuần này)",
+        "edited": "(GM xếp)",
+        "auto": "Tuần này chưa được xếp: kệ đang tự xoay như dưới đây. Thêm món để tự xếp.",
+        "picked": "Đã chọn {{count}}/6",
+        "items": "Món trên kệ",
+        "pick": "Chọn món",
+        "add": "Thêm món",
+        "remove": "Bỏ",
+        "full": "Kệ đã đủ 6 món: bỏ một món trước khi thêm.",
+        "save": "Lưu kệ",
+        "clear": "Về tự xoay",
+        "saveTitle": "Lưu kệ — {{week}}",
+        "clearTitle": "Về tự xoay — {{week}}"
+      },
+      "welcome": {
+        "title": "Quà chào mừng",
+        "lead": "Ba món người chơi mới chọn một ở lần vào sảnh đầu tiên: quần áo, mũ, phụ kiện mặt, hào quang hoặc khung đang bán.",
+        "choice": "Món {{n}}",
+        "pick": "Chọn món",
+        "needThree": "Cần đúng ba món khác nhau.",
+        "save": "Lưu quà chào mừng",
+        "saveTitle": "Lưu ba món quà chào mừng"
+      }
+    },
+    "reputation": {
+      "title": "Danh vọng",
+      "rulesTitle": "Nguồn danh vọng",
+      "ranksTitle": "Bậc",
+      "colSource": "Nguồn",
+      "colAmount": "Danh vọng",
+      "colRank": "Bậc",
+      "colThreshold": "Ngưỡng",
+      "amountOf": "Danh vọng cho: {{rule}}",
+      "thresholdOf": "Ngưỡng của {{rank}}",
+      "rule": {
+        "hand_played": "Một ván được chia bài",
+        "hand_won": "Thắng ván (cộng thêm)",
+        "daily_login": "Một ngày điểm danh",
+        "achievement_small": "Thành tựu nhỏ (tới 5.000 điểm)",
+        "achievement_big": "Thành tựu lớn (trên 5.000 điểm)",
+        "achievement_item": "Thành tựu thưởng vật phẩm",
+        "welcome": "Chọn quà chào mừng",
+        "newcomer_day7": "Ngày 7 của lịch tân thủ"
+      },
+      "invalid": "Mỗi ô là số nguyên từ 0.",
+      "ranksNote": "Bậc 1 luôn từ 0 và ngưỡng phải tăng dần. Nâng ngưỡng không làm ai tụt bậc.",
+      "saveRules": "Lưu nguồn",
+      "saveRanks": "Lưu bậc",
+      "rulesDialog": "Lưu nguồn danh vọng",
+      "ranksDialog": "Lưu ngưỡng bậc"
+    },
     "gifts": {
       "month": "Tháng",
       "edited": "(đã sửa)",
-      "lead": "Mỗi ô là tier của chuỗi điểm danh. Tháng hiện tại chỉ sửa được các ngày sau hôm nay.",
+      "lead": "Mỗi ô là một mốc theo số lần điểm danh trong tháng. Tháng hiện tại chỉ sửa được các ngày sau hôm nay.",
       "error": "Không tải được lịch quà",
       "rule": {
         "default": "Như mặc định",
@@ -200,7 +304,9 @@
       "colNet": "Ròng",
       "colBar": "Tỉ lệ",
       "byDayEmpty": "Chưa có giao dịch trong khoảng này.",
-      "byDayError": "Không tải được số liệu theo ngày"
+      "byDayError": "Không tải được số liệu theo ngày",
+      "reputation": "Danh vọng, số người ở mỗi bậc: {{counts}}",
+      "rankCount": "{{rank}} {{n}}"
     },
     "players": {
       "search": "Tìm theo email hoặc tên",
@@ -231,7 +337,8 @@
       "balance": "Số dư",
       "role": "Vai trò",
       "error": "Không tải được người chơi này",
-      "roles": { "gm": "Quản trị viên", "player": "Người chơi" }
+      "roles": { "gm": "Quản trị viên", "player": "Người chơi" },
+      "reputation": "Danh vọng: {{points}} ({{rank}})"
     },
     "actions": {
       "points": "Cộng/trừ điểm",
@@ -243,15 +350,18 @@
       "demote": "Thu quyền quản trị",
       "unlockAchievement": "Mở thành tựu",
       "resetCheckin": "Đặt lại điểm danh",
+      "grantReputation": "Cộng danh vọng",
       "kick": "Mời ra",
       "close": "Đóng phòng"
     },
     "dialog": {
       "reason": "Lý do (bắt buộc, 3–200 ký tự)",
       "amount": "Số điểm (âm để trừ, tối đa ±10.000.000)",
+      "reputationAmount": "Danh vọng cộng thêm (1–100.000)",
+      "reputationBody": "Danh vọng chỉ cộng, không trừ lại được.",
       "item": "Mã món",
       "achievement": "Thành tựu",
-      "checkinBody": "Hoàn tác lượt điểm danh hôm nay: trừ lại {{points}} điểm, thu lại {{items}}; chuỗi ngày giữ nguyên và người chơi nhận lại được ngay.",
+      "checkinBody": "Hoàn tác lượt điểm danh hôm nay: trừ lại {{points}} điểm, thu lại {{items}}; số lần điểm danh trong tháng lùi lại một và người chơi nhận lại được ngay.",
       "noItems": "không có món nào",
       "confirm": "Xác nhận",
       "cancel": "Hủy",
@@ -308,7 +418,13 @@
         "unlock_achievement": "Mở thành tựu",
         "reset_checkin": "Đặt lại điểm danh",
         "set_gift_month": "Đổi quà tháng",
-        "clear_gift_month": "Về quà mặc định"
+        "clear_gift_month": "Về quà mặc định",
+        "grant_reputation": "Cộng danh vọng",
+        "set_reputation_rules": "Đổi nguồn danh vọng",
+        "set_reputation_ranks": "Đổi ngưỡng bậc",
+        "set_shop_prices": "Đổi giá cửa hàng",
+        "set_shop_featured": "Xếp kệ tuần",
+        "set_welcome_choices": "Đổi quà chào mừng"
       }
     },
     "done": {
@@ -324,7 +440,13 @@
       "kick": "Đã mời ra ({{when}})",
       "kickNow": "ngay",
       "kickAfterHand": "sau ván này",
-      "close": "Đã đóng phòng, hoàn cho {{count}} người"
+      "close": "Đã đóng phòng, hoàn cho {{count}} người",
+      "grantReputation": "Đã cộng danh vọng: {{points}} ({{rank}})",
+      "shopPrices": "Đã lưu {{count}} giá.",
+      "shopFeatured": "Đã lưu kệ tuần.",
+      "welcome": "Đã lưu quà chào mừng.",
+      "reputationRules": "Đã lưu nguồn danh vọng.",
+      "reputationRanks": "Đã lưu ngưỡng bậc."
     },
     "errors": {
       "INVALID_REASON": "Lý do phải dài 3–200 ký tự",
@@ -348,7 +470,14 @@
       "MONTH_IN_PAST": "Tháng đã qua.",
       "INVALID_GIFTS": "Lịch quà không hợp lệ: {{message}}",
       "NOTHING_TO_CLEAR": "Tháng này chưa có bản sửa.",
-      "INVALID_MONTH": "Tháng không hợp lệ."
+      "INVALID_MONTH": "Tháng không hợp lệ.",
+      "INVALID_PRICES": "Bảng giá không hợp lệ: {{message}}",
+      "INVALID_FEATURED": "Kệ không hợp lệ: {{message}}",
+      "INVALID_WELCOME": "Quà chào mừng không hợp lệ: {{message}}",
+      "INVALID_RULES": "Nguồn danh vọng không hợp lệ: {{message}}",
+      "INVALID_RANKS": "Ngưỡng bậc không hợp lệ: {{message}}",
+      "INVALID_WEEK": "Tuần không hợp lệ.",
+      "WEEK_IN_PAST": "Tuần đã qua."
     },
     "notice": {
       "points": "{{amount}} điểm — {{reason}}",

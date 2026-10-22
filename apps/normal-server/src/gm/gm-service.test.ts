@@ -7,7 +7,9 @@ import { rowsOf, type AppDb } from '../db/client.js'
 import { createTestDb, type TestDb } from '../db/test-db.js'
 import { ServiceError } from '../errors.js'
 import { buildTestApp, ORIGIN, resetDb, START, testConfig, type Account, type Harness } from '../test-harness.js'
-import { createGmService, GM_ITEM_SOURCE, POINTS_CAP, type GmActor, type GmService, type GmServiceDeps } from './gm-service.js'
+import { seedDefaults as seedReputationDefaults } from '../reputation/reputation-service.js'
+import { seedConfig as seedShopConfig } from '../shop/shop-prices-seed.js'
+import { createGmService, GM_ITEM_SOURCE, POINTS_CAP, WELCOME_SLOTS, type GmActor, type GmService, type GmServiceDeps } from './gm-service.js'
 
 /** A Blind room nobody plays in: the lock test only needs the player seated, with a stack on the table. */
 const BLIND_ROOM: RoomConfig = {
@@ -750,6 +752,131 @@ describe('GmService — daily stats', () => {
     } finally {
       await db.execute(sql`delete from point_transactions where reason in ('shop_purchase', 'shop')`)
     }
+  })
+})
+
+describe('GmService — shop and reputation (Plan 27 B4)', () => {
+  /** The config tables `resetDb` leaves alone go back to their seeds, so no test leaks an edit into the next. */
+  afterEach(async () => {
+    await db.execute(sql`delete from reputation_rules`)
+    await db.execute(sql`delete from reputation_ranks`)
+    await db.execute(sql`delete from shop_config where key = 'welcome_choices'`)
+    await seedReputationDefaults(db)
+    await seedShopConfig(db)
+    h.app.services.reputation.invalidate()
+  })
+
+  const logged = async (action: string) =>
+    rowsOf<{ id: number; action: string; target_player_id: string | null; amount: string | number | null; reason: string; details: Record<string, unknown> | null }>(
+      await db.execute(sql`select id, action, target_player_id, amount, reason, details from gm_actions where action = ${action} order by id`),
+    )
+
+  it('shopConfig lists every catalogue item with its row and lock, nine weeks of shelves, the welcome choices and both reputation tables', async () => {
+    const gmAt = createGmService(deps({ now: () => START }))
+    const config = await gmAt.shopConfig(actor(boss))
+    expect(config.prices).toHaveLength(h.app.services.catalog.all().length)
+    const anAchievementItem = config.prices.find((p) => p.itemId === 'head_crown_gold01')
+    expect(anAchievementItem?.lock?.kind).toBe('achievement')
+    expect(config.prices.some((p) => p.lock === null && p.priced && p.enabled)).toBe(true)
+    // START is Friday 4 September 2026: ISO week 36, then 37 … 44.
+    expect(config.featured.map((f) => f.weekKey)).toEqual(['2026-W36', '2026-W37', '2026-W38', '2026-W39', '2026-W40', '2026-W41', '2026-W42', '2026-W43', '2026-W44'])
+    expect(config.featured.every((f) => f.source === 'auto' && f.itemIds.length <= 6)).toBe(true)
+    expect(config.welcomeChoices).toEqual(['outfit_dealer01', 'outfit_tet_red01', 'head_conical_hat01'])
+    expect(config.welcomeSlots).toEqual(WELCOME_SLOTS)
+    expect(config.reputation.rules.daily_login).toBe(10)
+    expect(config.reputation.ranks.map((r) => r.threshold)).toEqual([0, 100, 400, 1_800, 5_000])
+  })
+
+  it('setShopPrices writes only the fields given, logs set_shop_prices with the changes, and refuses a bad row with no log line', async () => {
+    const before = (await gm.shopConfig(actor(boss))).prices.find((p) => p.itemId === 'outfit_dealer01')!
+    const r = await gm.setShopPrices(actor(boss), [{ itemId: 'outfit_dealer01', pricePoints: 12_345, junk: 'dropped' }], 'giảm giá')
+    expect(r.changed).toBe(1)
+    const after = (await h.app.services.shop.prices()).find((p) => p.itemId === 'outfit_dealer01')!
+    expect(after).toMatchObject({ pricePoints: 12_345, minRank: before.minRank, enabled: before.enabled })
+    const [row] = await logged('set_shop_prices')
+    expect(row).toMatchObject({ id: r.actionId, target_player_id: null, reason: 'giảm giá', details: { changes: [{ itemId: 'outfit_dealer01', pricePoints: 12_345 }] } })
+
+    await expect(gm.setShopPrices(actor(boss), [{ itemId: 'outfit_dealer01', minRank: 9 }], 'bậc sai')).rejects.toMatchObject({ code: 'INVALID_PRICES' })
+    await expect(gm.setShopPrices(actor(boss), [], 'trống')).rejects.toMatchObject({ code: 'INVALID_PRICES' })
+    await expect(gm.setShopPrices(actor(boss), [{ itemId: 'outfit_dealer01', pricePoints: 1 }], 'no')).rejects.toMatchObject({ code: 'INVALID_REASON' })
+    await expect(gm.setShopPrices({ userId: null }, [{ itemId: 'outfit_dealer01', pricePoints: 1 }], 'từ CLI')).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(await logged('set_shop_prices')).toHaveLength(1)
+  })
+
+  it('setShopFeatured sets a week’s shelf and clears it, logging both; a past week, a seventh item and a locked one are refused', async () => {
+    const gmAt = createGmService(deps({ now: () => START }))
+    const sellable = (await gmAt.shopConfig(actor(boss))).prices.filter((p) => p.lock === null).map((p) => p.itemId)
+    const set = await gmAt.setShopFeatured(actor(boss), '2026-W37', sellable.slice(0, 2), 'kệ tuần sau')
+    expect(await h.app.services.shop.featuredFor('2026-W37')).toEqual({ itemIds: sellable.slice(0, 2), source: 'gm' })
+    await gmAt.setShopFeatured(actor(boss), '2026-W37', [], 'về tự xoay')
+    expect((await h.app.services.shop.featuredFor('2026-W37')).source).toBe('auto')
+    const rows = await logged('set_shop_featured')
+    expect(rows.map((r) => r.details)).toEqual([{ weekKey: '2026-W37', itemIds: sellable.slice(0, 2) }, { weekKey: '2026-W37', itemIds: [] }])
+    expect(rows[0]!.id).toBe(set.actionId)
+
+    await expect(gmAt.setShopFeatured(actor(boss), '2026-W35', sellable.slice(0, 1), 'tuần đã qua')).rejects.toMatchObject({ code: 'WEEK_IN_PAST' })
+    await expect(gmAt.setShopFeatured(actor(boss), '2026-W38', sellable.slice(0, 7), 'quá sáu món')).rejects.toMatchObject({ code: 'INVALID_FEATURED' })
+    await expect(gmAt.setShopFeatured(actor(boss), '2026-W38', ['head_crown_gold01'], 'món thành tựu')).rejects.toMatchObject({ code: 'INVALID_FEATURED' })
+    expect(await logged('set_shop_featured')).toHaveLength(2)
+  })
+
+  it('setWelcomeChoices takes exactly three wearable items that sell, logs them, and refuses a colour or a hairstyle', async () => {
+    const prices = (await gm.shopConfig(actor(boss))).prices
+    const wearable = prices.filter((p) => p.lock === null && WELCOME_SLOTS.includes(p.slot)).map((p) => p.itemId)
+    const other = prices.find((p) => p.lock === null && !WELCOME_SLOTS.includes(p.slot))!
+    const r = await gm.setWelcomeChoices(actor(boss), wearable.slice(0, 3), 'đổi quà chào mừng')
+    expect(await h.app.services.shop.welcomeChoices()).toEqual(wearable.slice(0, 3))
+    expect(await logged('set_welcome_choices')).toEqual([expect.objectContaining({ id: r.actionId, details: { itemIds: wearable.slice(0, 3) } })])
+
+    await expect(gm.setWelcomeChoices(actor(boss), [...wearable.slice(0, 2), other.itemId], 'một màu tóc')).rejects.toMatchObject({ code: 'INVALID_WELCOME' })
+    await expect(gm.setWelcomeChoices(actor(boss), wearable.slice(0, 2), 'thiếu một')).rejects.toMatchObject({ code: 'INVALID_WELCOME' })
+    expect(await logged('set_welcome_choices')).toHaveLength(1)
+  })
+
+  it('setReputationRules and setReputationRanks apply at once (the cache is dropped) and log their kind; a non-rising ladder is refused', async () => {
+    expect((await h.app.services.reputation.rules()).daily_login).toBe(10)
+    await gm.setReputationRules(actor(boss), { daily_login: 15 }, 'tăng điểm danh')
+    expect((await h.app.services.reputation.rules()).daily_login).toBe(15)
+    await expect(gm.setReputationRules(actor(boss), { daily_login: -1 }, 'số âm')).rejects.toMatchObject({ code: 'INVALID_RULES' })
+    await expect(gm.setReputationRules(actor(boss), { daily_login: 2.5 }, 'số lẻ')).rejects.toMatchObject({ code: 'INVALID_RULES' })
+
+    const ladder = [{ rank: 1, threshold: 0 }, { rank: 2, threshold: 150 }, { rank: 3, threshold: 450 }, { rank: 4, threshold: 2_000 }, { rank: 5, threshold: 6_000 }]
+    await gm.setReputationRanks(actor(boss), ladder, 'giãn bậc')
+    expect(await h.app.services.reputation.ranks()).toEqual(ladder)
+    const bad = [0, 100, 50, 1_800, 5_000].map((threshold, i) => ({ rank: i + 1, threshold }))
+    await expect(gm.setReputationRanks(actor(boss), bad, 'bậc lùi')).rejects.toMatchObject({ code: 'INVALID_RANKS' })
+    await expect(gm.setReputationRanks(actor(boss), [null], 'dữ liệu rác')).rejects.toMatchObject({ code: 'INVALID_RANKS' })
+    expect(await h.app.services.reputation.ranks()).toEqual(ladder)
+
+    expect((await logged('set_reputation_rules')).map((r) => r.details)).toEqual([{ rules: { daily_login: 15 } }])
+    expect((await logged('set_reputation_ranks')).map((r) => r.details)).toEqual([{ ranks: ladder }])
+  })
+
+  it('grantReputation adds a gm_grant event under gm:<actionId>, ranks up and announces RANK_UP after the commit; refuses 0, a fraction and over 100 000', async () => {
+    const notified = vi.spyOn(h.app.game, 'notify')
+    const r = await gm.grantReputation(actor(boss), me.playerId, 500, 'thưởng giải đấu')
+    expect(r).toEqual({ actionId: expect.any(Number), reputation: 500, rank: 3 })
+    const events = rowsOf<{ delta: number; reason: string; ref_id: string }>(
+      await db.execute(sql`select delta, reason, ref_id from reputation_events where player_id = ${me.playerId}`),
+    )
+    expect(events).toEqual([{ delta: 500, reason: 'gm_grant', ref_id: `gm:${String(r.actionId)}` }])
+    const [row] = await logged('grant_reputation')
+    expect(row).toMatchObject({ id: r.actionId, target_player_id: me.playerId, reason: 'thưởng giải đấu' })
+    expect(Number(row!.amount)).toBe(500)
+    expect(notified).toHaveBeenCalledWith(me.playerId, { t: 'NOTIFICATION', kind: 'RANK_UP', payload: { rank: 3 } })
+    expect((await gm.get(me.playerId))).toMatchObject({ reputation: 500, rank: 3 })
+
+    for (const amount of [0, -5, 1.5, 100_001]) {
+      await expect(gm.grantReputation(actor(boss), me.playerId, amount, 'sai số')).rejects.toMatchObject({ code: 'INVALID_AMOUNT' })
+    }
+    await expect(gm.grantReputation(actor(boss), 'not-a-uuid', 5, 'không có')).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(await logged('grant_reputation')).toHaveLength(1)
+  })
+
+  it('overview counts the accounts at each rank and sums reputation', async () => {
+    expect((await gm.overview()).reputation).toEqual({ total: 0, byRank: [2, 0, 0, 0, 0] })
+    await gm.grantReputation(actor(boss), me.playerId, 500, 'thưởng')
+    expect((await gm.overview()).reputation).toEqual({ total: 500, byRank: [1, 0, 1, 0, 0] })
   })
 })
 
