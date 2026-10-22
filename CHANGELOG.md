@@ -9,7 +9,7 @@ below are the real history.
 
 ---
 
-## Plan 27 — a shop for points behind a reputation rank, a welcome gift, Blind played to zero, a lazy wardrobe and a monthly check-in — merged `da8ca8a` (2026-10-24)
+## Plan 27 — a shop for points behind a reputation rank, a welcome gift, Blind played to zero, a lazy wardrobe and a monthly check-in — merged `da8ca8a` (2026-10-22)
 
 The round the user asked for on 2026-10-20/21 (`docs/bug-log.md` §9, K1–K5, plus Q13 from the spec review): players saw
 many outfits and no way to earn them, Blind tables threw out accounts with 5–6k left, and the wardrobe loaded slowly.
@@ -180,7 +180,7 @@ on one player cannot deadlock on Postgres; the ops test server reads 2400 a minu
   - Tinted layers load @1x below DPR 1.5 everywhere, table seats included (P32), not only in the wardrobe.
   - F-10 became the Blind-to-zero case (P30), and the shop's ops cases take section P (Ruling 24, amending Ruling 15; `M` is the layout section).
   - The entry chunk's budget rose from 130 to 140 KB (Ruling 13).
-- **Deployed.** VPS (`play.14-225-254-250.sslip.io`) on 2026-10-24: `backup.sh` (`bp-2026-10-22-2142.dump`, the server's
+- **Deployed.** VPS (`play.14-225-254-250.sslip.io`) on 2026-10-22: `backup.sh` (`bp-2026-10-22-2142.dump`, the server's
   clock), `git pull` to `3c853d6`, waited for the one open room to close (health polled to `rooms: 0`), `docker compose up
   -d --build`; the migrate container applied `0006_plan27` (seven rows in `drizzle.__drizzle_migrations`; the seven new
   tables present; boot seeded 8 reputation rules, 5 ranks and 89 shop prices); `reputation-backfill-cli --dry-run` then the

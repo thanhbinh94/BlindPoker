@@ -979,7 +979,7 @@ rulings below are the SDD ledger's, in order.
 - The reviews that opened screenshots again earned their cost: the dock covered seat 6 at 640×360, a 4 px clip hid Đóng
   under `overflow: hidden`, and a six-digit raise crossed the hero's plate at 844×390. None showed in a unit test.
 
-## Plan 27 — the shop, reputation, the welcome gift, Blind to zero, a lazy wardrobe, a monthly check-in (merged `da8ca8a`, 2026-10-24)
+## Plan 27 — the shop, reputation, the welcome gift, Blind to zero, a lazy wardrobe, a monthly check-in (merged `da8ca8a`, 2026-10-22)
 
 Spec `docs/superpowers/specs/2026-10-21-plan27-shop-reputation-welcome-blind-zero-design.md`; plan
 `docs/superpowers/plans/2026-10-22-plan27-shop-reputation-welcome-blind-zero.md`; branch
@@ -1085,7 +1085,7 @@ The single list is `docs/known-limitations.md`. As of this writing, the items a 
   - the deck's position (Ruling 17, reported as a deviation);
   - the 11 px phone scroll on play-or-fold squeeze tables (Ruling 28);
   - the human test rounds in `docs/operation-test-plan.md` (real phones, a LAN session, Lite on a second PC);
-  - Plans 25, 26 and 27 are live on the VPS (25 and 26 since 2026-10-21; 27 since 2026-10-24 with `0006_plan27` applied
+  - Plans 25, 26 and 27 are live on the VPS (25 and 26 since 2026-10-21; 27 since 2026-10-22 with `0006_plan27` applied
     and the one-shot `reputation-backfill-cli` run, 3 572 reputation across 6 accounts — `docs/deployment-normal.md`
     §7). The Windows LAN host still needs `run.ps1` without `-NoMigrate` (the user's Neon database; ask first) and, after
     `0006`, the backfill once; section Q of the test plan plus the landscape, GM round-2 and Plan 27 checks (the welcome
