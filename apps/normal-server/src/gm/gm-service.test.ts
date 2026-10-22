@@ -163,6 +163,20 @@ describe('GmService — achievements', () => {
     await expect(gm.unlockAchievement(actor(boss), me.playerId, other.id, 'đang khóa')).rejects.toMatchObject({ code: 'TARGET_IS_LOCKED' })
     expect((await gm.get(me.playerId))?.unlockedAchievementIds).not.toContain(other.id)
   })
+
+  it('a GM unlock adds reputation too', async () => {
+    const notified = vi.spyOn(h.app.game, 'notify')
+    await gm.unlockAchievement(actor(boss), me.playerId, 'login_days_100', 'quà dài hạn')
+
+    // The earning path's ref, not the GM action's: a GM unlock and a later earning of the same achievement are one event.
+    const events = rowsOf<{ delta: number; reason: string; ref_id: string }>(
+      await db.execute(sql`select delta, reason, ref_id from reputation_events where player_id = ${me.playerId} order by id`),
+    )
+    expect(events).toEqual([{ delta: 500, reason: 'achievement', ref_id: `ach:${me.playerId}:login_days_100` }])
+    const [row] = rowsOf<{ reputation: number; rank: number }>(await db.execute(sql`select reputation, rank from players where id = ${me.playerId}`))
+    expect(row).toEqual({ reputation: 500, rank: 3 })
+    expect(notified).toHaveBeenCalledWith(me.playerId, { t: 'NOTIFICATION', kind: 'RANK_UP', payload: { rank: 3 } })
+  })
 })
 
 describe('GmService — check-in', () => {

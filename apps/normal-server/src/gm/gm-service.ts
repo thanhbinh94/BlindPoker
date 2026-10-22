@@ -32,6 +32,7 @@ import { missingWardrobe } from '../inventory/grant-wardrobe.js'
 import type { InventoryService } from '../inventory/inventory-service.js'
 import type { ItemCatalog } from '../inventory/items.js'
 import { clampLimit, creditWithin, cursorOf, isUuid, type NormalRepositories } from '../repos/index.js'
+import type { ReputationService } from '../reputation/reputation-service.js'
 import type { PlayerStats } from '../stats/player-stats.js'
 import type { StatsService } from '../stats/stats-service.js'
 import { maskEmail } from './mask-email.js'
@@ -164,6 +165,8 @@ export interface GmServiceDeps {
   gifts: GiftScheduleStore
   /** The economy's time zone: "today" for a check-in is a calendar day there. */
   timezone: string
+  /** Plan 27: a GM's unlock adds reputation as the earning does. Optional for tests not about it. */
+  reputation?: ReputationService
   log?: Pick<Logger, 'warn'>
   now?: () => number
 }
@@ -397,14 +400,17 @@ export function createGmService(deps: GmServiceDeps): GmService {
         if (t.lockedAt !== null) throw new ServiceError('TARGET_IS_LOCKED', 'a locked account cannot be given an achievement; unlock first')
         const actionId = await logAction(tx, { actorUserId: actor.userId, action: 'unlock_achievement', targetPlayerId: t.id, itemId: def.id, amount: def.reward.points ?? null, reason: why })
         // The same code path as earning it, so the reward is the full one; a second unlock rolls the log line back too.
-        const outcome = await unlockWithin(tx, t.id, def, new Date(now()), { inventory: deps.inventory, reason: 'gm_achievement', refId: `gm:${String(actionId)}` })
-        if (outcome === 'already') throw new ServiceError('ALREADY_UNLOCKED', 'the achievement is already unlocked')
+        // Reputation rides along under the earning path's `ach:<player>:<id>` (spec A2), so it is paid once either way.
+        const unlocked = await unlockWithin(tx, t.id, def, new Date(now()), { inventory: deps.inventory, reason: 'gm_achievement', refId: `gm:${String(actionId)}`, reputation: deps.reputation })
+        if (unlocked.outcome === 'already') throw new ServiceError('ALREADY_UNLOCKED', 'the achievement is already unlocked')
         const [after] = await tx.select({ balance: players.balance }).from(players).where(eq(players.id, t.id))
-        return { actionId, reward: def.reward, balance: Number(after!.balance) }
+        return { result: { actionId, reward: def.reward, balance: Number(after!.balance) }, unlocked }
       })
       if (def.reward.points !== undefined) void deps.game.balanceChanged(playerId)
       notice(playerId, { action: 'unlock_achievement', achievementId: def.id, reason: why })
-      return result
+      // After the commit, like every other notice.
+      if (result.unlocked.rankUp) deps.game.notify(playerId, { t: 'NOTIFICATION', kind: 'RANK_UP', payload: { rank: result.unlocked.rank } })
+      return result.result
     },
 
     async checkinPreview(playerId) {

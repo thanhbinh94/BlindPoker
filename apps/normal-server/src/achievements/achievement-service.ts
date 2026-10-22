@@ -24,6 +24,7 @@ import type { AppEvent, AppEventBus } from '../events.js'
 import type { InventoryService } from '../inventory/inventory-service.js'
 import { creditWithin, type NormalRepositories } from '../repos/index.js'
 import { isUuid } from '../repos/util.js'
+import { achievementRuleFor, type ReputationService } from '../reputation/reputation-service.js'
 import type { StatsService } from '../stats/stats-service.js'
 import { byMetric, type AchievementDef } from './definitions.js'
 
@@ -56,6 +57,8 @@ export interface AchievementServiceDeps {
    */
   notify: (playerId: string, msg: ServerMessage) => void
   onBalanceChanged: (playerId: string, balance: number) => void
+  /** Plan 27: an unlock also adds reputation. Optional, so a test that is not about it can leave it out. */
+  reputation?: ReputationService
   now?: () => number
 }
 
@@ -69,14 +72,24 @@ const ACHIEVEMENT_SOURCE = 'achievement'
  * The row is upserted first: a player who never made progress on this metric has no `player_achievements` row, and the
  * guarded UPDATE below would match nothing and report `'already'` for an achievement that was never unlocked.
  * `'already'` means the UPDATE found the row unlocked (nothing was paid); `'unlocked'` means this call flipped it.
+ *
+ * With `pay.reputation`, an unlock also adds the reputation its reward tier pays (Plan 27, spec A2), under
+ * `ach:<player>:<id>` on both paths — so a GM's unlock and the player's own earning of it are one event. `rankUp` and
+ * `rank` report what that grant did (`false`/`0` when nothing was granted); the caller announces `RANK_UP` after commit.
  */
+export interface UnlockResult {
+  outcome: 'unlocked' | 'already'
+  rankUp: boolean
+  rank: number
+}
+
 export async function unlockWithin(
   tx: AppTx,
   playerId: string,
   def: AchievementDef,
   at: Date,
-  pay: { inventory: InventoryService; reason: TxReason; refId: string },
-): Promise<'unlocked' | 'already'> {
+  pay: { inventory: InventoryService; reason: TxReason; refId: string; reputation?: Pick<ReputationService, 'grantRuleWithin'> | undefined },
+): Promise<UnlockResult> {
   await tx.insert(playerAchievements).values({ playerId, achievementId: def.id }).onConflictDoNothing()
   // The `unlocked_at IS NULL` predicate is the whole idempotency argument: a second attempt
   // updates no rows and therefore pays nothing.
@@ -91,7 +104,7 @@ export async function unlockWithin(
       ),
     )
     .returning({ id: playerAchievements.achievementId })
-  if (claimed.length === 0) return 'already'
+  if (claimed.length === 0) return { outcome: 'already', rankUp: false, rank: 0 }
 
   if (def.reward.points !== undefined) {
     await creditWithin(tx, [{ playerId, delta: def.reward.points, reason: pay.reason, refId: pay.refId }])
@@ -99,7 +112,9 @@ export async function unlockWithin(
   if (def.reward.itemId !== undefined) {
     await pay.inventory.grant(tx, playerId, def.reward.itemId, ACHIEVEMENT_SOURCE)
   }
-  return 'unlocked'
+  if (pay.reputation === undefined) return { outcome: 'unlocked', rankUp: false, rank: 0 }
+  const grant = await pay.reputation.grantRuleWithin(tx, playerId, achievementRuleFor(def), 'achievement', `ach:${playerId}:${def.id}`)
+  return { outcome: 'unlocked', rankUp: grant.rankUp, rank: grant.rank }
 }
 
 export function createAchievementService(deps: AchievementServiceDeps): AchievementService {
@@ -133,14 +148,19 @@ export function createAchievementService(deps: AchievementServiceDeps): Achievem
   async function unlock(playerId: string, def: AchievementDef): Promise<void> {
     const at = new Date(now())
     const outcome = await deps.db.transaction(async (tx) => {
-      const result = await unlockWithin(tx, playerId, def, at, { inventory: deps.inventory, reason: 'achievement', refId: `ach:${playerId}:${def.id}` })
-      if (result === 'already') return null
-      if (def.reward.points === undefined) return { balance: null }
+      const result = await unlockWithin(tx, playerId, def, at, {
+        inventory: deps.inventory,
+        reason: 'achievement',
+        refId: `ach:${playerId}:${def.id}`,
+        reputation: deps.reputation,
+      })
+      if (result.outcome === 'already') return null
+      if (def.reward.points === undefined) return { balance: null, result }
       // Read through `tx`, not `repos.balances.get`: that opens a connection of its own, which
       // under read-committed would still see the pre-credit balance this transaction has not
       // committed yet — and would announce a number that was never true.
       const [row] = await tx.select({ balance: players.balance }).from(players).where(eq(players.id, playerId))
-      return { balance: row === undefined ? null : Number(row.balance) }
+      return { balance: row === undefined ? null : Number(row.balance), result }
     })
     if (outcome === null) return
     deps.log.info('achievement unlocked', { playerId, achievement: def.id })
@@ -148,6 +168,7 @@ export function createAchievementService(deps: AchievementServiceDeps): Achievem
     // Announced only after the commit — a notification for an unlock that rolled back would be a
     // reward the player saw and never received.
     deps.notify(playerId, { t: 'NOTIFICATION', kind: 'ACHIEVEMENT_UNLOCKED', payload: { id: def.id, reward: def.reward } })
+    if (outcome.result.rankUp) deps.notify(playerId, { t: 'NOTIFICATION', kind: 'RANK_UP', payload: { rank: outcome.result.rank } })
     if (outcome.balance !== null) deps.onBalanceChanged(playerId, outcome.balance)
   }
 

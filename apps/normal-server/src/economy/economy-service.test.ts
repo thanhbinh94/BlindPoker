@@ -3,7 +3,7 @@ import { silentLogger } from '@bp/server-kit'
 import { asc, eq, sql } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { AppDb } from '../db/client.js'
-import { dailyLogins, inventory, items, players, pointTransactions, users } from '../db/schema.js'
+import { dailyLogins, inventory, items, players, pointTransactions, reputationEvents, users } from '../db/schema.js'
 import type { TestDb } from '../db/test-db.js'
 import { createTestDb } from '../db/test-db.js'
 import type { AppEvent, AppEventBus } from '../events.js'
@@ -16,6 +16,7 @@ import { DAILY_DRAW_SLOTS } from '../inventory/slots.js'
 import { loadAchievements } from '../achievements/definitions.js'
 import type { NormalRepositories } from '../repos/index.js'
 import { createRepositories } from '../repos/index.js'
+import { createReputationService, type ReputationService } from '../reputation/reputation-service.js'
 import { parseDailyGifts, type DailyGiftSchedule } from './daily-gifts.js'
 import type { EconomyService } from './economy-service.js'
 import { createEconomyService } from './economy-service.js'
@@ -31,8 +32,10 @@ let economy: EconomyService
 let reserved: Set<string>
 let gifts: DailyGiftSchedule
 
+let reputation: ReputationService
 let published: AppEvent[] = []
 let balanceCalls: { playerId: string; balance: number }[] = []
+let rankUps: { playerId: string; rank: number }[] = []
 /** Replaced per test to pin which unowned item the random tiers draw. */
 let rng = (): number => 0
 
@@ -69,6 +72,7 @@ beforeAll(async () => {
   bus.subscribe((e) => {
     published.push(e)
   })
+  reputation = createReputationService({ db, bus, notify: (playerId, msg) => rankUps.push({ playerId, rank: msg.payload.rank }), log: silentLogger })
   economy = createEconomyService({
     db,
     repos,
@@ -80,6 +84,7 @@ beforeAll(async () => {
     rng: () => rng(),
     reservedItemIds: rewardItemIds,
     gifts: () => gifts,
+    reputation,
   })
 })
 afterAll(async () => {
@@ -88,6 +93,7 @@ afterAll(async () => {
 beforeEach(() => {
   published = []
   balanceCalls = []
+  rankUps = []
   rng = () => 0
 })
 afterEach(async () => {
@@ -180,6 +186,25 @@ describe('claimDaily', () => {
     // Announced only after the commit, so the stats module never counts a login day that rolled back.
     expect(published).toEqual([{ type: 'DAILY_CLAIMED', playerId, day: 1, streak: 1, consecutive: 1 }])
     expect(balanceCalls).toEqual([{ playerId, balance: 5_000 }])
+  })
+
+  it('a claim adds 10 reputation under the claim\'s ref', async () => {
+    const playerId = await seedPlayer()
+    await db.update(players).set({ reputation: 95 }).where(eq(players.id, playerId))
+
+    await economy.claimDaily(playerId, OCT(1))
+    // A second claim the same day is refused before anything is written, reputation included.
+    await economy.claimDaily(playerId, OCT(1) + HOUR)
+
+    const events = await db
+      .select({ delta: reputationEvents.delta, reason: reputationEvents.reason, refId: reputationEvents.refId })
+      .from(reputationEvents)
+      .where(eq(reputationEvents.playerId, playerId))
+    expect(events).toEqual([{ delta: 10, reason: 'daily_login', refId: `daily:${playerId}:2026-10-01` }])
+    const [row] = await db.select({ reputation: players.reputation, rank: players.rank }).from(players).where(eq(players.id, playerId))
+    expect(row).toEqual({ reputation: 105, rank: 2 })
+    // Announced after the commit, like the balance.
+    expect(rankUps).toEqual([{ playerId, rank: 2 }])
   })
 
   it('refuses a second claim the same day and moves nothing', async () => {

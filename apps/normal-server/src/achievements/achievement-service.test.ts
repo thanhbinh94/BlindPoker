@@ -7,7 +7,7 @@ import { silentLogger } from '@bp/server-kit'
 import { asc, eq, sql } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { AppDb } from '../db/client.js'
-import { inventory, playerAchievements, players, playerStats, pointTransactions, users } from '../db/schema.js'
+import { inventory, playerAchievements, players, playerStats, pointTransactions, reputationEvents, users } from '../db/schema.js'
 import type { TestDb } from '../db/test-db.js'
 import { createTestDb } from '../db/test-db.js'
 import type { AppEventBus } from '../events.js'
@@ -18,6 +18,7 @@ import type { ItemCatalog } from '../inventory/items.js'
 import { loadItemCatalog } from '../inventory/items.js'
 import type { NormalRepositories } from '../repos/index.js'
 import { createRepositories } from '../repos/index.js'
+import { createReputationService, type ReputationService } from '../reputation/reputation-service.js'
 import { createStatsService, type StatsService } from '../stats/stats-service.js'
 import type { AchievementService } from './achievement-service.js'
 import { createAchievementService, unlockWithin } from './achievement-service.js'
@@ -31,6 +32,7 @@ let inv: InventoryService
 let catalog: ItemCatalog
 let bus: AppEventBus
 let stats: StatsService
+let reputation: ReputationService
 let achievements: AchievementService
 let defs: AchievementDef[]
 let stops: (() => void)[] = []
@@ -53,6 +55,8 @@ beforeAll(async () => {
 
   bus = createEventBus(silentLogger)
   stats = createStatsService({ db, bus })
+  // Not started: only the unlocks' reputation is under test here, not the per-hand listener.
+  reputation = createReputationService({ db, bus, notify: (playerId, msg) => notified.push({ playerId, msg }), log: silentLogger })
   achievements = createAchievementService({
     db,
     repos,
@@ -61,6 +65,7 @@ beforeAll(async () => {
     bus,
     defs,
     log: silentLogger,
+    reputation,
     notify: (playerId, msg) => notified.push({ playerId, msg }),
     onBalanceChanged: (playerId, balance) => balanceCalls.push({ playerId, balance }),
     now: () => NOW,
@@ -275,16 +280,51 @@ describe('unlockWithin', () => {
 
     // The seeded player has no `player_achievements` row at all: the guarded UPDATE alone would match nothing.
     expect(await db.select().from(playerAchievements).where(eq(playerAchievements.playerId, playerId))).toEqual([])
-    expect(await run(points)).toBe('unlocked')
-    expect(await run(points)).toBe('already')
-    expect(await run(item)).toBe('unlocked')
-    expect(await run(item)).toBe('already')
+    expect((await run(points)).outcome).toBe('unlocked')
+    expect((await run(points)).outcome).toBe('already')
+    expect((await run(item)).outcome).toBe('unlocked')
+    // Without a reputation service nothing is granted and nothing is reported.
+    expect(await run(item)).toEqual({ outcome: 'already', rankUp: false, rank: 0 })
 
     expect(await ledger(playerId)).toEqual([{ amount: points.reward.points, reason: 'gm_achievement', refId: 'gm:login_streak_7' }])
     expect(await repos.balances.get(playerId)).toBe(points.reward.points)
     expect(await inv.list(playerId)).toEqual([{ itemId: item.reward.itemId, source: 'achievement', acquiredAt: expect.any(Number) }])
     expect(await find(playerId, 'login_streak_7')).toMatchObject({ unlockedAt: NOW })
     expect(await find(playerId, 'login_days_100')).toMatchObject({ unlockedAt: NOW })
+  })
+})
+
+describe('reputation', () => {
+  it('an unlock adds 500 reputation for an item reward', async () => {
+    const playerId = await seedPlayer()
+    await db.update(playerStats).set({ totalLoginDays: 100 }).where(eq(playerStats.playerId, playerId))
+
+    await bus.publish({ type: 'STATS_UPDATED', playerId, changedMetrics: ['totalLoginDays'] })
+
+    // login_days_7 (5,000 points → small), login_days_30 (20,000 → big), login_days_100 (an item → item).
+    const events = await db
+      .select({ delta: reputationEvents.delta, reason: reputationEvents.reason, refId: reputationEvents.refId })
+      .from(reputationEvents)
+      .where(eq(reputationEvents.playerId, playerId))
+    expect(events).toEqual([
+      { delta: 50, reason: 'achievement', refId: `ach:${playerId}:login_days_7` },
+      { delta: 150, reason: 'achievement', refId: `ach:${playerId}:login_days_30` },
+      { delta: 500, reason: 'achievement', refId: `ach:${playerId}:login_days_100` },
+    ])
+    const [row] = await db.select({ reputation: players.reputation, rank: players.rank }).from(players).where(eq(players.id, playerId))
+    expect(row).toEqual({ reputation: 700, rank: 3 })
+    // Each rank reached is announced after its unlock committed, right after the unlock's own notice.
+    expect(notified.map((n) => n.msg)).toEqual([
+      { t: 'NOTIFICATION', kind: 'ACHIEVEMENT_UNLOCKED', payload: { id: 'login_days_7', reward: { points: 5_000 } } },
+      { t: 'NOTIFICATION', kind: 'ACHIEVEMENT_UNLOCKED', payload: { id: 'login_days_30', reward: { points: 20_000 } } },
+      { t: 'NOTIFICATION', kind: 'RANK_UP', payload: { rank: 2 } },
+      { t: 'NOTIFICATION', kind: 'ACHIEVEMENT_UNLOCKED', payload: { id: 'login_days_100', reward: { itemId: 'head_crown_gold01' } } },
+      { t: 'NOTIFICATION', kind: 'RANK_UP', payload: { rank: 3 } },
+    ])
+
+    // Replayed: nothing unlocks, so nothing is added.
+    await bus.publish({ type: 'STATS_UPDATED', playerId, changedMetrics: ['totalLoginDays'] })
+    expect((await db.select().from(reputationEvents).where(eq(reputationEvents.playerId, playerId))).length).toBe(3)
   })
 })
 

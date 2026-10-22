@@ -25,6 +25,7 @@ import type { ItemCatalog } from '../inventory/items.js'
 import { DAILY_DRAW_SLOTS } from '../inventory/slots.js'
 import { UnknownPlayerError, type NormalRepositories } from '../repos/index.js'
 import { isUuid } from '../repos/util.js'
+import type { ReputationGrant, ReputationService } from '../reputation/reputation-service.js'
 import type { DailyGiftNotice, DailyGiftSchedule } from './daily-gifts.js'
 import {
   dailyCalendar,
@@ -124,6 +125,8 @@ export interface EconomyServiceDeps {
    * claim never sees two schedules.
    */
   gifts: () => DailyGiftSchedule
+  /** Plan 27: a claim also adds `daily_login` reputation, in its own transaction. Optional for tests not about it. */
+  reputation?: ReputationService
 }
 
 /** The `source` recorded in `inventory` for anything the check-in hands out. */
@@ -265,6 +268,7 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
       const month = monthKey(nowMs, deps.timezone)
       // Once, before the transaction: a `setMonth` that commits while this claim runs applies to the next claim.
       const gifts = deps.gifts()
+      let reputation: ReputationGrant | null = null
 
       const result = await deps.db.transaction(async (tx): Promise<DailyClaimResult> => {
         const state = await lockDaily(tx, playerId)
@@ -289,6 +293,9 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
             claimedDays: state.month === month ? state.claimedDays + 1 : 1,
           })
           .where(eq(dailyLogins.playerId, playerId))
+        // Spec A2: the day's reputation, flat (not by tier), under the claim's own ref — so a reclaim after a GM undo,
+        // which reuses that ref, adds nothing a second time. Read through `tx` (one PGlite connection).
+        reputation = (await deps.reputation?.grantRuleWithin(tx, playerId, 'daily_login', 'daily_login', refId)) ?? null
 
         return {
           ok: true,
@@ -306,6 +313,9 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
       if (result.ok) {
         await deps.bus.publish({ type: 'DAILY_CLAIMED', playerId, day: result.day, streak: result.streak, consecutive: result.consecutive })
         deps.onBalanceChanged(playerId, result.balance)
+        // Assigned inside the transaction's callback, which control-flow narrowing cannot see (it still reads `null`).
+        const grant = reputation as ReputationGrant | null
+        if (grant?.rankUp === true) deps.reputation?.announceRankUp(playerId, grant.rank)
       }
       return result
     },
