@@ -776,6 +776,15 @@ show one day more or less than the server will allow. The tiles and the claim ar
 *Why it stays:* a hint line; the server does not send the count.
 *Tracked:* `apps/normal-web/src/screens/DailyScreen.tsx`.
 
+**On a phone a toast can cover the foot of a tall dialog for a few seconds (BP-29).** Toasts stand above dialogs since
+BP-29 (`--z-toast` over `--z-modal`, bug log §10 E5), so a refusal that answers a dialog's own button is read on top of it.
+On a 375 px phone the strip is the screen's width at its foot, and a dialog tall enough to reach there — "Tạo phòng" — has
+its footer under the slip until it clears (6 s for an error, 8 s for news) or is closed with ×. The buy-in dialog, short and
+centred, is never reached. The strip itself takes no presses (`pointer-events: none`); only the slip does.
+*Why it stays:* the alternative is the refusal unreadable under the backdrop, which is the bug fixed; moving the strip to
+the top on a phone would put it over the rail and the room header instead.
+*Tracked:* `packages/ui-kit/src/screens/screens.module.css` (`.toasts`), `docs/bug-log.md` §10 E5.
+
 ---
 
 ## Not limitations — things that were never in scope

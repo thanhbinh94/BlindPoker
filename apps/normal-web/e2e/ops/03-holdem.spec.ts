@@ -11,6 +11,7 @@ import {
   historyOf,
   joinByCode,
   ledgerOf,
+  ledgerSince,
   newPlayer,
   OVERLAP_SCREENS,
   PHONE_SCREEN,
@@ -214,6 +215,32 @@ test('E-06: a player who only ever arms "Theo mọi mức" plays a whole hand wi
   expect(Date.now() - began, 'no turn waited out its clock').toBeLessThan(15_000)
   await leave(a.page)
   await leave(c.page)
+})
+
+// BP-29 (bug log §10 E5): the refusal is a toast and the buy-in dialog stays open for another amount; the toast shared the
+// dialog's z-index and the dialog's backdrop, portalled after it, was drawn over it. Hit-testing proves which is on top.
+test('E-13: a buy-in the balance cannot cover is refused in words, on top of the open buy-in dialog', async () => {
+  const page = b.page
+  await createHoldemRoom(page, { name: unique('Bàn E13 '), tier: '2.500/5.000' })
+  // 50 BB of 5.000 is 250.000, more than a fresh account's 100.000 and whatever the run has added to it.
+  expect(await balanceOf(page), 'the balance is short of the minimum buy-in').toBeLessThan(250_000)
+  const rowsBefore = (await ledgerOf(page)).length
+  await page.locator('[data-seat="0"]').getByRole('button', { name: /Ngồi vào bàn/ }).click()
+  const dialog = page.getByRole('dialog', { name: 'Chọn số điểm mang vào bàn' })
+  await dialog.getByRole('button', { name: 'Ngồi vào bàn' }).click()
+
+  const refusal = page.getByRole('alert').filter({ hasText: 'Số dư không đủ' })
+  await expect(refusal, 'the refusal').toBeVisible()
+  await expect(dialog, 'the dialog stays open for another amount').toBeVisible()
+  const box = (await refusal.boundingBox())!
+  const onTop = await refusal.evaluate((el, [x, y]) => el.contains(document.elementFromPoint(x!, y!)), [box.x + box.width / 2, box.y + box.height / 2])
+  expect(onTop, 'the refusal is drawn over the dialog’s backdrop, not under it').toBe(true)
+  // An achievement the new room unlocked may land meanwhile; nothing else may.
+  expect((await ledgerSince(page, rowsBefore)).filter((row) => row.reason !== 'achievement'), 'nothing charged').toEqual([])
+
+  await dialog.getByRole('button', { name: 'Hủy', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  await leave(page)
 })
 
 test('H-03: every Hold’em hand of the run conserves points — the nets of its seats sum to minus a fee of at most 1 BB', async () => {

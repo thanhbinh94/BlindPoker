@@ -202,6 +202,14 @@ describe('Chibi', () => {
     expect(layerRule).toMatch(/max-height:\s*none/)
   })
 
+  it('the .chibi root opens its own stacking context, so its layers’ z-index never competes with the page around it', () => {
+    // BP-29 (bug log §10 E4): the lobby head, scrolled under the sticky rail (z-index 20), drew its hat and frame over it.
+    const withoutComments = AVATAR2D_CSS.replace(/\/\*[\s\S]*?\*\//g, '')
+    const rootRule = withoutComments.match(/\.chibi\s*\{[^}]*\}/)?.[0] ?? ''
+    expect(rootRule).not.toBe('')
+    expect(rootRule).toMatch(/isolation:\s*isolate/)
+  })
+
   it('is decorative with no label, and an announced role="img" with one', () => {
     const { container: bare } = render(<Chibi subject={SUBJECT} />)
     expect(bare.firstElementChild).toHaveAttribute('aria-hidden', 'true')
