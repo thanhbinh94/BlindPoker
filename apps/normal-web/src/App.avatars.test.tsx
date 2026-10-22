@@ -136,10 +136,12 @@ describe('App — avatars on the bar and at the table', () => {
 
     const mine = await screen.findByRole('link', { name: viNormal.avatar.mine })
     expect(mine).toHaveAttribute('href', '#/avatar')
-    // Daily and Profile are the rail's; the lobby's bar no longer repeats them (layout audit U2).
+    // Daily and Profile are the rail's; the lobby's bar no longer repeats them (layout audit U2). Besides the face it
+    // carries only the two named doors, Phòng thay đồ and Cửa hàng, on its own line (Plan 27 fix wave).
     const bar = mine.closest('header')
     expect(bar).not.toBeNull()
-    expect(within(bar as HTMLElement).getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(['#/avatar'])
+    expect(within(bar as HTMLElement).getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(['#/avatar', '#/avatar', '#/shop'])
+    expect(within(bar as HTMLElement).getByRole('navigation', { name: viNormal.shop.lobbyLinks })).toBeInTheDocument()
     // The boot probe named me before `WELCOME` did, so the face is fetched once and rendered from the
     // config — `data-chibi-hash` is that config's identity, and the only thing a Chibi can be asserted on.
     const expectedHash = hashChibi({
