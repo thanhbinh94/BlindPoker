@@ -17,8 +17,9 @@ export interface CreateBlindInput {
 }
 
 /**
- * What a seat must hold to be dealt a Blind hand: the ante, plus the play in play-or-fold. Takes only the two
- * fields it reads, so a client can ask it of the room config it was sent (the "not enough points" hint).
+ * What a seat needs to cover a whole Blind hand: the ante, plus the play in play-or-fold. Takes only the two fields
+ * it reads, so a client can ask it of the room config it was sent (the "not enough points" hint). The engine no
+ * longer reads it (plan 27 D1): any seat with points left is dealt and goes all in for what it has.
  */
 export function blindRequiredStack(rules: Pick<BlindRules, 'decisionMode' | 'fixedWager'>): number {
   return rules.decisionMode === 'playOrFold' ? rules.fixedWager * 2 : rules.fixedWager
@@ -40,9 +41,9 @@ const rulesOf = (state: HandState): BlindRules => {
 
 export function createBlindHand(input: CreateBlindInput, rng: Rng): EngineResult {
   const seats = [...input.seats].sort((a, b) => a.seat - b.seat)
-  const required = blindRequiredStack(input.rules)
   if (seats.length < 2) throw new EngineError('INVALID_SETUP', 'need at least 2 players')
-  if (seats.some((s) => s.stack < required)) throw new EngineError('INVALID_SETUP', `every player needs at least ${required}`)
+  // A seat short of a wager is dealt and antes all it has (plan 27 D1): `commit` caps at the stack and sets allIn.
+  if (seats.some((s) => s.stack <= 0)) throw new EngineError('INVALID_SETUP', 'every player needs points left')
   if (!seats.some((s) => s.seat === input.button)) throw new EngineError('INVALID_SETUP', 'button must be a seated player')
   if (input.carryOverIn < 0) throw new EngineError('INVALID_SETUP', 'carryOverIn must be >= 0')
 
@@ -85,6 +86,7 @@ export function createBlindHand(input: CreateBlindInput, rng: Rng): EngineResult
   if (state.phase === 'DECISION') {
     state.turnSeq += 1
     events.push({ type: 'DECISION_PHASE', seats: state.players.map((p) => p.seat), turnSeq: state.turnSeq })
+    autoPlayAllIn(state, events)
   } else if (state.phase === 'SQUEEZE') {
     state.turnSeq += 1
     events.push({ type: 'SQUEEZE_PHASE', seats: state.players.filter((p) => !p.revealed).map((p) => p.seat), turnSeq: state.turnSeq })
@@ -96,8 +98,28 @@ export function createBlindHand(input: CreateBlindInput, rng: Rng): EngineResult
 export function blindLegalActions(state: HandState, seat: number): LegalActions {
   const p = getPlayer(state, seat)
   const none: LegalActions = { seat, kinds: [], callAmount: 0, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 }
-  if (state.phase !== 'DECISION' || p.decision !== null) return none
-  return { ...none, kinds: ['play', 'fold'], callAmount: rulesOf(state).fixedWager }
+  if (state.phase !== 'DECISION' || p.decision !== null || p.allIn) return none
+  // A seat short of the wager plays all in for what it has: `resolveDecisions` commits through `commit`, which caps.
+  return { ...none, kinds: ['play', 'fold'], callAmount: Math.min(p.stack, rulesOf(state).fixedWager) }
+}
+
+/**
+ * Play-or-fold, as the decision round opens: a seat the ante emptied has nothing left to put in, and folding would
+ * only throw its ante away, so it is never asked (spec plan 27 R14). It is decided `play` on the spot — a bare
+ * `DECISION_MADE`, as for any seat — and its `PLAYER_ACTED` (amount 0, all in, not timed out) comes with everyone
+ * else's when the round resolves. Its cards stay as they are on a squeeze table, like a bot's. If every seat was
+ * emptied, the round resolves here and then.
+ */
+function autoPlayAllIn(state: HandState, events: GameEvent[]): void {
+  for (const p of state.players) {
+    if (!p.allIn || p.decision !== null) continue
+    p.decision = 'play'
+    p.timedOut = false
+    p.hasActed = true
+    events.push({ type: 'DECISION_MADE', seat: p.seat })
+  }
+  if (state.players.some((x) => x.decision === null)) return
+  resolveDecisions(state, events)
 }
 
 export function applyBlindCommand(input: HandState, cmd: HandCommand, _rng: Rng): EngineResult {

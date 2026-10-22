@@ -128,7 +128,7 @@ export function roomConfigToRuleset(config: RoomConfig): Ruleset {
     return { mode: 'holdem', smallBlind: h.smallBlind, bigBlind: h.bigBlind, tableFeeRate: ECONOMY.tableFeeRate, tableFeeCapBB: ECONOMY.tableFeeCapBB }
   }
   const b = config.blind!
-  return { mode: 'blind', holeCards: b.holeCards, decisionMode: b.decisionMode, fixedWager: b.fixedWager, tableFeeRate: ECONOMY.tableFeeRate, squeeze: b.squeeze === true }
+  return { mode: 'blind', holeCards: b.holeCards, decisionMode: b.decisionMode, fixedWager: b.fixedWager, tableFeeRate: ECONOMY.blindTableFeeRate, squeeze: b.squeeze === true }
 }
 
 const ENGINE_ERROR_TO_CODE: Record<EngineErrorCode, ErrorCode> = {

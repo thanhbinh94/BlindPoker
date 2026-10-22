@@ -6,6 +6,8 @@ import { playerView } from './view.js'
 import { EngineError, type BlindRules, type GameEvent, type HandState } from './types.js'
 
 const identityRng: Rng = { int: (n) => n - 1 }
+/** A seed whose deal gives seat 0 the winning hand in the 3,000-at-5,000 case below. */
+const SHORT_STACK_WIN_SEED = 2
 const rules = (over: Partial<BlindRules> = {}): BlindRules => ({ mode: 'blind', holeCards: 2, decisionMode: 'playOrFold', fixedWager: 1000, tableFeeRate: 0.02, ...over })
 
 class Table {
@@ -56,9 +58,35 @@ describe('setup', () => {
     expect(t.state.phase).toBe('DECISION')
     expect(t.types()).toEqual(['HAND_STARTED', 'BLINDS_POSTED', 'POT_UPDATED', 'CARDS_DEALT', 'CARDS_DEALT', 'CARDS_DEALT', 'DECISION_PHASE'])
   })
-  it('rejects a seat that cannot afford the required stack', () => {
-    expect(() => new Table(rules(), [5000, 1500])).toThrow(EngineError)
+  it('deals any seat with points left and rejects only an empty one (plan 27 D1)', () => {
+    expect(() => new Table(rules(), [5000, 1500])).not.toThrow()
+    expect(() => new Table(rules(), [5000, 1])).not.toThrow()
     expect(() => new Table(rules({ decisionMode: 'none' }), [5000, 1500])).not.toThrow()
+    expect(() => new Table(rules(), [5000, 0])).toThrow(EngineError)
+    expect(() => new Table(rules({ decisionMode: 'none' }), [0, 5000])).toThrow(/INVALID_SETUP/)
+  })
+  it('a seat with 3,000 at a 5,000 wager is dealt, antes 3,000 all-in, and a win pays it only the main pot it covered', () => {
+    // The seed deals seat 0 the best hand at showdown (asserted below, so a deck change fails loudly).
+    const t = new Table(rules({ decisionMode: 'none', fixedWager: 5000, tableFeeRate: 0 }), [3000, 25000, 25000], 0, 0, seededRng(SHORT_STACK_WIN_SEED))
+    expect(t.events[1]).toEqual({ type: 'BLINDS_POSTED', posts: [
+      { seat: 0, amount: 3000, kind: 'ANTE' }, { seat: 1, amount: 5000, kind: 'ANTE' }, { seat: 2, amount: 5000, kind: 'ANTE' },
+    ] })
+    expect(t.state.players[0]).toMatchObject({ stack: 0, allIn: true, totalCommitted: 3000 })
+    expect(t.state.pot).toBe(13000) // the pot is exactly what the seats put in
+    t.advanceAll()
+    const r = t.state.result!
+    expect(r.fee).toBe(0)
+    expect(r.pots).toMatchObject([
+      { amount: 9000, eligibleSeats: [0, 1, 2] },
+      { amount: 4000, eligibleSeats: [1, 2] },
+    ])
+    expect(r.pots[0]!.winners.map((w) => w.seat)).toEqual([0])
+    // Seat 0 takes the main pot it covered and nothing of the side pot it could not.
+    expect(r.payouts.find((p) => p.seat === 0)?.amount).toBe(9000)
+    expect(r.pots[1]!.winners.every((w) => w.seat !== 0)).toBe(true)
+    expect(t.stack(0)).toBe(9000)
+    t.assertMoney()
+    expect(t.state.players.reduce((a, p) => a + p.stack, 0)).toBe(t.startTotal) // no fee, no carry: Σ stacks is unchanged
   })
 })
 
@@ -196,6 +224,68 @@ describe('mode B (play or fold)', () => {
     t.fold(0); t.fold(1)
     expect(() => t.fold(0)).toThrow(/HAND_COMPLETE/)
   })
+  it('play-or-fold: a seat emptied by the ante is auto-played and never asked', () => {
+    const t = new Table(rules(), [1000, 5000, 5000])
+    // The round opens for every seat, and the seat the ante emptied is decided in the same breath: `play`, all in.
+    expect(t.types()).toEqual([
+      'HAND_STARTED', 'BLINDS_POSTED', 'POT_UPDATED', 'CARDS_DEALT', 'CARDS_DEALT', 'CARDS_DEALT', 'DECISION_PHASE', 'DECISION_MADE',
+    ])
+    expect(t.events.at(-1)).toEqual({ type: 'DECISION_MADE', seat: 0 })
+    expect(t.state.players[0]).toMatchObject({ stack: 0, allIn: true, decision: 'play', timedOut: false })
+    expect(blindLegalActions(t.state, 0).kinds).toEqual([])
+    expect(blindLegalActions(t.state, 1)).toMatchObject({ kinds: ['play', 'fold'], callAmount: 1000 })
+    // A table-wide timer that fires for it is nothing: it was never asked, so it cannot time out.
+    expect(t.apply({ type: 'TIMEOUT', seat: 0 })).toEqual([])
+    expect(() => t.fold(0)).toThrow(/NOT_YOUR_TURN/)
+    t.play(1)
+    const ev = t.fold(2)
+    expect(ev.filter((e) => e.type === 'PLAYER_ACTED')).toEqual([
+      { type: 'PLAYER_ACTED', seat: 0, action: { kind: 'play' }, amount: 0, stack: 0, allIn: true, timedOut: false },
+      { type: 'PLAYER_ACTED', seat: 1, action: { kind: 'play' }, amount: 1000, stack: 3000, allIn: false, timedOut: false },
+      { type: 'PLAYER_ACTED', seat: 2, action: { kind: 'fold' }, amount: 0, stack: 4000, allIn: false, timedOut: false },
+    ])
+    expect(ev.find((e) => e.type === 'DECISIONS_REVEALED')).toEqual({
+      type: 'DECISIONS_REVEALED', decisions: [{ seat: 0, decision: 'play' }, { seat: 1, decision: 'play' }, { seat: 2, decision: 'fold' }],
+    })
+    expect(t.types()).not.toContain('TURN_CHANGED')
+    expect(t.state.phase).toBe('REVEAL')
+    t.advanceAll()
+    // Seat 0 covered 1,000 of seat 1's 2,000: the 1,000 nobody could call goes back to seat 1.
+    expect(t.state.result!.uncalledReturned).toEqual({ seat: 1, amount: 1000 })
+    expect(t.state.result!.pots.map((p) => p.eligibleSeats)).toEqual([[0, 1]])
+    t.assertMoney()
+  })
+  it('play-or-fold: a seat short for the second commit plays all in for the rest', () => {
+    const t = new Table(rules({ tableFeeRate: 0 }), [1500, 5000, 5000])
+    expect(t.stack(0)).toBe(500)
+    expect(blindLegalActions(t.state, 0)).toMatchObject({ kinds: ['play', 'fold'], callAmount: 500 })
+    expect(blindLegalActions(t.state, 1)).toMatchObject({ callAmount: 1000 })
+    t.play(0); t.play(1)
+    const ev = t.play(2)
+    expect(ev.filter((e) => e.type === 'PLAYER_ACTED')[0]).toEqual(
+      { type: 'PLAYER_ACTED', seat: 0, action: { kind: 'play' }, amount: 500, stack: 0, allIn: true, timedOut: false },
+    )
+    expect(t.state.pot).toBe(1500 + 2000 + 2000)
+    t.advanceAll()
+    expect(t.state.result!.pots).toMatchObject([
+      { amount: 4500, eligibleSeats: [0, 1, 2] },
+      { amount: 1000, eligibleSeats: [1, 2] },
+    ])
+    t.assertMoney()
+  })
+  it('play-or-fold: every seat emptied by the ante resolves at once', () => {
+    const t = new Table(rules(), [1000, 800, 1000], 300)
+    expect(t.types()).toEqual([
+      'HAND_STARTED', 'BLINDS_POSTED', 'POT_UPDATED', 'CARDS_DEALT', 'CARDS_DEALT', 'CARDS_DEALT', 'DECISION_PHASE',
+      'DECISION_MADE', 'DECISION_MADE', 'DECISION_MADE', 'PLAYER_ACTED', 'PLAYER_ACTED', 'PLAYER_ACTED', 'POT_UPDATED', 'DECISIONS_REVEALED',
+    ])
+    expect(t.state.phase).toBe('REVEAL')
+    expect(t.state.players.every((p) => p.decision === 'play' && !p.folded && !p.timedOut)).toBe(true)
+    t.advanceAll()
+    // The 800 seat is in the main pot with the carry-over (R19); the two 1,000 seats share a side pot of 400.
+    expect(t.state.result!.pots.map((p) => p.eligibleSeats)).toEqual([[0, 1, 2], [0, 2]])
+    t.assertMoney()
+  })
 })
 
 describe('squeeze mode (spec 2026-10-08)', () => {
@@ -292,6 +382,14 @@ describe('squeeze mode (spec 2026-10-08)', () => {
     const { state } = deal('none', [2])
     expect(() => step(state, { type: 'ADVANCE' })).toThrow(EngineError)
     expect(() => step(state, { type: 'REVEALED', seat: 7 })).toThrow(EngineError) // NOT_IN_HAND
+  })
+
+  it('play or fold: a seat emptied by the ante is auto-played without turning its cards, like a bot', () => {
+    const seats = [0, 1, 2].map((seat) => ({ seat, playerId: `p${seat}`, stack: seat === 0 ? 1000 : 5000, isBot: false }))
+    const { state, events } = createBlindHand({ handId: 'sq', rules: squeezeRules('playOrFold'), seats, button: 0, carryOverIn: 0 }, seededRng(3))
+    expect(events.slice(-2)).toEqual([{ type: 'DECISION_PHASE', seats: [0, 1, 2], turnSeq: 1 }, { type: 'DECISION_MADE', seat: 0 }])
+    expect(events.some((e) => e.type === 'PLAYER_REVEALED')).toBe(false)
+    expect(state.players[0]).toMatchObject({ decision: 'play', revealed: false })
   })
 
   it('the view carries revealed per seat, and a Hold’em or plain Blind seat is always revealed', () => {

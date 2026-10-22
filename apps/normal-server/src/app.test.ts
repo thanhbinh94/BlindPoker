@@ -877,8 +877,8 @@ describe('a whole hand between two registered players', () => {
     expect(await b.request({ t: 'STAND_UP', reqId: 'stand-b' })).toMatchObject({ t: 'ACK' })
 
     /**
-     * The hand is recorded, and every point the engine took as a fee is a sink row — which is what
-     * keeps `Σ balances + Σ sinks` constant (§12.5).
+     * The hand is recorded, and a Blind table takes no fee (plan 27 D1): no `table_fee` sink row, so
+     * `Σ balances` alone is constant (§12.5).
      *
      * All of it inside one `waitFor` because settlement, the `games` rows and the counters are
      * separate writes that follow the frame the socket has already seen.
@@ -892,25 +892,23 @@ describe('a whole hand between two registered players', () => {
       expect(hands[0]?.players).toHaveLength(2)
 
       const sinks = rowsOf<{ amount: string | number }>(await db.execute(sql`select amount from point_transactions where player_id is null and kind = 'table_fee'`))
-      expect(sinks.length).toBeGreaterThan(0)
-      expect(Number(sinks[0]?.amount)).toBeGreaterThan(0)
+      expect(sinks).toHaveLength(0)
 
-      // The table conserves points exactly: what the seats brought, what they took home and the fee
-      // that left for the sink cancel to zero. Stated over those rows rather than over the balances
-      // because the winner may also have unlocked an achievement on the way — a real credit, and
-      // one whose size depends on which hand they happened to show down.
+      // The table conserves points exactly: what the seats brought and what they took home cancel to
+      // zero. Stated over those rows rather than over the balances because the winner may also have
+      // unlocked an achievement on the way — a real credit, and one whose size depends on which hand
+      // they happened to show down.
       const settled = rowsOf<{ amount: string | number }>(
-        await db.execute(sql`select amount from point_transactions where reason in ('buy_in', 'cash_out', 'table_fee')`),
+        await db.execute(sql`select amount from point_transactions where reason in ('buy_in', 'cash_out')`),
       )
       expect(settled.reduce((sum, row) => sum + Number(row.amount), 0)).toBe(0)
 
-      // …and the balances are the whole ledger, read back: what they started with, less the fee,
-      // plus anything an achievement or a GM paid out (or took) on the way.
+      // …and the balances are the whole ledger, read back: what they started with, plus anything an
+      // achievement or a GM paid out (or took) on the way.
       const credited = rowsOf<{ amount: string | number }>(await db.execute(sql`select amount from point_transactions where reason in ('achievement', 'gm_grant', 'gm_adjust', 'gm_achievement', 'gm_checkin_undo')`))
-      const fees = sinks.reduce((sum, row) => sum + Number(row.amount), 0)
       const rewards = credited.reduce((sum, row) => sum + Number(row.amount), 0)
       const balances = await Promise.all([alice, mai].map((p) => h.app.services.repos.balances.get(p.playerId)))
-      expect(balances[0]! + balances[1]!).toBe(2 * ECONOMY.startingBalance - fees + rewards)
+      expect(balances[0]! + balances[1]!).toBe(2 * ECONOMY.startingBalance + rewards)
     }, { timeout: 10_000 })
 
     // The counters move through the bus, so they land a tick after the socket saw the hand end.
