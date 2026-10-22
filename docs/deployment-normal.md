@@ -397,6 +397,26 @@ migration đã áp, nên một schema không đổi khiến bước đó thành 
 `0004_gm` (các cột `role`, `locked_at`, `locked_reason` của `users` và bảng `gm_actions`): nó chỉ thêm, không đổi dữ liệu
 cũ, và mọi tài khoản hiện có thành "Người chơi" chưa bị khóa. Sau lần nâng cấp đó, trao GM đầu tiên theo mục 5.
 
+### Lần nâng cấp lên Plan 27: tính danh vọng từ lịch sử
+
+Plan 27 thêm danh vọng và bậc (migration `0006_plan27`). Migration chỉ tạo bảng, nên mọi tài khoản cũ bắt đầu ở 0. Ngay
+sau bước 3 ở trên (đã `backup.sh` ở bước 1, `app` đã lên), chạy **một lần** lệnh tính lại danh vọng từ lịch sử — trước
+hết chạy thử, rồi chạy thật:
+
+```bash
+cd /srv/bind-poker/deploy/normal
+docker compose exec app node dist/reputation-backfill-cli.js --dry-run   # chỉ tính, không ghi gì
+docker compose exec app node dist/reputation-backfill-cli.js             # ghi thật
+```
+
+Mỗi lần in một dòng `players=<số tài khoản xét> applied=<tổng danh vọng cộng thêm> ranks=[b1,b2,b3,b4,b5]` (số người ở
+từng bậc 1..5 sau lần chạy). Danh vọng của mỗi người = số ván đã chơi × `hand_played` + số ván thắng × `hand_won` + số
+ngày điểm danh × `daily_login` + phần thưởng của từng thành tựu đã mở, theo bảng `reputation_rules` đang lưu; trừ đi
+những gì server đã cộng cho ván, lần điểm danh và thành tựu kể từ khi `app` lên (quà chào mừng, lịch tân binh và điểm GM
+cộng thì **không** bị trừ). Lệnh đọc `DATABASE_URL` của container `app`; thoát 0 khi xong, 2 khi thiếu `DATABASE_URL`,
+1 khi lỗi. Chạy lại không cộng thêm gì cho người đã được tính (mỗi người có đúng một dòng `reputation_events` lý do
+`backfill`, `ref_id = 'plan27'`), nên lỡ chạy hai lần cũng không sao. Lệnh không gửi thông báo lên bậc.
+
 **Ván đang chơi không sống qua lần khởi động lại** (spec §32.8). Chúng bị huỷ và mọi khoản cược được
 hoàn, nên không ai mất điểm — nhưng người đang ngồi bàn sẽ thấy ván biến mất. Nâng cấp lúc bàn trống
 nếu có thể.

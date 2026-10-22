@@ -44,8 +44,8 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const DIST = resolve(ROOT, 'dist')
 
 /** The entry points, and the file each becomes. `outdir` derives the names from `src/`. */
-const ENTRIES = ['src/main.ts', 'src/migrate-cli.ts', 'src/grant-wardrobe-cli.ts', 'src/grant-gm-cli.ts']
-const OUTPUTS = ['dist/main.js', 'dist/migrate-cli.js', 'dist/grant-wardrobe-cli.js', 'dist/grant-gm-cli.js']
+const ENTRIES = ['src/main.ts', 'src/migrate-cli.ts', 'src/grant-wardrobe-cli.ts', 'src/grant-gm-cli.ts', 'src/reputation-backfill-cli.ts']
+const OUTPUTS = ['dist/main.js', 'dist/migrate-cli.js', 'dist/grant-wardrobe-cli.js', 'dist/grant-gm-cli.js', 'dist/reputation-backfill-cli.js']
 
 /**
  * Third-party packages left as run-time imports. Every one of them is a direct dependency of
