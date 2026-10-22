@@ -198,6 +198,7 @@
         "empty": "No item matches the filter.",
         "changed": "{{count}} rows changed, not saved.",
         "invalid": "A price is a whole number from 0 to 1,000,000,000.",
+        "invalidItems": "Fix the price of: {{items}}.",
         "save": "Save prices",
         "saveTitle": "Save {{count}} price changes",
         "achievementNote": "Switching on an achievement's item or a month's gift does not put it on sale: the label beside it says why."
@@ -250,7 +251,8 @@
         "welcome": "Picking the welcome gift",
         "newcomer_day7": "Day 7 of the newcomer calendar"
       },
-      "invalid": "Each box is a whole number from 0.",
+      "invalidRules": "Each source is a whole number from 0 to 100,000.",
+      "invalidRanks": "Each threshold is a whole number from 0 to 1,000,000,000.",
       "ranksNote": "Rank 1 always starts at 0 and the thresholds must rise. Raising a threshold never takes a rank away.",
       "saveRules": "Save sources",
       "saveRanks": "Save ranks",
@@ -481,6 +483,7 @@
     },
     "notice": {
       "points": "{{amount}} points — {{reason}}",
+      "reputation": "{{amount}} reputation — {{reason}}",
       "item": "{{item}} — {{reason}}",
       "promote": "You are now a game master — {{reason}}",
       "demote": "Your game-master role was removed — {{reason}}",

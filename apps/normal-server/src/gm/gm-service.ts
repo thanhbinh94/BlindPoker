@@ -104,6 +104,10 @@ export interface GmShopConfig {
 export const WELCOME_SLOTS: readonly string[] = ['outfit', 'head', 'face', 'aura', 'frame']
 /** The most reputation one GM grant may add (spec A5: positive only). */
 export const REPUTATION_GRANT_MAX = 100_000
+/** The most one reputation rule may pay (B4 review): a typo of three zeros must not hand out a rank per hand. */
+export const REPUTATION_RULE_MAX = 100_000
+/** The highest rank threshold a GM may set (B4 review): far past any reachable total, short of the integer column's end. */
+export const RANK_THRESHOLD_MAX = 1_000_000_000
 /** The current week and the eight after it (spec B4). */
 const FEATURED_WEEKS = 9
 
@@ -826,6 +830,11 @@ export function createGmService(deps: GmServiceDeps): GmService {
         throw new ServiceError('INVALID_RULES', 'an object of rule amounts is expected')
       }
       const rules = patch as Partial<Record<RuleKey, number>>
+      for (const [key, amount] of Object.entries(rules)) {
+        if (typeof amount === 'number' && amount > REPUTATION_RULE_MAX) {
+          throw new ServiceError('INVALID_RULES', `${key} pays at most ${String(REPUTATION_RULE_MAX)}`)
+        }
+      }
       const reputation = repOf()
       const actionId = await deps.db.transaction(async (tx) => {
         await reputation.setRules(tx, rules, by)
@@ -843,6 +852,9 @@ export function createGmService(deps: GmServiceDeps): GmService {
         throw new ServiceError('INVALID_RANKS', 'a list of { rank, threshold } is expected')
       }
       const ladder = (ranks as { rank: unknown; threshold: unknown }[]).map((r) => ({ rank: r.rank, threshold: r.threshold }) as RankRow)
+      if (ladder.some((r) => typeof r.threshold === 'number' && r.threshold > RANK_THRESHOLD_MAX)) {
+        throw new ServiceError('INVALID_RANKS', `a threshold is at most ${String(RANK_THRESHOLD_MAX)}`)
+      }
       const reputation = repOf()
       const actionId = await deps.db.transaction(async (tx) => {
         await reputation.setRanks(tx, ladder, by)

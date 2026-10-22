@@ -11,12 +11,21 @@ import type { GmTabProps } from './tabProps.js'
 /** The eight sources in the order of the spec's table (A2); a key the server adds later is listed after them. */
 const RULE_ORDER = ['hand_played', 'hand_won', 'daily_login', 'achievement_small', 'achievement_big', 'achievement_item', 'welcome', 'newcomer_day7']
 
-/** A whole number of 0 or more, else `null`. */
-function parseWhole(text: string): number | null {
+/** The server's caps (`gm-service.ts`: `REPUTATION_RULE_MAX`, `RANK_THRESHOLD_MAX`), checked here so the box says so first. */
+const RULE_MAX = 100_000
+const THRESHOLD_MAX = 1_000_000_000
+
+/** A whole number from 0 to `max`, else `null`. */
+function parseWhole(text: string, max: number): number | null {
   const trimmed = text.trim()
   if (!/^\d+$/u.test(trimmed)) return null
   const value = Number(trimmed)
-  return Number.isSafeInteger(value) ? value : null
+  return Number.isSafeInteger(value) && value <= max ? value : null
+}
+
+/** The ladder's own rule, as the server judges it: rank 1 at 0, each threshold above the one before. */
+function ladderRises(thresholds: readonly number[]): boolean {
+  return thresholds[0] === 0 && thresholds.every((value, i) => i === 0 || value > thresholds[i - 1]!)
 }
 
 export interface ReputationEditorProps {
@@ -30,8 +39,8 @@ type Pending = 'rules' | 'ranks'
 
 /**
  * Block "Danh vọng": what each source pays and where each rank starts, each table saved on its own with a reason.
- * The form only checks that each box is a whole number; the ladder's order is the server's to judge (rank 1 at 0,
- * strictly rising), and its refusal is printed in the dialog, in words.
+ * The form checks each box (a whole number up to the server's cap) and the ladder's order (rank 1 at 0, strictly
+ * rising) before any dialog opens; the server judges both again, and its refusal is printed in the dialog, in words.
  */
 export function ReputationEditor({ api, rules, ranks, onDone }: ReputationEditorProps) {
   const { t } = useTranslation('normal')
@@ -43,13 +52,14 @@ export function ReputationEditor({ api, rules, ranks, onDone }: ReputationEditor
   const changedRules: Record<string, number> = {}
   let rulesInvalid = false
   for (const key of keys) {
-    const value = parseWhole(ruleText[key] ?? '')
+    const value = parseWhole(ruleText[key] ?? '', RULE_MAX)
     if (value === null) rulesInvalid = true
     else if (value !== rules[key]) changedRules[key] = value
   }
-  const ladder = ranks.map((r, i) => ({ rank: r.rank, threshold: parseWhole(rankText[i] ?? '') }))
+  const ladder = ranks.map((r, i) => ({ rank: r.rank, threshold: parseWhole(rankText[i] ?? '', THRESHOLD_MAX) }))
   const ranksInvalid = ladder.some((r) => r.threshold === null)
   const ranksDirty = ladder.some((r, i) => r.threshold !== ranks[i]?.threshold)
+  const ladderBroken = !ranksInvalid && !ladderRises(ladder.map((r) => r.threshold ?? 0))
 
   const ruleLabel = (key: string): string => t(`gm.reputation.rule.${key}`, { defaultValue: key })
 
@@ -87,7 +97,7 @@ export function ReputationEditor({ api, rules, ranks, onDone }: ReputationEditor
                       inputMode="numeric"
                       autoComplete="off"
                       aria-label={t('gm.reputation.amountOf', { rule: ruleLabel(key) })}
-                      aria-invalid={parseWhole(ruleText[key] ?? '') === null ? true : undefined}
+                      aria-invalid={parseWhole(ruleText[key] ?? '', RULE_MAX) === null ? true : undefined}
                       value={ruleText[key] ?? ''}
                       onChange={(event) => setRuleText((prev) => ({ ...prev, [key]: event.target.value }))}
                     />
@@ -99,7 +109,7 @@ export function ReputationEditor({ api, rules, ranks, onDone }: ReputationEditor
         </div>
         {rulesInvalid ? (
           <p className={s.alert} role="alert">
-            {t('gm.reputation.invalid')}
+            {t('gm.reputation.invalidRules')}
           </p>
         ) : null}
         <div className={s.choices}>
@@ -139,14 +149,17 @@ export function ReputationEditor({ api, rules, ranks, onDone }: ReputationEditor
             </tbody>
           </table>
         </div>
-        <p className={s.footnote}>{t('gm.reputation.ranksNote')}</p>
+        {/* The ladder's rule: a note while it holds, the alert the moment an edit breaks it. */}
+        <p className={ladderBroken ? s.alert : s.footnote} role={ladderBroken ? 'alert' : undefined}>
+          {t('gm.reputation.ranksNote')}
+        </p>
         {ranksInvalid ? (
           <p className={s.alert} role="alert">
-            {t('gm.reputation.invalid')}
+            {t('gm.reputation.invalidRanks')}
           </p>
         ) : null}
         <div className={s.choices}>
-          <Button variant="gold" disabled={ranksInvalid || !ranksDirty} onClick={() => setPending('ranks')}>
+          <Button variant="gold" disabled={ranksInvalid || ladderBroken || !ranksDirty} onClick={() => setPending('ranks')}>
             {t('gm.reputation.saveRanks')}
           </Button>
         </div>

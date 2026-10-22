@@ -198,6 +198,7 @@
         "empty": "Không có món nào khớp bộ lọc.",
         "changed": "Đã sửa {{count}} hàng, chưa lưu.",
         "invalid": "Giá là số nguyên từ 0 tới 1.000.000.000.",
+        "invalidItems": "Sửa giá của: {{items}}.",
         "save": "Lưu giá",
         "saveTitle": "Lưu {{count}} thay đổi giá",
         "achievementNote": "Bật bán một món thành tựu hay quà tháng cũng không làm nó lên kệ: nhãn bên cạnh là lý do."
@@ -250,7 +251,8 @@
         "welcome": "Chọn quà chào mừng",
         "newcomer_day7": "Ngày 7 của lịch tân thủ"
       },
-      "invalid": "Mỗi ô là số nguyên từ 0.",
+      "invalidRules": "Mỗi nguồn là số nguyên từ 0 đến 100.000.",
+      "invalidRanks": "Mỗi ngưỡng là số nguyên từ 0 đến 1.000.000.000.",
       "ranksNote": "Bậc 1 luôn từ 0 và ngưỡng phải tăng dần. Nâng ngưỡng không làm ai tụt bậc.",
       "saveRules": "Lưu nguồn",
       "saveRanks": "Lưu bậc",
@@ -481,6 +483,7 @@
     },
     "notice": {
       "points": "{{amount}} điểm — {{reason}}",
+      "reputation": "{{amount}} danh vọng — {{reason}}",
       "item": "{{item}} — {{reason}}",
       "promote": "Bạn đã được trao quyền quản trị — {{reason}}",
       "demote": "Quyền quản trị của bạn đã được thu — {{reason}}",

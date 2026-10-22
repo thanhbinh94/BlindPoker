@@ -73,7 +73,7 @@ export function PlayerDetail({ api, lang, playerId, onBack }: PlayerDetailProps)
   const player = detail.data
   const rankName = (rank: number): string => t(`game:rank.${rank}`, { defaultValue: String(rank) })
 
-  const perform =async (kind: ActionKind, values: ReasonValues): Promise<string> => {
+  const perform = async (kind: ActionKind, values: ReasonValues): Promise<string> => {
     switch (kind) {
       case 'points': {
         if (values.amount === undefined) throw new Error('amount')

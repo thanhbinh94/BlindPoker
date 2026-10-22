@@ -57,7 +57,8 @@ export function gmNoticeAction(n: ClientNotification): string | null {
 }
 
 /**
- * A GM's notice with the reason the player should read: `+12.000 điểm — thưởng` for points, `Mũ vương miện — tặng`
+ * A GM's notice with the reason the player should read: `+12.000 điểm — thưởng` for points, `+500 danh vọng — giải`
+ * for reputation (Plan 27), `Mũ vương miện — tặng`
  * for an item, and a sentence that names what happened for a promotion, a demotion or the whole wardrobe. Any other
  * action (a lock, a kick) says only what the GM wrote, so it comes back unchanged — and so does a points notice that
  * lost its amount, because "0 điểm" would be a lie.
@@ -68,6 +69,8 @@ function gmNoticeText(n: ClientNotification, t: TFunction, lang: Language): Clie
   let written: string | null = null
   if ((action === 'grant_points' || action === 'adjust_points') && amount !== null) {
     written = t('gm.notice.points', { amount: formatSigned(amount, lang), reason })
+  } else if (action === 'grant_reputation' && amount !== null) {
+    written = t('gm.notice.reputation', { amount: formatSigned(amount, lang), reason })
   } else if (action === 'grant_item' && itemId !== null) {
     written = t('gm.notice.item', { item: itemName(itemId, t), reason })
   } else if (action === 'promote') {

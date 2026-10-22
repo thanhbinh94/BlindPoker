@@ -848,6 +848,13 @@ describe('GmService — shop and reputation (Plan 27 B4)', () => {
     await expect(gm.setReputationRanks(actor(boss), [null], 'dữ liệu rác')).rejects.toMatchObject({ code: 'INVALID_RANKS' })
     expect(await h.app.services.reputation.ranks()).toEqual(ladder)
 
+    // The caps (B4 review): a rule pays at most 100 000, a threshold is at most 1 000 000 000; one past either is refused.
+    await expect(gm.setReputationRules(actor(boss), { daily_login: 100_001 }, 'quá tay')).rejects.toMatchObject({ code: 'INVALID_RULES' })
+    const tooHigh = ladder.map((row) => (row.rank === 5 ? { rank: 5, threshold: 1_000_000_001 } : row))
+    await expect(gm.setReputationRanks(actor(boss), tooHigh, 'quá cao')).rejects.toMatchObject({ code: 'INVALID_RANKS' })
+    expect(await h.app.services.reputation.ranks()).toEqual(ladder)
+    expect((await h.app.services.reputation.rules()).daily_login).toBe(15)
+
     expect((await logged('set_reputation_rules')).map((r) => r.details)).toEqual([{ rules: { daily_login: 15 } }])
     expect((await logged('set_reputation_ranks')).map((r) => r.details)).toEqual([{ ranks: ladder }])
   })

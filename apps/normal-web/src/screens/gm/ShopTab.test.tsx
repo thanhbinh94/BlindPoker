@@ -145,7 +145,8 @@ describe('ShopTab', () => {
     await user.clear(price)
     await user.type(price, '12.5')
 
-    expect(prices.getByText(t.shop.prices.invalid)).toBeInTheDocument()
+    // The alert names the row, which a filter may since have hidden (B4 review).
+    expect(prices.getByRole('alert')).toHaveTextContent(`${t.shop.prices.invalid} Sửa giá của: Mũ len.`)
     expect(prices.getByRole('button', { name: t.shop.prices.save })).toBeDisabled()
   })
 
@@ -228,7 +229,7 @@ describe('ShopTab', () => {
     expect(await screen.findByText(t.done.reputationRules)).toBeInTheDocument()
   })
 
-  it('sends the whole ladder and prints the server’s refusal of one that falls', async () => {
+  it('sends the whole ladder and prints the server’s refusal in the dialog', async () => {
     const user = userEvent.setup()
     const gmSetReputationRanks = vi.fn().mockRejectedValue(new ApiError(400, 'INVALID_RANKS', 'rank 3 must start above rank 2'))
     setup(config(), { gmSetReputationRanks })
@@ -237,15 +238,52 @@ describe('ShopTab', () => {
 
     const sharp = rep.getByLabelText('Ngưỡng của Cao thủ')
     await user.clear(sharp)
-    await user.type(sharp, '50')
+    await user.type(sharp, '450')
     await user.click(rep.getByRole('button', { name: t.reputation.saveRanks }))
-    await confirmWithReason('thử bậc lùi')
+    await confirmWithReason('giãn bậc')
 
     expect(gmSetReputationRanks).toHaveBeenCalledWith(
-      [0, 100, 50, 1_800, 5_000].map((threshold, i) => ({ rank: i + 1, threshold })),
-      'thử bậc lùi',
+      [0, 100, 450, 1_800, 5_000].map((threshold, i) => ({ rank: i + 1, threshold })),
+      'giãn bậc',
     )
     await waitFor(() => expect(dialog().getByRole('alert')).toHaveTextContent('Ngưỡng bậc không hợp lệ: rank 3 must start above rank 2'))
+  })
+
+  it('refuses a ladder that falls before any dialog, with the rule it breaks', async () => {
+    const user = userEvent.setup()
+    const { api } = setup()
+    const rep = await section(t.reputation.title)
+    await screen.findByRole('heading', { name: t.reputation.title })
+
+    const sharp = rep.getByLabelText('Ngưỡng của Cao thủ')
+    await user.clear(sharp)
+    await user.type(sharp, '50')
+
+    expect(rep.getByRole('alert')).toHaveTextContent(t.reputation.ranksNote)
+    expect(rep.getByRole('button', { name: t.reputation.saveRanks })).toBeDisabled()
+    expect(api.gmSetReputationRanks).not.toHaveBeenCalled()
+  })
+
+  it('refuses a source above 100.000 and a threshold above 1.000.000.000 before any dialog', async () => {
+    const user = userEvent.setup()
+    setup()
+    const rep = await section(t.reputation.title)
+    await screen.findByRole('heading', { name: t.reputation.title })
+
+    const daily = rep.getByLabelText('Danh vọng cho: Một ngày điểm danh')
+    await user.clear(daily)
+    await user.type(daily, '100001')
+    expect(rep.getByRole('alert')).toHaveTextContent(t.reputation.invalidRules)
+    expect(rep.getByRole('button', { name: t.reputation.saveRules })).toBeDisabled()
+    await user.clear(daily)
+    await user.type(daily, '100000')
+    expect(rep.queryByRole('alert')).toBeNull()
+
+    const legend = rep.getByLabelText('Ngưỡng của Huyền thoại')
+    await user.clear(legend)
+    await user.type(legend, '1000000001')
+    expect(rep.getByRole('alert')).toHaveTextContent(t.reputation.invalidRanks)
+    expect(rep.getByRole('button', { name: t.reputation.saveRanks })).toBeDisabled()
   })
 
   it('offers a retry when the settings cannot be loaded', async () => {

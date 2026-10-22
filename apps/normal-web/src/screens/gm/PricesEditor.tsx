@@ -75,7 +75,9 @@ export function PricesEditor({ api, rows, onDone }: PricesEditorProps) {
     const change = changeOf(row, draftFor(row))
     return change === null ? [] : [change]
   })
-  const invalid = rows.some((row) => parsePrice(draftFor(row).price) === null)
+  // Every row is judged, shown or not: the alert names the bad ones, since a filter may hide them (B4 review).
+  const invalidNames = rows.filter((row) => parsePrice(draftFor(row).price) === null).map((row) => itemName(row.itemId, t))
+  const invalid = invalidNames.length > 0
 
   // "Chưa định giá" first, then the catalogue's order.
   const shown = [...rows]
@@ -184,7 +186,7 @@ export function PricesEditor({ api, rows, onDone }: PricesEditorProps) {
 
         {invalid ? (
           <p className={s.alert} role="alert">
-            {t('gm.shop.prices.invalid')}
+            {t('gm.shop.prices.invalid')} {t('gm.shop.prices.invalidItems', { items: invalidNames.join(', ') })}
           </p>
         ) : null}
         <div className={s.choices}>

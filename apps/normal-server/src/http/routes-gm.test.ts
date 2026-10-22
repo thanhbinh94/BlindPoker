@@ -202,6 +202,8 @@ describe('the shop and reputation (Plan 27 B4)', () => {
     await db.execute(sql`delete from shop_config where key = 'welcome_choices'`)
     await seedReputationDefaults(db)
     await seedShopConfig(db)
+    // The rows went back behind the service's back: drop its few-second cache too, so nothing after reads the old ones.
+    h.app.services.reputation.invalidate()
   })
 
   interface ShopConfigBody {

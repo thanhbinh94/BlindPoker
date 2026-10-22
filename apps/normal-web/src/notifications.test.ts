@@ -56,6 +56,14 @@ describe('mapNotifications — a game master’s notice', () => {
     expect((mapped?.payload as { action: string }).action).toBe('grant_points')
   })
 
+  it('writes the reputation, signed, in front of the reason of a reputation notice', () => {
+    const [vi] = mapNotifications([note('GM_NOTICE', { action: 'grant_reputation', amount: 1_500, reason: 'giải đấu' })], t, 'vi')
+    expect(reasonOf(vi)).toBe('+1.500 danh vọng — giải đấu')
+    const en = makeI18n('en').getFixedT(null, 'normal')
+    const [english] = mapNotifications([note('GM_NOTICE', { action: 'grant_reputation', amount: -200, reason: 'mistake' })], en, 'en')
+    expect(reasonOf(english)).toBe('-200 reputation — mistake')
+  })
+
   it('writes a deduction with its minus', () => {
     const [mapped] = mapNotifications([note('GM_NOTICE', { action: 'adjust_points', amount: -3_000, reason: 'nhầm' })], t, 'vi')
 
