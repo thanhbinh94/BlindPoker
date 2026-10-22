@@ -112,3 +112,22 @@ export interface BotChibi {
 }
 
 export type ChibiSubject = ChibiConfig | BotChibi
+
+/** How alive a `Chibi` is (BP-30, spec K6 §3.1). `off`, the default, is the chibi as it always was — the table, the
+ * PlayerBar, every card and portrait. `still` mounts the faces a reaction needs and answers `react` and `facing`, but
+ * never breathes or blinks on its own (the welcome cards: three at once). `idle` also breathes and blinks while it is on
+ * screen (one stage per screen). */
+export type ChibiLive = 'off' | 'still' | 'idle'
+
+/** What a live chibi can do for a moment: `cheer` (an item went on), `wave` (a tap), `spin` (a turn — driven by a
+ * `facing` change, never by `react`). */
+export type ChibiReactionKind = 'cheer' | 'wave' | 'spin'
+
+/** One reaction asked of a live chibi. A new `key` runs it again; the same key is the same reaction, already seen. */
+export interface ChibiReaction {
+  kind: ChibiReactionKind
+  key: number
+}
+
+/** Which way the figure faces: `right` is the art as drawn, `left` its mirror image. */
+export type ChibiFacing = 'right' | 'left'
