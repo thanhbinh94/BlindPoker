@@ -274,6 +274,17 @@ GM's own reputation route (`grantReputation` in `apps/normal-web/e2e/ops/ops-hel
 | Spec Phần E, K5, R12 (the wardrobe's loading in a browser): opening the Phòng thay đồ on a phone asks only for the pictures near the screen, and fewer than when every card loaded; on fast 3G the stage and the first row are drawn within 2 s at 1366×768 and 375×812 | `apps/normal-web/e2e/ops/08-shop.spec.ts` | the wardrobe asks only for the figures on screen … · on a 3G profile the wardrobe draws the stage and the first row within 2 s at 1366×768 and 375×812 | added in Plan 27 — runs outside `pnpm test` |
 | Spec B4 (the GM's Cửa hàng tab in a browser): a GM changes Mũ len's price with a reason, the tab says it saved and reads the price back, the player's shelf shows the new price, the log has "Đổi giá cửa hàng", and the price goes back to the seed | `apps/normal-web/e2e/ops/06-gm.spec.ts` | Q-04: the GM shop tab reprices an item and the shelf follows | added in Plan 27 — runs outside `pnpm test` |
 
+## BP-29 — the chibi under the rail, the refusal over the dialog, and the Blind fee in a browser (bug log §10 E3–E5)
+
+Not rows of §29.2, §29.3 or §30: three regressions of the 2026-10-22 review round, each pinned once in a unit test and
+once in the ops pack. B-05 is the `mobile` project's (title tagged `@mobile`); E-13 and F-01 the `desktop` project's.
+
+| Rule | Test file | Test name | Status |
+|---|---|---|---|
+| Bug log E4: a `Chibi` keeps its layers' z-index (10–90) inside its own root, so on a phone the lobby's face and the profile's figure, scrolled under the sticky rail (z-index 20), are drawn beneath it — the browser's hit test at the rail's middle answers with the rail, not a layer of the face | `packages/ui-kit/src/avatar2d/Chibi.test.tsx`, `apps/normal-web/e2e/ops/01-accounts.spec.ts` | the .chibi root opens its own stacking context, so its layers’ z-index never competes with the page around it · B-05 @mobile scrolled under the sticky rail, the player’s face stays beneath it | added in BP-29 — B-05 runs outside `pnpm test` |
+| Bug log E5: a refusal answering a dialog's own button is drawn above the dialog's backdrop — `.toasts` stands on `--z-toast`, above the backdrop's `--z-modal`; a Hold'em buy-in the balance cannot cover leaves the dialog open and "Số dư không đủ" on top of it, and charges nothing | `packages/ui-kit/src/screens/RoomScreen.test.tsx`, `apps/normal-web/e2e/ops/03-holdem.spec.ts` | keeps the buy-in dialog open on INSUFFICIENT_BALANCE and draws the refusal above its backdrop · E-13: a buy-in the balance cannot cover is refused in words, on top of the open buy-in dialog | added in BP-29 — E-13 runs outside `pnpm test` |
+| Bug log E3 (Plan 27 D1 in a browser): a Blind hand's result card prints no "Phí bàn" line | `apps/normal-web/e2e/ops/04-blind.spec.ts` | F-01 F-02 H-01: pure luck, three cards | added in BP-29 — runs outside `pnpm test` |
+
 ## Ruling recorded: the `reqId` cache is per connection
 
 Plan 7's first review round raised the `reqId` ring buffer as an open question, with a
