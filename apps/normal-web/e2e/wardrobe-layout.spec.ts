@@ -287,7 +287,8 @@ async function expectStepper(page: Page, where: string, phone: boolean): Promise
  * scroll — on a window as tall as `USER_SCREEN`'s or the 900 px one (the note on `.equippedRows`,
  * `wardrobe.module.css`). The 768 px laptop is not asked: its column has scrolled inside itself since before No10. */
 async function expectColumnFits(page: Page, where: string): Promise<void> {
-  const column = page.getByRole('group', { name: 'Xem thử biểu cảm' }).locator('xpath=../..')
+  // group → .stageControls (BP-30's row with Xoay) → .stagePanel → .previewColumn, the box that must not scroll
+  const column = page.getByRole('group', { name: 'Xem thử biểu cảm' }).locator('xpath=../../..')
   const { scrollHeight, clientHeight } = await column.evaluate((el) => ({ scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }))
   expect(scrollHeight, `${where}: the left column fits its box (content ${scrollHeight} px, box ${clientHeight} px)`).toBeLessThanOrEqual(clientHeight)
 }
