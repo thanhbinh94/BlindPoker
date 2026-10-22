@@ -258,10 +258,10 @@ icon's size until then. A card icon's tint render queues behind every figure's, 
 
 Measured by the ops pack (`e2e/ops/08-shop.spec.ts`; Chromium, fresh HTTP cache):
 
-- **S-04** (375×812, DPR 2): opening the wardrobe asks for 11 `/avatar/` pictures, for the 5 figures and cards near the
+- **P-04** (375×812, DPR 2): opening the wardrobe asks for 11 `/avatar/` pictures, for the 5 figures and cards near the
   screen. On Mũ with "Hiện cả món chưa có" ticked, 3 requests for the 4 hats near the screen out of 8, where loading
   every card (`IntersectionObserver` removed, the old behaviour) asks for 7. Back on Kiểu tóc it asks for none.
-- **S-05** ("fast 3G": 1.6 Mbps down, 750 kbps up, 150 ms RTT, from a tap with the app already open): the stage is
+- **P-05** ("fast 3G": 1.6 Mbps down, 750 kbps up, 150 ms RTT, from a tap with the app already open): the stage is
   drawn and the first row of cards is on screen in about 850 ms at both 1366×768 and 375×812. The first row's pictures
   arrive in about 1.8 s at 1366×768, but about 3.2 s on the phone: at DPR 2 a 72 px Kiểu tóc portrait loads its hair
   layers at @2x (about 440 KB for the row), because the kit picks the density by the screen and not by the drawn size.
@@ -396,7 +396,7 @@ the lock.** A player who types `#/gm` is sent to the lobby before the chunk is r
 `window.location.replace` so Back is not trapped on a redirecting entry), and a GM demoted or locked since the page loaded
 finds out on the next call.
 
-- **Five tabs** — Tổng quan, Người chơi, Phòng, Quà tháng, Nhật ký. The Players tab stays mounted (hidden) while one player's page is
+- **Six tabs** — Tổng quan, Người chơi, Phòng, Quà tháng, Cửa hàng (Plan 27), Nhật ký. The Players tab stays mounted (hidden) while one player's page is
   open, so Back returns to the same search, results and cursor with no request.
 - **The 403 proxy.** `useAsync` swallows the cause of a failure, so a tab cannot notice that the role is gone. `GmScreen`
   wraps the api in a `Proxy` that checks each call's rejection: a `403 FORBIDDEN` calls `onForbidden` once (a tab firing
@@ -442,9 +442,33 @@ finds out on the next call.
   `GET /api/gm/stats/daily`: a table with a row per economy day (Ngày, Nguồn, Bể, Ròng) whose last column draws the day's
   sources (gold) and sinks (red) as bars on one scale, the largest single sum of the range; no chart library. At 375 px the
   table scrolls inside its wrapper (`docs/known-limitations.md`).
+- **The Cửa hàng tab (`ShopTab.tsx`, Plan 27).** One read of `GET /api/gm/shop` feeds four blocks, each with its own
+  Save behind the `ReasonDialog`: **Giá** (`PricesEditor.tsx`: every item with "Giá của …", "Bậc tối thiểu của …" and
+  "Bán …", filtered by slot and rarity, unpriced rows first; Save sends only the changed fields of the changed rows),
+  the week's shelf (`FeaturedEditor.tsx`), the welcome choices (`WelcomeEditor.tsx`) and reputation's rules and rank
+  thresholds (`ReputationEditor.tsx`). After a save the tab is read again and a status line says what landed ("Đã lưu
+  N giá."). A player's page adds "Cộng danh vọng" (a GM only ever adds reputation).
 
 Tests: `screens/gm/*.test.tsx`, `screens/DailyCalendar.test.tsx`, `notifications.test.ts`, and the ops pack's section Q
-(`e2e/ops/06-gm.spec.ts`, Q-01 to Q-03).
+(`e2e/ops/06-gm.spec.ts`, Q-01 to Q-04).
+
+---
+
+## The Cửa hàng and the welcome gift (Plan 27)
+
+`screens/shop/ShopScreen.tsx` (route `#/shop`, a lazy account chunk, reached from the lobby's "Phòng thay đồ và cửa
+hàng" links) draws `GET /api/shop`: a stage with the player's figure, their balance ("Số dư: N điểm") and their
+reputation line, "Kệ tuần này" when the week has a shelf, then one shelf per rarity ("Theo độ hiếm") filtered by slot.
+Each card (`ShopCard.tsx`) is the wardrobe's own card with the shop's footer: "Mua · N", "🔒 cần <Bậc>" under the
+player's rank, "thiếu N điểm" when short, "✓ Đã có" with a link to wear it, or why the item does not sell. A press on a
+card is a try-on; "Mua" asks "Mua món này?" and sends a fresh `purchaseId` (`purchase-id.ts`), so a retry after a
+timeout is charged once.
+
+`screens/WelcomeDialog.tsx` is the welcome gift: it opens over the lobby by itself once per account and browser
+(`bp.welcomeShown`) while `GET /api/welcome` says it is not claimed, offers three rare items drawn on the player's own
+figure, and grants the pick (worn at once) and the reputation with "Nhận"; "Để sau" leaves the lobby's "🎁 Quà chào
+mừng" button as the way back. While the gift waits the daily reminder does not open Điểm danh. Tests:
+`screens/shop/*.test.tsx`, `screens/WelcomeDialog.test.tsx`, and the ops pack's section P (`e2e/ops/08-shop.spec.ts`).
 
 ---
 

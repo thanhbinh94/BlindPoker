@@ -245,6 +245,35 @@ looks right, and a real phone — is the user's to try (`docs/operation-test-pla
 | Spec C2 (the layout in a browser): the hero picture has decoded (a blocked or missing file has no natural width); the narrowest phone, 320 px, does not scroll sideways under the 300 px band; the card and the hero's words never overlap text on either tab, at 1920 × 940 and 1366 × 768 (the desktop tour) and at 375 × 812 (the `@mobile` tour) | `apps/normal-web/e2e/normal.spec.ts` | một tài khoản chơi trọn một ván Blind với bot | added in Plan 26 — runs outside `pnpm test` |
 | Spec C3 (the light theme): at 1024 × 700 on the light theme the hero keeps its night picture and its lead holds at least 4.5 : 1 against the lightest pixel under the text (measured by a screenshot of the lead's box with the text hidden, decoded with `sharp`; 5.36 when written), and exactly one `h1` is visible | `apps/normal-web/e2e/normal.spec.ts` | một tài khoản chơi trọn một ván Blind với bot | added in Plan 26 — runs outside `pnpm test` |
 
+## Plan 27 — the shop, Blind to zero, reputation and the check-in count (spec 2026-10-21)
+
+Not rows of §29.2, §29.3 or §30: Plan 27's spec amends the main design's economy (§18), the Blind rules (§8) and the
+daily check-in. These are the invariants that hold the money and the counters up, run by `pnpm test`; the browser cases
+have their own section below.
+
+| Rule | Test file | Test name | Status |
+|---|---|---|---|
+| Spec B1, B2 (the shop's money): every purchase is one ledger row against the shop sink, so random buys by several players keep Σ balances + Σ sinks and the sink holds exactly what was paid; a purchase retried with the same `purchaseId` charges once and grants once | `apps/normal-server/src/shop/shop-service.test.ts` | conservation: 40 random buys across 3 players keep Σ balances + Σ sinks, and the shop sink equals what was paid · buys once for a repeated purchaseId | added in Plan 27 |
+| Spec D1, D2 (a Blind seat plays to zero): a seat whose ante takes its whole stack in Chơi hoặc bỏ is dealt in, auto-played and never asked; a seat at 0 is stood up after the hand with `STACK_SPENT`, and the room's books stay balanced | `packages/core/src/hand/blind.test.ts`, `packages/server-kit/src/room/room-hands.test.ts` | play-or-fold: a seat emptied by the ante is auto-played and never asked · a seat that reaches 0 is stood up after the hand with STACK_SPENT and books() stays 0 | added in Plan 27 |
+| Spec A1, A2 (reputation): reputation only grows, through events; a player's stored reputation is always the sum of their events | `apps/normal-server/src/reputation/reputation-service.test.ts` | invariant: players.reputation = Σ events | added in Plan 27 |
+| Spec C2 (the monthly check-in counts claims, not a streak): a 31-day month forgives three missed days and still reaches tier 28, and four do not | `apps/normal-server/src/economy/daily-rules.test.ts` | three missed days in a 31-day month still reach tier 28, four do not | added in Plan 27 |
+| Spec C2 (the newcomer calendar): a day-7 claim with the rare pool empty pays the fallback points, still finishes the newcomer calendar, and lands with the daily claim in one transaction | `apps/normal-server/src/economy/economy-service.test.ts` | the rare pool empty on day 7 pays the fallback and still finishes, in one transaction | added in Plan 27 |
+
+## Plan 27 — the shop, reputation and the welcome gift, in the browser (spec 2026-10-21)
+
+Not rows of §29.2, §29.3 or §30: the ops pack's section P (`docs/operation-test-plan.md`, "Cửa hàng, danh vọng và tủ
+đồ") and its Q-04, which run outside `pnpm test`, as every e2e does. P-02 and P-04 are the `mobile` project's (titles
+tagged `@mobile`), P-03b the `landscape` project's, the rest the `desktop` project's. The ops pack lifts a rank through the
+GM's own reputation route (`grantReputation` in `apps/normal-web/e2e/ops/ops-helpers.ts`), since reputation is never bought.
+
+| Rule | Test file | Test name | Status |
+|---|---|---|---|
+| Spec C1, C3 (the welcome gift in a browser): a new account's lobby keeps "🎁 Quà chào mừng" after "Để sau"; the dialog offers three choices and keeps Nhận off until one is picked; the claim says what landed, the pick is worn at once (the lobby figure is redrawn) and listed as owned and worn in the Phòng thay đồ; a later sign-in elsewhere, gift taken and today's reward waiting, opens Điểm danh with no dialog | `apps/normal-web/e2e/ops/08-shop.spec.ts` | the welcome gift offers three rare items, the pick is worn, and a later sign-in with a reward waiting still opens Điểm danh | added in Plan 27 — runs outside `pnpm test` |
+| Spec B2, B3 (a purchase in a browser, on a phone): a common buys at rank 1 through the confirm dialog, the status line says it is in the wardrobe, the card reads owned and the stage's balance drops by the price; a rare reads "🔒 cần Cao thủ", has no Mua and is refused RANK_TOO_LOW by the server; after a GM's 400 reputation the rare buys; the ledger has exactly one shop_purchase row per item and the profile's Lịch sử điểm two "Mua ở Cửa hàng" lines | `apps/normal-web/e2e/ops/08-shop.spec.ts` | a common buys at rank 1, a rare needs Cao thủ, and the balance drops once @mobile | added in Plan 27 — runs outside `pnpm test` |
+| Spec A4 (the rank in a browser): a Cao thủ's profile reads "Danh vọng 400 · Cao thủ · còn 1.400 tới Bậc thầy" and their seat at a bot table carries the word beside the name or after the stack; held sideways the narrow plate shows the numeral III in a pill, named Cao thủ, on the stack's line | `apps/normal-web/e2e/ops/08-shop.spec.ts` | the rank label stands beside the name on the seat and the profile · the rank shows as the numeral III in a pill on the stack line of a narrow plate @landscape | added in Plan 27 — runs outside `pnpm test` |
+| Spec Phần E, K5, R12 (the wardrobe's loading in a browser): opening the Phòng thay đồ on a phone asks only for the pictures near the screen, and fewer than when every card loaded; on fast 3G the stage and the first row are drawn within 2 s at 1366×768 and 375×812 | `apps/normal-web/e2e/ops/08-shop.spec.ts` | the wardrobe asks only for the figures on screen … · on a 3G profile the wardrobe draws the stage and the first row within 2 s at 1366×768 and 375×812 | added in Plan 27 — runs outside `pnpm test` |
+| Spec B4 (the GM's Cửa hàng tab in a browser): a GM changes Mũ len's price with a reason, the tab says it saved and reads the price back, the player's shelf shows the new price, the log has "Đổi giá cửa hàng", and the price goes back to the seed | `apps/normal-web/e2e/ops/06-gm.spec.ts` | Q-04: the GM shop tab reprices an item and the shelf follows | added in Plan 27 — runs outside `pnpm test` |
+
 ## Ruling recorded: the `reqId` cache is per connection
 
 Plan 7's first review round raised the `reqId` ring buffer as an open question, with a

@@ -23,8 +23,9 @@ test('S-01 S-02 S-03 I-01 I-02 I-03: first visit, first sign-in, first reward', 
   await expect(probe).toHaveTitle('Blind Luck Poker')
   await probe.close()
 
-  // S-02 + I-01 (first half): `../support.js`'s `register` itself asserts the app opens on the daily page for a
-  // fresh account (unlike `registerPatiently`, which only needs a signed-in player).
+  // S-02 + I-01 (first half): since Plan 27 a fresh account's first visit opens the welcome gift over the lobby, not the
+  // daily page, and `../support.js`'s `register` closes it with "Để sau". The daily jump itself — a sign-in with the
+  // gift taken and today's reward waiting — is walked by P-01 (`08-shop.spec.ts`).
   const context = await browser.newContext({ locale: 'vi-VN', timezoneId: 'Asia/Ho_Chi_Minh', colorScheme: 'dark' })
   const page = await context.newPage()
   const who = account('Ops')

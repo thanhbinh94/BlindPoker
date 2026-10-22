@@ -242,3 +242,45 @@ test("Q-03: a GM reopens a claimed check-in, unlocks an achievement, and sets a 
   await expect(gm.page.getByRole('row').filter({ hasText: 'mở thành tựu Q-03' })).toContainText('Mở thành tựu')
   await expect(gm.page.getByRole('row').filter({ hasText: 'quà tháng Q-03' })).toContainText('Đổi quà tháng')
 })
+
+/** The Quản trị console's Cửa hàng tab: sets Mũ len's price with a reason and waits for the tab's "saved" line. */
+async function priceBeanie(gmPage: Page, price: string, reason: string): Promise<void> {
+  const box = gmPage.getByLabel('Giá của Mũ len', { exact: true })
+  await box.fill(price)
+  await expect(gmPage.getByText('Đã sửa 1 hàng, chưa lưu.')).toBeVisible()
+  await gmPage.getByRole('button', { name: 'Lưu giá', exact: true }).click()
+  const dialog = gmPage.getByRole('dialog', { name: 'Lưu 1 thay đổi giá' })
+  await expect(dialog.getByRole('button', { name: 'Lưu giá', exact: true })).toBeDisabled() // a reason first
+  await dialog.getByLabel(/Lý do/).fill(reason)
+  await dialog.getByRole('button', { name: 'Lưu giá', exact: true }).click()
+  await expect(dialog).toBeHidden()
+  await expect(gmPage.getByRole('status').filter({ hasText: 'Đã lưu 1 giá.' })).toBeVisible()
+  await expect(box, 'the tab reads the saved price back').toHaveValue(price)
+}
+
+test('Q-04: the GM shop tab reprices an item and the shelf follows; the log has the line', async () => {
+  await gm.page.goto('/#/settings')
+  await gm.page.getByRole('link', { name: 'Quản trị' }).click()
+  await expect(gm.page.getByRole('heading', { name: 'Quản trị' })).toBeVisible()
+  await gm.page.getByRole('button', { name: 'Cửa hàng', exact: true }).click()
+  await expect(gm.page.getByRole('table', { name: 'Giá' })).toBeVisible()
+  const was = await gm.page.getByLabel('Giá của Mũ len', { exact: true }).inputValue()
+  expect(was, 'Mũ len is seeded at a common’s 10.000').toBe('10000')
+
+  await priceBeanie(gm.page, '12000', 'giá Q-04')
+
+  // The player's shop reads the new price; nothing else on the card changes.
+  await alice.page.goto('/#/shop')
+  await expect(alice.page.getByRole('heading', { name: 'Cửa hàng', level: 1 })).toBeVisible()
+  const card = alice.page.locator('[data-shelf="common"] [data-item="head_beanie01"]')
+  await expect(card.getByRole('button', { name: 'Mua · 12.000', exact: true })).toBeVisible()
+
+  await gm.page.getByRole('button', { name: 'Nhật ký', exact: true }).click()
+  await expect(gm.page.getByRole('row').filter({ hasText: 'giá Q-04' })).toContainText('Đổi giá cửa hàng')
+
+  // Back to the seed, so the shop cases (08-shop, P-02) find a common at 10.000 whatever order the projects run in.
+  await gm.page.getByRole('button', { name: 'Cửa hàng', exact: true }).click()
+  await priceBeanie(gm.page, was, 'trả giá Q-04')
+  await alice.page.reload()
+  await expect(card.getByRole('button', { name: 'Mua · 10.000', exact: true })).toBeVisible()
+})

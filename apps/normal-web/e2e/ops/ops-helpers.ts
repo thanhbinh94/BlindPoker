@@ -58,8 +58,20 @@ export interface Player {
  * this pack makes more than that in a run, so a refusal that says "wait N seconds" is waited out and retried.
  */
 export async function registerPatiently(page: Page, who: Account): Promise<void> {
+  const toLobby = async (): Promise<void> => {
+    await page.waitForTimeout(500)
+    await page.goto('/#/lobby')
+    await expect(page.getByRole('button', { name: 'Tạo phòng' })).toBeVisible()
+    // A new account's welcome gift opens over the lobby (Plan 27, C3); "Để sau" leaves it for later.
+    await dismissWelcome(page)
+  }
   for (let attempt = 0; attempt < 4; attempt++) {
+    // The last attempt may have gone through after all (the refusal text it read was the one before it): a signed-in
+    // page is sent away from the form, so look before filling it.
+    if (attempt > 0 && (await page.request.get('/api/auth/me')).ok()) return toLobby()
     await page.goto('/#/register')
+    // A fresh form on a retry: the last refusal's "vui lòng đợi N giây" must not answer this attempt's race.
+    if (attempt > 0) await page.reload()
     await page.getByLabel('Email', { exact: true }).fill(who.email)
     await page.getByLabel('Mật khẩu', { exact: true }).fill(who.password)
     await page.getByLabel('Tên hiển thị', { exact: true }).fill(who.displayName)
@@ -72,14 +84,7 @@ export async function registerPatiently(page: Page, who: Account): Promise<void>
       asked.then(() => 'in' as const),
       limited.waitFor({ timeout: 20_000 }).then(() => 'limited' as const),
     ])
-    if (outcome === 'in') {
-      await page.waitForTimeout(500)
-      await page.goto('/#/lobby')
-      await expect(page.getByRole('button', { name: 'Tạo phòng' })).toBeVisible()
-      // A new account's welcome gift opens over the lobby (Plan 27, C3); "Để sau" leaves it for later.
-      await dismissWelcome(page)
-      return
-    }
+    if (outcome === 'in') return toLobby()
     const seconds = Number(/(\d+) giây/.exec(await limited.innerText())?.[1] ?? '30')
     await page.waitForTimeout((seconds + 1) * 1000)
   }
@@ -433,4 +438,22 @@ export async function promoteToGm(page: Page, email: string): Promise<void> {
   const res = await page.request.post('/e2e/promote', { data: { email }, headers: { 'x-requested-with': 'bind-poker' } })
   expect(res.status(), `POST /e2e/promote returned ${res.status()}`).toBe(200)
   await page.reload()
+}
+
+/** The signed-in player's id, as the server reads the session (`GET /api/auth/me`). */
+export async function playerIdOf(page: Page): Promise<string> {
+  const res = await page.request.get('/api/auth/me')
+  expect(res.ok(), `GET /api/auth/me returned ${res.status()}`).toBeTruthy()
+  return ((await res.json()) as { playerId: string }).playerId
+}
+
+/**
+ * Plan 27: adds `amount` reputation to `playerId` through the GM console's own route (`POST /api/gm/players/:id/reputation`),
+ * from `gmPage` — a page of an account `promoteToGm` made a GM. Reputation is never bought, so this is the pack's only way
+ * to lift a player's rank in one step. Resolves the player's new reputation and rank.
+ */
+export async function grantReputation(gmPage: Page, playerId: string, amount: number, reason = 'danh vọng cho test'): Promise<{ reputation: number; rank: number }> {
+  const res = await postApi(gmPage, `/api/gm/players/${encodeURIComponent(playerId)}/reputation`, { amount, reason })
+  expect(res.status, `POST /api/gm/players/:id/reputation returned ${res.status} ${JSON.stringify(res.body)}`).toBe(200)
+  return res.body as unknown as { reputation: number; rank: number }
 }

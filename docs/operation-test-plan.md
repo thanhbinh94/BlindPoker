@@ -73,7 +73,7 @@ mã phòng (nếu có), thiết bị, ảnh chụp màn hình. Claude chép vào
 | Mã | Bước | Kỳ vọng | Ưu tiên |
 |---|---|---|---|
 | S-01 | Mở địa chỉ máy chủ | Trang đăng nhập "Blind Luck Poker", tab trình duyệt cùng tên | P1 |
-| S-02 | Đăng ký tài khoản mới | Vào thẳng trang Điểm danh (lần đầu trong ngày), số dư 100.000 điểm | P1 |
+| S-02 | Đăng ký tài khoản mới | Sảnh mở cùng hộp thoại "Chào mừng đến Blind Luck Poker" (quà chào mừng, xem P-01); bấm "Để sau" thì hộp thoại đóng, sảnh còn nút "🎁 Quà chào mừng"; số dư 100.000 điểm. Trang Điểm danh tự mở ở lần đăng nhập sau khi đã nhận quà (P-01) | P1 |
 | S-03 | Bấm Nhận thưởng | Số dư +5.000, nút khoá lại; chấm vàng trên tab Điểm danh biến mất khi rời trang (xem T1 trong `docs/bug-log.md` §6) | P1 |
 | S-04 | Sảnh → Tạo phòng Blind, 3 bot | Vào bàn, 3 bot ngồi sẵn, mã phòng 6 ký tự ở đầu trang | P1 |
 | S-05 | Ngồi vào bàn → Sẵn sàng → Bắt đầu | Ngồi: số dư trừ hạn mức 5.000; ván chạy, lá chung lật, có người thắng, chồng trên bàn đổi; rời phòng: chồng về số dư | P1 |
@@ -281,6 +281,20 @@ màn nào, trạng thái nào, cỡ nào và test nào: `docs/test-matrix.md`. N
 | O-05 | Chạy exe thứ hai trên cùng thư mục dữ liệu | Từ chối: `another instance is already running (pid …)` | P2 |
 | O-06 | Tắt rồi mở lại exe | Số dư và tên còn nguyên (SQLite) | P1 |
 
+### P. Cửa hàng, danh vọng và tủ đồ (Plan 27)
+
+Cả năm ca là **tự động** — `08-shop.spec.ts` (P-02 và P-04 chạy ở project `mobile`, P-03b ở project `landscape`, còn lại
+ở `desktop`); ca đổi giá của GM là Q-04. Bộ test nâng bậc bằng lối cộng danh vọng của GM; người test làm bằng tay thì nhờ
+GM bấm "Cộng danh vọng" ở trang người chơi. Mã P- là mã ca test, khác với P1/P2 (điện thoại) và P1/P2/P3 (mức ưu tiên).
+
+| Mã | Bước | Kỳ vọng | Ưu tiên |
+|---|---|---|---|
+| P-01 | **Tự động.** Tài khoản mới: hộp thoại chào mừng hiện trên sảnh, bấm "Để sau"; rồi bấm "🎁 Quà chào mừng", chọn "Đồng phục chia bài", "Nhận", "Vào chơi". Mở Phòng thay đồ. Sau đó đăng nhập tài khoản ấy trên trình duyệt khác khi chưa nhận Điểm danh hôm nay | Hộp thoại có ba món hiếm, mỗi món vẽ trên chính nhân vật của mình; "Nhận" còn khóa cho tới khi chọn một món. Sau "Nhận": dòng "Đồng phục chia bài đã vào tủ đồ, +100 danh vọng"; "Vào chơi" đóng hộp thoại, nút "🎁 Quà chào mừng" biến mất, hình nhân vật ở sảnh mặc món vừa chọn. Phòng thay đồ có món đó, nhãn "Đang dùng". Lần đăng nhập sau: không còn hộp thoại chào mừng, app tự mở trang Điểm danh, nút "Nhận thưởng" sáng | P1 |
+| P-02 | **Tự động, điện thoại.** Sảnh → "Cửa hàng". Ở kệ Thường bấm "Mua · 10.000" của "Mũ len" → "Mua". Chuyển sang kệ Hiếm. GM cộng 400 danh vọng; tải lại trang, mua một món hiếm. Mở Hồ sơ → Lịch sử điểm | Hộp thoại "Mua món này?" ghi giá và số dư còn lại; mua xong có dòng "Mũ len đã vào tủ đồ", thẻ ghi "✓ Đã có", "Số dư: … điểm" giảm đúng 10.000. Trước khi được cộng danh vọng, thẻ hiếm ghi "🔒 cần Cao thủ" và không có nút Mua (máy chủ cũng từ chối); sau khi lên Cao thủ thì mua được. Mỗi lần mua trừ điểm đúng một lần: Lịch sử điểm có đúng hai dòng "Mua ở Cửa hàng" | P1 |
+| P-03 | **Tự động.** Người chơi đã lên Cao thủ (400 danh vọng): mở Hồ sơ, rồi tạo bàn Blind có 1 bot và ngồi vào bàn. P-03b: làm lại trên điện thoại xoay ngang | Hồ sơ ghi "Danh vọng 400 · Cao thủ · còn 1.400 tới Bậc thầy". Ở bàn, chữ "Cao thủ" đứng cạnh tên (hoặc sau số điểm khi tên dài) trên bảng tên của mình. Xoay ngang: bảng tên hẹp nên bậc hiện thành viên "III" trên dòng số điểm. Lưu ý: hình đại diện được trình duyệt giữ 60 giây, nên vừa lên bậc mà vào bàn ngay thì bàn có thể còn hiện bậc cũ một lúc | P2 |
+| P-04 | **Tự động, điện thoại.** Tài khoản mới mở Phòng thay đồ; chuyển sang Trang phục → Mũ với ô "Hiện cả món chưa có" được tích; quay lại Ngoại hình | Trang chỉ tải hình của các thẻ gần màn hình (không quá 8 yêu cầu `/avatar/` cho mỗi hình nhân vật hay thẻ đang thấy), ít hơn hẳn cách tải mọi thẻ cùng lúc; chuyển tab không gây một loạt yêu cầu | P2 |
+| P-05 | **Tự động.** Mạng "3G nhanh" (1,6 Mbps, trễ 150 ms), app đang mở ở Hồ sơ, bấm sang Phòng thay đồ, ở 1366×768 và 375×812 | Sân khấu và hàng thẻ đầu tiên hiện trong 2 giây ở cả hai cỡ; ở 1366×768 hình của hàng đầu cũng tải xong trong 2 giây (trên điện thoại hình @2x có thể chậm hơn, xem `docs/known-limitations.md`) | P3 |
+
 ### Q. Quản trị (GM)
 
 Cần một tài khoản có quyền quản trị (người vận hành trao bằng `grant-gm-cli`; bộ test tự động dùng lối riêng của
@@ -291,6 +305,7 @@ server thử). Mục "Quản trị" chỉ hiện trong Cài đặt cho tài kho�
 | Q-01 | **Tự động — `06-gm.spec.ts`.** GM: Cài đặt → Quản trị → tab Người chơi → tìm một người chơi theo tên → bấm Mở → "Cộng/trừ điểm", nhập 10.000 điểm: nút Xác nhận còn khóa cho tới khi nhập lý do; nhập lý do rồi Xác nhận. Người chơi kia đang mở sảnh. Rồi GM mở tab Nhật ký | Trong danh sách, email bị che; trang người chơi hiện email đầy đủ. GM thấy "Đã cập nhật số dư". Người chơi thấy ngay thông báo "Quản trị viên: +10.000 điểm — `<lý do>`" và số dư tăng 10.000 mà không cần tải lại trang. Nhật ký có dòng "Cộng điểm" kèm lý do. Không chữ đè chữ, không cuộn ngang: test tự động kiểm một lần ở 1440×900 (project `desktop`); 1920×940, 1366×768 và 375×812 do người test nhìn bằng mắt (mục M) | P1 |
 | Q-02 | **Tự động — `06-gm.spec.ts`.** Hai người chơi vào một bàn Blind (Chơi hoặc bỏ, hai ghế, không bot), bắt đầu ván và dừng ở vòng quyết định Chơi/Bỏ. GM: Quản trị → tab Phòng → Làm mới → bàn hiện "Đang ván" → Đóng phòng, nhập lý do, Xác nhận. Rồi GM mở tab Nhật ký | Hộp thoại ghi rõ "Ván đang chơi sẽ bị hủy". GM thấy "Đã đóng phòng, hoàn cho 2 người". Cả hai người chơi tự về sảnh, điểm mỗi người bằng đúng số trước khi ngồi vào bàn (không mất cược). Nhật ký có dòng "Đóng phòng" kèm lý do | P1 |
 | Q-03 | **Tự động — `06-gm.spec.ts`.** Người chơi A bấm "Nhận thưởng" ở "Điểm danh". GM: Quản trị → Người chơi → mở A → "Đặt lại điểm danh" (hộp thoại ghi số điểm sẽ trừ lại), nhập lý do, Xác nhận; A vẫn ở trang "Điểm danh", nút "Nhận thưởng" sáng lại không cần tải lại trang, A bấm lần nữa. Rồi GM bấm "Mở thành tựu", chọn "Bảy ngày ghé bàn", nhập lý do, Xác nhận. Rồi tab "Quà tháng": chọn tháng sau, bấm "Ngày 21", chọn "Cố định", thêm một món chưa có trong lịch, "Lưu", nhập lý do; tải lại trang và mở lại tab. Cuối cùng tab "Nhật ký". Ở 1920×940, 1366×768 và 375×812 xem tab "Quà tháng" và bảng "Theo ngày" ở tab "Tổng quan" | A thấy "Lượt điểm danh hôm nay đã được mở lại: trừ lại … điểm — <lý do>" và số dư giảm đúng bằng số điểm hộp thoại đã ghi, rồi tăng lại sau lần nhận thứ hai. GM thấy "Đã mở lại lượt điểm danh hôm nay.", "Đã mở thành tựu và trả thưởng." (A thấy thông báo và +5.000) và "Đã lưu quà tháng."; sau khi tải lại, tháng có chữ "(đã sửa)" và ô ngày 21 có món vừa thêm. Nhật ký có ba dòng "Đặt lại điểm danh", "Mở thành tựu", "Đổi quà tháng". Không chữ đè chữ và không cuộn ngang ở cả ba cỡ; ở 375 px bảng "Theo ngày" cuộn ngang trong khung của nó (`docs/known-limitations.md`) | P1 |
+| Q-04 | **Tự động — `06-gm.spec.ts`.** GM: Quản trị → tab "Cửa hàng" → bảng "Giá": ô "Giá của Mũ len" sửa thành 12000, bấm "Lưu giá", nhập lý do, "Lưu giá". Người chơi A mở "Cửa hàng". GM mở tab Nhật ký, rồi đặt giá về 10000 như cũ | Trước khi lưu có dòng "Đã sửa 1 hàng, chưa lưu."; hộp thoại "Lưu 1 thay đổi giá" chỉ cho lưu khi có lý do; lưu xong GM thấy "Đã lưu 1 giá." và ô giá giữ 12000. Thẻ "Mũ len" ở kệ Thường của A ghi "Mua · 12.000". Nhật ký có dòng "Đổi giá cửa hàng" kèm lý do. Đặt lại giá thì thẻ về "Mua · 10.000" | P1 |
 
 ## 6. Kịch bản nhiều người (vòng 3, 3–4 người, ~45 phút)
 
