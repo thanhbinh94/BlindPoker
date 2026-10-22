@@ -19,7 +19,7 @@
  *     hold a bot seat, because a bot has no `players` row at all.
  */
 import { sql } from 'drizzle-orm'
-import { bigint, bigserial, boolean, check, date, index, integer, jsonb, pgTable, primaryKey, smallint, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+import { bigint, bigserial, boolean, check, date, index, integer, jsonb, pgTable, primaryKey, smallint, text, timestamp, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core'
 
 /** `timestamptz not null default now()` — the shape every "when did this happen" column wants. */
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
@@ -56,6 +56,15 @@ export const players = pgTable('players', {
   equippedTitle: text('equipped_title'),
   equippedBadge: text('equipped_badge'),
   lastReliefAt: timestamp('last_relief_at', { withTimezone: true }),
+  /**
+   * Plan 27: lifetime reputation, only ever raised — the materialised `Σ reputation_events.delta`, written in the
+   * same transaction as its event. Not points: never in the ledger, never bought, never moved between players.
+   */
+  reputation: integer('reputation').notNull().default(0),
+  /** Plan 27: the highest rank 1..5 ever reached. A GM raising a threshold never lowers it (spec R15). */
+  rank: integer('rank').notNull().default(1),
+  /** Plan 27: when the welcome outfit was picked; null = the lobby still offers it. */
+  welcomeClaimedAt: timestamp('welcome_claimed_at', { withTimezone: true }),
   createdAt: createdAt(),
 }, (t) => [
   // The ledger is the story of the balance, but this is what makes "points were never conjured"
@@ -127,7 +136,7 @@ export const ledgerKeys = pgTable('ledger_keys', {
 })
 
 /** Everything a GM did (Plan 25). Append-only: no API updates or deletes a row. `actorUserId` null = the server CLI. */
-export const GM_ACTION_KINDS = ['grant_points', 'adjust_points', 'grant_item', 'grant_wardrobe', 'lock', 'unlock', 'kick', 'close_room', 'promote', 'demote', 'unlock_achievement', 'reset_checkin', 'set_gift_month', 'clear_gift_month'] as const
+export const GM_ACTION_KINDS = ['grant_points', 'adjust_points', 'grant_item', 'grant_wardrobe', 'lock', 'unlock', 'kick', 'close_room', 'promote', 'demote', 'unlock_achievement', 'reset_checkin', 'set_gift_month', 'clear_gift_month', 'grant_reputation', 'set_reputation_rules', 'set_reputation_ranks', 'set_shop_prices', 'set_shop_featured', 'set_welcome_choices'] as const
 export type GmActionKind = (typeof GM_ACTION_KINDS)[number]
 
 export const gmActions = pgTable('gm_actions', {
@@ -252,6 +261,99 @@ export const dailyLogins = pgTable('daily_logins', {
   claimedDays: integer('claimed_days').notNull().default(0),
   /** `YYYY-MM` in the economy timezone, empty until the first claim. */
   month: text('month').notNull().default(''),
+  /**
+   * Plan 27: days claimed in a row (yesterday claimed → +1, else 1), for the two login-streak achievements. Since
+   * Plan 27 `streak` counts the month's claims and forgives a missed day, so the run of consecutive days lives here.
+   */
+  consecutive: integer('consecutive').notNull().default(0),
+})
+
+/**
+ * Plan 27: the newcomer's seven-day calendar, created when the welcome outfit is claimed. `day` counts days with a
+ * claim, not calendar days, so a missed day loses nothing; `claimed_days` lists the newcomer days (1..7) already claimed;
+ * `last_day_key` is the economy day (`YYYY-MM-DD`) of the last increment, so one day never advances it twice.
+ */
+export const newcomerProgress = pgTable('newcomer_progress', {
+  playerId: uuid('player_id').primaryKey().references(() => players.id, { onDelete: 'cascade' }),
+  day: integer('day').notNull().default(1),
+  claimedDays: jsonb('claimed_days').$type<number[]>().notNull().default([]),
+  lastDayKey: text('last_day_key'),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
+})
+
+/*
+ * Plan 27's configuration tables (reputation rules and ranks, shop prices, the weekly shelf, the shop config) keep
+ * `updated_by` as a plain uuid with no foreign key on purpose: a key to `users` would let `truncate users … cascade`
+ * (the test harness's reset) and any cascade from an account wipe the seeded configuration with it.
+ */
+
+/**
+ * Plan 27: every rise of a player's reputation. `delta` is always positive (reputation only grows); the unique
+ * `(player_id, reason, ref_id)` makes a replayed event — a hand settled twice, a retried claim — a no-op. `ref_id` is
+ * required, because a null would escape that uniqueness.
+ */
+export const reputationEvents = pgTable('reputation_events', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  playerId: uuid('player_id').notNull().references(() => players.id, { onDelete: 'cascade' }),
+  delta: integer('delta').notNull(),
+  reason: text('reason').notNull(),
+  refId: text('ref_id').notNull(),
+  createdAt: createdAt(),
+}, (t) => [
+  check('reputation_events_delta_positive', sql`${t.delta} > 0`),
+  uniqueIndex('reputation_events_player_reason_ref_uq').on(t.playerId, t.reason, t.refId),
+  index('reputation_events_player_created_idx').on(t.playerId, t.createdAt),
+])
+
+/** Plan 27: how much reputation each source pays (`hand_played`, `hand_won`, `daily_login`, …). A GM edits it. */
+export const reputationRules = pgTable('reputation_rules', {
+  key: text('key').primaryKey(),
+  amount: integer('amount').notNull(),
+  updatedBy: uuid('updated_by'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+/** Plan 27: the reputation each rank 1..5 starts at. A GM edits it; raising one never lowers `players.rank`. */
+export const reputationRanks = pgTable('reputation_ranks', {
+  rank: integer('rank').primaryKey(),
+  threshold: integer('threshold').notNull(),
+  updatedBy: uuid('updated_by'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check('reputation_ranks_rank_range', sql`${t.rank} BETWEEN 1 AND 5`),
+])
+
+/**
+ * Plan 27: the shop's price list, one row per item. No foreign key to `items`: that table is reloaded from
+ * `data/items.json` at every boot. Seeded by code at boot, not by the migration. `sale_price` is unused for now.
+ */
+export const shopPrices = pgTable('shop_prices', {
+  itemId: text('item_id').primaryKey(),
+  pricePoints: integer('price_points').notNull(),
+  minRank: integer('min_rank').notNull(),
+  enabled: boolean('enabled').notNull(),
+  salePrice: integer('sale_price'),
+  updatedBy: uuid('updated_by'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check('shop_prices_min_rank_range', sql`${t.minRank} BETWEEN 1 AND 5`),
+  check('shop_prices_price_non_negative', sql`${t.pricePoints} >= 0`),
+])
+
+/** Plan 27: a GM's pick for one week's shelf (`week_key` is the ISO week); a week without a row rotates automatically. */
+export const shopFeatured = pgTable('shop_featured', {
+  weekKey: text('week_key').primaryKey(),
+  itemIds: jsonb('item_ids').$type<string[]>().notNull(),
+  updatedBy: uuid('updated_by'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+/** Plan 27: the shop's small settings as key → JSON (today only `welcome_choices`, the three welcome outfits). */
+export const shopConfig = pgTable('shop_config', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').notNull(),
+  updatedBy: uuid('updated_by'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
 /** Lifetime counters, updated by the stats module from domain events (never by the history writer). */
