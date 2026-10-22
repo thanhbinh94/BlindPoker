@@ -125,7 +125,7 @@ export interface EconomyServiceDeps {
    * claim never sees two schedules.
    */
   gifts: () => DailyGiftSchedule
-  /** Plan 27: a claim also adds `daily_login` reputation, in its own transaction. Optional for tests not about it. */
+  /** Plan 27: a claim also adds `daily_login` reputation, inside the claim's transaction. Optional for tests not about it. */
   reputation?: ReputationService
 }
 

@@ -1,7 +1,7 @@
 import type { HandSummary, HandSummaryPlayer, PublicRoomConfig } from '@bp/server-kit'
 import { silentLogger } from '@bp/server-kit'
 import { asc, eq, sql } from 'drizzle-orm'
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadAchievements } from '../achievements/definitions.js'
 import { rowsOf, type AppDb } from '../db/client.js'
 import { players, reputationEvents, reputationRanks, users } from '../db/schema.js'
@@ -16,6 +16,7 @@ import {
   RankOrderError,
   seedDefaults,
   type RankRow,
+  type RankUpMessage,
   type ReputationReason,
   type ReputationService,
 } from './reputation-service.js'
@@ -25,7 +26,8 @@ let db: AppDb
 let bus: AppEventBus
 let reputation: ReputationService
 let stop: () => void
-let notified: { playerId: string; rank: number }[] = []
+let notified: { playerId: string; msg: RankUpMessage }[] = []
+let warned: { msg: string; data?: object }[] = []
 /** The service's clock: `rules()` and `ranks()` cache for 5 s of it. */
 let clock = Date.parse('2026-10-22T10:00:00.000Z')
 
@@ -39,8 +41,8 @@ beforeAll(async () => {
   reputation = createReputationService({
     db,
     bus,
-    notify: (playerId, msg) => notified.push({ playerId, rank: msg.payload.rank }),
-    log: silentLogger,
+    notify: (playerId, msg) => notified.push({ playerId, msg }),
+    log: { ...silentLogger, warn: (msg, data) => warned.push({ msg, data }) },
     now: () => clock,
   })
   stop = reputation.start()
@@ -51,7 +53,10 @@ afterAll(async () => {
 })
 beforeEach(() => {
   notified = []
+  warned = []
 })
+/** What `notify` received for a rank-up to `rank`. */
+const rankUp = (playerId: string, rank: number) => ({ playerId, msg: { t: 'NOTIFICATION', kind: 'RANK_UP', payload: { rank } } })
 afterEach(async () => {
   await db.execute(sql`truncate table reputation_events, players, users restart identity cascade`)
   // The test reset never truncates the configuration tables (the harness's `resetDb` neither): put the seeds back.
@@ -112,7 +117,7 @@ describe('ReputationService — grants', () => {
       { delta: 60, reason: 'gm_grant', refId: 'gm:2' },
     ])
     // `grant` owns its transaction, so it announces the rank itself — once, after the commit.
-    expect(notified).toEqual([{ playerId: p, rank: 2 }])
+    expect(notified).toEqual([rankUp(p, 2)])
   })
 
   it('a repeated (reason, refId) is a no-op', async () => {
@@ -160,7 +165,7 @@ describe('ReputationService — grants', () => {
     expect(reputation.rankOf(451, raised)).toBe(2)
     expect(await reputation.grant(p, 1, 'gm_grant', 'gm:2')).toEqual({ reputation: 451, rank: 3, rankUp: false, applied: true })
     expect(await standing(p)).toEqual({ reputation: 451, rank: 3 })
-    expect(notified).toEqual([{ playerId: p, rank: 3 }])
+    expect(notified).toEqual([rankUp(p, 3)])
   })
 
   it('invariant: players.reputation = Σ events', async () => {
@@ -183,7 +188,10 @@ describe('ReputationService — grants', () => {
         where p.reputation <> coalesce(e.total, 0)`),
     )
     expect(drift).toEqual([])
-    expect(rowsOf(await db.execute(sql`select 1 from reputation_events`)).length).toBeGreaterThan(0)
+    const written = rowsOf(await db.execute(sql`select 1 from reputation_events`)).length
+    expect(written).toBeGreaterThan(0)
+    // At least one (player, reason, ref) came up twice, so the replay path really ran.
+    expect(written).toBeLessThan(50)
     const ranks = await reputation.ranks()
     for (const id of ids) {
       const now = await standing(id)
@@ -228,6 +236,20 @@ describe('ReputationService — rules and ranks', () => {
     expect((await reputation.rules()).hand_won).toBe(9)
     await db.transaction((tx) => reputation.setRules(tx, { hand_won: 4 }, ADMIN))
     expect((await reputation.rules()).hand_won).toBe(4)
+  })
+
+  it('invalidate() drops the views’ cache, so rules() and ranks() read the tables again', async () => {
+    expect((await reputation.rules()).hand_won).toBe(3)
+    expect((await reputation.ranks())[1]!.threshold).toBe(100)
+    // Written outside the service, as a GM route's own transaction would.
+    await db.execute(sql`update reputation_rules set amount = 8 where key = 'hand_won'`)
+    await db.execute(sql`update reputation_ranks set threshold = 120 where rank = 2`)
+    expect((await reputation.rules()).hand_won).toBe(3)
+
+    reputation.invalidate()
+
+    expect((await reputation.rules()).hand_won).toBe(8)
+    expect((await reputation.ranks())[1]!.threshold).toBe(120)
   })
 
   it('setRules refuses an unknown key and a negative or fractional amount', async () => {
@@ -301,6 +323,23 @@ describe('ReputationService — HAND_SETTLED', () => {
     await reputation.grant(p, 98, 'gm_grant', 'gm:1')
     await settle(hand([seat(p, { won: true, net: 100 }), seat('00000000-0000-4000-8000-0000000000ff', { seat: 1 })]))
     expect(await standing(p)).toEqual({ reputation: 102, rank: 2 })
-    expect(notified).toEqual([{ playerId: p, rank: 2 }])
+    expect(notified).toEqual([{ playerId: p, msg: { t: 'NOTIFICATION', kind: 'RANK_UP', payload: { rank: 2 } } }])
+  })
+
+  it('a failed grant for one seat is logged and the next seat of the hand is still paid', async () => {
+    const first = await seedPlayer()
+    const second = await seedPlayer()
+    // The first seat's transaction fails with something other than an erased account (a dropped connection, say).
+    const spy = vi.spyOn(db, 'transaction').mockRejectedValueOnce(new Error('connection reset'))
+    const summary = hand([seat(first, { won: true, net: 100 }), seat(second, { seat: 1, won: true, net: 50 })])
+    try {
+      await settle(summary)
+    } finally {
+      spy.mockRestore()
+    }
+
+    expect(await standing(first)).toEqual({ reputation: 0, rank: 1 })
+    expect(await standing(second)).toEqual({ reputation: 4, rank: 1 })
+    expect(warned).toEqual([{ msg: 'reputation for a hand failed', data: { handId: summary.handId, playerId: first, error: 'connection reset' } }])
   })
 })

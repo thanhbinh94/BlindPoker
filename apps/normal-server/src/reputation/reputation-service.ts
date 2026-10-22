@@ -57,6 +57,8 @@ export interface ReputationService {
   rules(): Promise<Record<RuleKey, number>>
   /** The ladder, ascending by rank. Same cache and the same warning as `rules()`. */
   ranks(): Promise<RankRow[]>
+  /** Drops the cache behind `rules()` and `ranks()` — for a writer that commits outside `setRules`/`setRanks`' reach. */
+  invalidate(): void
   /** The highest rank whose threshold `reputation` reaches; 1 when none does. */
   rankOf(reputation: number, ranks: readonly RankRow[]): number
   /** Which rule an unlock pays: an item reward → `achievement_item`; points > 5 000 → `achievement_big`; else small. */
@@ -250,7 +252,13 @@ export function createReputationService(deps: ReputationServiceDeps): Reputation
     for (const seat of summary.players) {
       // Bots have no reputation (and no `players` row).
       if (seat.isBot || !isUuid(seat.playerId)) continue
-      await paySeat(seat.playerId, seat.won, summary.handId)
+      // One seat's failure (a dropped connection, a lock timeout) must not starve the seats after it: nothing retries
+      // a settled hand, so each seat is paid or logged on its own.
+      try {
+        await paySeat(seat.playerId, seat.won, summary.handId)
+      } catch (err) {
+        deps.log.warn('reputation for a hand failed', { handId: summary.handId, playerId: seat.playerId, error: err instanceof Error ? err.message : String(err) })
+      }
     }
   }
 
@@ -271,6 +279,11 @@ export function createReputationService(deps: ReputationServiceDeps): Reputation
       const value = await readRanks(deps.db)
       ranksCache = { at: now(), value }
       return value.map((r) => ({ ...r }))
+    },
+
+    invalidate() {
+      rulesCache = null
+      ranksCache = null
     },
 
     rankOf,
