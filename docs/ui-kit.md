@@ -504,6 +504,20 @@ deterministic way. `chibiFor(player)` (on `RoomScreen` and `PokerTable`) is how 
 seat's `ChibiConfig`; a bot never asks it — `PokerTable` draws `botChibi` for a bot seat on its own. Full design:
 `docs/avatar-2d.md`.
 
+**Loading cost (plan 27 E1).** `Chibi` takes `lazy?: boolean` (off by default). A lazy chibi renders only its root —
+size, frame, `data-chibi-hash`, so the box is already right and nothing jumps — with no `<img>`, no tint render and no
+hat-clip preload until the root comes within 200 px of the viewport; then it draws every layer and keeps them. The
+watch is `useInView(ref, rootMargin = '200px', enabled = true)` (`lazy.ts`), an `IntersectionObserver` that stays
+`true` once it fires and is `true` at once where the API is missing (jsdom), so the lazy path renders like the eager one
+in unit tests unless a test stubs the observer. Use it for grids of cards (wardrobe, shop, saved outfits); the stage and
+a table seat stay eager. Every tinted render (`useTintedLayer`, also used by the wardrobe's item icons) waits in one
+page-wide queue, `enqueue(job, priority)` (`tint-queue.ts`): at most four renders at once — so at most four tint image
+loads in flight — higher priority first, first come first served within one priority, a failed job freeing its slot.
+`useTintedLayer(prefix, layer, priority = -layer.order)` ranks the body and face ahead of the hat and frame; a lazy
+chibi ranks its layers 100 lower, behind every eager chibi's. A tinted render paints from the @2x files only when
+`devicePixelRatio >= 1.5` (it was `> 1`); the plain layers keep their two-density `srcset`, and a hat's hair clip is
+always @2x.
+
 ### Lobby
 
 | Component | Props |

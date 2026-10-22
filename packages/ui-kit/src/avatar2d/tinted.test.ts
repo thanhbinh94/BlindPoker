@@ -190,6 +190,52 @@ describe('useTintedLayer — with a faked canvas pipeline', () => {
     expect(result.current).toBeNull()
   })
 
+  it('renders no more than four tinted layers at once, the rest waiting their turn (plan 27 E1)', async () => {
+    const held: (() => void)[] = []
+    vi.mocked(HTMLImageElement.prototype.decode).mockImplementation(() => new Promise<void>((resolve) => held.push(resolve)))
+    const hooks = Array.from({ length: 6 }, (_, i) =>
+      renderHook(() => useTintedLayer('/avatar/', { order: 60, file: `tint_stub_queue_${i}`, tints: [{ ...RED, mask: `tint_stub_queue_${i}_hairmask` }] })),
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    // Each running render is stuck on its first image: four renders, four image loads, two renders not started.
+    expect(held).toHaveLength(4)
+
+    // Let every image through; the two waiting renders start as slots free, and all six land.
+    vi.mocked(HTMLImageElement.prototype.decode).mockResolvedValue(undefined)
+    for (const release of held.splice(0)) release()
+    for (const hook of hooks) await waitFor(() => expect(hook.result.current).not.toBeNull())
+  })
+
+  describe('the density it paints from (plan 27 E1: @2x only from a device pixel ratio of 1.5)', () => {
+    let saved: PropertyDescriptor | undefined
+    beforeEach(() => {
+      saved = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio')
+    })
+    afterEach(() => {
+      if (saved === undefined) delete (window as { devicePixelRatio?: number }).devicePixelRatio
+      else Object.defineProperty(window, 'devicePixelRatio', saved)
+    })
+
+    it.each([
+      [1, 1],
+      [1.4, 1],
+      [1.5, 2],
+      [2, 2],
+    ])('at a device pixel ratio of %s it loads the layer and its mask @%ix', async (dpr, density) => {
+      Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: dpr })
+      const loaded: string[] = []
+      vi.mocked(HTMLImageElement.prototype.decode).mockImplementation(function (this: HTMLImageElement) {
+        loaded.push(this.src)
+        return Promise.resolve()
+      })
+      const file = `tint_stub_dpr_${String(dpr).replace('.', '_')}`
+      const tint: TintRef = { mask: `${file}_hairmask`, colour: '#123456', meanL: 0.4 }
+      const { result } = renderHook(() => useTintedLayer('/avatar/', { order: 60, file, tints: [tint] }))
+      await waitFor(() => expect(result.current).not.toBeNull())
+      expect(loaded).toEqual([`/avatar/${file}@${density}x.png`, `/avatar/${file}_hairmask@${density}x.png`].map((p) => new URL(p, document.baseURI).href))
+    })
+  })
+
   it('retries a render whose mask failed to load after a 2D context was available, instead of caching the failure', async () => {
     // Distinct file from every other test in this describe block, so this test's cache entry cannot
     // collide with (or be short-circuited by) one another test already settled.

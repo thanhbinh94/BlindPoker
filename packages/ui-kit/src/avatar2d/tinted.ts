@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { assetUrl } from './AvatarAssets.js'
 import { ratio, recolour, shade } from './recolour.mjs'
+import { enqueue } from './tint-queue.js'
 import type { LayerRef, TintRef } from './types.js'
 
 /** How many rendered blob URLs to keep alive at once (spec §5.2). Past this, the oldest *settled* entry is
@@ -27,6 +28,14 @@ const cache = new Map<string, CacheEntry>()
  * and a hair's or outfit's `_skinmask` always painted by `ratio`, a body's or face's by `recolour`). */
 export function tintKey(file: string, density: 1 | 2, tints: TintRef[]): string {
   return `${file}|${density}|${tints.map((t) => `${t.mask}:${t.colour}:${t.meanL}`).join(',')}`
+}
+
+/** The density a tinted render paints from (plan 27 E1): @2x only from a device pixel ratio of 1.5. A 1.25 laptop
+ * screen gets the @1x files — a quarter of the pixels to fetch, decode and walk on the canvas — and the browser scales
+ * them the last 25 %, where it used to pay for @2x at any ratio above 1. The plain layer's `srcset` is untouched: there
+ * the browser picks. */
+function tintDensity(): 1 | 2 {
+  return typeof window !== 'undefined' && window.devicePixelRatio >= 1.5 ? 2 : 1
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -143,14 +152,19 @@ function cachedRender(key: string, factory: () => Promise<RenderOutcome>): Promi
  * between each tap would read as broken rather than as loading. A *file* change (a different layer altogether)
  * gets no such grace: it drops straight back to `null` so a stale render from the old file is never shown under
  * the new one's name.
+ *
+ * Each render waits its turn in the tint queue (`tint-queue.ts`: four at a time, higher `priority` first). The
+ * default ranks a layer by `-layer.order`, so a chibi's body and face start before its hat and frame; `Chibi` passes a
+ * lower one for a lazy chibi so a card never holds up the stage. Two mounts asking for one key share the first one's
+ * render and therefore its rank.
  */
-export function useTintedLayer(prefix: string, layer: LayerRef): string | null {
+export function useTintedLayer(prefix: string, layer: LayerRef, priority: number = -layer.order): string | null {
   const [url, setUrl] = useState<string | null>(null)
   // Identifies the file (and asset prefix) the currently-shown `url`, if any, was rendered from — not necessarily
   // this render's `layer.file`, which may already have moved on to a new colour or a wholly different layer.
   const shownRef = useRef<string | null>(null)
   const tints = layer.tints
-  const density: 1 | 2 = typeof window !== 'undefined' && window.devicePixelRatio > 1 ? 2 : 1
+  const density = tintDensity()
   const key = tints === undefined || tints.length === 0 ? null : tintKey(layer.file, density, tints)
   const identity = `${prefix}|${layer.file}`
 
@@ -164,7 +178,7 @@ export function useTintedLayer(prefix: string, layer: LayerRef): string | null {
     if (shownRef.current !== identity) setUrl(null)
 
     let cancelled = false
-    cachedRender(key, () => renderTintedLayer(prefix, layer, density)).then((result) => {
+    cachedRender(key, () => enqueue(() => renderTintedLayer(prefix, layer, density), priority)).then((result) => {
       if (cancelled) return
       shownRef.current = result === null ? null : identity
       setUrl(result)
@@ -174,7 +188,8 @@ export function useTintedLayer(prefix: string, layer: LayerRef): string | null {
     }
     // `key` already encodes file, density and every tint; `identity` and `density` are both derived from
     // `prefix`/`layer.file`, already listed — re-running on `layer`'s own (fresh-every-render) object identity
-    // or on those derived values would defeat the point of the cache.
+    // or on those derived values would defeat the point of the cache. `priority` only ranks a render not yet
+    // started, so a change to it alone starts nothing new.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, prefix, layer.file])
 

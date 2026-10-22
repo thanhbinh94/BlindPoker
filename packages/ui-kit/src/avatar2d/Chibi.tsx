@@ -1,8 +1,9 @@
-import { useState, type CSSProperties } from 'react'
+import { useRef, useState, type CSSProperties } from 'react'
 import { cx } from '../primitives/cx.js'
 import { assetUrl, useAvatarAssetsBase } from './AvatarAssets.js'
 import { useLoadedClip } from './clip.js'
 import { hashChibi, layersFor } from './layers.js'
+import { useInView } from './lazy.js'
 import { useTintedLayer } from './tinted.js'
 import type { ChibiFrame, ChibiSubject, Expression, LayerRef } from './types.js'
 import s from './avatar2d.module.css'
@@ -35,8 +36,8 @@ function clipMask(url: string): CSSProperties {
  * layer instead, so the worst case is the untinted character, not a missing head. A *different* tinted URL (the
  * next colour) is a new attempt and is tried again.
  */
-function ChibiLayer({ base, layer, className }: { base: string; layer: LayerRef; className?: string }) {
-  const tinted = useTintedLayer(base, layer)
+function ChibiLayer({ base, layer, className, tintPriority }: { base: string; layer: LayerRef; className?: string; tintPriority?: number }) {
+  const tinted = useTintedLayer(base, layer, tintPriority)
   const clip = useLoadedClip(layer.clip === undefined ? null : assetUrl(base, layer.clip, 2))
   const [failedUrl, setFailedUrl] = useState<string | null>(null)
   const common = {
@@ -68,7 +69,18 @@ export interface ChibiProps {
   className?: string
   /** The 0.5 s turn bounce (spec 08 §3.4) — `PokerTable` sets this for the seat whose turn it is. */
   bounce?: boolean
+  /** Plan 27 E1: draw nothing inside the root — no `<img>`, no tint render, no hat-clip preload — until the root comes
+   * within 200 px of the viewport (`useInView`), then every layer as usual, for good. The root itself renders at once
+   * with its size, frame and `data-chibi-hash`, so the placeholder holds the chibi's exact box and nothing jumps when
+   * it fills in. Its tinted layers also queue behind every eager chibi's (`LAZY_TINT_PRIORITY`). For a grid of cards
+   * (the wardrobe, the shop, saved outfits); the stage and a table seat stay eager. Off by default. */
+  lazy?: boolean
 }
+
+/** How far a lazy chibi's tint renders sit below an eager one's in the tint queue. `useTintedLayer` ranks a layer at
+ * `-order` (L10 the aura … L90 the frame: −10 … −90), so the body and the face start before the frame; a lazy chibi's
+ * layers rank 100 lower still (−110 … −190), behind every layer of the stage or a seat, whatever its order. */
+const LAZY_TINT_PRIORITY = -100
 
 /**
  * One chibi: every layer `layersFor` returns for this subject, expression and frame, stacked as absolutely
@@ -77,8 +89,11 @@ export interface ChibiProps {
  * Each layer ships at two densities; the browser picks. Lazy-loaded because a table can hold nine of these (up to
  * ~72 images) and only the ones on screen are worth fetching.
  */
-export function Chibi({ subject, expression = 'neutral', frame = 'full', size, label, className, bounce = false }: ChibiProps) {
+export function Chibi({ subject, expression = 'neutral', frame = 'full', size, label, className, bounce = false, lazy = false }: ChibiProps) {
   const base = useAvatarAssetsBase()
+  const rootRef = useRef<HTMLDivElement>(null)
+  // Called unconditionally (hook order); with `lazy` off it observes nothing and reports `true`.
+  const inView = useInView(rootRef, '200px', lazy)
   const layers = layersFor(subject, expression, frame)
   const hash = hashChibi(subject)
   // `full`'s 6:7 box only ever needs a width — its own `aspect-ratio` derives the height. `head` is square, so an
@@ -87,9 +102,12 @@ export function Chibi({ subject, expression = 'neutral', frame = 'full', size, l
   // size, not the head crop's geometry, which is a fixed percentage of whatever the root ends up rendered at.
   const style: CSSProperties | undefined = size === undefined ? undefined : frame === 'head' ? { width: `${size}px`, height: `${size}px` } : { width: `${size}px` }
 
-  const renderLayer = (layer: LayerRef, extraClassName?: string) => <ChibiLayer key={layer.file} base={base} layer={layer} className={extraClassName} />
+  const renderLayer = (layer: LayerRef, extraClassName?: string) => (
+    <ChibiLayer key={layer.file} base={base} layer={layer} className={extraClassName} tintPriority={lazy ? LAZY_TINT_PRIORITY - layer.order : undefined} />
+  )
 
   const rootProps = {
+    ref: rootRef,
     className: cx(s.chibi, frame === 'head' ? s.head : s.full, bounce && s.bounce, className),
     style,
     'data-chibi-hash': hash,
@@ -99,6 +117,9 @@ export function Chibi({ subject, expression = 'neutral', frame = 'full', size, l
     'aria-label': label,
     'aria-hidden': label === undefined ? true : undefined,
   }
+
+  // A lazy chibi not yet on screen: the root alone, holding its box. No `ChibiLayer` mounts, so no tint and no clip load.
+  if (!inView) return <div {...rootProps} />
 
   if (frame === 'head') {
     // D01 §5: the 260×260 frame border rings the crop from *outside* it — inside the 208×208 crop window it is
