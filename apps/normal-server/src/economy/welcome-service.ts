@@ -106,6 +106,9 @@ export function createWelcomeService(deps: WelcomeServiceDeps): WelcomeService {
       let result: Extract<WelcomeClaimResult, { ok: true }>
       try {
         result = await deps.db.transaction(async (tx) => {
+          // Lock order (Plan 27 whole-branch review): the player's row before anything else, stated outright so a
+          // later edit that puts a statement above the guard cannot lock another table first.
+          await tx.select({ id: players.id }).from(players).where(eq(players.id, playerId)).for('update')
           const guarded = await tx
             .update(players)
             .set({ welcomeClaimedAt: new Date(nowMs) })

@@ -90,6 +90,10 @@ export async function unlockWithin(
   at: Date,
   pay: { inventory: InventoryService; reason: TxReason; refId: string; reputation?: Pick<ReputationService, 'grantRuleWithin'> | undefined },
 ): Promise<UnlockResult> {
+  // Lock order (Plan 27 whole-branch review): the player's row first, as every other money path does. The credit and
+  // the reputation grant below lock `players` too; taking it after `player_achievements` let two transactions on the
+  // same player lock the two tables in opposite orders and deadlock on Postgres.
+  await tx.select({ id: players.id }).from(players).where(eq(players.id, playerId)).for('update')
   await tx.insert(playerAchievements).values({ playerId, achievementId: def.id }).onConflictDoNothing()
   // The `unlocked_at IS NULL` predicate is the whole idempotency argument: a second attempt
   // updates no rows and therefore pays nothing.
