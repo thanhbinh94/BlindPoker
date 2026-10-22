@@ -640,6 +640,36 @@ describe('GmService — daily stats', () => {
     expect(days[6]).toEqual({ day: '2026-09-04', sources: { gm_grant: 5_000 }, sinks: {}, net: 5_000 })
     expect(await gmAt.dailyStats(30)).toHaveLength(30)
   })
+
+  it('a shop purchase counts once: its sink row under sinks.shop, its player row (shop_purchase) in neither column', async () => {
+    const gmAt = createGmService(deps({ now: () => START })) // 2026-09-04 10:00 in Ho Chi Minh, 03:00 UTC
+    await stamp('starting_balance', '2026-08-28T10:00:00Z')
+    const before = await gmAt.dailyStats(7)
+    const overviewBefore = await gmAt.overview()
+    expect(overviewBefore.points24h).toMatchObject({ sources: 0, sinks: 0 })
+    try {
+      // The two halves of one purchase, as `ShopService.buy` writes them through `creditWithin`.
+      await db.execute(sql`insert into point_transactions (player_id, amount, reason, ref_id) values (${me.playerId}, -10000, 'shop_purchase', 'head_beanie01')`)
+      await db.execute(sql`insert into point_transactions (player_id, amount, reason, ref_id, kind) values (null, 10000, 'shop', 'head_beanie01', 'shop')`)
+      await stamp('shop_purchase', '2026-09-04T02:00:00Z')
+      await stamp('shop', '2026-09-04T02:00:00Z')
+
+      const days = await gmAt.dailyStats(7)
+      expect(days[6]).toEqual({ day: '2026-09-04', sources: {}, sinks: { shop: 10_000 }, net: before[6]!.net - 10_000 })
+      for (const d of days) {
+        expect(d.sources).not.toHaveProperty('shop_purchase')
+        expect(d.sinks).not.toHaveProperty('shop_purchase')
+      }
+      expect(days.slice(0, 6)).toEqual(before.slice(0, 6))
+
+      const o = await gmAt.overview()
+      expect(o.points24h.sinks).toBe(10_000)
+      expect(o.points24h.sources).toBe(0)
+      expect(o.points24h.byReason.find((s) => s.reason === 'shop')?.total).toBe(10_000)
+    } finally {
+      await db.execute(sql`delete from point_transactions where reason in ('shop_purchase', 'shop')`)
+    }
+  })
 })
 
 describe('GmService — gift schedule', () => {

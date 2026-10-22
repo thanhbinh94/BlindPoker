@@ -21,14 +21,21 @@
  *
  * **Locks are live.** Whether a gift of the check-in schedule sells depends on the schedule and the month (R20): the
  * shop asks `gifts.current().noticesFrom(<this month>)` at every read and every purchase rather than freezing it into
- * the price list. The rank a purchase is judged on is `players.rank`, the high-water mark (R15).
+ * the price list. The rank a purchase is judged on is `players.rank`, the high-water mark (R15). The week's shelf is the
+ * one exception: the rotation judges gift locks as of the week's Monday (`weekStartMs`), so a lock lifting mid-week
+ * does not reshuffle the shelf (R4). Gift locks only ever lift as months pass, so a Monday shelf never shows an item a
+ * later day of the week locks.
+ *
+ * **An undone purchase.** A purchase id whose key still stands but whose inventory row is gone was revoked by a GM:
+ * the answer is `PURCHASE_UNDONE` — neither "repeated" (the item is not there) nor a second charge. Once a boot has
+ * pruned the key, the same id is a new purchase again.
  */
 import { InsufficientBalanceError } from '@bp/server-kit'
 import { asc, eq, inArray } from 'drizzle-orm'
 import type { AchievementDef } from '../achievements/definitions.js'
 import type { AppDb, AppTx } from '../db/client.js'
 import { ledgerKeys, players, shopConfig, shopFeatured, shopPrices } from '../db/schema.js'
-import { monthKey, dayKey } from '../economy/daily-rules.js'
+import { dayKey, dayStartMs, monthKey } from '../economy/daily-rules.js'
 import type { DailyGiftNotice } from '../economy/daily-gifts.js'
 import type { GiftScheduleStore } from '../economy/gift-schedule-store.js'
 import { ServiceError } from '../errors.js'
@@ -37,7 +44,7 @@ import type { ItemCatalog, ItemDef, Rarity } from '../inventory/items.js'
 import { UnknownPlayerError, type NormalRepositories } from '../repos/index.js'
 import { isUuid } from '../repos/util.js'
 import type { RankRow, ReputationService } from '../reputation/reputation-service.js'
-import { achievementItemIds, DEFAULT_WELCOME_CHOICES, SEED_PRICES, seedConfig, seedPrices, WELCOME_CHOICES_KEY } from './shop-prices-seed.js'
+import { DEFAULT_WELCOME_CHOICES, SEED_PRICES, seedConfig, seedPrices, WELCOME_CHOICES_KEY } from './shop-prices-seed.js'
 
 export interface ShopPrice {
   itemId: string
@@ -80,7 +87,7 @@ export interface ShopView {
 
 export type BuyResult =
   | { ok: true; balance: number; itemId: string; repeated: boolean }
-  | { ok: false; code: 'SHOP_DISABLED' | 'RANK_TOO_LOW' | 'ALREADY_OWNED' | 'INSUFFICIENT_POINTS' | 'UNKNOWN_ITEM' }
+  | { ok: false; code: 'SHOP_DISABLED' | 'RANK_TOO_LOW' | 'ALREADY_OWNED' | 'INSUFFICIENT_POINTS' | 'UNKNOWN_ITEM' | 'PURCHASE_UNDONE' }
 
 /** One GM edit of a price row: the item, and only the fields that change. */
 export type ShopPriceChange = Partial<ShopPrice> & { itemId: string }
@@ -94,13 +101,16 @@ export interface ShopService {
   prices(): Promise<ShopPrice[]>
   /** Writes a GM's edits in the caller's transaction. Throws `ServiceError('INVALID_PRICES')`. */
   setPrices(tx: AppTx, changes: ShopPriceChange[], updatedBy: string): Promise<void>
-  /** The GM's shelf for `weekKey` when there is one, else the rotation over what sells now. */
+  /** The GM's shelf for `weekKey` when there is one, else the rotation over what sells on that week's Monday. */
   featuredFor(weekKey: string): Promise<{ itemIds: string[]; source: 'gm' | 'auto' }>
-  /** ≤ 6 distinct, priced and enabled ids; `[]` hands the week back to the rotation. Throws `ServiceError('INVALID_FEATURED')`. */
+  /**
+   * ≤ 6 distinct ids that sell on the week's Monday (no lock); `[]` hands the week back to the rotation.
+   * Throws `ServiceError('INVALID_FEATURED')`.
+   */
   setFeatured(tx: AppTx, weekKey: string, itemIds: string[], updatedBy: string): Promise<void>
   /** The three welcome outfits (spec C1). */
   welcomeChoices(): Promise<string[]>
-  /** Exactly three distinct, priced, enabled, non-achievement items. Throws `ServiceError('INVALID_WELCOME')`. */
+  /** Exactly three distinct items that sell now (no lock: not a gift, not an achievement's). Throws `ServiceError('INVALID_WELCOME')`. */
   setWelcomeChoices(tx: AppTx, itemIds: string[], updatedBy: string): Promise<void>
   /** Inserts a price row per catalogue item missing one (spec B1); resolves how many. Never overwrites. */
   seedPrices(): Promise<number>
@@ -126,6 +136,8 @@ export interface ShopServiceDeps {
 const FEATURED_MAX = 6
 const WELCOME_COUNT = 3
 const PURCHASE_ID_MAX = 100
+/** The highest price a GM may set: well inside the `integer` column. */
+const PRICE_MAX = 1_000_000_000
 const WEEK_KEY = /^(\d{4})-W(0[1-9]|[1-4]\d|5[0-3])$/
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -149,6 +161,19 @@ export function isoWeekKey(nowMs: number, timeZone: string): string {
 }
 
 /**
+ * The instant `weekKey` (`YYYY-Www`) begins: its Monday at 00:00 in `timeZone`. Week 1's Monday is the one on or before
+ * 4 January. Throws a `RangeError` for a malformed key.
+ */
+export function weekStartMs(weekKey: string, timeZone: string): number {
+  const match = WEEK_KEY.exec(weekKey)
+  if (match === null) throw new RangeError(`${weekKey} is not an ISO week, YYYY-Www`)
+  const jan4 = Date.UTC(Number(match[1]), 0, 4)
+  const firstMonday = jan4 - ((new Date(jan4).getUTCDay() + 6) % 7) * DAY_MS
+  const monday = new Date(firstMonday + (Number(match[2]) - 1) * 7 * DAY_MS)
+  return dayStartMs(monday.toISOString().slice(0, 10), timeZone)
+}
+
+/**
  * Six of `enabledIds` for `weekKey`, rotating by week (R4): the ids sorted, a window of six starting six further on each
  * week, wrapping. The same inputs give the same shelf all week, whatever order the ids come in; fewer than six give all.
  */
@@ -165,7 +190,6 @@ const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInt
 
 export function createShopService(deps: ShopServiceDeps): ShopService {
   const clock = deps.now ?? Date.now
-  const rewards = achievementItemIds(deps.defs)
   /** Item → the achievement that rewards it (the first, if two ever did). */
   const rewardOwner = new Map<string, string>()
   for (const def of deps.defs) if (def.reward.itemId !== undefined && !rewardOwner.has(def.reward.itemId)) rewardOwner.set(def.reward.itemId, def.id)
@@ -200,10 +224,11 @@ export function createShopService(deps: ShopServiceDeps): ShopService {
     return deps.catalog.all().filter((def) => lockOf(def, prices.get(def.id), notices) === null).map((def) => def.id)
   }
 
-  async function featuredAt(weekKey: string, prices: ReadonlyMap<string, ShopPrice>, nowMs: number): Promise<{ itemIds: string[]; source: 'gm' | 'auto' }> {
+  /** The GM's row, else the rotation over what sold on the week's Monday — the same shelf every day of the week (R4). */
+  async function featuredAt(weekKey: string, prices: ReadonlyMap<string, ShopPrice>): Promise<{ itemIds: string[]; source: 'gm' | 'auto' }> {
     const [row] = await deps.db.select({ itemIds: shopFeatured.itemIds }).from(shopFeatured).where(eq(shopFeatured.weekKey, weekKey))
     if (row !== undefined && Array.isArray(row.itemIds) && row.itemIds.length > 0) return { itemIds: [...row.itemIds], source: 'gm' }
-    return { itemIds: autoFeatured(sellable(prices, nowMs), weekKey), source: 'auto' }
+    return { itemIds: autoFeatured(sellable(prices, weekStartMs(weekKey, deps.timezone)), weekKey), source: 'auto' }
   }
 
   /** Reads a player's balance through `tx`, for an answer given inside the purchase transaction. */
@@ -213,14 +238,20 @@ export function createShopService(deps: ShopServiceDeps): ShopService {
     return row.balance
   }
 
-  /** Every id must be a catalogue item with an enabled price row (read through `tx`); `code` names the refusal. */
-  async function requirePricedEnabled(tx: AppTx, itemIds: readonly string[], code: string): Promise<void> {
+  /**
+   * Every id must be a catalogue item that sells at `atMs` — no lock of any kind, judged on the price rows read through
+   * `tx` and the gift schedule from `atMs`'s month on. `code` names the refusal.
+   */
+  async function requireSellable(tx: AppTx, itemIds: readonly string[], code: string, atMs: number): Promise<void> {
     if (itemIds.length === 0) return
-    const rows = await tx.select({ itemId: shopPrices.itemId, enabled: shopPrices.enabled }).from(shopPrices).where(inArray(shopPrices.itemId, [...itemIds]))
-    const enabled = new Set(rows.filter((r) => r.enabled).map((r) => r.itemId))
+    const rows = await tx.select().from(shopPrices).where(inArray(shopPrices.itemId, [...itemIds]))
+    const prices = new Map(rows.map((r) => [r.itemId, toPrice(r)]))
+    const notices = giftNotices(atMs)
     for (const id of itemIds) {
-      if (deps.catalog.get(id) === undefined) throw new ServiceError(code, `${id} is not in the item catalogue`)
-      if (!enabled.has(id)) throw new ServiceError(code, `${id} is not priced and on sale`)
+      const def = deps.catalog.get(id)
+      if (def === undefined) throw new ServiceError(code, `${id} is not in the item catalogue`)
+      const lock = lockOf(def, prices.get(id), notices)
+      if (lock !== null) throw new ServiceError(code, `${id} is not on sale (${lock.kind})`)
     }
   }
 
@@ -248,7 +279,7 @@ export function createShopService(deps: ShopServiceDeps): ShopService {
         return { itemId: def.id, slot: def.slot, rarity: def.rarity, price: price?.pricePoints ?? 0, minRank: price?.minRank ?? 1, purchasable: lock === null && !owned, owned, lock }
       })
       const weekKey = isoWeekKey(nowMs, deps.timezone)
-      const featured = await featuredAt(weekKey, prices, nowMs)
+      const featured = await featuredAt(weekKey, prices)
       return { weekKey, featured: featured.itemIds, featuredSource: featured.source, entries, me: { balance: me.balance, reputation: me.reputation, rank: me.rank, ranks } }
     },
 
@@ -270,9 +301,15 @@ export function createShopService(deps: ShopServiceDeps): ShopService {
           // (1) The purchase itself, which survives a boot's key prune.
           const earlier = await deps.inventory.findByRef(tx, playerId, ref)
           if (earlier.length > 0) return { ok: true as const, balance: await balanceWithin(tx, playerId), itemId: earlier[0]!, repeated: true }
-          // (2) The key: a purchase with this id still in flight, or one that committed since this process booted.
+          // (2) The key: a purchase with this id that committed since this process booted, or (on Postgres) a twin
+          // that was in flight and has just committed — the insert waits for it. Its inventory row, read again by a
+          // fresh statement, says what was bought; no row means a GM has taken the item back since.
           const claimed = await tx.insert(ledgerKeys).values({ key: ref }).onConflictDoNothing().returning({ key: ledgerKeys.key })
-          if (claimed.length === 0) return { ok: true as const, balance: await balanceWithin(tx, playerId), itemId, repeated: true }
+          if (claimed.length === 0) {
+            const committed = await deps.inventory.findByRef(tx, playerId, ref)
+            if (committed.length === 0) throw new Refusal('PURCHASE_UNDONE')
+            return { ok: true as const, balance: await balanceWithin(tx, playerId), itemId: committed[0]!, repeated: true }
+          }
 
           // (3) The checks, against the price list and schedule as they are now (no cache).
           if (def === undefined) throw new Refusal('UNKNOWN_ITEM')
@@ -315,10 +352,13 @@ export function createShopService(deps: ShopServiceDeps): ShopService {
         if (deps.catalog.get(c.itemId) === undefined) throw new ServiceError(code, `${c.itemId} is not in the item catalogue`)
         if (seen.has(c.itemId)) throw new ServiceError(code, `${c.itemId} is changed twice`)
         seen.add(c.itemId)
-        if (c.pricePoints !== undefined && (!isInt(c.pricePoints) || c.pricePoints < 0)) throw new ServiceError(code, `${c.itemId}: a price is a whole number of 0 or more`)
+        if (c.pricePoints !== undefined && (!isInt(c.pricePoints) || c.pricePoints < 0 || c.pricePoints > PRICE_MAX)) {
+          throw new ServiceError(code, `${c.itemId}: a price is a whole number from 0 to ${String(PRICE_MAX)}`)
+        }
         if (c.minRank !== undefined && (!isInt(c.minRank) || c.minRank < 1 || c.minRank > 5)) throw new ServiceError(code, `${c.itemId}: a rank is 1 to 5`)
         if (c.enabled !== undefined && typeof c.enabled !== 'boolean') throw new ServiceError(code, `${c.itemId}: enabled is true or false`)
-        if (c.salePrice !== undefined && c.salePrice !== null && (!isInt(c.salePrice) || c.salePrice < 0)) throw new ServiceError(code, `${c.itemId}: a sale price is a whole number of 0 or more`)
+        // R5: the column is there, sales are not — nothing reads `sale_price` this round, so none may be set.
+        if (c.salePrice !== undefined && c.salePrice !== null) throw new ServiceError(code, `${c.itemId}: sale prices are not offered yet`)
       }
       const at = new Date(clock())
       for (const c of changes) {
@@ -346,8 +386,7 @@ export function createShopService(deps: ShopServiceDeps): ShopService {
     },
 
     async featuredFor(weekKey) {
-      const nowMs = clock()
-      return featuredAt(weekKey, await readPrices(deps.db), nowMs)
+      return featuredAt(weekKey, await readPrices(deps.db))
     },
 
     async setFeatured(tx, weekKey, itemIds, updatedBy) {
@@ -359,7 +398,7 @@ export function createShopService(deps: ShopServiceDeps): ShopService {
         await tx.delete(shopFeatured).where(eq(shopFeatured.weekKey, weekKey))
         return
       }
-      await requirePricedEnabled(tx, ids, code)
+      await requireSellable(tx, ids, code, weekStartMs(weekKey, deps.timezone))
       const at = new Date(clock())
       await tx
         .insert(shopFeatured)
@@ -378,13 +417,9 @@ export function createShopService(deps: ShopServiceDeps): ShopService {
       const code = 'INVALID_WELCOME'
       const ids = distinctStrings(itemIds, code)
       if (ids.length !== WELCOME_COUNT) throw new ServiceError(code, `the welcome gift offers exactly ${String(WELCOME_COUNT)} items`)
-      for (const id of ids) {
-        const def = deps.catalog.get(id)
-        if (def === undefined) throw new ServiceError(code, `${id} is not in the item catalogue`)
-        if (def.isDefault || def.free === true) throw new ServiceError(code, `${id} is owned by every player already`)
-        if (rewards.has(id)) throw new ServiceError(code, `${id} is an achievement's reward`)
-      }
-      await requirePricedEnabled(tx, ids, code)
+      // A default, a free item, an achievement's reward and a gift of the schedule (this month's or a later one's) all
+      // carry a lock: none is the shop's to give away.
+      await requireSellable(tx, ids, code, clock())
       const at = new Date(clock())
       await tx
         .insert(shopConfig)
