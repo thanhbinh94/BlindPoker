@@ -412,6 +412,40 @@ describe('GmService — check-in', () => {
     expect(await h.app.services.economy.claimDaily(me.playerId, clock)).toMatchObject({ ok: true, day: 7, consecutive: 1 })
     expect(await consecutiveOf(me.playerId)).toBe(1)
   })
+
+  it('resetCheckin does not touch newcomer_progress', async () => {
+    // Newcomer day 2 was yesterday: today's claim reaches day 3, which hands out a common (or its fallback).
+    await db.execute(sql`insert into newcomer_progress (player_id, day, claimed_days, last_day_key) values (${me.playerId}, 2, '[1,2]'::jsonb, ${YESTERDAY})`)
+    const newcomerOf = async () =>
+      (rowsOf<{ day: number; claimed: number[]; last: string; finished: string | null }>(
+        await db.execute(sql`select day, claimed_days as claimed, last_day_key as last, finished_at as finished from newcomer_progress where player_id = ${me.playerId}`),
+      ))[0]
+    const newcomerGifts = async () => ({
+      items: rowsOf<{ item_id: string }>(await db.execute(sql`select item_id from inventory where player_id = ${me.playerId} and source = 'newcomer'`)),
+      points: rowsOf<{ amount: string | number }>(await db.execute(sql`select amount from point_transactions where ref_id = ${`newcomer:${me.playerId}:3`}`)),
+    })
+
+    const claim = await h.app.services.economy.claimDaily(me.playerId, clock)
+    if (!claim.ok) throw new Error('the claim was refused')
+    expect(claim.newcomer).toMatchObject({ day: 3, finished: false })
+    const calendar = await newcomerOf()
+    expect(calendar).toEqual({ day: 3, claimed: [1, 2, 3], last: TODAY, finished: null })
+    const gifts = await newcomerGifts()
+    expect(gifts.items.length + gifts.points.length).toBe(1)
+
+    const r = await gmAt.resetCheckin(actor(boss), me.playerId, 'điểm danh nhầm tài khoản')
+    // The undo takes back the check-in only: the newcomer day, its item or fallback, stay where the claim put them.
+    expect(r.undone).toEqual({ points: claim.points + claim.fallbackPoints, itemIds: claim.items })
+    expect(await newcomerOf()).toEqual(calendar)
+    expect(await newcomerGifts()).toEqual(gifts)
+
+    // The reclaim is the same day: the calendar already advanced today, so it does not advance again.
+    const again = await h.app.services.economy.claimDaily(me.playerId, clock)
+    expect(again).toMatchObject({ ok: true, day: claim.day })
+    expect(again).not.toHaveProperty('newcomer')
+    expect(await newcomerOf()).toEqual(calendar)
+    expect(await newcomerGifts()).toEqual(gifts)
+  })
 })
 
 describe('GmService — lock and role', () => {

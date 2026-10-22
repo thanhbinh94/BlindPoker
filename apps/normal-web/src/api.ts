@@ -248,6 +248,32 @@ export interface DailyStatusDto {
   /** `YYYY-MM` in the server's economy timezone: the month `calendar` describes. */
   month: string
   calendar: CalendarEntryDto[]
+  /** Plan 27 C2: the newcomer calendar while it runs; absent with no welcome claim, once finished, and from an older server. */
+  newcomer?: NewcomerStatusDto
+}
+
+/** `apps/normal-server/src/economy/economy-service.ts`'s `NewcomerStatus`, verbatim. */
+export interface NewcomerStatusDto {
+  /** The newcomer day today's claim is (or was) for: in `claimedDays` means already counted today, otherwise the one today's claim reaches. */
+  day: number
+  /** The newcomer days (1–7) already counted, ascending; day 1 is the welcome claim. */
+  claimedDays: number[]
+  /** Always false while reported: a finished calendar is left out. */
+  finished: boolean
+}
+
+/** `NewcomerClaim`: what a check-in added to the newcomer calendar, present only when it advanced it. */
+export interface NewcomerClaimDto {
+  /** The newcomer day reached, 2–7. */
+  day: number
+  /** The item day 3 or day 7 handed out, or null. */
+  item: string | null
+  /** The substitute when day 3 or day 7 had nothing unowned left; 0 otherwise. Already in `balance`. */
+  fallbackPoints: number
+  /** Reputation day 7 added; 0 on other days. */
+  reputation: number
+  /** True when this claim completed day 7. */
+  finished: boolean
 }
 
 /**
@@ -279,6 +305,8 @@ export interface DailyClaimDto {
   fallbackPoints: number
   balance: number
   streak: number
+  /** Plan 27 C2: present only when this claim advanced the newcomer calendar. */
+  newcomer?: NewcomerClaimDto
 }
 
 export type ReliefRefusal = 'balance' | 'cooldown'

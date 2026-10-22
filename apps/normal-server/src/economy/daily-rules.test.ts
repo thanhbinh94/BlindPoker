@@ -9,6 +9,8 @@ import {
   itemMarker,
   MAX_STREAK,
   monthKey,
+  NEWCOMER_DAYS,
+  newcomerGiftFor,
   nextDayStartMs,
   nextStreak,
   NO_ITEM_FALLBACK_POINTS,
@@ -174,6 +176,16 @@ describe('the reward table', () => {
 
   it('substitutes 10,000 points when a tier has nothing left', () => {
     expect(NO_ITEM_FALLBACK_POINTS).toBe(10_000)
+  })
+})
+
+describe('newcomerGiftFor', () => {
+  it('gives a common on day 3, a rare on day 7, and nothing on the other days of the seven', () => {
+    expect(NEWCOMER_DAYS).toBe(7)
+    const gifts = Array.from({ length: NEWCOMER_DAYS }, (_, i) => newcomerGiftFor(i + 1))
+    expect(gifts).toEqual([null, null, 'common', null, null, null, 'rare'])
+    expect(newcomerGiftFor(0)).toBeNull()
+    expect(newcomerGiftFor(8)).toBeNull()
   })
 })
 

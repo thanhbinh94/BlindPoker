@@ -2,8 +2,8 @@ import { ECONOMY } from '@bp/core'
 import { silentLogger } from '@bp/server-kit'
 import { asc, eq, sql } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import type { AppDb } from '../db/client.js'
-import { dailyLogins, inventory, items, players, pointTransactions, reputationEvents, users } from '../db/schema.js'
+import { rowsOf, type AppDb } from '../db/client.js'
+import { dailyLogins, inventory, items, newcomerProgress, players, pointTransactions, reputationEvents, users } from '../db/schema.js'
 import type { TestDb } from '../db/test-db.js'
 import { createTestDb } from '../db/test-db.js'
 import type { AppEvent, AppEventBus } from '../events.js'
@@ -600,6 +600,191 @@ describe('claimDaily', () => {
       expect(await hcm.claimDaily(playerId, later)).toEqual({ ok: false, code: 'ALREADY_CLAIMED' })
       expect(await hcm.dailyStatus(playerId, later)).toMatchObject({ claimable: false })
       expect(await economy.dailyStatus(playerId, later)).toMatchObject({ claimable: true })
+    })
+  })
+
+  describe('the newcomer calendar', () => {
+    /** The calendar as the welcome claim (C1) starts it, or fast-forwarded to `day` with the last increment on `lastDay`. */
+    async function startNewcomer(playerId: string, day: number, lastDay: number): Promise<void> {
+      const claimedDays = Array.from({ length: day }, (_, i) => i + 1)
+      await db.insert(newcomerProgress).values({ playerId, day, claimedDays, lastDayKey: octKey(lastDay) })
+    }
+    const newcomerRow = async (playerId: string) => {
+      const [row] = await db.select().from(newcomerProgress).where(eq(newcomerProgress.playerId, playerId))
+      return row
+    }
+    const newcomerItemsOf = async (playerId: string) =>
+      db.select({ itemId: inventory.itemId, ref: inventory.ref }).from(inventory).where(sql`${inventory.playerId} = ${playerId} and ${inventory.source} = 'newcomer'`)
+    const unownedCommons = (): string[] => drawable('common').filter((id) => !catalog.defaults().includes(id))
+
+    it('a claim advances the newcomer day and day 3 pays a common', async () => {
+      const playerId = await seedPlayer()
+      await own(playerId, catalog.defaults())
+      await startNewcomer(playerId, 2, 1)
+      rng = () => 0
+
+      const result = await economy.claimDaily(playerId, OCT(2))
+
+      const common = unownedCommons()[0]!
+      // The month's day 1 draws nothing, so the only item is the newcomer's — through the monthly draw's own pool and rng.
+      expect(result).toMatchObject({ ok: true, day: 1, points: 5_000, items: [], fallbackPoints: 0, balance: 5_000 })
+      expect(result).toMatchObject({ newcomer: { day: 3, item: common, fallbackPoints: 0, reputation: 0, finished: false } })
+      expect(await newcomerItemsOf(playerId)).toEqual([{ itemId: common, ref: `newcomer:${playerId}:3` }])
+      expect(await newcomerRow(playerId)).toMatchObject({ day: 3, claimedDays: [1, 2, 3], lastDayKey: octKey(2), finishedAt: null })
+      expect(await ledger(playerId)).toEqual([{ amount: 5_000, reason: 'daily_login', refId: `daily:${playerId}:2026-10-02` }])
+      // The check-in's own event is unchanged by the calendar riding on it.
+      expect(published).toEqual([{ type: 'DAILY_CLAIMED', playerId, day: 1, streak: 1, consecutive: 1 }])
+    })
+
+    it('day 3 with no common left pays the fallback in the claim\'s own credit, under the newcomer ref', async () => {
+      const playerId = await seedPlayer()
+      await own(playerId, drawable('common'))
+      await startNewcomer(playerId, 2, 1)
+
+      const result = await economy.claimDaily(playerId, OCT(2))
+
+      expect(result).toMatchObject({ balance: 15_000, newcomer: { day: 3, item: null, fallbackPoints: 10_000, reputation: 0, finished: false } })
+      expect(await ledger(playerId)).toEqual([
+        { amount: 5_000, reason: 'daily_login', refId: `daily:${playerId}:2026-10-02` },
+        { amount: 10_000, reason: 'daily_item_fallback', refId: `newcomer:${playerId}:3` },
+      ])
+    })
+
+    it('day 7 pays a rare, 200 reputation and finishes', async () => {
+      const playerId = await seedPlayer()
+      await db.update(players).set({ reputation: 250, rank: 2 }).where(eq(players.id, playerId))
+      await startNewcomer(playerId, 6, 5)
+
+      const result = await economy.claimDaily(playerId, OCT(6))
+
+      if (!result.ok) throw new Error('the claim was refused')
+      const rare = result.newcomer?.item
+      expect(drawable('rare')).toContain(rare)
+      expect(result.newcomer).toEqual({ day: 7, item: rare, fallbackPoints: 0, reputation: 200, finished: true })
+      expect(await newcomerItemsOf(playerId)).toEqual([{ itemId: rare, ref: `newcomer:${playerId}:7` }])
+      const row = await newcomerRow(playerId)
+      expect(row).toMatchObject({ day: 7, claimedDays: [1, 2, 3, 4, 5, 6, 7], lastDayKey: octKey(6) })
+      expect(row?.finishedAt?.getTime()).toBe(OCT(6))
+      const events = await db
+        .select({ delta: reputationEvents.delta, reason: reputationEvents.reason, refId: reputationEvents.refId })
+        .from(reputationEvents)
+        .where(eq(reputationEvents.playerId, playerId))
+        .orderBy(asc(reputationEvents.id))
+      expect(events).toEqual([
+        { delta: 10, reason: 'daily_login', refId: `daily:${playerId}:2026-10-06` },
+        { delta: 200, reason: 'newcomer_day', refId: `newcomer:${playerId}:7` },
+      ])
+      // 250 → 260 → 460 crosses 400 on the newcomer's grant: one announcement, with the final rank.
+      expect(rankUps).toEqual([{ playerId, rank: 3 }])
+
+      // Finished: the next day's claim is a plain check-in again.
+      const next = await economy.claimDaily(playerId, OCT(7))
+      expect(next).not.toHaveProperty('newcomer')
+      expect(await newcomerRow(playerId)).toMatchObject({ day: 7, lastDayKey: octKey(6) })
+    })
+
+    it('announces a rank-up once when both the daily and the newcomer grant land in one claim', async () => {
+      const playerId = await seedPlayer()
+      await db.update(players).set({ reputation: 95, rank: 1 }).where(eq(players.id, playerId))
+      await startNewcomer(playerId, 6, 5)
+
+      await economy.claimDaily(playerId, OCT(6))
+
+      // 95 → 105 ranks up on the daily grant, 305 stays at 2: told once.
+      expect(rankUps).toEqual([{ playerId, rank: 2 }])
+    })
+
+    it('the rare pool empty on day 7 pays the fallback and still finishes, in one transaction', async () => {
+      const playerId = await seedPlayer()
+      await own(playerId, drawable('rare'))
+      await startNewcomer(playerId, 6, 5)
+
+      const result = await economy.claimDaily(playerId, OCT(6))
+
+      expect(result).toMatchObject({ balance: 15_000, newcomer: { day: 7, item: null, fallbackPoints: 10_000, reputation: 200, finished: true } })
+      expect(await ledger(playerId)).toEqual([
+        { amount: 5_000, reason: 'daily_login', refId: `daily:${playerId}:2026-10-06` },
+        { amount: 10_000, reason: 'daily_item_fallback', refId: `newcomer:${playerId}:7` },
+      ])
+      expect((await newcomerRow(playerId))?.finishedAt).not.toBeNull()
+
+      // The same claim for another player, with the reputation grant — the last write, after the points — failing.
+      const other = await seedPlayer()
+      await own(other, drawable('rare'))
+      await startNewcomer(other, 6, 5)
+      const failing: ReputationService = {
+        ...reputation,
+        grantRuleWithin: async (tx, pid, key, reason, refId) => {
+          if (key === 'newcomer_day7') throw new Error('the reputation write failed')
+          return reputation.grantRuleWithin(tx, pid, key, reason, refId)
+        },
+      }
+      const broken = createEconomyService({ db, repos, inventory: inv, catalog, bus, timezone: 'UTC', onBalanceChanged: (p, b) => balanceCalls.push({ playerId: p, balance: b }), gifts: () => gifts, reputation: failing })
+      published = []
+      balanceCalls = []
+
+      await expect(broken.claimDaily(other, OCT(6))).rejects.toThrow(/reputation write failed/)
+
+      // Nothing of either calendar stands: no points, no fallback, no streak, no newcomer day, no reputation, no news.
+      expect(await balanceOf(other)).toBe(0)
+      expect(await ledger(other)).toEqual([])
+      const [login] = await db.select().from(dailyLogins).where(eq(dailyLogins.playerId, other))
+      expect(login).toMatchObject({ streak: 0, lastClaimDate: null })
+      expect(await newcomerRow(other)).toMatchObject({ day: 6, claimedDays: [1, 2, 3, 4, 5, 6], lastDayKey: octKey(5), finishedAt: null })
+      expect(await db.select().from(reputationEvents).where(eq(reputationEvents.playerId, other))).toEqual([])
+      expect(published).toEqual([])
+      expect(balanceCalls).toEqual([])
+      // And the books still balance: Σ balances is Σ ledger.
+      const [sums] = rowsOf<{ balances: string | number; ledger: string | number }>(
+        await db.execute(sql`select (select coalesce(sum(balance), 0) from players) as balances, (select coalesce(sum(amount), 0) from point_transactions) as ledger`),
+      )
+      expect(Number(sums?.balances)).toBe(Number(sums?.ledger))
+
+      // The working service then claims it whole.
+      expect(await economy.claimDaily(other, OCT(6))).toMatchObject({ newcomer: { day: 7, fallbackPoints: 10_000, finished: true } })
+    })
+
+    it('the welcome day\'s own claim does not advance the newcomer day, and the next day\'s claim does', async () => {
+      const playerId = await seedPlayer()
+      // What C1 writes: day 1 is the welcome day, already counted.
+      await startNewcomer(playerId, 1, 1)
+
+      const sameDay = await economy.claimDaily(playerId, OCT(1) + HOUR)
+      expect(sameDay).toMatchObject({ ok: true, day: 1 })
+      expect(sameDay).not.toHaveProperty('newcomer')
+      expect(await newcomerRow(playerId)).toMatchObject({ day: 1, claimedDays: [1], lastDayKey: octKey(1) })
+
+      // A missed day loses nothing (R7): the calendar counts days with a claim, not calendar days.
+      const later = await economy.claimDaily(playerId, OCT(3))
+      expect(later).toMatchObject({ newcomer: { day: 2, item: null, fallbackPoints: 0, reputation: 0, finished: false } })
+      expect(await newcomerRow(playerId)).toMatchObject({ day: 2, claimedDays: [1, 2], lastDayKey: octKey(3) })
+    })
+
+    it('a player without the welcome claim has no newcomer field', async () => {
+      const playerId = await seedPlayer()
+
+      const result = await economy.claimDaily(playerId, OCT(1))
+
+      expect(result).not.toHaveProperty('newcomer')
+      expect(await economy.dailyStatus(playerId, OCT(2))).not.toHaveProperty('newcomer')
+      expect(await newcomerRow(playerId)).toBeUndefined()
+    })
+
+    it('dailyStatus reports the newcomer calendar until it finishes', async () => {
+      const playerId = await seedPlayer()
+      await startNewcomer(playerId, 1, 1)
+
+      // On the welcome day, today's tile is day 1 and already claimed; tomorrow's claim is for day 2.
+      expect((await economy.dailyStatus(playerId, OCT(1))).newcomer).toEqual({ day: 1, claimedDays: [1], finished: false })
+      expect((await economy.dailyStatus(playerId, OCT(2))).newcomer).toEqual({ day: 2, claimedDays: [1], finished: false })
+      await economy.claimDaily(playerId, OCT(2))
+      expect((await economy.dailyStatus(playerId, OCT(2))).newcomer).toEqual({ day: 2, claimedDays: [1, 2], finished: false })
+
+      await db.update(newcomerProgress).set({ day: 6, claimedDays: [1, 2, 3, 4, 5, 6], lastDayKey: octKey(2) }).where(eq(newcomerProgress.playerId, playerId))
+      expect((await economy.dailyStatus(playerId, OCT(3))).newcomer).toEqual({ day: 7, claimedDays: [1, 2, 3, 4, 5, 6], finished: false })
+      await economy.claimDaily(playerId, OCT(3))
+      expect(await economy.dailyStatus(playerId, OCT(3))).not.toHaveProperty('newcomer')
+      expect(await economy.dailyStatus(playerId, OCT(4))).not.toHaveProperty('newcomer')
     })
   })
 

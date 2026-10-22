@@ -21,6 +21,16 @@ export const MAX_STREAK = 31
 /** §13.2: what a day whose cosmetic tier has nothing unowned left pays instead. */
 export const NO_ITEM_FALLBACK_POINTS = 10_000
 
+/** Plan 27 C2: the newcomer calendar's length — day 1 is the welcome claim, each later day with a check-in adds one. */
+export const NEWCOMER_DAYS = 7
+
+/** What a newcomer day hands out besides the check-in (spec C2): a random unowned common on day 3, a rare on day 7. */
+export function newcomerGiftFor(day: number): 'common' | 'rare' | null {
+  if (day === 3) return 'common'
+  if (day === NEWCOMER_DAYS) return 'rare'
+  return null
+}
+
 /** Renders `nowMs` as the calendar day (`YYYY-MM-DD`) it falls on in `timeZone`. */
 export function dayKey(nowMs: number, timeZone: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(nowMs))
