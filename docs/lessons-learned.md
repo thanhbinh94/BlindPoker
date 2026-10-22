@@ -1064,6 +1064,10 @@ into the plan, one of them rejected. The rulings below are the SDD ledger's, in 
 - **Measure before you promise a number.** The 3G case showed the stage and the first row drawn in 850 ms, but the
   pictures at 3.2 s on a phone: the kit chooses the tint density by the screen, not by the drawn size (Ruling 16).
   Without the measurement the spec's "≤ 2 s" would have been claimed.
+- **A cache bypass that does not write back only moves the stale answer.** The avatar's "fresh" read used `cache:
+  'no-store'`, so after a rank-up the app showed the new rank while the browser kept the old answer for its 60 s, and
+  the next reload read it again (the ops case had to clear the cache over CDP). `cache: 'reload'` goes to the server
+  and replaces the entry; the app now invalidates the player's own avatar on `RANK_UP` (fix wave).
 - **Dead money code is a liability, not a safety net.** Once every seat is dealt with a point and an emptied seat is
   played for it, the carry-over claimant path could not run; the reviewer proved it and the code went (Ruling 14),
   with a test of the all-fold table instead of tests of an unreachable branch.

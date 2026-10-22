@@ -31,7 +31,8 @@ GATE
   The starting balance stays 100,000. From then on Điểm danh carries a **"Tuần đầu tiên"** panel under the summary: seven
   cells (Đã nhận / Hôm nay / Chưa tới), "1 món thường" on day 3, "1 món hiếm +200 danh vọng" on day 7; one "Nhận thưởng"
   claims both calendars and the receipt lists both. It counts claim days, so a missed day costs nothing.
-- **What a player sees (Part B).** A **"Cửa hàng"** link beside "Phòng thay đồ" on the lobby opens `#/shop`: the player's
+- **What a player sees (Part B).** A **"Cửa hàng"** pill beside "Phòng thay đồ" on the lobby's player bar (the same line
+  as the name and the balance, so a lobby of six still fits 1920×940) opens `#/shop`: the player's
   own figure on the left (a 96 px strip on top at phone width) with the balance and the rank's progress, **"Kệ tuần
   này"** (up to six items, a GM's pick or a rotation fixed from Monday), then shelves Thường / Hiếm / Cực hiếm, filtered
   by slot ("Lọc theo ô", the wardrobe's own labels, plus "Màu sắc" for the rare and epic hair and eye colours). A tap
@@ -50,7 +51,8 @@ GATE
   on a wide seat plate, in its colour (`--rank-2` … `--rank-5`, AA on the plate); on a narrow plate, in the landscape
   frame and in the "Mời ra" list it is a roman-numeral pill ("III") with the name as its title. The lobby bar shows it
   after the name, the profile reads "Danh vọng 455 · Cao thủ · còn 1.345 tới Bậc thầy" with a bar, and a rank-up toasts
-  "Bạn vừa lên bậc Cao thủ".
+  "Bạn vừa lên bậc Cao thủ" and shows on the player's own bar and seat at once (the app reads its own avatar again,
+  past the browser's cache). A GM's grant reads "+500 danh vọng — <lý do>".
 - **What a player sees (Part D).** A Blind table takes **no fee**, and a seat plays **down to its last point**. Sitting
   down needs one wager in both modes (play-or-fold asked for two). A seat short of the wager antes what it has and is all
   in, winning only the pots it matched; in play-or-fold a seat the ante emptied is played for it (never asked, never
@@ -66,8 +68,9 @@ GATE
   heads, the Kiểu tóc portraits and every card icon wait until they are within 200 px of the screen, tinted layers render
   four at a time with the figures first, and a picture that stalls gives up after 15 s and leaves the plain layer.
   Measured on "fast 3G": the stage and the first row are on screen in about 850 ms at 1366×768 and 375×812; the first
-  row's pictures arrive in about 1.8 s on the laptop and 3.2 s on the phone (see "Still open"). Opening the wardrobe at
-  375×812 asks for 11 avatar pictures instead of every layer of every card.
+  row's pictures arrive in about 1.7 s at both sizes, the phone's because a small portrait loads its pictures @1x
+  whatever the screen (Ruling 16; 3.2 s before). Opening the wardrobe at 375×812 asks for 16 small avatar pictures
+  instead of every layer of every card.
 - **What a GM sees.** Quản trị has six tabs: the new **Cửa hàng** tab edits prices, minimum rank and on/off per item (the
   "chưa định giá" rows first, each row with its lock), picks "Kệ tuần này" for this week and the eight after, sets the
   three welcome choices (outfit, head, face, aura or frame only), and holds two small **Danh vọng** tables (the eight
@@ -172,21 +175,9 @@ GATE
   - The entry chunk's budget rose from 130 to 140 KB (Ruling 13).
 - **Deployed.** DEPLOY
 - **Still open.**
-  - **Final wave (each item here is deleted from this list, and from `docs/known-limitations.md`, if the wave lands
-    it):** a small `head` figure draws its tinted layers @1x whatever the DPR, so the phone's first wardrobe row arrives
-    within 2 s (Ruling 16); `GET /api/welcome` and `DailyStatus.newcomer` carry the 100 / 200 reputation amounts instead
-    of client constants; the player-facing text of a GM's reputation grant (`gm.notice.reputation`); caps on rule amounts
-    (≤ 100,000) and thresholds (≤ 1,000,000,000) and a client-side ladder check in the GM editor; the lobby's link row
-    making the six-room lobby scroll 55 px at 1920×940 (blocks the gate); `PURCHASE_UNDONE` with its own message and
-    string; `blindRequiredStack`, now dead, removed; the featured-week editor offering items by today's locks rather
-    than each week's; the wardrobe's retry only when its second group is not loading.
-  - **Parked minors:** range checks on `players.reputation`, `players.rank` and `newcomer_progress.day`; two clock-skew
-    cases in `daily-rules.test.ts`; a `{day 7, streak 7, consecutive 1}` achievement case; `BAD_REQUEST` vs
-    `INVALID_BODY` across the shop and welcome routes; a route-level 409 for `SHOP_DISABLED` and
-    `INSUFFICIENT_POINTS`; the welcome service's two rollback tests; the backfill CLI refusing unknown flags and its
-    tests for every mirrored reason; `aria-current` on the tried-on shop card; `avatarRefusal` moved out of
-    `WardrobeScreen`; the wardrobe preview column's sticky offset under the bar; a visually hidden separator between
-    name and rank word; the shop's error string borrowed from the wardrobe.
+  - **Parked minors, declined:** range checks on `players.reputation`, `players.rank` and `newcomer_progress.day`
+    (the services already keep them in range; a CHECK constraint is a migration for no behaviour); a visually hidden
+    separator between name and rank word.
   - **English copy waiting for the user:** "Check-in 12 of 10/2026" and "1 days left" (G2), and the GM's
     `gm.dialog.checkinBody` ("the streak is kept") and `gm.gifts.lead` ("check-in streak tier"), now wrong.
   - **Residuals** (`docs/known-limitations.md`): reputation is never taken back; a GM's check-in reset leaves the newcomer
@@ -194,7 +185,8 @@ GATE
     the epic shelf is thin until the gift months pass; a new catalogue item sells at the next boot; a retry across a GM
     revoke and a restart can charge again; two GMs saving at once, the last wins; the backfill's race window and "run
     once"; the 0006 data step's fixed zone; the folder's bet chip; the text-only relief nudge; locale namespaces in the
-    entry chunk; one account on two devices with no "Tiếp quản" prompt (K1).
+    entry chunk; one account on two devices with no "Tiếp quản" prompt (K1); the featured-week editor offering items by
+    today's locks rather than each week's.
   - **Manual checks for the user:** the welcome gift on a real account, a purchase, the rank on a phone seat, a Blind
     table played to zero, the Điểm danh page after a missed day; the Windows LAN host still needs `0004`–`0006` and the
     backfill (the user's Neon database; ask first).
