@@ -7,7 +7,7 @@ import w from './welcome.module.css'
 /** The newcomer calendar's length (spec 2026-10-21 §4 C2): day 1 is the welcome claim, days 2–7 the check-ins after it. */
 const DAYS = [1, 2, 3, 4, 5, 6, 7] as const
 
-/** Day 7's reputation: the server's `rules.newcomer_day7` default. The status does not carry it (see `WELCOME_REPUTATION`). */
+/** Day 7's reputation when the status does not say (a server older than the Plan 27 fix wave): `rules.newcomer_day7`'s default. */
 export const NEWCOMER_DAY7_REPUTATION = 200
 
 type Mark = 'claimed' | 'today' | 'locked'
@@ -33,7 +33,7 @@ export function NewcomerPanel({ newcomer, lang }: NewcomerPanelProps) {
 
   const markOf = (day: number): Mark => (claimed.has(day) ? 'claimed' : day === newcomer.day ? 'today' : 'locked')
   const giftOf = (day: number): string | null =>
-    day === 3 ? t('daily.newcomer.common') : day === 7 ? t('daily.newcomer.rare', { amount: formatPoints(NEWCOMER_DAY7_REPUTATION, lang) }) : null
+    day === 3 ? t('daily.newcomer.common') : day === 7 ? t('daily.newcomer.rare', { amount: formatPoints(newcomer.day7Reputation ?? NEWCOMER_DAY7_REPUTATION, lang) }) : null
 
   return (
     <Panel title={t('daily.newcomer.title')}>

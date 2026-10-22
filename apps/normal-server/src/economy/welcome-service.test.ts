@@ -18,7 +18,7 @@ import { loadItemCatalog, type ItemCatalog } from '../inventory/items.js'
 import { createReputationService, seedDefaults, type ReputationService } from '../reputation/reputation-service.js'
 import { DEFAULT_WELCOME_CHOICES, WELCOME_CHOICES_KEY } from '../shop/shop-prices-seed.js'
 import { dayKey } from './daily-rules.js'
-import { createWelcomeService, type WelcomeService } from './welcome-service.js'
+import { createWelcomeService, type WelcomeService, type WelcomeServiceDeps } from './welcome-service.js'
 
 let test: TestDb
 let db: AppDb
@@ -35,19 +35,21 @@ const TZ = 'Asia/Ho_Chi_Minh'
 const [HAT_CHOICE] = DEFAULT_WELCOME_CHOICES.filter((id) => id.startsWith('head_'))
 const [OUTFIT_CHOICE] = DEFAULT_WELCOME_CHOICES.filter((id) => id.startsWith('outfit_'))
 
-function makeWelcome(): WelcomeService {
+function makeWelcome(overrides: Partial<WelcomeServiceDeps> = {}): WelcomeService {
   return createWelcomeService({
     db,
     inventory: inv,
     catalog,
     shop: { welcomeChoices: async () => [...DEFAULT_WELCOME_CHOICES] },
     reputation: {
+      rules: () => reputation.rules(),
       grantRuleWithin: (tx, playerId, key, reason, refId) => reputation.grantRuleWithin(tx, playerId, key, reason, refId),
       announceRankUp: (playerId, rank) => announced.push({ playerId, rank }),
     },
     avatars: { wearWithin: (tx: AppTx, playerId: string, itemId: string) => wearItemWithin(tx, catalog, aliases, bodies, playerId, itemId) },
     timezone: TZ,
     now: () => NOW,
+    ...overrides,
   })
 }
 
@@ -104,7 +106,11 @@ describe('WelcomeService', () => {
   it('claims once: item, worn, +100 reputation, newcomer day 1 with last_day_key', async () => {
     const pid = await seedPlayer()
     const welcome = makeWelcome()
-    expect(await welcome.status(pid)).toEqual({ claimed: false, choices: DEFAULT_WELCOME_CHOICES.map((itemId) => ({ itemId, owned: false })) })
+    expect(await welcome.status(pid)).toEqual({
+      claimed: false,
+      choices: DEFAULT_WELCOME_CHOICES.map((itemId) => ({ itemId, owned: false })),
+      reputation: 100,
+    })
 
     const result = await welcome.claim(pid, HAT_CHOICE!)
     expect(result).toEqual({ ok: true, itemId: HAT_CHOICE, reputation: 100, rank: 2, rankUp: true })
@@ -202,5 +208,44 @@ describe('WelcomeService', () => {
     expect(row.reputation).toBe(0)
     expect(await newcomerOf(pid)).toBeUndefined()
     expect((await welcome.status(pid)).claimed).toBe(false)
+  })
+
+  it('status says what the welcome rule pays now, so a GM’s change reaches the dialog before the claim', async () => {
+    const pid = await seedPlayer()
+    const rules = { ...(await reputation.rules()), welcome: 250 }
+    const welcome = makeWelcome({ reputation: { rules: async () => rules, grantRuleWithin: (...args) => reputation.grantRuleWithin(...args), announceRankUp: () => {} } })
+    expect((await welcome.status(pid)).reputation).toBe(250)
+  })
+
+  it('a grant that loses a race inside the transaction is ALREADY_OWNED, and the guard stays null', async () => {
+    const pid = await seedPlayer()
+    // `missingOf` (read before the transaction) says unowned; the grant inside it finds the row a racing draw just wrote.
+    const welcome = makeWelcome({ inventory: { missingOf: inv.missingOf, grant: async () => false } })
+    expect(await welcome.claim(pid, HAT_CHOICE!)).toEqual({ ok: false, code: 'ALREADY_OWNED' })
+    const row = await playerRow(pid)
+    expect(row.welcomeClaimedAt).toBeNull()
+    expect(row.reputation).toBe(0)
+    expect(await newcomerOf(pid)).toBeUndefined()
+  })
+
+  it('a throw after the grant rolls back the item, what was worn and the guard', async () => {
+    const pid = await seedPlayer()
+    const failing = makeWelcome({
+      reputation: {
+        rules: () => reputation.rules(),
+        grantRuleWithin: () => Promise.reject(new Error('reputation down')),
+        announceRankUp: () => announced.push({ playerId: pid, rank: 0 }),
+      },
+    })
+    await expect(failing.claim(pid, HAT_CHOICE!)).rejects.toThrow('reputation down')
+
+    expect(await itemsOf(pid)).toEqual([])
+    const row = await playerRow(pid)
+    expect(readAvatarConfig(row.avatarConfig, catalog, aliases, bodies)).toEqual(defaultAvatar(catalog))
+    expect(row.welcomeClaimedAt).toBeNull()
+    expect(await newcomerOf(pid)).toBeUndefined()
+    expect(announced).toEqual([])
+    // And the gift is still there to take.
+    expect((await makeWelcome().claim(pid, HAT_CHOICE!)).ok).toBe(true)
   })
 })

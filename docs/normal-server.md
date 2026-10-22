@@ -668,7 +668,7 @@ was used for an item a GM has since revoked) 409, each with a message of its own
 `shop_purchase` is a transfer like `buy_in`, so the overview and "Theo ngày" count a purchase once. Conservation: 40
 random buys across three players keep `Σ balances + Σ sinks`, and the shop sink equals what was paid.
 
-**The welcome gift (`economy/welcome-service.ts`).** `GET /api/welcome` → `{ claimed, choices: [{ itemId, owned }] }`;
+**The welcome gift (`economy/welcome-service.ts`).** `GET /api/welcome` → `{ claimed, choices: [{ itemId, owned }], reputation }` (`reputation` is what `rules.welcome` pays now, so the dialog announces a GM's change);
 `POST /api/welcome/claim { itemId: string | null }`. One transaction, guard first (`UPDATE players SET
 welcome_claimed_at … WHERE welcome_claimed_at IS NULL RETURNING id`): grant the item (source `welcome`), wear it
 (`wearItemWithin`, `inventory/avatar.ts`, through `tx`), `+rules.welcome` reputation (ref `welcome`), and day 1 of the
@@ -682,7 +682,8 @@ A claim on a later economy day than `last_day_key` advances `day` by one **insid
 an unowned common, day 7 an unowned rare plus `rules.newcomer_day7` reputation and finishes; an empty pool pays
 `NO_ITEM_FALLBACK_POINTS` under `daily_item_fallback` with ref `newcomer:<pid>:<day>` — outside the GM undo's reach.
 `DailyClaimOk.newcomer` is `{ day, item: string | null, fallbackPoints, reputation, finished }`, present only when the
-claim advanced the calendar; `GET /api/rewards/daily` carries `newcomer` until it finishes.
+claim advanced the calendar; `GET /api/rewards/daily` carries `newcomer: { day, claimedDays, finished, day7Reputation }`
+until it finishes (`day7Reputation` is what `rules.newcomer_day7` pays now, for the panel's day-7 tile).
 
 **The GM's seven routes.** `POST /api/gm/players/:id/reputation` (1 to 100,000, a reason; `gm_actions` kind
 `grant_reputation`, event `gm_grant` with ref `gm:<actionId>`; a locked account can receive it), `GET /api/gm/shop`

@@ -18,9 +18,8 @@ import { refusalText } from './refusal.js'
 import w from './welcome.module.css'
 
 /**
- * The reputation the welcome gift adds: the server's `rules.welcome` default (spec 2026-10-21 §4 C1). The status route
- * does not carry it, so the dialog names the default; a game master who changes the rule changes the grant, not
- * these words.
+ * The reputation the welcome gift adds when the status does not say (a server older than the Plan 27 fix wave): the
+ * server's `rules.welcome` default (spec 2026-10-21 §4 C1). `GET /api/welcome` carries the rule's current amount.
  */
 export const WELCOME_REPUTATION = 100
 
@@ -67,7 +66,7 @@ export function WelcomeDialog({ api, lang, status, avatar, items, bodies, onClai
 
   const shown = claimedFrom ?? fresh ?? status
   const allOwned = shown.choices.every((choice) => choice.owned)
-  const amount = formatPoints(WELCOME_REPUTATION, lang)
+  const amount = formatPoints(shown.reputation ?? WELCOME_REPUTATION, lang)
 
   // Before the lobby's avatar read lands, the first body the catalogue serves, in its first hairstyle and default
   // outfit — `chibiFromApi` falls back to both for an id it does not know.

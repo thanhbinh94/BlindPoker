@@ -1,7 +1,7 @@
 import { ECONOMY } from '@bp/core'
 import { silentLogger } from '@bp/server-kit'
 import { asc, eq, sql } from 'drizzle-orm'
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { rowsOf, type AppDb } from '../db/client.js'
 import { dailyLogins, inventory, items, newcomerProgress, players, pointTransactions, reputationEvents, users } from '../db/schema.js'
 import type { TestDb } from '../db/test-db.js'
@@ -775,16 +775,28 @@ describe('claimDaily', () => {
       await startNewcomer(playerId, 1, 1)
 
       // On the welcome day, today's tile is day 1 and already claimed; tomorrow's claim is for day 2.
-      expect((await economy.dailyStatus(playerId, OCT(1))).newcomer).toEqual({ day: 1, claimedDays: [1], finished: false })
-      expect((await economy.dailyStatus(playerId, OCT(2))).newcomer).toEqual({ day: 2, claimedDays: [1], finished: false })
+      expect((await economy.dailyStatus(playerId, OCT(1))).newcomer).toEqual({ day: 1, claimedDays: [1], finished: false, day7Reputation: 200 })
+      expect((await economy.dailyStatus(playerId, OCT(2))).newcomer).toEqual({ day: 2, claimedDays: [1], finished: false, day7Reputation: 200 })
       await economy.claimDaily(playerId, OCT(2))
-      expect((await economy.dailyStatus(playerId, OCT(2))).newcomer).toEqual({ day: 2, claimedDays: [1, 2], finished: false })
+      expect((await economy.dailyStatus(playerId, OCT(2))).newcomer).toEqual({ day: 2, claimedDays: [1, 2], finished: false, day7Reputation: 200 })
 
       await db.update(newcomerProgress).set({ day: 6, claimedDays: [1, 2, 3, 4, 5, 6], lastDayKey: octKey(2) }).where(eq(newcomerProgress.playerId, playerId))
-      expect((await economy.dailyStatus(playerId, OCT(3))).newcomer).toEqual({ day: 7, claimedDays: [1, 2, 3, 4, 5, 6], finished: false })
+      expect((await economy.dailyStatus(playerId, OCT(3))).newcomer).toEqual({ day: 7, claimedDays: [1, 2, 3, 4, 5, 6], finished: false, day7Reputation: 200 })
       await economy.claimDaily(playerId, OCT(3))
       expect(await economy.dailyStatus(playerId, OCT(3))).not.toHaveProperty('newcomer')
       expect(await economy.dailyStatus(playerId, OCT(4))).not.toHaveProperty('newcomer')
+    })
+
+    it('dailyStatus says what day 7 pays now, from the newcomer_day7 rule', async () => {
+      const playerId = await seedPlayer()
+      await startNewcomer(playerId, 1, 1)
+      const rules = await reputation.rules()
+      const spy = vi.spyOn(reputation, 'rules').mockResolvedValue({ ...rules, newcomer_day7: 300 })
+      try {
+        expect((await economy.dailyStatus(playerId, OCT(2))).newcomer?.day7Reputation).toBe(300)
+      } finally {
+        spy.mockRestore()
+      }
     })
   })
 

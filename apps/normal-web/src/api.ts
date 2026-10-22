@@ -260,6 +260,8 @@ export interface NewcomerStatusDto {
   claimedDays: number[]
   /** Always false while reported: a finished calendar is left out. */
   finished: boolean
+  /** What day 7 pays now (`rules.newcomer_day7`); absent from a server older than the Plan 27 fix wave. */
+  day7Reputation?: number
 }
 
 /** `NewcomerClaim`: what a check-in added to the newcomer calendar, present only when it advanced it. */
@@ -404,6 +406,8 @@ export interface BuyResultDto {
 export interface WelcomeStatusDto {
   claimed: boolean
   choices: { itemId: string; owned: boolean }[]
+  /** What the gift's reputation is now (`rules.welcome`); absent from a server older than the Plan 27 fix wave. */
+  reputation?: number
 }
 
 /** `POST /api/welcome/claim`: the item granted and worn (`null` for reputation only), and the standing after it. */

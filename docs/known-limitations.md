@@ -500,15 +500,6 @@ the gift is claimed. While the gift is unclaimed the lobby does not jump to "Đi
 enough to stop it opening over every later lobby visit.
 *Tracked:* `apps/normal-web/src/App.tsx` (`WELCOME_SHOWN_KEY`).
 
-**The welcome dialog and the newcomer panel print 100 and 200 reputation from client constants.** `WELCOME_REPUTATION`
-and `NEWCOMER_DAY7_REPUTATION` are the server's defaults; a GM who changes `welcome` or `newcomer_day7` in "Nguồn danh
-vọng" changes what is granted (and the claim's receipt, which reads the server's answer) but not the figure the dialog's
-"Nhận 100 danh vọng" button and the panel's day-7 tile announce in advance.
-*Why it stays:* until `GET /api/welcome` and `DailyStatus.newcomer` carry the amounts; parked for the final wave of
-Plan 27, and this entry goes when they do.
-*Tracked:* `apps/normal-web/src/screens/NewcomerPanel.tsx`, `apps/normal-web/src/screens/WelcomeDialog.tsx`; CHANGELOG
-Plan 27, "Still open".
-
 **The epic shelf is thin until the gift months pass.** Of 15 epics, the achievements reward 7 and the check-in schedule
 gives 6 more in a later month (one a month from 11/2026 to 4/2027), so at launch two epics sell (`outfit_tuxedo01`, `outfit_royal_robe01`), beside 27 rares and 12 commons. A monthly epic goes on sale
 the month after its own (R20), so the shelf fills one item a month.

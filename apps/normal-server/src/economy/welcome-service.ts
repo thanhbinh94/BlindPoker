@@ -19,6 +19,10 @@
  *
  * **Reputation only (R17).** When every choice is already owned, `claim(pid, null)` grants the reputation and the
  * newcomer day without an item; `null` while any choice is still unowned is `NOT_A_CHOICE`.
+ *
+ * **A choice that cannot be worn is still granted.** `avatars.wearWithin` answers false, writing nothing, when the
+ * figure would not validate with the item on (a cut for the other body); the claim goes on, and the item waits in the
+ * wardrobe. Only a throw rolls the claim back.
  */
 import { and, eq, isNull } from 'drizzle-orm'
 import type { AppDb, AppTx } from '../db/client.js'
@@ -35,6 +39,8 @@ export interface WelcomeStatus {
   claimed: boolean
   /** The configured choices, in their configured order; `owned` ones cannot be picked (R17). */
   choices: { itemId: string; owned: boolean }[]
+  /** What the `welcome` rule pays now (Plan 27 fix wave): the dialog announces it before the claim, so a GM's change shows. */
+  reputation: number
 }
 
 export type WelcomeRefusal = 'WELCOME_CLAIMED' | 'NOT_A_CHOICE' | 'ALREADY_OWNED'
@@ -54,7 +60,7 @@ export interface WelcomeServiceDeps {
   inventory: Pick<InventoryService, 'grant' | 'missingOf'>
   catalog: ItemCatalog
   shop: Pick<ShopService, 'welcomeChoices'>
-  reputation: Pick<ReputationService, 'grantRuleWithin' | 'announceRankUp'>
+  reputation: Pick<ReputationService, 'rules' | 'grantRuleWithin' | 'announceRankUp'>
   /** Puts the item on the figure inside `tx` — `wearItemWithin` in `app.ts`. */
   avatars: { wearWithin(tx: AppTx, playerId: string, itemId: string): Promise<unknown> }
   /** The economy's time zone: newcomer day 1 is today's `dayKey` there, so C2's next day is a different one. */
@@ -84,8 +90,12 @@ export function createWelcomeService(deps: WelcomeServiceDeps): WelcomeService {
       if (!isUuid(playerId)) throw new UnknownPlayerError(playerId)
       const [row] = await deps.db.select({ claimedAt: players.welcomeClaimedAt }).from(players).where(eq(players.id, playerId))
       if (row === undefined) throw new UnknownPlayerError(playerId)
-      const { choices, missing } = await choicesFor(playerId)
-      return { claimed: row.claimedAt !== null, choices: choices.map((itemId) => ({ itemId, owned: !missing.has(itemId) })) }
+      const [{ choices, missing }, rules] = await Promise.all([choicesFor(playerId), deps.reputation.rules()])
+      return {
+        claimed: row.claimedAt !== null,
+        choices: choices.map((itemId) => ({ itemId, owned: !missing.has(itemId) })),
+        reputation: rules.welcome,
+      }
     },
 
     async claim(playerId, itemId) {

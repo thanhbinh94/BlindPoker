@@ -139,7 +139,7 @@ describe('the daily reward', () => {
 
     const status = await h.app.fastify.inject({ url: '/api/rewards/daily', headers: { cookie: me.cookie } })
     expect(status.statusCode).toBe(200)
-    expect((status.json() as { newcomer?: unknown }).newcomer).toEqual({ day: 3, claimedDays: [1, 2, 3], finished: false })
+    expect((status.json() as { newcomer?: unknown }).newcomer).toEqual({ day: 3, claimedDays: [1, 2, 3], finished: false, day7Reputation: 200 })
   })
 
   it('requires a session and the CSRF header', async () => {

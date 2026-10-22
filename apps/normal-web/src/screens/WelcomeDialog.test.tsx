@@ -133,6 +133,12 @@ describe('WelcomeDialog', () => {
     expect(await within(dialog()).findByText(viNormal.welcome.doneReputationOnly.replace('{{amount}}', '100'))).toBeInTheDocument()
   })
 
+  it('announces the reputation the server says the gift pays now, the default only when it says nothing', () => {
+    renderDialog({ api: stubApi(), status: { ...statusWith(CHOICES), reputation: 250 } })
+
+    expect(within(dialog()).getByRole('button', { name: viNormal.welcome.claimReputationOnly.replace('{{amount}}', '250') })).toBeInTheDocument()
+  })
+
   it('closes on Để sau, claiming nothing', async () => {
     const api = stubApi()
     const user = userEvent.setup()

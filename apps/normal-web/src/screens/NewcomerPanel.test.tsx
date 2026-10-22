@@ -34,6 +34,12 @@ describe('NewcomerPanel', () => {
     expect(seventh).toHaveTextContent(viNormal.daily.newcomer.rare.replace('{{amount}}', '200'))
   })
 
+  it('names day 7’s reputation as the server says it pays now, the default only when it says nothing', () => {
+    renderPanel({ day: 2, claimedDays: [1], finished: false, day7Reputation: 350 })
+
+    expect(cells()[6]).toHaveTextContent(viNormal.daily.newcomer.rare.replace('{{amount}}', '350'))
+  })
+
   it('shows the welcome day alone as taken, with no star, while today’s check-in is already counted', () => {
     renderPanel({ day: 1, claimedDays: [1], finished: false })
 

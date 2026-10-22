@@ -76,6 +76,11 @@ export interface NewcomerStatus {
   claimedDays: number[]
   /** Always false while the calendar is reported: a finished one is left out. */
   finished: boolean
+  /**
+   * What day 7 pays now (`newcomer_day7`, Plan 27 fix wave), so the panel's day-7 tile follows a GM's change. Absent only
+   * where the service runs without reputation (some tests).
+   */
+  day7Reputation?: number
 }
 
 /** What a claim added to the newcomer calendar: present only when it advanced it. */
@@ -336,7 +341,9 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
       .where(and(eq(newcomerProgress.playerId, playerId), isNull(newcomerProgress.finishedAt)))
     if (row === undefined) return undefined
     const day = row.lastDayKey === today ? row.day : Math.min(row.day + 1, NEWCOMER_DAYS)
-    return { day, claimedDays: [...row.claimedDays].sort((a, b) => a - b), finished: false }
+    const status: NewcomerStatus = { day, claimedDays: [...row.claimedDays].sort((a, b) => a - b), finished: false }
+    if (deps.reputation !== undefined) status.day7Reputation = (await deps.reputation.rules()).newcomer_day7
+    return status
   }
 
   return {
