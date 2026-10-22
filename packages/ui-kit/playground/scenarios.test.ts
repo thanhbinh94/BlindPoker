@@ -24,6 +24,13 @@ describe('parseWorstHash', () => {
     expect(parseWorstHash('#worst/turn/9/vi/short/landscape')).toMatchObject({ long: false, frame: 'landscape' })
   })
 
+  // BP-28: the user's phone with its address bar, whatever the window.
+  it('reads /short as the room in an 855 × 319 box, in the landscape frame', () => {
+    expect(parseWorstHash('#worst/blindP/6/vi/short')).toEqual({ state: 'blindP', seats: 6, lang: 'vi', long: false, frame: 'landscape', box: { w: 855, h: 319 } })
+    expect(parseWorstHash('#worst/blindW/8/en/long/short')).toMatchObject({ state: 'blindW', long: true, frame: 'landscape', box: { w: 855, h: 319 } })
+    expect(parseWorstHash('#worst/turn/8/vi/landscape')?.box).toBeUndefined()
+  })
+
   it('reads /rank<N> as the viewer’s own rank, 1 to 5', () => {
     expect(parseWorstHash('#worst/turn/8/vi/rank5')).toMatchObject({ seats: 8, meRank: 5 })
     expect(parseWorstHash('#worst/turn/8/vi/long/rank2')).toMatchObject({ long: true, meRank: 2 })

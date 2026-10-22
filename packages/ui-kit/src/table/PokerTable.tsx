@@ -11,8 +11,8 @@ import { DeckAnchorProvider } from './deck-anchor.js'
 import { DEAL_MS, DEAL_WINDOW_MS, FLIP_MS, dealOrderOf, showdownWithBoard } from './motion.js'
 import { Pot } from './Pot.js'
 import { Seat } from './Seat.js'
-import type { RoomFrame } from './frame.js'
-import { ringPositions } from './geometry.js'
+import type { FrameTier, RoomFrame } from './frame.js'
+import { ringPositions, shortRingPositions } from './geometry.js'
 import { useMediaQuery } from './useMediaQuery.js'
 import s from './table.module.css'
 
@@ -31,6 +31,10 @@ export interface PokerTableProps {
   /** The room's frame. In `landscape` (a phone on its side) the table is always the ring: the stack needs height the
    * frame does not have. Defaults to `desktop`. */
   frame?: RoomFrame
+  /** The landscape frame's tier (BP-28): `short` — a stage under 290 px tall — seats the table on a stadium as wide as
+   * the stage (`shortRingPositions`) with compact seats. Stamped as `data-tier` on the ring; ignored outside `landscape`.
+   * Defaults to `normal`. */
+  tier?: FrameTier
   /** A human seat's chibi; `null` (or no answer) falls back to the name's initial. Bots always draw their own
    * `botChibi` and never ask this — a bot has no wardrobe for the app to answer for. */
   chibiFor?: (player: RoomPlayerView) => ChibiSubject | null
@@ -60,7 +64,8 @@ export interface PokerTableProps {
   /**
    * One quiet line the room lays on the felt under the board, on the ring only: the landscape room's pre-hand hint
    * ("Cần ít nhất 2 người sẵn sàng…"), which has no row of its own there — wrapped in the corner dock it doubled the
-   * dock's height over the seat beside the viewer's (Plan 26, B3). Nothing when not given.
+   * dock's height over the seat beside the viewer's (Plan 26, B3). Nothing when not given. The short tier's felt has no
+   * bare band for it, and `RoomScreen` puts it back in the dock there (BP-28, R2).
    */
   note?: ReactNode
 }
@@ -140,6 +145,7 @@ export function PokerTable({
   lang,
   layout,
   frame = 'desktop',
+  tier = 'normal',
   chibiFor,
   expressionFor,
   captionFor,
@@ -163,7 +169,8 @@ export function PokerTable({
   const mySeat =
     hand?.mySeat ?? (myPlayerId === null ? null : (room.players.find((p) => p.playerId === myPlayerId)?.seat ?? null))
   const order = Array.from({ length: room.maxPlayers }, (_, i) => i)
-  const positions = mode === 'ring' ? ringPositions(order, mySeat, ringBox) : null
+  const short = frame === 'landscape' && tier === 'short'
+  const positions = mode !== 'ring' ? null : short ? shortRingPositions(order, mySeat, ringBox) : ringPositions(order, mySeat, ringBox)
 
   const handSeats = new Map<number, ClientSeat>((hand?.seats ?? []).map((hs) => [hs.seat, hs]))
   // While the result is pending the table has none to show — no payouts, no hands named, so no result line, no winner
@@ -202,8 +209,14 @@ export function PokerTable({
 
     if (player === undefined) {
       const sit = canSit && onSeatClick !== undefined
+      // The short tier hangs, stands or centres a seat by these, as `Seat` stamps them; an empty seat's box would
+      // otherwise sit centred on a point at the stage's very edge, half off it (BP-28). The other layouts centre it.
+      const line =
+        short && position !== null
+          ? { 'data-half': position.y < 50 ? 'top' : 'bottom', 'data-edge': position.x < 15 ? 'left' : position.x > 85 ? 'right' : undefined }
+          : {}
       return (
-        <div key={index} className={cx(s.seat, s.seatEmpty)} style={style} data-seat={index}>
+        <div key={index} className={cx(s.seat, s.seatEmpty)} style={style} data-seat={index} {...line}>
           {sit ? (
             <button type="button" className={s.sitBtn} onClick={() => onSeatClick(index)}>
               {t('actions.sitDown')}
@@ -314,6 +327,7 @@ export function PokerTable({
         className={cx(s.table, s.ring)}
         data-seats={room.maxPlayers}
         data-frame={frame}
+        data-tier={frame === 'landscape' ? tier : undefined}
         data-surface="night"
         aria-label={t('labels.table')}
       >

@@ -251,7 +251,9 @@
     "sitFirst": "Chọn một ghế trống để vào chơi.",
     "more": "Thêm",
     "fullscreen": "Toàn màn hình",
-    "exitFullscreen": "Thoát toàn màn hình"
+    "exitFullscreen": "Thoát toàn màn hình",
+    "fullscreenNudge": "Dùng Toàn màn hình để bàn rộng hơn",
+    "fullscreenNudgeDismiss": "Ẩn gợi ý Toàn màn hình"
   },
   "cancel": {
     "shutdown": "Máy chủ sắp tắt",

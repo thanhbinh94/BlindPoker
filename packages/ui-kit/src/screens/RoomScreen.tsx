@@ -11,10 +11,11 @@ import { Modal } from '../primitives/Modal.js'
 import { cx } from '../primitives/cx.js'
 import { ActionBar } from '../table/ActionBar.js'
 import { HandResult } from '../table/HandResult.js'
-import { useRoomFrame, type RoomFrame } from '../table/frame.js'
+import { useRoomFrame, useStageTier, type RoomFrame } from '../table/frame.js'
 import { PokerTable, type TableLayout } from '../table/PokerTable.js'
 import { RankLabel } from '../table/RankLabel.js'
 import { RoomHeader } from '../table/RoomHeader.js'
+import { useFullscreenNudge } from './fullscreen-nudge.js'
 import { useRevealHold } from './reveal-hold.js'
 import { useSeatClearance } from './seat-clearance.js'
 import { Toasts } from './Toasts.js'
@@ -43,6 +44,8 @@ export interface RoomScreenProps {
 }
 
 const MIN_TO_START = 2
+/** The full-screen nudge's close mark; its name is the button's `aria-label`. */
+const NUDGE_CLOSE_GLYPH = '✕'
 
 /** Ticks once a second while a countdown is running; returns whole seconds left, or `null` when there is none. */
 function useCountdown(target: number | null, now: () => number): number | null {
@@ -157,6 +160,11 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
   // Also a hook, so also above the early return: the frame is what every landscape rule of the room keys on.
   const frame = useRoomFrame(frameOverride)
   const fullscreen = useFullscreenActive()
+  // The landscape frame's tier (BP-28): the stage itself is measured, so a phone that keeps its browser bars — or any
+  // stage under 290 px — gets the short one. A hook too, so above the early return; it starts measuring once the stage
+  // is in the tree.
+  const tier = useStageTier(stageRef, frame, room !== null)
+  const [nudgeDone, dismissNudge] = useFullscreenNudge()
 
   if (room === null) return null
 
@@ -288,7 +296,20 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
    * toggles, "Tự động chơi" among them — stays, so auto-play can be turned off during the countdown (B4).
    */
   const landscape = frame === 'landscape'
+  const short = landscape && tier === 'short'
   const dockShown = landscape && (waiting || countdownHere)
+  // R3: only where the browser offers it (iOS Safari on a phone does not).
+  const fullscreenOffered = typeof document !== 'undefined' && document.fullscreenEnabled === true
+  /**
+   * BP-28, R3: the short tier's one-time nudge towards full screen, in the bottom-left corner — the corner the tray's
+   * toggles take during a hand, so only while there is no tray (`hand` with my seat in it), and never in full screen.
+   * Using it or closing it is remembered for good (`useFullscreenNudge`). No motion: it is there or it is not.
+   */
+  const nudgeShown = short && fullscreenOffered && !fullscreen && !nudgeDone && (hand === null || hand.mySeat === null)
+  const takeFullscreen = (): void => {
+    dismissNudge()
+    toggleFullscreen()
+  }
   const menuItems: MenuItem[] = []
   if (landscape) {
     if (mySeated) menuItems.push({ id: 'standUp', label: t('actions.standUp'), disabled: request.busy, onSelect: standUp })
@@ -300,15 +321,14 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
       onSelect: toggleSitOut,
     })
     if (canManage) menuItems.push({ id: 'manage', label: t('room.manage'), onSelect: openManage })
-    // R3: only where the browser offers it (iOS Safari on a phone does not).
-    if (typeof document !== 'undefined' && document.fullscreenEnabled === true) {
+    if (fullscreenOffered) {
       menuItems.push({ id: 'fullscreen', label: t(fullscreen ? 'room.exitFullscreen' : 'room.fullscreen'), onSelect: toggleFullscreen })
     }
   }
   const leave = (): void => void request.run(() => client.leaveRoom())
 
   return (
-    <div className={s.room} data-frame={frame}>
+    <div className={s.room} data-frame={frame} data-tier={landscape ? tier : undefined}>
       {header}
       <RoomHeader
         room={room}
@@ -339,13 +359,15 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
           onSeatClick={onSeatClick}
           layout={layout}
           frame={frame}
+          tier={tier}
           chibiFor={chibiFor}
           expressionFor={expressionFor}
           captionFor={captionFor}
           rankFor={rankFor}
           resultPending={held}
           onReveal={reveal}
-          note={landscape && waiting ? hint : null}
+          // The short tier's felt has no free band under the board for it (BP-28, R2): the dock carries it there.
+          note={landscape && waiting && !short ? hint : null}
         />
 
         {/* The result card is dealt onto the felt, so it keeps the felt's night palette in either theme. The countdown
@@ -367,6 +389,16 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
       </main>
 
       <footer className={s.roomFoot}>
+        {nudgeShown ? (
+          <div className={s.nudge} data-surface="night">
+            <button type="button" className={s.nudgeUse} onClick={takeFullscreen}>
+              {t('room.fullscreenNudge')}
+            </button>
+            <button type="button" className={s.nudgeClose} aria-label={t('room.fullscreenNudgeDismiss')} onClick={dismissNudge}>
+              <span aria-hidden="true">{NUDGE_CLOSE_GLYPH}</span>
+            </button>
+          </div>
+        ) : null}
         {landscape ? (
           dockShown ? (
             <div className={s.dock} role="group" aria-label={t('room.controls')} data-surface="night">
@@ -374,6 +406,8 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
               {startButton}
               {readyLine}
               {countdownLine}
+              {/* BP-28, R2: in the short tier the hint is the dock's second line, under the ready count. */}
+              {short ? hintLine : null}
             </div>
           ) : null
         ) : (

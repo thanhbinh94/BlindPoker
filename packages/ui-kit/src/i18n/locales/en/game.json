@@ -251,7 +251,9 @@
     "sitFirst": "Take a seat to play.",
     "more": "More",
     "fullscreen": "Full screen",
-    "exitFullscreen": "Exit full screen"
+    "exitFullscreen": "Exit full screen",
+    "fullscreenNudge": "Use Full screen for a wider table",
+    "fullscreenNudgeDismiss": "Hide the Full screen tip"
   },
   "cancel": {
     "shutdown": "The server is shutting down",

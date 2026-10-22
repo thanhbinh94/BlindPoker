@@ -327,82 +327,86 @@ export function Seat({
       // where the pill hands focus on when it hides: reachable from a script, never by Tab
       tabIndex={peeling ? -1 : undefined}
     >
-      {faces.length > 0 ? (
-        <div className={s.seatCards}>
-          {faces.map((card, i) =>
-            peeling && card !== null ? (
-              <PeelCard
-                key={`${handId}:${i}`}
-                card={card}
-                size={cardSize}
-                open={openAll || seat.revealed === true || !squeezeRound}
-                onRevealed={() => onCardUp(i)}
-                dealt={dealt}
-                delayMs={dealDelay(i)}
-              />
-            ) : (
-              <Card
-                key={`${handId}:${i}`}
-                card={card}
-                faceDown={card === null}
-                size={cardSize}
-                dealt={dealt}
-                reveal={reveal}
-                delayMs={dealDelay(i)}
-                turnDelayMs={liftAfter + i * SHOWDOWN_STAGGER_MS}
-              />
-            ),
-          )}
-          {/* The pill keeps its place for the whole hand and shows while a card is still to turn. It lies over the foot of the
-              cards, centred, and takes no row of its own (Plan 26, B6): a row cost a squeeze table's stage 11 px on a 375 px
-              phone, where the seat is the tallest thing in the felt. Hidden, it stays in the box, so nothing about the cards
-              moves as the last one opens. */}
-          {peeling ? (
-            <button
-              ref={pillRef}
-              type="button"
-              className={cx(s.revealBtn, !toTurn && s.revealBtnIdle)}
-              disabled={!toTurn}
-              aria-hidden={toTurn ? undefined : true}
-              onClick={() => setPressedIn(handId)}
-            >
-              {t('actions.revealCards')}
-            </button>
+      {/* The cards and the plate. No box of its own (`display: contents`) in every layout but one: the short landscape
+          tier (BP-28) lays the viewer's cards beside the plate as one row, the line under it centred below. */}
+      <div className={s.seatTop}>
+        {faces.length > 0 ? (
+          <div className={s.seatCards}>
+            {faces.map((card, i) =>
+              peeling && card !== null ? (
+                <PeelCard
+                  key={`${handId}:${i}`}
+                  card={card}
+                  size={cardSize}
+                  open={openAll || seat.revealed === true || !squeezeRound}
+                  onRevealed={() => onCardUp(i)}
+                  dealt={dealt}
+                  delayMs={dealDelay(i)}
+                />
+              ) : (
+                <Card
+                  key={`${handId}:${i}`}
+                  card={card}
+                  faceDown={card === null}
+                  size={cardSize}
+                  dealt={dealt}
+                  reveal={reveal}
+                  delayMs={dealDelay(i)}
+                  turnDelayMs={liftAfter + i * SHOWDOWN_STAGGER_MS}
+                />
+              ),
+            )}
+            {/* The pill keeps its place for the whole hand and shows while a card is still to turn. It lies over the foot of the
+                cards, centred, and takes no row of its own (Plan 26, B6): a row cost a squeeze table's stage 11 px on a 375 px
+                phone, where the seat is the tallest thing in the felt. Hidden, it stays in the box, so nothing about the cards
+                moves as the last one opens. */}
+            {peeling ? (
+              <button
+                ref={pillRef}
+                type="button"
+                className={cx(s.revealBtn, !toTurn && s.revealBtnIdle)}
+                disabled={!toTurn}
+                aria-hidden={toTurn ? undefined : true}
+                onClick={() => setPressedIn(handId)}
+              >
+                {t('actions.revealCards')}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+  
+        <div className={s.plate} data-plate="">
+          {/* Every seat gets the same framed disc: a bot's chibi chosen by its id, the app's chibi for a human, and
+              the initial when the app has none. The frame is what makes a table of six read as six faces. */}
+          <span className={s.avatar} data-face={seat.isBot ? 'bot' : chibi === null ? 'default' : 'app'} aria-hidden="true">
+            {chibi === null ? initial : <Chibi subject={chibi} expression={expression} frame="head" bounce={bounce} />}
+          </span>
+          <span ref={plateTextRef} className={s.plateText}>
+            <span className={s.seatName}>
+              <span ref={nameTextRef} className={s.seatNameText}>
+                {name}
+              </span>
+              {rankPlace === 'name' ? rankLabel : null}
+            </span>
+            {caption === undefined || caption === null ? null : <span className={s.seatCaption}>{caption}</span>}
+            {/* A bot's stack is virtual — a table limit (5 × the wager) that is topped back up whenever it runs low, so
+                a figure beside it would only read as a real balance to compare against. The Bot badge below says what
+                the seat is; its bets and payouts still show like anyone else's. A bot has no rank either, so it has no
+                stack line at all. */}
+            {seat.isBot ? null : (
+              <span className={s.stackLine}>
+                <span className={s.seatStack}>{formatPoints(seat.stack, lang)}</span>
+                {rankPlace === 'name' ? null : rankLabel}
+              </span>
+            )}
+          </span>
+          {ring ? <TurnTimer deadlineAt={deadlineAt} serverNow={serverNow} totalMs={turnTimerMs} size={38} /> : null}
+          {isButton ? (
+            <span className={s.dealer} role="img" aria-label={t('labels.dealer')}>
+              {DEALER_GLYPH}
+            </span>
           ) : null}
         </div>
-      ) : null}
-
-      <div className={s.plate} data-plate="">
-        {/* Every seat gets the same framed disc: a bot's chibi chosen by its id, the app's chibi for a human, and
-            the initial when the app has none. The frame is what makes a table of six read as six faces. */}
-        <span className={s.avatar} data-face={seat.isBot ? 'bot' : chibi === null ? 'default' : 'app'} aria-hidden="true">
-          {chibi === null ? initial : <Chibi subject={chibi} expression={expression} frame="head" bounce={bounce} />}
-        </span>
-        <span ref={plateTextRef} className={s.plateText}>
-          <span className={s.seatName}>
-            <span ref={nameTextRef} className={s.seatNameText}>
-              {name}
-            </span>
-            {rankPlace === 'name' ? rankLabel : null}
-          </span>
-          {caption === undefined || caption === null ? null : <span className={s.seatCaption}>{caption}</span>}
-          {/* A bot's stack is virtual — a table limit (5 × the wager) that is topped back up whenever it runs low, so
-              a figure beside it would only read as a real balance to compare against. The Bot badge below says what
-              the seat is; its bets and payouts still show like anyone else's. A bot has no rank either, so it has no
-              stack line at all. */}
-          {seat.isBot ? null : (
-            <span className={s.stackLine}>
-              <span className={s.seatStack}>{formatPoints(seat.stack, lang)}</span>
-              {rankPlace === 'name' ? null : rankLabel}
-            </span>
-          )}
-        </span>
-        {ring ? <TurnTimer deadlineAt={deadlineAt} serverNow={serverNow} totalMs={turnTimerMs} size={38} /> : null}
-        {isButton ? (
-          <span className={s.dealer} role="img" aria-label={t('labels.dealer')}>
-            {DEALER_GLYPH}
-          </span>
-        ) : null}
       </div>
 
       {/* Two lines under the plate at most (review 2026-09-29, No2): who the seat is and what it has in front of
@@ -412,17 +416,32 @@ export function Seat({
         {isMe ? <Badge tone="gold">{t('labels.you')}</Badge> : null}
         {/* Gold, not red — red is for the risky acts (fold, leave, kick); a crown tells it apart from "you"
             when both sit on the same plate (layout audit C4). */}
+        {/* The short landscape tier (BP-28) keeps an opponent's line to its bet: who the seat is (host, bot) goes, and
+            its state shrinks to a dot of the state's colour, the words kept for a screen reader. The classes are those
+            rules' handles. */}
         {player?.isHost === true ? (
-          <Badge tone="gold">
+          <Badge tone="gold" className={s.tagWho}>
             <span aria-hidden="true">{CROWN_GLYPH}</span>
             {t('labels.host')}
           </Badge>
         ) : null}
-        {seat.isBot ? <Badge tone="muted">{t('labels.bot')}</Badge> : null}
-        {pill === null ? null : <Badge tone={pill.tone}>{pill.text}</Badge>}
+        {seat.isBot ? (
+          <Badge tone="muted" className={s.tagWho}>
+            {t('labels.bot')}
+          </Badge>
+        ) : null}
+        {pill === null ? null : (
+          <Badge tone={pill.tone} className={s.tagState}>
+            {pill.text}
+          </Badge>
+        )}
         {/* Squeeze mode (§4.2.6): who has turned, for the others to see whom the round still waits on. A seat that has
             decided has turned with it (§4.2.4): its "Đã chọn" says both, and keeps the line under the plate to one. */}
-        {!isMe && squeezeRound && seat.revealed === true && !seat.hasDecided ? <Badge tone="teal">{t('labels.revealed')}</Badge> : null}
+        {!isMe && squeezeRound && seat.revealed === true && !seat.hasDecided ? (
+          <Badge tone="teal" className={s.tagState}>
+            {t('labels.revealed')}
+          </Badge>
+        ) : null}
         {seat.betThisStreet > 0 ? <span className={s.bet}>{formatPoints(seat.betThisStreet, lang)}</span> : null}
       </div>
 

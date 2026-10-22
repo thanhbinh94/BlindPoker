@@ -307,6 +307,33 @@ describe('Seat in a squeeze room', () => {
     expect(screen.queryByText('Đã lật')).toBeNull()
   })
 
+  // BP-28, R1: on the short landscape tier an opponent's line keeps its bet — who the seat is goes, its state is a dot.
+  // The seat marks the badges for those rules, and the words stay in the tree for a screen reader.
+  it('marks the host and bot badges and the state pill for the short tier, keeping their words', () => {
+    const decided = makeSeat({ seat: 2, playerId: 'bot2', displayName: 'Bảo', isBot: true, hasDecided: true, betThisStreet: 2_000 })
+    wrap(props({ seat: decided, player: makePlayer({ playerId: 'bot2', displayName: 'Bảo', isBot: true, isHost: true, seat: 2 }), isMe: false, deadlineAt: null }))
+    expect(screen.getByText('Bot')).toHaveClass(s.tagWho!)
+    expect(screen.getByText('Chủ phòng').closest(`.${s.tagWho}`)).not.toBeNull()
+    expect(screen.getByText('Đã chọn')).toHaveClass(s.tagState!)
+    expect(screen.getByText('2.000')).not.toHaveClass(s.tagState!)
+    // the rules themselves: an opponent's who-badges go, and its state shrinks to a dot whose text is 0 px
+    const short = ".ring[data-frame='landscape'][data-tier='short'] .seat:not(.seatMe)"
+    const rule = (sel: string): string => new RegExp(`${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`).exec(TABLE_CSS)?.[1] ?? ''
+    expect(rule(`${short} .tagWho`)).toMatch(/display:\s*none/)
+    expect(rule(`${short} .tagState`)).toMatch(/font-size:\s*0/)
+    expect(rule(`${short} .tagState`)).toMatch(/background:\s*currentColor/)
+  })
+
+  // BP-28: the cards and the plate share a box that is no box (`display: contents`) everywhere but the short tier's own seat.
+  it('wraps the cards and the plate in a contents-only box, and keeps the lines under the plate the seat’s own children', () => {
+    const { container } = wrap(props())
+    const top = container.querySelector<HTMLElement>(`.${s.seatTop}`)!
+    expect(top.parentElement).toHaveAttribute('data-seat')
+    expect(top.querySelector('[data-plate]')).not.toBeNull()
+    expect(container.querySelector(`.${s.tags}`)!.parentElement).toBe(top.parentElement)
+    expect(TABLE_CSS).toMatch(/\.seatTop\s*\{\s*display:\s*contents;?\s*\}/)
+  })
+
   // Plan 26 (B6): the pill is laid over the foot of the cards, so it no longer costs the seat a row (the play-or-fold
   // squeeze table's stage scrolled 11 px on a 375 px phone). Its place stays for the whole hand all the same.
   it('keeps the reveal pill inside the cards box and hidden-but-present when idle', () => {
