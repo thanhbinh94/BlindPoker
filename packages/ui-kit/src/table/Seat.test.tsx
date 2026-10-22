@@ -357,10 +357,12 @@ describe('Seat with a rank', () => {
     expect(row!.contains(caption)).toBe(false)
   })
 
-  it('shows "IV" in the landscape frame, with the name as its title', () => {
+  it('shows "IV" in the landscape frame, with the name as its title, on the stack line and not on the name’s', () => {
     wrap(plain({ rank: 4, frame: 'landscape' }))
     expect(screen.queryByText('Bậc thầy')).toBeNull()
-    expect(screen.getByText('IV')).toHaveAttribute('title', 'Bậc thầy')
+    const pill = screen.getByText('IV')
+    expect(pill).toHaveAttribute('title', 'Bậc thầy')
+    expectOnStackLine(pill)
   })
 
   it('shows nothing for rank 1, for no rank, and for a bot', () => {
@@ -394,12 +396,75 @@ describe('Seat with a rank', () => {
     vi.stubGlobal('ResizeObserver', FakeObserver)
     try {
       wrap(plain({ rank: 3 }))
-      expect(screen.getByText('III')).toHaveAttribute('title', 'Cao thủ')
+      const pill = screen.getByText('III')
+      expect(pill).toHaveAttribute('title', 'Cao thủ')
+      expectOnStackLine(pill)
       width = 160
       act(() => fire())
-      expect(screen.getByText('Cao thủ')).toHaveClass(s.rankLabel!)
+      const word = screen.getByText('Cao thủ')
+      expect(word).toHaveClass(s.rankLabel!)
+      expect(word.closest(`.${s.seatName}`), 'back beside the name').not.toBeNull()
     } finally {
       vi.unstubAllGlobals()
     }
   })
+
+  /**
+   * Lays the plate out in jsdom: the plate's text box `text` px wide (its box and its client width), the name `name` px
+   * long at full length, the rank's word 45 px; with `cap`, the plate grows to its content up to `cap` px and its chrome
+   * (disc, padding, gap) is 50 px — the viewer's own plate on the ring.
+   */
+  const layOut = ({ text, name, cap }: { text: number; name: number; cap?: number }): void => {
+    const widthOf = (el: Element): number => (el.classList.contains(s.plateText!) ? text : el.classList.contains(s.rankLabel!) ? 45 : 0)
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const width = widthOf(this)
+      return { left: 0, top: 0, right: width, bottom: 20, width, height: 20, x: 0, y: 0, toJSON: () => ({}) } as DOMRect
+    })
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (this: HTMLElement) {
+      return widthOf(this)
+    })
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains(s.plate!) ? text + 50 : widthOf(this)
+    })
+    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains(s.seatNameText!) ? name : 0
+    })
+    if (cap === undefined) return
+    const real = window.getComputedStyle.bind(window)
+    vi.spyOn(window, 'getComputedStyle').mockImplementation((el: Element, pseudo?: string | null) => {
+      const style = real(el, pseudo)
+      return el instanceof HTMLElement && el.classList.contains(s.plate!) ? ({ ...style, maxWidth: `${cap}px` } as CSSStyleDeclaration) : style
+    })
+  }
+
+  it('puts the rank’s word after the stack when it would cut a long name beside it', () => {
+    // 120 + 5 + 45 = 170 px of name line in a 150 px text box
+    layOut({ text: 150, name: 120 })
+    wrap(plain({ rank: 3 }))
+    const word = screen.getByText('Cao thủ')
+    expect(word).toHaveClass(s.rankLabel!)
+    expectOnStackLine(word)
+  })
+
+  it('keeps the rank’s word beside a name it fits after, with room to breathe', () => {
+    // 96 + 5 + 45 = 146 px, the 150 px box less its 4 px of breathing room
+    layOut({ text: 150, name: 96 })
+    wrap(plain({ rank: 3 }))
+    expect(screen.getByText('Cao thủ').closest(`.${s.seatName}`)).not.toBeNull()
+  })
+
+  it('measures a plate that grows to its name by how far it may grow, not by the box it has now', () => {
+    // The box is 150 px today, but the plate may grow to 300 px: 300 − 50 px of chrome leaves 250 for 180 + 5 + 45.
+    layOut({ text: 150, name: 180, cap: 300 })
+    wrap(plain({ rank: 3 }))
+    expect(screen.getByText('Cao thủ').closest(`.${s.seatName}`)).not.toBeNull()
+  })
 })
+
+/** The rank stands on the stack line, beside the figure, and not on the name's line. */
+function expectOnStackLine(rank: HTMLElement): void {
+  const line = rank.closest(`.${s.stackLine}`)
+  expect(line, 'on the stack line').not.toBeNull()
+  expect(line!.querySelector(`.${s.seatStack}`), 'beside the figure').not.toBeNull()
+  expect(rank.closest(`.${s.seatName}`), 'not on the name’s line').toBeNull()
+}

@@ -614,7 +614,12 @@ describe('PokerTable', () => {
     expect(document.querySelectorAll(`.${s.rankLabel}, .${s.rankPill}`)).toHaveLength(1)
     view.unmount()
     wrap(at('landscape'))
-    expect(screen.getByRole('img', { name: 'Legend' })).toHaveTextContent('V')
+    const pill = screen.getByRole('img', { name: 'Legend' })
+    expect(pill).toHaveTextContent('V')
+    // A compact plate's numeral stands beside the stack (Ruling 11): the name's line is the name's alone.
+    expect(pill.closest(`.${s.stackLine}`)).toHaveTextContent('20,000')
+    expect(pill.closest(`.${s.seatName}`)).toBeNull()
+    expect(screen.getByText('20,000')).toHaveClass(s.seatStack!)
   })
 
   it('draws no caption line at all when the app supplies no slot', () => {

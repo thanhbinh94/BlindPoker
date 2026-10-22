@@ -557,8 +557,8 @@
   line-height: 1.2;
 }
 
-/* The name's line: the name, then the player's rank (Plan 27). The name is what gives when the line is short — it
-   truncates in "…" — and the rank keeps its whole word or numeral beside it. */
+/* The name's line: the name, then the player's rank's word when the whole name fits beside it (Plan 27; otherwise the
+   rank goes to the stack's line, `Seat`'s `placeRank`). A name too long for its plate on its own still ends in "…". */
 .seatName {
   display: flex;
   align-items: baseline;
@@ -623,6 +623,16 @@
   font-size: 0.6875rem;
   color: var(--ink-muted);
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The stack's line: the figure, then — on a compact plate, or when the name needs its whole line — the player's rank
+   (Plan 27, Ruling 11). The rank never shares the name's line where it would cut the name. */
+.stackLine {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
   white-space: nowrap;
 }
 

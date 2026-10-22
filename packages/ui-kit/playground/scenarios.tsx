@@ -29,6 +29,7 @@ import type { RoomFrame } from '../src/table/frame.js'
  * longer than the own plate's cap at any seat count, so it shows where the plate stops widening and the name ends in
  * "…" (review round 2, R2-3); without it the viewer keeps `NAMES[0]`, which earlier measurements use. `/landscape`
  * or `/desktop` forces that room frame whatever the window is; without either, the window's own media query chooses.
+ * `/rank<N>` (1–5) gives the viewer that rank instead of `RANKS[ME]`, to see the longest rank word beside the own name.
  */
 
 export type WorstState = 'waiting' | 'turn' | 'result' | 'blindS'
@@ -41,6 +42,8 @@ export interface WorstSpec {
   long: boolean
   /** A frame forced on the room whatever the window is; `null` leaves the choice to the window's own media query. */
   frame: RoomFrame | null
+  /** The viewer's own rank, from `/rank<N>`; absent, the viewer keeps `RANKS[ME]`. */
+  meRank?: number
 }
 
 const STATES: readonly WorstState[] = ['waiting', 'turn', 'result', 'blindS']
@@ -53,12 +56,14 @@ export function parseWorstHash(hash: string): WorstSpec | null {
   const [head, state, seats, lang, ...flags] = hash.replace(/^#/, '').split('/')
   if (head !== 'worst') return null
   const n = Number(seats ?? 6)
+  const meRank = flags.map((flag) => /^rank([1-5])$/.exec(flag)?.[1]).find((digit) => digit !== undefined)
   return {
     state: STATES.includes(state as WorstState) ? (state as WorstState) : 'result',
     seats: Number.isInteger(n) && n >= 2 && n <= 9 ? n : 6,
     lang: SUPPORTED_LANGUAGES.includes(lang as Language) ? (lang as Language) : 'vi',
     long: flags.includes('long'),
     frame: flags.includes('landscape') ? 'landscape' : flags.includes('desktop') ? 'desktop' : null,
+    ...(meRank === undefined ? {} : { meRank: Number(meRank) }),
   }
 }
 
@@ -310,7 +315,7 @@ export function WorstPage({ spec }: { spec: WorstSpec }) {
   }, [spec])
   return (
     <I18nextProvider i18n={i18n}>
-      <RoomScreen client={client} lang={spec.lang} onLeft={() => {}} captionFor={() => CAPTION} rankFor={(p) => RANKS[p.playerId] ?? null} frame={spec.frame ?? undefined} />
+      <RoomScreen client={client} lang={spec.lang} onLeft={() => {}} captionFor={() => CAPTION} rankFor={(p) => (p.playerId === ME && spec.meRank !== undefined ? spec.meRank : (RANKS[p.playerId] ?? null))} frame={spec.frame ?? undefined} />
     </I18nextProvider>
   )
 }
