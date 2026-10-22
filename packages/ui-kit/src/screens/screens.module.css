@@ -301,7 +301,9 @@
   position: fixed;
   right: var(--space-4);
   bottom: var(--space-4);
-  z-index: var(--z-modal);
+  /* Over a dialog's backdrop, not level with it: the backdrop is portalled to the end of <body>, so at an equal z-index
+     it painted over the slip (BP-29, E5). Only the slips take presses (`pointer-events` below), never the strip. */
+  z-index: var(--z-toast);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);

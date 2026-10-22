@@ -106,6 +106,7 @@ mã phòng (nếu có), thiết bị, ảnh chụp màn hình. Claude chép vào
 | B-02 | Cài đặt → Sáng / Tối | Đổi ngay, giữ sau khi tải lại | P2 |
 | B-03 | Cài đặt → English | Mọi chữ đổi sang tiếng Anh, kể cả trong bàn và hộp thoại | P2 |
 | B-04 | Để một tab mở, người vận hành deploy bản mới, rồi bấm sang Hồ sơ | Trang tự tải lại một lần; nếu vẫn lỗi thì hiện "Đã có phiên bản mới" + nút Tải lại, không bao giờ trang trắng | P1 |
+| B-05 | Điện thoại dọc: ở Sảnh chờ, rồi ở Hồ sơ, cuộn xuống từ từ cho hình đại diện trượt dưới thanh điều hướng | Thanh điều hướng luôn nằm trên: tóc, mũ, khung của hình đại diện không vẽ đè lên "Sảnh chờ" hay các ô khác (bug log §10 E4) | P2 |
 
 ### C. Sảnh
 
@@ -149,6 +150,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 | E-10 | Rời phòng giữa ván | Coi như bỏ bài; stack về số dư khi ván kết thúc | P1 |
 | E-11 | Đứng dậy giữa hai ván | Stack về số dư ngay | P1 |
 | E-12 | Ván sau tự bắt đầu | Khoảng 5 giây sau khi ván trước kết thúc, nếu còn ≥ 2 người có stack | P2 |
+| E-13 | Tạo bàn Hold'em mức 2.500/5.000 (mang vào tối thiểu 250.000) với số dư dưới mức đó; bấm Ngồi vào bàn rồi Ngồi vào bàn trong hộp | Bị từ chối, thông báo "Số dư không đủ" hiện rõ **trên** hộp thoại (không bị lớp nền mờ che), hộp vẫn mở để chọn lại, không bị trừ điểm (bug log §10 E5) | P2 |
 
 ### F. Bàn Blind Poker
 

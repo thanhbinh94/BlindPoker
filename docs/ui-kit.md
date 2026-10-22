@@ -617,7 +617,7 @@ Tokens live in `src/theme/tokens.css` and are all an app needs to restyle the ki
 | Type | `--font-display`, `--font-body` |
 | Space | `--space-1`…`--space-8` (4 px scale), `--radius-sm/md/lg/pill`, `--tap` (44 px), `--measure-wide` (1180 px: lobby, wardrobe) and `--measure-narrow` (44rem: pages read top to bottom) — content widths, padding not included |
 | Motion | `--dur-1`, `--dur-2`, `--dur-flip` (a card's turn), `--dur-deal` (the slide out of the deck), `--dur-lift` (the showdown's lift and turn), `--ease`, `--ease-lift` |
-| Misc | `--focus`, `--shadow-1`, `--shadow-2`, `--z-modal` |
+| Misc | `--focus`, `--shadow-1`, `--shadow-2`, `--z-modal` (dialogs and their backdrop), `--z-toast` (the toast strip, above every dialog since BP-29) |
 
 **Dark is the default**; `data-theme="light"` on the root swaps the page to parchment. The felt does not follow it —
 a card table is a physical object and stays night-side in both themes. Anything printed on it therefore has to keep

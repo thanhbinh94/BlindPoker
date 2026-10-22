@@ -7,10 +7,15 @@ import { defaultChibi, useTableExpressions } from '../avatar2d/index.js'
 import type { ClientHand, ClientState } from '../client/types.js'
 import type { GameClientApi } from '../client/useGameClient.js'
 import { createI18n } from '../i18n/index.js'
+import primitives from '../primitives/primitives.module.css'
+import PRIMITIVES_CSS from '../primitives/primitives.module.css?raw'
 import { makeHand, makePlayer, makeRoom, makeSeat, makeState } from '../test-fixtures.js'
 import s from '../table/table.module.css'
+import { declarationsOf } from '../theme/contrast.js'
+import TOKENS_CSS from '../theme/tokens.css?raw'
 import { REVEAL_HOLD_MS } from './reveal-hold.js'
 import { RoomScreen } from './RoomScreen.js'
+import screens from './screens.module.css'
 import SCREENS_CSS from './screens.module.css?raw'
 
 // The faces are the one thing of the table's result the screen cannot be asked about from outside, so one test reads what
@@ -123,6 +128,37 @@ describe('RoomScreen', () => {
 
     await confirm('5') // below 50 BB
     expect(client.sitDown).toHaveBeenLastCalledWith(1, 10_000)
+  })
+
+  it('keeps the buy-in dialog open on INSUFFICIENT_BALANCE and draws the refusal above its backdrop', async () => {
+    // BP-29 (bug log §10 E5): the refusal is a toast, the dialog a portal at the end of <body>. jsdom does not stack by
+    // z-index, so the order is read off the stylesheets the two elements actually carry.
+    const client = fakeClient(makeState({ room: standingRoom }), {
+      sitDown: vi.fn().mockResolvedValue({ t: 'ERROR', code: 'INSUFFICIENT_BALANCE', message: 'short', reqId: 'x' }),
+    })
+    wrap(client)
+
+    await userEvent.click(screen.getAllByRole('button', { name: /sit down/i })[0]!)
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sit down' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Insufficient balance')
+    expect(screen.getByRole('dialog'), 'the dialog stays open, for another amount').toBeVisible()
+    const backdrop = screen.getByTestId('modal-backdrop')
+    expect(backdrop.contains(alert), 'the slip is not drawn inside the dialog').toBe(false)
+    const strip = alert.closest(`.${screens.toasts}`)
+    expect(strip, 'the slip sits in the toast strip').not.toBeNull()
+    expect(backdrop).toHaveClass(primitives.backdrop!)
+
+    const tokens = declarationsOf(TOKENS_CSS, /^:root$/)
+    const zOf = (css: string, selector: RegExp): number => {
+      const value = declarationsOf(css, selector)['z-index'] ?? ''
+      const resolved = value.replace(/^var\((--[\w-]+)\)$/, (_, name: string) => tokens[name] ?? '')
+      const z = Number(resolved)
+      expect(Number.isFinite(z) && resolved !== '', `z-index "${value}" resolves to a number`).toBe(true)
+      return z
+    }
+    expect(zOf(SCREENS_CSS, /^\.toasts$/)).toBeGreaterThan(zOf(PRIMITIVES_CSS, /^\.backdrop$/))
   })
 
   it('threads the app slots down to the seats', () => {

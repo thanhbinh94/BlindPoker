@@ -10,6 +10,7 @@ import {
   expectNoSidewaysScroll,
   expectNoTextOverlapAt,
   expectRoomFits,
+  feeOn,
   handOver,
   historyOf,
   joinByCode,
@@ -77,6 +78,8 @@ test('F-01 F-02 H-01: pure luck, three cards — the ante goes in, nobody decide
   // F-01: no decision to make in this mode — the hand plays itself to a result.
   await expect(a.page.getByRole('button', { name: /^Chơi\b/ })).toHaveCount(0)
   await expect(resultCard(a.page)).toBeVisible({ timeout: 30_000 })
+  // Plan 27 D1 (bug log §10 E3): a Blind table takes no fee, so its result card prints no "Phí bàn" line.
+  expect(await feeOn(resultCard(a.page)), 'no table fee at a Blind table').toBe(0)
   await leave(a.page)
 
   // H-01 (spec 2026-09-29): a Blind seat plays from the table limit it brought, so the ledger sees the sit-down

@@ -537,7 +537,8 @@
   height: var(--seat-disc, 40px);
   overflow: visible;
   /* The chibi stacks its layers with z-indexes up to 90. On the ring each seat's transform keeps them in; in the
-     phone's stacked strip nothing did, and the faces were painted over the result card dealt above the strip. */
+     phone's stacked strip nothing did, and the faces were painted over the result card dealt above the strip. The chibi
+     root isolates itself since BP-29; this stays as a second guard. */
   isolation: isolate;
   border-radius: 50%;
   border: 2px solid rgba(217, 164, 65, 0.78);

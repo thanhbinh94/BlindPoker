@@ -287,6 +287,17 @@ sized to 855 × 319 inside the case, and runs outside `pnpm test`, as every e2e 
 | R2, R3 (the hint and the nudge): in the short tier the pre-hand hint is the dock's line after the ready count and not on the felt; a one-time "Dùng Toàn màn hình để bàn rộng hơn" shows only in the short tier, only where the browser offers full screen and while no tray holds its corner; its ✕ and its words both put it away for good (`bp.fullscreenNudge`), the words going full screen; it has no motion | `packages/ui-kit/src/screens/RoomScreen.test.tsx` | stamps the tier on the room and the ring from the stage’s height · lays the pre-hand hint in the dock, after the ready count, and not on the felt · shows once in the short tier where the browser offers full screen, and a ✕ puts it away for good · goes full screen from its words, and is done with then too · stays away in the normal tier, without full screen, and while my hand holds the corner · has no motion of its own, so reduced motion has nothing to stop | added in BP-28 |
 | R1, R2 in a browser: at 855 × 319 a seven-seat Blind play-or-fold table, waiting and then after every bot has chosen, and an eight-seat Hold'em table on the flop: no seat box meets another, the board, my cards, the dock, the tray's corners or the nudge; the waiting hint is in the dock and not on the felt; the room fits and no text lies over text | `apps/normal-web/e2e/ops/07-landscape.spec.ts` | L-06 @landscape a short landscape phone | added in BP-28 — runs outside `pnpm test` |
 
+## BP-29 — the chibi under the rail, the refusal over the dialog, and the Blind fee in a browser (bug log §10 E3–E5)
+
+Not rows of §29.2, §29.3 or §30: three regressions of the 2026-10-22 review round, each pinned once in a unit test and
+once in the ops pack. B-05 is the `mobile` project's (title tagged `@mobile`); E-13 and F-01 the `desktop` project's.
+
+| Rule | Test file | Test name | Status |
+|---|---|---|---|
+| Bug log E4: a `Chibi` keeps its layers' z-index (10–90) inside its own root, so on a phone the lobby's face and the profile's figure, scrolled under the sticky rail (z-index 20), are drawn beneath it — the browser's hit test at the rail's middle answers with the rail, not a layer of the face | `packages/ui-kit/src/avatar2d/Chibi.test.tsx`, `apps/normal-web/e2e/ops/01-accounts.spec.ts` | the .chibi root opens its own stacking context, so its layers’ z-index never competes with the page around it · B-05 @mobile scrolled under the sticky rail, the player’s face stays beneath it | added in BP-29 — B-05 runs outside `pnpm test` |
+| Bug log E5: a refusal answering a dialog's own button is drawn above the dialog's backdrop — `.toasts` stands on `--z-toast`, above the backdrop's `--z-modal`; a Hold'em buy-in the balance cannot cover leaves the dialog open and "Số dư không đủ" on top of it, and charges nothing | `packages/ui-kit/src/screens/RoomScreen.test.tsx`, `apps/normal-web/e2e/ops/03-holdem.spec.ts` | keeps the buy-in dialog open on INSUFFICIENT_BALANCE and draws the refusal above its backdrop · E-13: a buy-in the balance cannot cover is refused in words, on top of the open buy-in dialog | added in BP-29 — E-13 runs outside `pnpm test` |
+| Bug log E3 (Plan 27 D1 in a browser): a Blind hand's result card prints no "Phí bàn" line | `apps/normal-web/e2e/ops/04-blind.spec.ts` | F-01 F-02 H-01: pure luck, three cards | added in BP-29 — runs outside `pnpm test` |
+
 ## Ruling recorded: the `reqId` cache is per connection
 
 Plan 7's first review round raised the `reqId` ring buffer as an open question, with a

@@ -94,6 +94,38 @@ over the next plate, the viewer's 50 px cards covered the board, and the waiting
   e2e Normal 24/24 in 2.1 min. Not yet run: the whole `pnpm test`, build:lite, avatar:check, e2e Lite and the whole ops
   pack — the merge gate's.
 
+## BP-29 — the face stays under the rail, a refusal is read over its dialog, and the Blind fee is pinned in a browser — merged `4cd43dd` (2026-10-23)
+
+Three items of the 2026-10-22 review round (`docs/bug-log.md` §10): E4 from the user's phone screenshot, confirmed in words
+("khi scroll top, icon avatar đè lên khung"); E5 reported in words the same day ("lỗi này bị ẩn sau modal vào bàn"); E3 a
+screenshot taken before Plan 27 was deployed. Branch `bugfix/BP-29-chibi-over-rail-and-hidden-notice`.
+
+- **What a player gets.** On a phone, the lobby's face and the profile's figure slide under the sticky rail when the page
+  scrolls, instead of drawing their hair, hat and frame over "Sảnh chờ" (E4). A Hold'em buy-in the balance cannot cover now
+  shows "Số dư không đủ" on top of the open buy-in dialog, not under its dimmed, blurred backdrop; the dialog stays open for
+  another amount (E5). The same holds for every refusal or notification that arrives while a dialog is open — "Tạo phòng",
+  "Quản lý bàn", the welcome gift.
+- **Under it.** `.chibi` (`packages/ui-kit/src/avatar2d/avatar2d.module.css`) is `isolation: isolate`, so its layers'
+  z-index 10–90 rank only among themselves; the seat disc and the wardrobe's portrait cards keep their own, now redundant,
+  rules. A new token `--z-toast: 110` (`tokens.css`) sits above `--z-modal: 100`, and `.toasts` stands on it: the toast and
+  the backdrop had the same z-index, and the backdrop, portalled to the end of `<body>`, won on DOM order. Lite takes both
+  through the kit.
+- **Tests.** Unit: `Chibi.test.tsx` → "the .chibi root opens its own stacking context…"; `RoomScreen.test.tsx` → "keeps the
+  buy-in dialog open on INSUFFICIENT_BALANCE and draws the refusal above its backdrop" (reads the z-indexes off the
+  stylesheets the two elements carry). Ops: B-05 `@mobile` (`01-accounts.spec.ts`: lobby and profile scrolled under the
+  rail, `elementFromPoint` with the layers made hit-testable must answer the rail) and E-13 (`03-holdem.spec.ts`: a
+  2.500/5.000 table, the refusal on top of the dialog by hit test, nothing charged); F-01 now asserts a Blind result card
+  prints no "Phí bàn" (E3). Both new ops cases were run against a build with the two CSS lines reverted and failed there
+  ("found a IMG on top", "the refusal is drawn over the dialog's backdrop, not under it"). The ops pack is 52 cases.
+- **Docs.** `docs/bug-log.md` §10 (E5 logged with options, E3 and E4 updated), `docs/operation-test-plan.md` (B-05, E-13),
+  `docs/test-matrix.md` (a BP-29 section, three rows; the pinned count in `tooling/arch/acceptance-links.test.ts`),
+  `docs/known-limitations.md` (UI: a toast can cover the foot of a tall dialog on a phone for a few seconds),
+  `docs/ui-kit.md` and `docs/avatar-2d.md` (the token and the isolation), `CLAUDE.md` §3.
+- **Khác với spec / Deviations from the spec.** None. E5 took option (a) of the bug log (toasts above dialogs) rather than
+  a refusal line inside the buy-in dialog.
+- **Still open.** E3 waits for the user to play a Blind hand on the deployed build. E1/E2 (the short landscape table) are
+  BP-28's. The GM player page's chibi was not screenshotted (it takes the same root rule).
+
 ## Plan 27 — a shop for points behind a reputation rank, a welcome gift, Blind played to zero, a lazy wardrobe and a monthly check-in — merged `da8ca8a` (2026-10-22)
 
 The round the user asked for on 2026-10-20/21 (`docs/bug-log.md` §9, K1–K5, plus Q13 from the spec review): players saw
