@@ -3,8 +3,8 @@
  * The Normal server's build: `node scripts/build.mjs [--no-typecheck]`.
  *
  *   typecheck  `tsc -p tsconfig.build.json` over exactly the files that ship (no tests, no PGlite).
- *   bundle     esbuild → `dist/main.js`, `dist/migrate-cli.js`, `dist/grant-wardrobe-cli.js` and `dist/grant-gm-cli.js`, four
- *              self-contained ESM entries.
+ *   bundle     esbuild → `dist/main.js`, `dist/migrate-cli.js`, `dist/grant-wardrobe-cli.js`, `dist/grant-gm-cli.js` and
+ *              `dist/reputation-backfill-cli.js`, five self-contained ESM entries.
  *   verify     the sidecars `packageRoot()` resolves at run time are where the image expects them.
  *
  * **Why a bundler and not `tsc --outDir dist`.** The workspace packages publish their *sources*

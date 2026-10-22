@@ -4,7 +4,7 @@ Tài liệu này dành cho người chơi, viết chung cho hai bản của trò
 
 ## 1. Giới thiệu
 
-Blind Luck Poker là trò poker nhiều người chơi cùng lúc, mở bằng trình duyệt, không cần cài đặt. Bạn chơi bằng **điểm**. Điểm không phải tiền và sẽ không bao giờ là tiền: không nạp, không rút, không mua bán, không đổi ra thứ gì. Trò chơi không có cửa hàng; mọi thứ đều đến từ việc chơi, điểm danh và thành tựu.
+Blind Luck Poker là trò poker nhiều người chơi cùng lúc, mở bằng trình duyệt, không cần cài đặt. Bạn chơi bằng **điểm**. Điểm không phải tiền và sẽ không bao giờ là tiền: không nạp, không rút, không mua bán giữa người chơi, không đổi ra thứ gì. Mọi thứ đều đến từ việc chơi: điểm thắng ở bàn, điểm danh, thành tựu, và ở bản Normal là "Cửa hàng", nơi bạn dùng **điểm trong game** để mua trang phục (mục 8).
 
 Có hai chế độ: **Texas Hold'em** (poker No-Limit quen thuộc, mỗi người 2 lá, có các vòng cược) và **Blind Poker** (mọi người đặt cùng một mức cược trước khi xem bài, mỗi người 2 hoặc 3 lá, có bot và có thể nặn bài).
 
@@ -32,11 +32,11 @@ Tài khoản mới có **100.000 điểm**. "Số dư" hiện ở thanh trên c�
 
 **Số dư và stack.** Khi bạn ngồi vào bàn, một phần số dư chuyển lên bàn thành **stack** của bạn: ở Hold'em là số buy-in bạn chọn, ở Blind Poker là hạn mức của bàn (mục 5). Trong lúc ngồi, thắng thua chỉ làm thay đổi stack. Khi bạn "Đứng dậy" hoặc "Rời phòng", toàn bộ stack quay về số dư. Vì vậy số dư giảm ngay lúc bạn ngồi xuống là chuyện bình thường.
 
-**Phí bàn.** Mỗi ván có người thắng, bàn thu **2% pot** (làm tròn xuống) trước khi chia. Ở Hold'em phí tối đa là 1 blind lớn (BB) mỗi ván; ở Blind Poker không có mức tối đa. Không thu phí khi pot được cộng dồn sang ván sau hoặc khi ván bị hủy. Thẻ kết quả ghi khoản này ở dòng "Phí bàn". Ngoài phần bot thắng, phí bàn là khoản chính khiến điểm rời khỏi bàn mà không vào tay người chơi nào.
+**Phí bàn.** Ở **Texas Hold'em**, mỗi ván có người thắng, bàn thu **2% pot** (làm tròn xuống, tối đa 1 blind lớn) trước khi chia. Không thu phí khi ván bị hủy. Thẻ kết quả ghi khoản này ở dòng "Phí bàn". **Blind Poker không thu phí bàn**, ở cả hai bản. Ngoài phần bot thắng, phí bàn Hold'em và tiền mua đồ ở "Cửa hàng" là những khoản khiến điểm rời khỏi tay người chơi.
 
 ### Điểm danh hằng ngày
 
-Mỗi ngày, mở tab "Điểm danh" và bấm "Nhận thưởng" một lần. Ngày mới bắt đầu lúc 00:00 giờ Việt Nam (người quản lý máy chủ có thể đổi múi giờ). Ở bản Normal, lần đầu mở trò chơi trong ngày trên trình duyệt đó, nếu chưa nhận quà, trang "Điểm danh" tự mở; tab này cũng có chấm vàng khi còn quà chưa nhận.
+Mỗi ngày, mở tab "Điểm danh" và bấm "Nhận thưởng" một lần. Ngày mới bắt đầu lúc 00:00 giờ Việt Nam (người quản lý máy chủ có thể đổi múi giờ). Ở bản Normal, lần đầu mở trò chơi trong ngày trên trình duyệt đó, nếu chưa nhận quà, trang "Điểm danh" tự mở (trừ khi bạn chưa nhận "Quà chào mừng": khi đó sảnh mở hộp quà chào mừng thay vào); tab này cũng có chấm vàng khi còn quà chưa nhận.
 
 **Ở bản Normal, lịch đếm số lần bạn điểm danh trong tháng, không cần liên tiếp.** Lần điểm danh thứ 1 trong tháng nhận ô 1, lần thứ 2 nhận ô 2, cứ thế tới ô cuối tháng. Bỏ một hôm không đưa bạn về ô 1: lần sau bạn nhận ô kế tiếp. Một hôm bỏ lỡ chỉ làm bạn mất những ô cuối tháng không còn đủ ngày để tới. Màn "Điểm danh" ghi, ví dụ, "Lần điểm danh thứ 12 của tháng 10/2026 · không cần liên tiếp" và "Còn 19 ngày trong tháng cho 20 ô" (số ngày còn lại tính cả hôm nay nếu bạn chưa nhận), để bạn thấy mình còn kịp mốc nào; ô có chữ "Hôm nay" là ô lần bấm kế tiếp sẽ nhận. Sang tháng mới, lịch tính lại từ ô 1.
 
@@ -77,7 +77,54 @@ Quà được tính theo tháng của ngày bạn bấm nhận. Tháng 2/2027 c�
 
 **Đầu tháng** chỉ có lịch điểm danh quay về ô 1 (bản Lite: chuỗi về ngày 1). Số dư, vật phẩm, trang phục, thành tựu, thống kê và tổng số ngày điểm danh giữ nguyên; điểm không bị xóa theo tháng.
 
-Ở bản Normal, quản trị viên có thể mở lại lượt điểm danh hôm nay của bạn khi có lý do: điểm và món của lượt đó bị thu lại, lượt đó không còn được đếm cho tới khi bạn nhận lại, bạn nhận thông báo "Lượt điểm danh hôm nay đã được mở lại: trừ lại … điểm — …" (số điểm bị thu và lý do), nút "Nhận thưởng" sáng lại ngay để bạn bấm lần nữa; món ngẫu nhiên được rút lại từ đầu.
+Ở bản Normal, quản trị viên có thể mở lại lượt điểm danh hôm nay của bạn khi có lý do: điểm và món của lượt đó bị thu lại, lượt đó không còn được đếm cho tới khi bạn nhận lại, bạn nhận thông báo "Lượt điểm danh hôm nay đã được mở lại: trừ lại … điểm — …" (số điểm bị thu và lý do), nút "Nhận thưởng" sáng lại ngay để bạn bấm lần nữa; món ngẫu nhiên được rút lại từ đầu. Danh vọng của lượt đó và lịch "Tuần đầu tiên" thì giữ nguyên.
+
+### Quà chào mừng (bản Normal)
+
+Lần đầu bạn vào "Sảnh chờ", hộp "Chào mừng đến Blind Luck Poker" mở ra: "Chọn một bộ đồ để bắt đầu", với ba món hiếm (mặc định là "Đồng phục chia bài", "Áo dài Tết đỏ" và "Nón lá"). Bấm một món để thấy nhân vật của bạn mặc thử, rồi bấm "Nhận": món đó vào tủ đồ, được mặc lên nhân vật ngay, và bạn được thêm **100 danh vọng** (đủ để lên bậc "Tay bài"). Bấm "Vào chơi" để đóng hộp.
+
+- Chưa muốn chọn thì bấm "Để sau". Sảnh giữ nút "🎁 Quà chào mừng" để bạn mở lại bất cứ lúc nào. Hộp chỉ tự mở một lần trên mỗi trình duyệt; sang trình duyệt hay thiết bị khác thì nó tự mở thêm một lần nữa cho tới khi bạn nhận.
+- Món bạn đã có hiện mờ với "✓ Đã có" và không chọn được. Nếu bạn đã có cả ba món, hộp chỉ còn nút "Nhận 100 danh vọng".
+- Mỗi tài khoản nhận một lần. Tài khoản tạo trước khi có quà chào mừng cũng nhận được.
+- Quà này không cộng điểm: tài khoản mới vẫn bắt đầu với 100.000 điểm như trước.
+
+### Tuần đầu tiên (bản Normal)
+
+Sau khi nhận quà chào mừng, trang "Điểm danh" có thêm khung **"Tuần đầu tiên"**: "Bảy lần điểm danh đầu tiên có thêm quà. Bỏ một hôm cũng không mất lượt." Ngày 1 là ngày bạn nhận quà chào mừng; mỗi ngày sau đó bạn bấm "Nhận thưởng" thì lịch này tiến thêm một ngày, cùng với lịch của tháng (một lần bấm nhận cả hai, biên lai ghi cả hai).
+
+| Ngày | Quà thêm |
+|---|---|
+| 3 | "1 món thường" ngẫu nhiên mà bạn chưa có |
+| 7 | "1 món hiếm" ngẫu nhiên mà bạn chưa có, kèm **200 danh vọng**; lịch kết thúc |
+
+Ô đã nhận ghi "Đã nhận", ô của lần bấm kế tiếp ghi "Hôm nay", các ô còn lại "Chưa tới". Nếu bạn đã có hết món ở mức đó, bạn được 10.000 điểm thay cho món đồ. Lịch đếm theo **ngày có bấm nhận**, không theo ngày lịch: bỏ một hôm không mất ngày nào. Lưu ý: "ngày" ở đây là ngày theo giờ Việt Nam, nên nhận quà chào mừng lúc 23:59 rồi điểm danh lúc 00:01 là đã sang ngày 2. Quản trị viên mở lại lượt điểm danh hôm nay của bạn cũng không làm lịch này lùi lại.
+
+### Danh vọng và bậc (bản Normal)
+
+**Danh vọng** là một con số chỉ tăng, cho biết bạn đã chơi bao nhiêu. Nó **không phải điểm**: không tiêu được, không chuyển được, không mua được, và không bao giờ bị trừ, kể cả bởi quản trị viên. Danh vọng đến từ:
+
+| Việc | Danh vọng |
+|---|---|
+| Chơi một ván có kết quả mà bạn được chia bài (Hold'em hay Blind, kể cả thua hay bỏ bài) | +1 |
+| Thắng ván đó | +3 nữa |
+| Một ngày điểm danh | +10 |
+| Mở một thành tựu | +50 (thưởng tới 5.000 điểm), +150 (thưởng trên 5.000 điểm), +500 (thưởng là vật phẩm) |
+| Nhận quà chào mừng | +100 |
+| Ngày 7 của "Tuần đầu tiên" | +200 |
+
+Ván bị hủy không được tính, và danh vọng của một ván có thể đến chậm hơn số dư một chút. Quản trị viên có thể đổi các con số trên và có thể cộng thêm danh vọng cho bạn (kèm lý do), nhưng không trừ được.
+
+Danh vọng đưa bạn lên **5 bậc**:
+
+| Bậc | Tên | Từ (danh vọng) | Mở thêm |
+|---|---|---|---|
+| 1 | Tân binh | 0 | mua món thường ở "Cửa hàng" |
+| 2 | Tay bài | 100 | |
+| 3 | Cao thủ | 400 | mua món hiếm |
+| 4 | Bậc thầy | 1.800 | mua món cực hiếm |
+| 5 | Huyền thoại | 5.000 | chỉ để khoe |
+
+Bậc **không bao giờ tụt**: kể cả khi quản trị viên nâng mốc, bạn giữ bậc đã đạt. Khi lên bậc, bạn thấy thông báo "Bạn vừa lên bậc …". Từ bậc 2, tên bậc hiện cạnh tên bạn ở ghế ngồi (khi khung tên hẹp, trên điện thoại xoay ngang, hay trong danh sách "Mời ra" thì chỉ còn số La Mã cùng màu, ví dụ "III"), ở thanh trên của "Sảnh chờ" và trong "Hồ sơ": "Danh vọng 455 · Cao thủ · còn 1.345 tới Bậc thầy". Bậc 1 không hiện gì, bot không có bậc. Người khác thấy bậc mới của bạn từ lần vào phòng tiếp theo. Tài khoản tạo trước khi có danh vọng được tính lại từ lịch sử (số ván, số ván thắng, số ngày điểm danh, thành tựu đã mở).
 
 ### Cứu trợ
 
@@ -87,7 +134,7 @@ Khi số dư **dưới 5.000 điểm**, mở "Điểm danh" và bấm "Nhận c�
 
 Bản Normal: mở "Hồ sơ".
 
-- "Lịch sử điểm": mỗi lần số dư thay đổi là một dòng, ví dụ "Điểm khởi đầu", "Vào bàn", "Rời bàn", "Điểm danh hằng ngày", "Điểm danh (điểm thay vật phẩm)", "Điểm cứu trợ", "Thưởng thành tựu", "Hoàn điểm". Bấm "Tải thêm" để xem dòng cũ hơn. Kết quả từng ván không thành dòng riêng: hai dòng "Vào bàn" và "Rời bàn" cho biết bạn được hay mất bao nhiêu trong **cả lần ngồi**. Phí bàn cũng không có dòng riêng, vì nó được trừ thẳng từ pot.
+- "Lịch sử điểm": mỗi lần số dư thay đổi là một dòng, ví dụ "Điểm khởi đầu", "Vào bàn", "Rời bàn", "Điểm danh hằng ngày", "Điểm danh (điểm thay vật phẩm)", "Điểm cứu trợ", "Thưởng thành tựu", "Hoàn điểm", "Mua ở Cửa hàng". Bấm "Tải thêm" để xem dòng cũ hơn. Kết quả từng ván không thành dòng riêng: hai dòng "Vào bàn" và "Rời bàn" cho biết bạn được hay mất bao nhiêu trong **cả lần ngồi**. Phí bàn cũng không có dòng riêng, vì nó được trừ thẳng từ pot.
 - "Ván gần đây": các ván vừa chơi, ở bàn nào, gặp ai, có thắng không.
 - "Thống kê": số ván chơi và thắng của từng chế độ, chuỗi thắng/thua, bài mạnh nhất, ván thắng lớn nhất, số ngày điểm danh.
 
@@ -98,6 +145,7 @@ Bản Lite: máy chủ giữ tên hiển thị, số dư và chuỗi điểm dan
 Bản Normal có **quản trị viên**: những người được người quản lý máy chủ giao việc trông coi trò chơi. Họ không chơi thay bạn và không xem được bài của bạn. Việc họ làm được và bạn sẽ thấy:
 
 - **Cộng hoặc trừ điểm, cấp một món đồ.** Bạn nhận một thông báo nhỏ kiểu "Quản trị viên: +12.000 điểm — thưởng giải" (hoặc tên món đồ kèm lý do). Lý do luôn có: quản trị viên không làm được gì mà không ghi lý do. Dòng tương ứng hiện trong "Hồ sơ", mục "Lịch sử điểm", là "Quản trị viên cộng điểm" hoặc "Quản trị viên trừ điểm". Số dư không bao giờ bị trừ xuống dưới 0.
+- **Cộng danh vọng.** Chỉ cộng, không bao giờ trừ (xem "Danh vọng và bậc").
 - **Mở một thành tựu, hoặc mở lại lượt điểm danh hôm nay.** Bạn nhận thông báo "GM đã mở thành tựu "…" cho bạn." (phần thưởng được trả đủ) hoặc "Lượt điểm danh hôm nay đã được mở lại: trừ lại … điểm — …" (xem mục "Điểm danh hằng ngày").
 - **Mời bạn ra khỏi phòng.** Bạn thấy "Bạn đã bị mời ra khỏi phòng" và thông báo của quản trị viên kèm lý do. Nếu lúc đó bạn đang giữa một ván, bạn bị bỏ bài ngay và rời bàn khi ván kết thúc; điểm trên bàn vẫn về số dư của bạn như mọi lần rời bàn.
 - **Đóng phòng.** Mọi người trong phòng được báo "Phòng đã đóng" và trở về "Sảnh chờ". Ván đang chơi bị hủy, cược được hoàn lại và stack của từng người về số dư.
@@ -184,7 +232,7 @@ Khi tất tay, bạn chỉ thắng được từ mỗi đối thủ tối đa b�
 
 Nếu mọi người khác bỏ bài, người còn lại ăn pot mà không phải lật bài. Nếu không, những ai còn trong ván cùng lật bài. Lá chung trượt ra từ bộ bài giữa bàn rồi lật; bài đối thủ được nhấc lên rồi lật. Khi lá cuối đã lật xong, **thẻ kết quả** mới hiện: "Người thắng", tên bộ bài, 5 lá thắng, số điểm nhận được, "Phí bàn", và bảng từng pot khi có pot phụ. Hòa thì chia đều; điểm lẻ thuộc về người thắng gần nút cái nhất theo chiều kim đồng hồ. Bấm "Đóng" để ẩn thẻ. Dòng "Ván tiếp theo sau" đếm ngược 5 giây.
 
-**Buy-in.** Khi ngồi, bạn chọn số mang vào trong khoảng "Buy-in tối thiểu" đến "Buy-in tối đa" của bàn (làm tròn theo bội số của blind lớn). Đang ngồi thì không mang thêm điểm lên bàn được: muốn mang thêm, bấm "Đứng dậy" (toàn bộ stack về số dư) rồi ngồi lại với buy-in mới. Stack về 0 thì hết ván bạn tự đứng dậy.
+**Buy-in.** Khi ngồi, bạn chọn số mang vào trong khoảng "Buy-in tối thiểu" đến "Buy-in tối đa" của bàn (làm tròn theo bội số của blind lớn). Đang ngồi thì không mang thêm điểm lên bàn được: muốn mang thêm, bấm "Đứng dậy" (toàn bộ stack về số dư) rồi ngồi lại với buy-in mới. Stack về 0 thì hết ván bạn tự đứng dậy, vẫn ở trong phòng để xem, và thấy thông báo "Bạn đã hết điểm ở bàn này. Nhận Cứu trợ nếu số dư dưới 5.000 điểm, hoặc chọn ghế trống khi có điểm."
 
 ## 5. Blind Poker
 
@@ -192,28 +240,37 @@ Blind Poker lấy cảm hứng từ *ba cây*: mọi người đặt **cùng m�
 
 ### Hạn mức
 
-Khi bạn ngồi vào bàn Blind, bàn lấy từ số dư một khoản gọi là **hạn mức**, bằng 5 lần mức cược (mức cược 1.000 thì hạn mức 5.000); đầu bàn ghi cả "Mức cược" và "Hạn mức". Nếu số dư ít hơn hạn mức, bàn lấy hết số dư, miễn là đủ cho một ván: 1 mức cược với "Hoàn toàn may rủi", 2 mức cược với "Chơi hoặc bỏ" (mức cược đầu ván và mức cược khi bấm "Chơi"). Không đủ thì bạn thấy "Số dư không đủ để vào bàn" kèm số điểm cần có.
+Khi bạn ngồi vào bàn Blind, bàn lấy từ số dư một khoản gọi là **hạn mức**, bằng 5 lần mức cược (mức cược 1.000 thì hạn mức 5.000); đầu bàn ghi cả "Mức cược" và "Hạn mức". Nếu số dư ít hơn hạn mức, bàn lấy hết số dư, miễn là đủ **một mức cược** (ở cả hai cách chơi). Không đủ thì bạn thấy "Số dư không đủ để vào bàn" kèm số điểm cần có.
 
-Mọi khoản cược và điểm thắng đều nằm trong stack trên bàn; thắng nhiều thì stack có thể vượt hạn mức. Khi hết ván mà stack không còn đủ cho ván sau, bạn **hết hạn mức**: bạn được mời đứng dậy, phần còn lại (nếu có) về số dư, và thấy thông báo "Bạn đã dùng hết hạn mức ở bàn này". Bạn vẫn ở trong phòng; bấm "Ngồi vào bàn" ở một ghế trống để vào lại với hạn mức mới.
+Mọi khoản cược và điểm thắng đều nằm trong stack trên bàn; thắng nhiều thì stack có thể vượt hạn mức. Blind Poker không thu phí bàn.
+
+### Chơi tới điểm cuối cùng
+
+Đã ngồi vào bàn thì bạn được chia bài miễn là stack còn điểm, dù ít hơn mức cược:
+
+- Stack ít hơn mức cược: bạn đặt hết số còn lại và **tất tay**. Bạn chỉ thắng được từ mỗi người khác tối đa bằng số mình đã đặt (pot chính); phần những người khác cược thêm với nhau thành pot phụ, như ở Hold'em (mục 4).
+- Ở "Chơi hoặc bỏ", nếu mức cược đầu ván đã lấy hết stack của bạn thì trò chơi tự chọn "Chơi" cho bạn (bỏ bài lúc đó chỉ làm mất phần đã đặt): bạn không phải bấm gì, và ván đó không tính là hết giờ. Nếu còn ít hơn một mức cược cho lần "Chơi", nút ghi **"Tất tay"** kèm số điểm còn lại thay cho "Chơi".
+- Nếu mọi người theo được bạn đều bỏ bài, phần họ đã đặt vượt quá số bạn theo được được trả lại cho họ.
+- Hết ván mà stack về **đúng 0**, bạn được mời đứng dậy, vẫn ở trong phòng để xem, và thấy thông báo "Bạn đã hết điểm ở bàn này. Nhận Cứu trợ nếu số dư dưới 5.000 điểm, hoặc chọn ghế trống khi có điểm." Khi số dư đủ một mức cược, bấm "Ngồi vào bàn" ở một ghế trống để vào lại với hạn mức mới; nếu số dư dưới 5.000 điểm, nhận "Cứu trợ" ở trang "Điểm danh" (mục 2).
 
 ### Hai cách chơi
 
-**"Hoàn toàn may rủi"**: bạn không phải bấm gì. Mỗi người trong ván đặt mức cược vào pot, bài được chia, lá chung lật 3–1–1, rồi mọi người lật bài và bộ mạnh nhất ăn pot (trừ 2% phí bàn).
+**"Hoàn toàn may rủi"**: bạn không phải bấm gì. Mỗi người trong ván đặt mức cược vào pot, bài được chia, lá chung lật 3–1–1, rồi mọi người lật bài và bộ mạnh nhất ăn pot (không thu phí bàn).
 
 **"Chơi hoặc bỏ"**:
 
 1. Mỗi người đặt mức cược vào pot, rồi bài được chia.
-2. **Mọi người chọn cùng lúc** trong "Thời gian mỗi lượt": "Chơi" (đặt thêm một mức cược, nút ghi kèm số điểm) hoặc "Bỏ bài". Bạn không biết ai chọn gì, chỉ thấy nhãn "Đã chọn" ở ghế đã quyết định; hàng nút của bạn báo "Đã chọn — chờ người chơi khác". Hết giờ mà chưa chọn thì bạn bỏ bài ván đó, và tính là một lượt hết giờ: hết giờ **3 lượt liên tiếp** thì khi ván kết thúc bạn bị mời đứng dậy, stack về số dư, như ở Hold'em. Chọn kịp giờ ("Chơi" hay "Bỏ bài", kể cả do "Tự động chơi" chọn) ở một ván thì đếm lại từ đầu.
+2. **Mọi người chọn cùng lúc** trong "Thời gian mỗi lượt": "Chơi" (đặt thêm một mức cược, nút ghi kèm số điểm; còn ít hơn một mức cược thì nút là "Tất tay" kèm số còn lại) hoặc "Bỏ bài". Ghế đã hết điểm sau mức cược đầu ván được chơi tự động, không bị hỏi. Bạn không biết ai chọn gì, chỉ thấy nhãn "Đã chọn" ở ghế đã quyết định; hàng nút của bạn báo "Đã chọn — chờ người chơi khác". Hết giờ mà chưa chọn thì bạn bỏ bài ván đó, và tính là một lượt hết giờ: hết giờ **3 lượt liên tiếp** thì khi ván kết thúc bạn bị mời đứng dậy, stack về số dư, như ở Hold'em. Chọn kịp giờ ("Chơi" hay "Bỏ bài", kể cả do "Tự động chơi" chọn) ở một ván thì đếm lại từ đầu.
 3. Khi mọi người đã chọn hoặc hết giờ:
-   - không ai chơi: pot **cộng dồn** sang ván sau, không thu phí, không ai phải lật bài; dưới pot hiện "Cộng dồn" kèm số điểm;
-   - chỉ một người chơi: người đó ăn cả pot ngay (trừ phí bàn), không lật lá chung, bài của họ không bị lộ;
+   - không ai chơi: pot **cộng dồn** sang ván sau, không ai phải lật bài; dưới pot hiện "Cộng dồn" kèm số điểm;
+   - chỉ một người chơi: người đó ăn cả pot ngay, không lật lá chung, bài của họ không bị lộ;
    - từ hai người trở lên: lật lá chung 3–1–1 rồi so bài giữa những người đã chọn "Chơi".
 
-Pot cộng dồn được cộng vào pot của ván sau. Nếu phòng không bắt đầu được ván mới trong 60 giây, hoặc phòng đóng, pot cộng dồn được chia đều vào số dư của những người thật đang ngồi (cùng những ai vừa hết hạn mức trong lúc pot đang cộng dồn mà vẫn ở trong phòng); bản Normal ghi khoản này là "Hoàn điểm". Phần lẻ không chia đều được thì mất.
+Pot cộng dồn được cộng vào pot của ván sau. Nếu phòng không bắt đầu được ván mới trong 60 giây, hoặc phòng đóng, pot cộng dồn được chia đều vào số dư của những người thật đang ngồi; bản Normal ghi khoản này là "Hoàn điểm". Người tất tay ít cũng được ăn phần cộng dồn nếu thắng pot chính. Phần lẻ không chia đều được thì mất.
 
 ### Bot và nút cái
 
-Bot ngồi sẵn theo "Số lượng bot", luôn sẵn sàng và có nhãn "Bot". Bot chiếm ghế thật: phòng 4 ghế có 3 bot chỉ còn chỗ cho một người. Bot không hiện stack vì điểm của bot là điểm ảo, không lấy từ tài khoản nào, được tự bù lại; nhưng khi bot thắng, pot đó vẫn rời khỏi bàn như khi người khác thắng. Bot nghĩ 1–3 giây, và ở kiểu "Chơi hoặc bỏ" thì chọn theo độ mạnh của bài. Ván chỉ bắt đầu khi có ít nhất một người thật sẵn sàng. Chủ phòng bớt bot bằng "Quản lý bàn" rồi "Mời ra", giữa hai ván.
+Bot ngồi sẵn theo "Số lượng bot", luôn sẵn sàng và có nhãn "Bot". Bot chiếm ghế thật: phòng 4 ghế có 3 bot chỉ còn chỗ cho một người. Bot không hiện stack vì điểm của bot là điểm ảo, không lấy từ tài khoản nào; bot cũng chơi tới điểm cuối cùng và được tự bù lại khi hết sạch; nhưng khi bot thắng, pot đó vẫn rời khỏi bàn như khi người khác thắng. Bot nghĩ 1–3 giây, và ở kiểu "Chơi hoặc bỏ" thì chọn theo độ mạnh của bài. Ván chỉ bắt đầu khi có ít nhất một người thật sẵn sàng. Chủ phòng bớt bot bằng "Quản lý bàn" rồi "Mời ra", giữa hai ván.
 
 Chữ **D** (nút cái) chuyển sang ghế kế tiếp mỗi ván; ở Blind Poker nó chỉ quyết định thứ tự chia bài và ai nhận điểm lẻ khi hòa. Thẻ kết quả giống Hold'em, có thêm "Cộng dồn" khi pot chuyển sang ván sau.
 
@@ -275,6 +332,10 @@ Không muốn nặn thì bấm nút nhỏ "Lật" dưới bài để mở hết 
 
 **"Tự động chơi"** có ở bàn Blind Poker kiểu "Chơi hoặc bỏ" và ở bàn nặn bài, ngay trên hàng nút (Hold'em không có). Bật lên thì mỗi ván trò chơi chọn "Chơi" cho bạn, nghĩa là mỗi ván bạn luôn đặt thêm một mức cược; ở bàn nặn thì bài còn được mở ngay khi chia. Nút giữ nguyên tới khi bạn tắt, đứng dậy, tạm nghỉ hoặc rời phòng. Nút chạy trên máy của bạn: khi bạn mất kết nối, nó không chơi thay, và hết giờ vẫn tính là "Bỏ bài", cũng là một lượt hết giờ. Ván nào nút đã chọn "Chơi" cho bạn thì ván đó không tính là hết giờ.
 
+### Chơi trên hai thiết bị
+
+Mỗi người chỉ có **một kết nối** tới bàn. Nếu bạn mở trò chơi ở thiết bị (hay tab) thứ hai trong lúc thiết bị thứ nhất vẫn mở, thiết bị **sau** tiếp quản: nó nhận ghế của bạn và ván đang dở, đúng bài, đúng lượt. Thiết bị **trước** thấy "Đã đăng nhập ở nơi khác" và không tự kết nối lại; muốn chơi lại ở đó thì tải lại trang (lúc đó nó lại tiếp quản từ thiết bị kia). Không ai bị cấm, không mất điểm. Trò chơi không hỏi xác nhận trước khi tiếp quản và không có danh sách thiết bị đang đăng nhập, nên hãy đóng trò chơi ở máy cũ khi chuyển sang máy mới.
+
 ## 8. Nhân vật và Phòng thay đồ (bản Normal)
 
 Mỗi người chơi có một nhân vật chibi. Ở bàn, người khác thấy nhân vật của bạn ở ghế, kèm danh hiệu và huy hiệu đang dùng ngay dưới tên; bot có nhân vật riêng. Bản Lite cũng vẽ nhân vật, nhưng đó là nhân vật mặc định chọn theo tên và không đổi được.
@@ -297,13 +358,28 @@ Khung "Đang dùng" liệt kê các món đang mặc. Mặc định mỗi mục 
 
 **"Bộ đồ đã lưu"** có 5 ô. Bấm vào một ô trống, đặt "Tên bộ đồ" (mặc định là "Bộ 1", "Bộ 2"…) rồi bấm "Lưu vào đây". Bấm vào một bộ đã lưu để mở menu: "Mặc bộ này", "Lưu đè" (ghi bộ đang thử vào ô này), "Đổi tên", "Xóa".
 
-**Cách nhận đồ.** Mỗi món có độ hiếm "Thường", "Hiếm" hoặc "Cực hiếm". Không có cửa hàng; đồ đến từ:
+**Cách nhận đồ.** Mỗi món có độ hiếm "Thường", "Hiếm" hoặc "Cực hiếm". Đồ đến từ:
 
 - **Có sẵn**: mọi kiểu tóc, màu da, các màu tóc và màu mắt thường, "Bộ thường ngày" và các màu áo phông.
+- **Quà chào mừng** và **Tuần đầu tiên**: một món hiếm do bạn chọn lần đầu vào sảnh, rồi một món thường ở ngày 3 và một món hiếm ở ngày 7 (mục 2).
 - **Quà điểm danh**: ngày 7 (một món thường), ngày 14 và 21 (một món hiếm), ngày 28 ("Huy hiệu tháng" và "Chuyên cần", từ 11/2026 thêm một món cực hiếm mỗi tháng), xem mục 2.
 - **Thành tựu**: ví dụ danh hiệu "Vận đỏ" khi thắng 10 ván liên tiếp, "Khung một năm" khi điểm danh đủ 365 ngày; danh sách ở mục 9.
+- **Cửa hàng**: mua bằng điểm (xem dưới).
 
-Thẻ của món còn khóa ghi cách nhận: tên thành tựu; "Quà điểm danh ngày 28", hoặc kèm tháng như "Quà điểm danh ngày 28 tháng 11/2026"; hoặc "Có thể nhận từ quà điểm danh" kèm độ hiếm. Món chưa có cách nhận, kể cả món chỉ được tặng ở một tháng đã qua, ghi "Chưa có cách nhận món này".
+Thẻ của món còn khóa ghi cách nhận: tên thành tựu; "Quà điểm danh ngày 28", hoặc kèm tháng như "Quà điểm danh ngày 28 tháng 11/2026"; hoặc "Có thể nhận từ quà điểm danh" kèm độ hiếm. Món chưa có cách nhận, kể cả món chỉ được tặng ở một tháng đã qua, ghi "Chưa có cách nhận món này"; nhiều món như vậy giờ mua được ở "Cửa hàng".
+
+### Cửa hàng
+
+Ở "Sảnh chờ", cạnh nút "Phòng thay đồ" có nút **"Cửa hàng"**. Đây là nơi bạn dùng **điểm trong game** để mua trang phục và phụ kiện; không có tiền thật, không nạp, không đổi điểm ra thứ gì, không bán lại hay tặng cho người khác, và không hoàn điểm.
+
+- **Bên trái** là nhân vật của bạn (trên điện thoại là một dải ngang ở trên cùng), dưới đó là "Số dư" và dòng danh vọng, bậc. Bấm vào một thẻ để **mặc thử** ngay trên nhân vật ("Mặc thử: …"); việc này không lưu gì. Bấm "Về đồ đang mặc" để quay lại.
+- **"Kệ tuần này"** ở trên cùng: tối đa 6 món, đổi mỗi thứ Hai, do quản trị viên chọn hoặc trò chơi tự xoay vòng.
+- Bên dưới là các kệ **"Thường"**, **"Hiếm"**, **"Cực hiếm"** ("Theo độ hiếm"), lọc được theo ô ("Lọc theo ô": "Tất cả", "Mũ", "Phụ kiện mặt", "Quần áo", "Hào quang", "Khung", danh hiệu, huy hiệu, và "Màu sắc" cho màu tóc, màu mắt hiếm và cực hiếm).
+- Mỗi thẻ ghi giá và trạng thái: nút **"Mua · 30.000"**; "thiếu … điểm" khi số dư chưa đủ; **"🔒 cần Cao thủ"** (hay "cần Bậc thầy") khi bậc của bạn chưa đủ; **"✓ Đã có"** kèm nút "Mặc" mở "Phòng thay đồ" với món đó; hoặc món không bán, ghi nguồn của nó: "🏆 Thành tựu: …", "📅 Quà tháng 11/2026", "📅 Quà điểm danh", "Miễn phí — có sẵn trong Phòng thay đồ".
+
+Giá mặc định: món thường **10.000 điểm** (bậc nào cũng mua được), món hiếm **30.000** (từ bậc "Cao thủ"), món cực hiếm **150.000** (từ bậc "Bậc thầy"); quản trị viên có thể đổi giá và bậc từng món. Món là quà điểm danh của tháng này hay các tháng tới, và món là phần thưởng thành tựu, thì không bán; quà của một tháng đã qua thì bán như món khác, nên kệ "Cực hiếm" sẽ đầy dần theo tháng.
+
+Bấm "Mua" thì hộp "Mua món này?" hỏi lại, ví dụ "Mua Nón lá với 30.000 điểm? Còn lại 98.000."; bấm "Mua" để xác nhận hoặc "Thôi". Mua xong, dòng "… đã vào tủ đồ" hiện ra, thẻ thành "✓ Đã có", nhân vật vẫn mặc thử món đó, và nút **"Mặc luôn"** lưu nó lên nhân vật của bạn. Khoản điểm hiện trong "Lịch sử điểm" là "Mua ở Cửa hàng". Nếu mạng chập chờn và trò chơi báo chưa rõ đã mua được chưa, cứ bấm "Mua" lần nữa: bạn không bị trừ điểm hai lần.
 
 **Biểu cảm.** Khu "Xem thử biểu cảm" dưới hình nhân vật có hai nút ‹ › để xem các biểu cảm "Bình thường", "Vui", "Buồn", "Ngạc nhiên", "Nhắm mắt", "Ngủ". Bạn không cần chọn gì: ở bàn (cả ở bản Lite), nhân vật tự "Vui" khi thắng ván, "Buồn" khi thua lúc so bài, "Ngạc nhiên" khi có người tất tay, "Nhắm mắt" khi đã bỏ bài, và "Ngủ" khi đang tạm nghỉ, mất kết nối hoặc bàn hơn một phút không có ván.
 
@@ -374,9 +450,11 @@ Trang "Cài đặt" của **bản Lite** có "Giao diện", "Ngôn ngữ", "Phi�
 | "Số dư không đủ" hoặc "Số dư không đủ để vào bàn" | Nhận điểm danh hoặc cứu trợ, hay chọn bàn có mức cược thấp hơn. Bàn Hold'em cần số dư ít nhất bằng buy-in tối thiểu. |
 | Thời gian mỗi lượt quá ngắn | Chủ phòng chọn lúc tạo phòng, sau đó không đổi được; hãy tạo phòng mới. Ở Hold'em, dùng các nút chọn sẵn; ở Blind Poker, có thể bật "Tự động chơi", nhưng nút này luôn chọn "Chơi" nên mỗi ván bạn luôn đặt thêm một mức cược. |
 | Trên điện thoại, phần bàn cuộn nhẹ | Ở bàn "Chơi hoặc bỏ" có "Nặn bài", phần bàn có thể cuộn nhẹ trong vòng nặn. Trang không cuộn, ghế của bạn (bài, nút "Lật", vòng đếm giờ) vẫn ghim ở đáy. Đây là chuyện bình thường. |
-| Số dư giảm, không biết điểm đi đâu | Lúc ngồi, điểm chuyển lên bàn thành stack và chỉ về khi bạn rời ghế. Mỗi pot có người thắng bị thu 2% phí bàn. Bản Normal: đối chiếu trong "Lịch sử điểm". Máy chủ tắt đột ngột thì điểm trên bàn có thể mất (mục 7). |
-| Đầu tháng chuỗi điểm danh về ngày 1 | Đây là luật của trò chơi. Chỉ chuỗi điểm danh tính lại; số dư, đồ và thành tựu giữ nguyên. |
-| Mở trò chơi ở tab hay máy khác thì nơi cũ báo "Mất kết nối" | Mỗi người chỉ có một kết nối; nơi cũ bị ngắt và không tự kết nối lại. Tải lại trang ở nơi bạn muốn chơi. |
+| Số dư giảm, không biết điểm đi đâu | Lúc ngồi, điểm chuyển lên bàn thành stack và chỉ về khi bạn rời ghế. Mỗi pot Hold'em có người thắng bị thu 2% phí bàn (Blind Poker không thu). Bản Normal: đối chiếu trong "Lịch sử điểm". Máy chủ tắt đột ngột thì điểm trên bàn có thể mất (mục 7). |
+| Đầu tháng lịch điểm danh về ô 1 (bản Lite: chuỗi về ngày 1) | Đây là luật của trò chơi. Chỉ lịch điểm danh tính lại; số dư, đồ, danh vọng và thành tựu giữ nguyên. |
+| Mở trò chơi ở tab hay máy khác thì nơi cũ báo "Đã đăng nhập ở nơi khác" | Mỗi người chỉ có một kết nối; nơi sau tiếp quản ghế, nơi cũ bị ngắt và không tự kết nối lại. Tải lại trang ở nơi bạn muốn chơi (mục 7, "Chơi trên hai thiết bị"). |
+| "Bạn đã hết điểm ở bàn này" | Stack của bạn ở bàn đã về 0 nên bạn được mời đứng dậy. Nhận "Cứu trợ" ở trang "Điểm danh" nếu số dư dưới 5.000 điểm, rồi chọn một ghế trống (mục 5, "Chơi tới điểm cuối cùng"). |
+| (bản Normal) Nút "Mua" mờ, ghi "🔒 cần …" | Bậc của bạn chưa đủ cho món đó. Bậc tăng theo danh vọng: chơi, thắng, điểm danh và mở thành tựu (mục 2, "Danh vọng và bậc"). |
 | (bản Normal) "Đã có phiên bản mới của trò chơi." | Bấm "Tải lại". |
 | Đổi tên hay trang phục mà người cùng bàn chưa thấy | Thay đổi hiện ở bàn từ lần vào phòng tiếp theo. |
 | Bản Lite báo "Phiên đăng nhập đã hết hạn. Vui lòng nhập lại tên hiển thị." | Máy chủ không còn nhận ra trình duyệt của bạn, ví dụ dữ liệu máy chủ vừa được làm mới. Nhập một tên để chơi tiếp; nếu thấy "Tên hiển thị đã có người dùng" thì chọn tên khác. |
@@ -389,8 +467,9 @@ Trang "Cài đặt" của **bản Lite** có "Giao diện", "Ngôn ngữ", "Phi�
 | Cách vào | Email và mật khẩu | Tên hiển thị, không mật khẩu |
 | Nhiều thiết bị | Một tài khoản, mọi thiết bị | Gắn với trình duyệt trên một thiết bị |
 | Texas Hold'em, Blind Poker, bot, nặn bài | Có | Có |
-| Phí bàn, cứu trợ | Có | Có |
-| Điểm danh | Điểm và vật phẩm; có "Lịch điểm danh" và chấm vàng trên tab khi còn quà | Chỉ có điểm |
+| Phí bàn (chỉ Hold'em), cứu trợ | Có | Có |
+| Điểm danh | Điểm và vật phẩm, đếm số lần trong tháng; có "Lịch điểm danh", "Tuần đầu tiên" và chấm vàng trên tab khi còn quà | Chỉ có điểm, đếm theo chuỗi liên tiếp |
+| Quà chào mừng, danh vọng và bậc, "Cửa hàng" | Có | Không |
 | Hồ sơ, thống kê, "Lịch sử điểm", "Ván gần đây" | Có | Không |
 | Đổi tên hiển thị | Có, trong "Hồ sơ" | Không |
 | Nhân vật | Tùy chỉnh trong "Phòng thay đồ" | Nhân vật mặc định theo tên |

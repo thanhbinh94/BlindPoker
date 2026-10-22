@@ -582,7 +582,8 @@ See §3.
 
 - A Blind seat brings `min(balance, 5 × wager)` to the table (`buy_in`), and every way off a seat cashes out.
 - A seat that can no longer cover a hand is stood up with `TABLE_LIMIT_SPENT` and stays in the room as a spectator,
-  still a claimant on a carried pot. Bots get a virtual limit.
+  still a claimant on a carried pot. Bots get a virtual limit. (Plan 27 replaced both: a seat plays to 0 and is stood up
+  with `STACK_SPENT`, and the claimant path is deleted.)
 - **Lessons:** `pnpm lint` in the main checkout lints the worktrees; worktree folders survive `git worktree remove`.
 
 ### 2026-09-29 — operation-test run 1 — `20c2e0e`; findings T1–T9 — `2111c55` (docs `60d027c`)
@@ -978,6 +979,95 @@ rulings below are the SDD ledger's, in order.
 - The reviews that opened screenshots again earned their cost: the dock covered seat 6 at 640×360, a 4 px clip hid Đóng
   under `overflow: hidden`, and a six-digit raise crossed the hero's plate at 844×390. None showed in a unit test.
 
+## Plan 27 — the shop, reputation, the welcome gift, Blind to zero, a lazy wardrobe, a monthly check-in (merged `MERGE`, 2026-10-2x)
+
+Spec `docs/superpowers/specs/2026-10-21-plan27-shop-reputation-welcome-blind-zero-design.md`; plan
+`docs/superpowers/plans/2026-10-22-plan27-shop-reputation-welcome-blind-zero.md`; branch
+`feature/BP-27-shop-reputation-welcome-blind-zero`. Twenty-one tasks in six parts (A reputation, B the shop, C the welcome
+gift and the newcomer calendar, D Blind to zero, E the lazy wardrobe, G the monthly check-in) plus F (docs, ops cases, the
+final review, the gate, the VPS). The user's decisions are the spec's Q-table (Q1–Q13); the spec's own rulings are R1–R21
+(§10). The pre-flight review (an independent opus agent, 93 tool uses against `5fbeeba`) spliced 36 amendments, P1–P36,
+into the plan, one of them rejected. The rulings below are the SDD ledger's, in order.
+
+### Rulings
+
+- Ruling 1 (P3): the config tables' `updated_by` has no foreign key to `users`, and their defaults are re-seeded in code at
+  boot, because the test harness truncates `users … cascade`. Costs if wrong: an orphan uuid in an audit column.
+- Ruling 2 (P5): the check-in `day` derives from `daily_logins.streak`, which after the data step is the month's count; no
+  new count column. Costs if wrong: one more column later.
+- Ruling 3 (P7): reputation granted inside a caller's transaction reads rules and ranks through `tx`
+  (`grantRuleWithin`), never `db`. Costs if wrong: a PGlite deadlock in tests.
+- Ruling 4 (P13): the GM's rooms table reads the rank through `useAvatars`; no server change. Costs if wrong: one request
+  per member the first time.
+- Ruling 5 (P19): two reputation routes (rules, ranks); 29 GM routes in all. Costs if wrong: a route renamed later.
+- Ruling 6 (P20): no fifth Shell tab (the rail holds four at 375 px since bug 8); the shop link sits beside the wardrobe
+  link on the lobby. Costs if wrong: the shop is one tap further away.
+- Ruling 7 (P25): the daily nudge is skipped while the welcome gift is unclaimed, and the e2e and ops helpers dismiss the
+  welcome dialog. Costs if wrong: a new player is not sent to Điểm danh on day one.
+- Ruling 8 (P30): F-10 becomes the Blind-to-zero case; `TABLE_LIMIT_SPENT` is removed; a busted Hold'em seat also gets
+  `STACK_SPENT`; the Cứu trợ nudge is text only (a deviation). Costs if wrong: a toast button later.
+- Ruling 9 (P34): the backfill subtracts only the reasons that mirror `player_stats` and `player_achievements`
+  (`hand_played`, `hand_won`, `daily_login`, `achievement`) — a deviation from R18's wording, whose premise would have
+  taken away a player's welcome reputation. Costs if wrong: none known.
+- Ruling 10 (P36 rejected): the commit trailer stays the one the session prescribes.
+- Ruling 11 (A3, the lead after opening the 1920 and 375 shots): on a compact plate the rank pill sits on the stack line
+  after the figure, not beside the name, where it cut opponents' names sooner ("Lê Hoà…"); the viewer's wide plate keeps
+  the word. Costs if wrong: the stack line grows by about 20 px on a phone.
+- Ruling 12 (D1 fix): a Blind folder's excess above the highest live commitment goes back to the folder inside
+  `resolveDecisions` (one place covers both settle paths); with exactly one folder above, `settle`'s `returnUncalled`
+  does it as before. Costs if wrong: none in money; the folder's bet chip shows the whole ante during the reveal
+  (known limitation).
+- Ruling 13 (B3 review): `MAX_ENTRY_GZIP` rises from 130 to 140 KB, with the reason in the test header; splitting the
+  locale namespaces per lazy screen is a recorded residual. Costs if wrong: about 10 KB more on first paint.
+- Ruling 14 (D2 review): the carry-over claimant code in `room.ts` is deleted — unreachable once every seat is dealt with
+  at least 1 point and an emptied seat is played for it; the doc comment says why. Costs if wrong: an all-fold table
+  with a seat at 0 would pay the house; the reviewer's proof says it cannot happen, and a test pins the all-fold case.
+- Ruling 15 (ops ids): the shop's ops cases take the prefix `M` ("M. Cửa hàng, danh vọng và tủ đồ"), because `S-` is the
+  lobby's: M-01 welcome, M-02 buy and the rank lock, M-03 the rank on seat and profile, M-04 the wardrobe's request count
+  (E2's S-04), M-05 the 3G first paint (E2's S-05). Costs if wrong: a rename.
+- Ruling 16 (E2 measurement): a `head` frame drawn at 110 px or less loads its tinted layers @1x whatever the DPR (72 px
+  portraits pulled about 440 KB @2x, 3.25 s on a 3G phone). Parked for the final wave; until it lands, a known
+  limitation with the figure. Costs if wrong: slightly soft portraits on DPR-3 phones.
+- Rulings 17–23 (B4, the implementer's, accepted by the review): a config write with no GM account behind it (the CLI's
+  actor) is `FORBIDDEN`; a past week is 409 `WEEK_IN_PAST` and a malformed one 400 `INVALID_WEEK`; an empty price list
+  is `INVALID_PRICES`; a bad ladder is 400 `INVALID_RANKS`; a locked account may receive reputation; `GET /api/gm/shop`
+  reuses the shop view for its locks; the rarity stands under the item's name in the GM price table.
+- Smaller decisions in the tasks, all in the CHANGELOG's deviations: the shop reuses the wardrobe's slot labels and hides
+  the free hairstyles, skin tones and colours (B3); "Tất tay N" reuses `actions.allIn` with the amount (D2); bots are
+  topped up only once spent (D2); the welcome dialog opens once per account per browser and confirms with a status line,
+  not a toast (C3); the 100 and 200 reputation figures are client constants for now (C3).
+
+### Lessons
+
+- **Two implementers in one worktree share the git index.** The C2 fixer's commit swept up D1's staged files and had to
+  be undone with `reset --soft` and redone with `commit --only`. Parallel writers are safe only when each stages *and*
+  commits in one step — `git commit --only <paths> -F <msg>` — and never leaves a file staged. Every later brief said so.
+- **The pre-flight review earned its cost again: 36 amendments, 19 of them blockers.** Among them: the harness's
+  `truncate users … cascade` would have emptied every config table with a foreign key (P3); a reputation read through
+  `db` inside a claim would deadlock PGlite (P7); `pruneLedgerKeys` empties `ledger_keys` at every boot, so a purchase
+  key alone is no guard across a restart and the shop finds a repeat by its inventory ref first (P15); a new account's
+  welcome modal would have sat over every e2e and ops test that registers (P25); and the Shell rail has no room for a
+  fifth tab at 375 px (P20).
+- **Recon caught a spec built on a wrong premise.** The first draft offered three common outfits as the welcome gift;
+  the code showed the common tees are already free, so the gift would have been nothing. The spec moved to three rares
+  (R6, Q11) before a line was written. Read the data the user's words touch, not only the code.
+- **A spec's formula can be wrong about its own inputs.** R18 said "subtract every live event"; the plan review saw that
+  `welcome`, `newcomer_day` and `gm_grant` are not history the formula counts, so subtracting them would take a player's
+  gift back (P34, Ruling 9). Check each term of a reconciliation against every reason that can feed it.
+- **Reviewers who opened the screenshots caught what no unit test did:** the rank pill cutting opponents' names at 375 px
+  (Ruling 11) and the shop's figure strip sliding under the top bar (`bbea929`). The ops lobby fit check caught a third:
+  the lobby's new link row made the six-room lobby scroll 55 px at 1920 × 940 — a new lobby control has to fit the
+  budget the e2e suite holds.
+- **Measure before you promise a number.** The 3G case showed the stage and the first row drawn in 850 ms, but the
+  pictures at 3.2 s on a phone: the kit chooses the tint density by the screen, not by the drawn size (Ruling 16).
+  Without the measurement the spec's "≤ 2 s" would have been claimed.
+- **Dead money code is a liability, not a safety net.** Once every seat is dealt with a point and an emptied seat is
+  played for it, the carry-over claimant path could not run; the reviewer proved it and the code went (Ruling 14),
+  with a test of the all-fold table instead of tests of an unreachable branch.
+- **A session break with background agents running loses nothing if the ledger says what was running.** At the usage
+  limit two implementers (C3, E2) were still going; the ledger named them and their files, and the next session checked
+  `git log` for their commits before dispatching anything.
+
 ## 5. Open items
 
 The single list is `docs/known-limitations.md`. As of this writing, the items a next session is most likely to meet:
@@ -989,15 +1079,20 @@ The single list is `docs/known-limitations.md`. As of this writing, the items a 
   - the 11 px phone scroll on play-or-fold squeeze tables (Ruling 28);
   - the human test rounds in `docs/operation-test-plan.md` (real phones, a LAN session, Lite on a second PC);
   - Plans 25 and 26 are live on the VPS since 2026-10-21 (`0004_gm` and `0005_plan26` applied, the first GM made by
-    `grant-gm-cli`); the Windows LAN host still needs `run.ps1` without `-NoMigrate` once (the user's Neon database; ask
-    first), and section Q of the test plan plus the landscape and GM round-2 checks are the user's to run by hand;
-  - the next round, K1–K5 in `docs/bug-log.md` §9, is to be brainstormed before anything is built.
+    `grant-gm-cli`); Plan 27 brings `0006_plan27` and a one-shot `reputation-backfill-cli` run (`docs/deployment-normal.md`
+    §7). The Windows LAN host still needs `run.ps1` without `-NoMigrate` (the user's Neon database; ask first) and, after
+    `0006`, the backfill once; section Q of the test plan plus the landscape, GM round-2 and Plan 27 checks (the welcome
+    gift on a real account, a purchase, the rank on a phone seat, a Blind table played to zero, the Điểm danh page after a
+    missed day) are the user's to run by hand;
+  - English copy the user has not approved: the monthly check-in's "Check-in 12 of 10/2026" and "1 days left", and the
+    GM's `gm.dialog.checkinBody` ("the streak is kept") and `gm.gifts.lead` ("check-in streak tier"), now wrong;
+  - the next round: K6 (more poses for the figure) in `docs/bug-log.md` §9, to be brainstormed as an art project.
 - **Environment:** the Normal Docker image has been built once on x86 and the suite has run once on a real PostgreSQL
   (both 2026-10-16, BP-24), and the Compose stack ran once with `DOMAIN=localhost` the same day; Caddy's ACME flow on
   a public name, the ARM build and the Oracle kit have never been executed, and seven dev-only npm advisories are
   deferred.
-- **Roadmap (spec §34):** avatar upload (R1), email (No7), a bundled Vietnamese font, more poses, spectators and chat,
-  top-up at the table.
+- **Roadmap (spec §34):** avatar upload (R1), email (No7), a bundled Vietnamese font, more poses (K6), spectators and
+  chat, top-up at the table; for the shop, sales, timed items, bundles and gifts between players (spec 2026-10-21 §8).
 - **Rule changes the user has not asked for:** a carry-over pot paying seats that sat out (spec §8.4); relief that
   ignores table stacks (§12.4).
 - **Not shipped:** the Lite exe has been rebuilt locally after each plan but not handed out.

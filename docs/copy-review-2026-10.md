@@ -68,11 +68,11 @@ Bảng dưới là bản đề xuất. Plan 18, Task 1 áp dụng nguyên văn, 
 | room.sitOut | Ngồi ngoài | Tạm nghỉ | Dịch sát "Sit out". Khớp với nhãn ghế `labels.sittingOut` = "Tạm nghỉ". |
 | room.sitIn | Vào lại | Chơi tiếp | Cặp với "Tạm nghỉ". "Vào lại" dễ nhầm với vào lại phòng. |
 | room.buyInTitle | Chọn mức mang vào | Chọn số điểm mang vào bàn | "mức mang vào" thiếu đối tượng. |
-| room.sitFirst | Hãy ngồi vào bàn để chơi. | Chọn một ghế trống để vào chơi. | Chỉ rõ cần làm gì, giống cách `notify.TABLE_LIMIT_SPENT` đang nói. |
+| room.sitFirst | Hãy ngồi vào bàn để chơi. | Chọn một ghế trống để vào chơi. | Chỉ rõ cần làm gì, giống cách `notify.TABLE_LIMIT_SPENT` đang nói (khóa đó đã bỏ ở Plan 27, xem hai dòng dưới). |
 | notify.KICKED | Bạn đã bị mời khỏi phòng | Bạn đã bị mời ra khỏi phòng | Thiếu chữ "ra". Thống nhất với `actions.kick`. |
 | notify.ACHIEVEMENT_UNLOCKED | Mở khóa thành tựu: {{id}} | Đạt thành tựu mới: {{id}} | Thống nhất động từ "đạt" cho thành tựu (xem mục 2.3). |
-| notify.TABLE_LIMIT_SPENT | Bạn đã dùng hết hạn mức ở bàn này — {{amount}} điểm còn lại đã về số dư. Chọn một ghế trống để vào lại. | Bạn đã dùng hết hạn mức ở bàn này, {{amount}} điểm còn lại đã được trả về số dư. Chọn ghế trống để chơi tiếp. | "đã về số dư" là văn nói và cụt. "vào lại" đổi thành "chơi tiếp" cho khớp với `room.sitIn`. |
-| notify.TABLE_LIMIT_SPENT_none | Bạn đã dùng hết hạn mức ở bàn này. Chọn một ghế trống để vào lại. | Bạn đã dùng hết hạn mức ở bàn này. Chọn ghế trống để chơi tiếp. | Giống dòng trên. |
+| notify.TABLE_LIMIT_SPENT | Bạn đã dùng hết hạn mức ở bàn này — {{amount}} điểm còn lại đã về số dư. Chọn một ghế trống để vào lại. | Bạn đã dùng hết hạn mức ở bàn này, {{amount}} điểm còn lại đã được trả về số dư. Chọn ghế trống để chơi tiếp. | "đã về số dư" là văn nói và cụt. "vào lại" đổi thành "chơi tiếp" cho khớp với `room.sitIn`. Plan 27 (2026-10-22) bỏ khóa này cùng luật hết hạn mức: ghế chơi tới 0 rồi nhận `notify.STACK_SPENT` "Bạn đã hết điểm ở bàn này. Nhận Cứu trợ nếu số dư dưới {{threshold}} điểm, hoặc chọn ghế trống khi có điểm." |
+| notify.TABLE_LIMIT_SPENT_none | Bạn đã dùng hết hạn mức ở bàn này. Chọn một ghế trống để vào lại. | Bạn đã dùng hết hạn mức ở bàn này. Chọn ghế trống để chơi tiếp. | Giống dòng trên (cũng đã bỏ ở Plan 27). |
 
 ### 2.3 `apps/normal-web/src/locales/vi/normal.json` (bản Normal)
 

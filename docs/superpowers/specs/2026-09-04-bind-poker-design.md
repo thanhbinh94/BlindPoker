@@ -264,6 +264,7 @@ Như mục 7.7.
 ### 8.8 Hạn mức bàn (sửa đổi 2026-09-29)
 - **Vào bàn**: server lấy `min(số dư, L)` từ số dư lên bàn, ghi `buy_in` (từ chối `INSUFFICIENT_BALANCE` nếu số dư < mức cần cho một ván). Không có hộp thoại chọn số.
 - **Trong ván**: ante, tiền Chơi và tiền thắng chỉ đổi chồng trên bàn (có thể vượt L); sổ điểm mỗi ván chỉ ghi dòng sink phí bàn, không còn dòng `settlement` cho người chơi.
+- *(Plan 27 thay hai gạch đầu dòng "Hết hạn mức" và "Pot cộng dồn khi hết hạn mức" dưới đây bằng luật chơi tới 0, xem sửa đổi ở §12.3.)*
 - **Hết hạn mức**: khi ván kết thúc, ghế người thật có chồng không đủ cho một ván bị mời đứng dậy, phần lẻ (nếu có) về số dư qua `cash_out`, người chơi nhận thông báo `TABLE_LIMIT_SPENT`, **ở lại phòng** làm người xem và tự chọn một ghế trống để vào lại (một lần vào bàn mới).
 - **Pot cộng dồn khi hết hạn mức**: nếu lúc bị mời đứng dậy phòng đang giữ pot cộng dồn, người đó vẫn được chia pot ấy khi nó được giải phóng như một người đang ngồi ghế, miễn là còn trong phòng (§8.4).
 - **Mọi cách rời ghế trả cả chồng về số dư** (`cash_out`): Đứng dậy, Rời phòng, bị đuổi, quá hạn kết nối lại, ngồi ngoài đủ số ván, đóng phòng, server tắt đúng cách.
@@ -385,6 +386,8 @@ Hold'em: `min(floor(totalPot × 0,02), 1 BB)`. Blind: `floor(pot × 0,02)`. Khô
 
 Phí được ghi thành **dòng sink** bởi `BalanceRepository.apply(entries, meta)` với `meta.kind = 'table_fee'` — cùng transaction với các entry của người chơi. Hold'em **và Blind** không có entry người chơi nào mỗi ván (chip đã nằm trên bàn) nên gọi `apply([], { kind: 'table_fee', refId: handId, fee })`: một batch rỗng chỉ để ghi dòng sink. Pot cộng dồn khi được giải phóng (mục 8.4) ghi sink `carry_over` theo đúng cơ chế đó.
 
+> **Sửa đổi (Plan 27, Phần D — `docs/superpowers/specs/2026-10-21-plan27-shop-reputation-welcome-blind-zero-design.md` §5):** **Blind không thu phí bàn** (`ECONOMY.blindTableFeeRate = 0`, cả Normal lẫn Lite): một ván Blind không ghi dòng sink `table_fee`; phí 2 % (trần 1 BB) chỉ còn ở Hold'em. Blind **chơi tới 0**: ngồi xuống chỉ cần đủ **một** mức cược ở cả hai cách chơi; ghế còn `stack > 0` là được chia, thiếu mức cược thì góp hết và tất tay với pot phụ; ở Chơi hoặc bỏ, ghế hết sạch sau mức cược đầu được coi là "Chơi" tự động (không hỏi, không tính timeout), ghế thiếu cho lần góp thứ hai thì "Tất tay N"; khi mọi người theo được một ghế tất tay ít đều bỏ bài, phần vượt của họ được trả lại. Hết ván, ghế người ở **đúng 0** (cả Hold'em) đứng dậy và nhận `STACK_SPENT { roomId, threshold }` (gợi ý Cứu trợ); `TABLE_LIMIT_SPENT` và quy tắc "Hết hạn mức" ở §8.8 (cùng việc người bị mời đứng dậy vẫn được chia pot cộng dồn) **không còn**. Bot cũng chơi tới 0 và chỉ được bù khi hết sạch. Bể của hệ thống từ đây là phí bàn Hold'em, bot thắng, và (bản Normal) tiền mua đồ ở Cửa hàng (sink `shop`, §15).
+
 ### 12.4 Cứu trợ
 `POST /api/economy/relief` (cả hai edition, REST — không nằm trong protocol gameplay): nếu `balance < 5.000` và `lastReliefAt` cách ≥ 24 giờ → balance = 5.000, ghi `relief`.
 
@@ -473,11 +476,15 @@ Cùng bảng, chỉ cột Điểm. Lưu `streak`, `last_daily_claim` trong `play
 
 Thêm achievement = thêm dòng JSON. Thêm metric = thêm cột `player_stats` + logic đếm trong module stats.
 
+> **Sửa đổi (Plan 27, Phần A — `docs/superpowers/specs/2026-10-21-plan27-shop-reputation-welcome-blind-zero-design.md` §2):** mỗi lần mở thành tựu (tự đạt hay GM mở) còn cộng **danh vọng** trong cùng giao dịch: +50 khi thưởng ≤ 5.000 điểm, +150 khi thưởng > 5.000 điểm, +500 khi thưởng là vật phẩm (bảng `reputation_rules`, GM sửa được). Danh vọng không phải điểm và không bao giờ bị trừ; xem sửa đổi ở §15.
+
 ## 15. Avatar / Inventory (Normal-only)
 
 > **Đã thay thế (Plan 11):** §15.1–§15.2 dưới đây tả nhân vật 3D của Plan 8, đã bị gỡ. Thiết kế hiện hành
 > là `docs/superpowers/specs/2026-09-14-avatar-chibi-ai-design.md` — chibi 2D xếp lớp PNG, hai thân cố định
 > F01/M01, sinh bằng AI; tài liệu triển khai: `docs/avatar-2d.md`. Giữ nguyên phần dưới làm lịch sử.
+
+> **Sửa đổi (Plan 27, Phần A, B, C — `docs/superpowers/specs/2026-10-21-plan27-shop-reputation-welcome-blind-zero-design.md` §2–§4):** "Không có shop ở MVP" (§15.1) **không còn đúng**. Bản Normal có màn **Cửa hàng** bán món trong `items.json` bằng **điểm trong game** (không tiền thật, không quy đổi, không trao đổi giữa người chơi — §33 giữ nguyên): bảng `shop_prices` (giá, bậc tối thiểu, bật/tắt; seed theo độ hiếm 10.000 / 30.000 / 150.000 điểm ở bậc 1 / 3 / 4), món mặc định, món miễn phí, thưởng thành tựu và quà điểm danh của tháng hiện tại hoặc tháng tới không bán; "Kệ tuần này" tối đa 6 món; mỗi lần mua là một giao dịch qua `creditWithin` với dòng người chơi `shop_purchase` và dòng sink `shop`, một lần cho mỗi `purchaseId`, giữ `Σ balance + Σ sink`. **Danh vọng** (`players.reputation`, chỉ tăng; nguồn: ván được chia +1, thắng +3, điểm danh +10, thành tựu, quà chào mừng +100, ngày 7 tân thủ +200) đưa người chơi qua 5 **bậc** (Tân binh 0, Tay bài 100, Cao thủ 400, Bậc thầy 1.800, Huyền thoại 5.000; `players.rank` là mốc cao nhất đã đạt, không bao giờ tụt); bậc mở quyền mua theo `min_rank` và hiện cạnh tên ở ghế, sảnh, hồ sơ (bậc 1 không hiện). Lần vào sảnh đầu, mỗi tài khoản (cũ lẫn mới) nhận **Quà chào mừng**: chọn một trong ba món hiếm, mặc ngay, +100 danh vọng; rồi lịch **Tuần đầu tiên** bảy lần điểm danh (ngày 3 một món thường, ngày 7 một món hiếm + 200 danh vọng). Nguồn item vì thế là: có sẵn, quà chào mừng, tuần đầu tiên, điểm danh, thành tựu, cửa hàng, quản trị viên cấp.
 
 ### 15.1 Mô hình
 - Avatar = **nhân vật 3D** (Plan 8, đặc tả riêng `2026-09-05-avatar-3d-design.md`): thân `male`/`female`, màu da (8 tông) / mắt (6) / tóc (`#rrggbb` tự do), cộng một item cho mỗi **slot**.

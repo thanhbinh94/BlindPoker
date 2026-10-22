@@ -397,6 +397,13 @@ migration đã áp, nên một schema không đổi khiến bước đó thành 
 `0004_gm` (các cột `role`, `locked_at`, `locked_reason` của `users` và bảng `gm_actions`): nó chỉ thêm, không đổi dữ liệu
 cũ, và mọi tài khoản hiện có thành "Người chơi" chưa bị khóa. Sau lần nâng cấp đó, trao GM đầu tiên theo mục 5.
 
+**Ván đang chơi không sống qua lần khởi động lại** (spec §32.8). Chúng bị huỷ và mọi khoản cược được
+hoàn, nên không ai mất điểm — nhưng người đang ngồi bàn sẽ thấy ván biến mất. Nâng cấp lúc bàn trống
+nếu có thể.
+
+**Không có down-migration.** Lùi lại nghĩa là khôi phục bản dump ở bước 1 rồi chạy image cũ; quy
+trình nằm ở cuối `restore.md`. Đó là lý do bước 1 không phải tuỳ chọn.
+
 ### Lần nâng cấp lên Plan 27: tính danh vọng từ lịch sử
 
 Plan 27 thêm danh vọng và bậc (migration `0006_plan27`). Migration chỉ tạo bảng, nên mọi tài khoản cũ bắt đầu ở 0. Ngay
@@ -405,24 +412,31 @@ hết chạy thử, rồi chạy thật:
 
 ```bash
 cd /srv/bind-poker/deploy/normal
+curl -fsS https://$DOMAIN/health                                         # chờ tới khi "rooms":0
 docker compose exec app node dist/reputation-backfill-cli.js --dry-run   # chỉ tính, không ghi gì
 docker compose exec app node dist/reputation-backfill-cli.js             # ghi thật
 ```
 
 Mỗi lần in một dòng `players=<số tài khoản xét> applied=<tổng danh vọng cộng thêm> ranks=[b1,b2,b3,b4,b5]` (số người ở
-từng bậc 1..5 sau lần chạy). Danh vọng của mỗi người = số ván đã chơi × `hand_played` + số ván thắng × `hand_won` + số
-ngày điểm danh × `daily_login` + phần thưởng của từng thành tựu đã mở, theo bảng `reputation_rules` đang lưu; trừ đi
-những gì server đã cộng cho ván, lần điểm danh và thành tựu kể từ khi `app` lên (quà chào mừng, lịch tân binh và điểm GM
-cộng thì **không** bị trừ). Lệnh đọc `DATABASE_URL` của container `app`; thoát 0 khi xong, 2 khi thiếu `DATABASE_URL`,
-1 khi lỗi. Chạy lại không cộng thêm gì cho người đã được tính (mỗi người có đúng một dòng `reputation_events` lý do
-`backfill`, `ref_id = 'plan27'`), nên lỡ chạy hai lần cũng không sao. Lệnh không gửi thông báo lên bậc.
+từng bậc 1..5 sau lần chạy); lần chạy thử in thêm tiền tố `(dry run) ` ở đầu dòng, ví dụ
+`(dry run) players=42 applied=18350 ranks=[30,8,3,1,0]`. Danh vọng của mỗi người = số ván đã chơi × `hand_played` + số
+ván thắng × `hand_won` + số ngày điểm danh × `daily_login` + phần thưởng của từng thành tựu đã mở, theo bảng
+`reputation_rules` đang lưu; trừ đi những gì server đã cộng cho ván, lần điểm danh và thành tựu kể từ khi `app` lên (quà
+chào mừng, lịch tân thủ và danh vọng GM cộng thì **không** bị trừ). Lệnh đọc `DATABASE_URL` của container `app`; thoát 0
+khi xong, 2 khi thiếu `DATABASE_URL`, 1 khi lỗi. Chạy lại không cộng thêm gì cho người đã được tính (mỗi người có đúng
+một dòng `reputation_events` lý do `backfill`, `ref_id = 'plan27'`), nên lỡ chạy hai lần cũng không sao. Lệnh không gửi
+thông báo lên bậc.
 
-**Ván đang chơi không sống qua lần khởi động lại** (spec §32.8). Chúng bị huỷ và mọi khoản cược được
-hoàn, nên không ai mất điểm — nhưng người đang ngồi bàn sẽ thấy ván biến mất. Nâng cấp lúc bàn trống
-nếu có thể.
+**Chạy một lần, lúc vắng, không bao giờ sau khi GM đổi nguồn danh vọng.**
 
-**Không có down-migration.** Lùi lại nghĩa là khôi phục bản dump ở bước 1 rồi chạy image cũ; quy
-trình nằm ở cuối `restore.md`. Đó là lý do bước 1 không phải tuỳ chọn.
+- **Lúc vắng:** `/health` báo `"rooms":0`. Một ván kết thúc hay một lượt điểm danh rơi đúng vào vài chục ms lệnh đang
+  tính cho chính người đó có thể làm người đó lệch một chút (tối đa khoảng +4 hoặc −10 danh vọng): số đếm trong
+  `player_stats` và các sự kiện sống không được đọc trong cùng một khoảnh khắc. Lệch nhỏ, không đụng tới điểm, và không
+  sửa lại được bằng cách chạy lần nữa (người đó đã có dòng `backfill`).
+- **Không chạy lại sau khi đổi `reputation_rules`:** lệnh nhân lịch sử với số đang lưu. Người đã có dòng `backfill` thì
+  không đổi gì, nhưng người chưa có (lần đầu tính ra 0, tài khoản tạo sau đó, hay một tài khoản lần đầu lỗi giữa chừng)
+  sẽ được tính theo số mới, không cùng thước với những người khác. Nếu cần chạy lại, hãy chạy trước khi GM sửa bảng
+  nguồn.
 
 ---
 

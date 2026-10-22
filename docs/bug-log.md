@@ -562,6 +562,24 @@ sách thiết bị). Người dùng đồng ý (spec Plan 27, Q9).
 `TABLE_LIMIT_SPENT`), tiền lẻ về ví. Engine đã có pot phụ và `commit` đã cắt ở stack, nên chỉ cần bỏ chốt chặn. Người
 dùng chọn (a): tất tay phần còn lại + bỏ phí Blind (spec §5).
 
+**Kết quả (Plan 27, 2026-10-22, nhánh `feature/BP-27-shop-reputation-welcome-blind-zero`, xem CHANGELOG):**
+
+- **K1 — đã ghi thành luật, không sửa mã.** Hướng dẫn chơi mục 7 "Chơi trên hai thiết bị"; `docs/known-limitations.md`
+  ("One account on two devices…": không có xác nhận "Tiếp quản", không có danh sách thiết bị).
+- **K2 — đã làm.** Blind không thu phí bàn; ghế còn điểm là được chia, thiếu mức cược thì tất tay phần còn lại (ở Chơi
+  hoặc bỏ, ghế hết sạch sau mức cược đầu được chơi tự động); ngồi xuống chỉ cần một mức cược; về đúng 0 thì đứng dậy
+  với thông báo `STACK_SPENT` "Bạn đã hết điểm ở bàn này…" (Hold'em cũng vậy). `TABLE_LIMIT_SPENT` đã bỏ.
+- **K3 — đã làm.** Màn "Cửa hàng" (mua bằng điểm trong game, mặc thử, "Kệ tuần này", ba kệ theo độ hiếm), **danh vọng**
+  là cấp bậc chỉ tăng chứ không phải tiền thứ hai (Q2): mua chỉ trừ điểm, bậc mở quyền mua món hiếm (Cao thủ) và cực
+  hiếm (Bậc thầy). Giá, bậc tối thiểu, kệ tuần, nguồn và ngưỡng danh vọng đều sửa được trong tab "Cửa hàng" của GM.
+- **K4 — đã làm**, khác ý ban đầu: không có bước tạo nhân vật, nên là hộp **"Quà chào mừng"** ở lần vào sảnh đầu (một
+  trong ba món hiếm, +100 danh vọng; tài khoản cũ cũng nhận) cộng lịch **"Tuần đầu tiên"** bảy lần điểm danh; điểm khởi
+  đầu giữ 100.000.
+- **K5 — đã làm.** Tủ đồ và cửa hàng chỉ tải hình trong tầm nhìn, hàng đợi nhuộm màu tối đa 4 việc, @2x chỉ khi DPR ≥ 1,5.
+  Còn lại: trên điện thoại qua mạng chậm hàng thẻ đầu tới sau khoảng 3,2 s (mục tiêu 2 s; `docs/known-limitations.md`).
+- **Thêm trong cùng plan (Q13):** điểm danh bản Normal đếm **số lần trong tháng**, bỏ một hôm không về ô 1.
+- **K6 — vẫn mở**, chờ brainstorm riêng.
+
 | # | Yêu cầu | Ghi chú ban đầu của Claude |
 |---|---|---|
 | K1 | **Hai máy cùng một tài khoản.** "Đã giải quyết vấn đề multithread chưa? Giả sử đăng nhập trên 2 máy và 1 máy đang chơi dở thì máy còn lại sẽ như nào, có bị cấm chơi không hay là gì?" | Cần dò mã: phiên theo thiết bị (`sessions`), một socket mỗi phiên hay mỗi tài khoản, ghế trong phòng gắn với `playerId`; trả lời bằng hành vi thật hiện nay (máy thứ hai thấy gì, có vào được bàn khác không, có bị đuổi không) rồi mới đề xuất luật (một bàn một lúc, máy sau "tiếp quản" ghế, hay chỉ xem). |
