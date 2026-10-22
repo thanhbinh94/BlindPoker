@@ -1,5 +1,5 @@
 import { Button, defaultChibi, formatPoints, Modal, Segmented, useMediaQuery, type Language } from '@bp/ui-kit'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ApiError,
@@ -48,23 +48,38 @@ const FILTER_KEY: Record<SlotFilter, string> = {
   colour: 'shop.slot.colour',
 }
 
-const COLOUR_SLOTS = new Set<ItemSlot>(['hairColor', 'eyeColor'])
+const COLOUR_SLOTS = new Set<ItemSlot>(['hairColor', 'eyeColor', 'skinColor'])
+/** The body's own looks: free in the wardrobe for everyone, so the shop shows one only when it is sold. */
+const LOOK_SLOTS = new Set<ItemSlot>(['hairStyle', ...COLOUR_SLOTS])
 
 /**
- * Whether a row belongs on the rarity shelves. The hairstyles and the skin tones are all free and drawn for nobody to
- * buy, so they never show; nor do the free hair and eye colours — "Màu sắc" lists the ones that sell (spec §3 B3: the
- * rare and epic colours). Every other item shows, sold or with its source label (spec §3 B1).
+ * Whether a row belongs on the rarity shelves. A free hairstyle, skin tone, hair or eye colour is the wardrobe's to
+ * hand out, so it never shows — today that is every hairstyle and skin tone, and "Màu sắc" lists the colours that sell
+ * (spec §3 B3: the rare and epic colours); a priced one would show. Every other item shows, sold or with its source
+ * label (spec §3 B1).
  */
 function onShelves(entry: ShopEntryDto): boolean {
-  if (entry.slot === 'hairStyle' || entry.slot === 'skinColor') return false
-  if (COLOUR_SLOTS.has(entry.slot) && entry.lock?.kind === 'free') return false
-  return true
+  return !(LOOK_SLOTS.has(entry.slot) && entry.lock?.kind === 'free')
 }
 
 function matches(entry: ShopEntryDto, filter: SlotFilter): boolean {
   if (filter === 'all') return true
   if (filter === 'colour') return COLOUR_SLOTS.has(entry.slot)
   return entry.slot === filter
+}
+
+/** A slot's place on a shelf: the filters' own order, the colours together, anything without a filter last. */
+function slotOrder(slot: ItemSlot): number {
+  const filter: SlotFilter | null = COLOUR_SLOTS.has(slot) ? 'colour' : (FILTERS as readonly string[]).includes(slot) ? (slot as SlotFilter) : null
+  return filter === null ? FILTERS.length : FILTERS.indexOf(filter)
+}
+
+const bySlotThenId = (a: ShopEntryDto, b: ShopEntryDto): number =>
+  slotOrder(a.slot) - slotOrder(b.slot) || (a.itemId < b.itemId ? -1 : a.itemId > b.itemId ? 1 : 0)
+
+/** A 4xx the shop has no words for (a malformed request): the same press would fail the same way, so no retry. */
+function isClientError(cause: unknown): boolean {
+  return cause instanceof ApiError && cause.status >= 400 && cause.status < 500 && cause.status !== 429
 }
 
 /** `2026-W43` → week 43 of 2026; anything else is shown as it came. */
@@ -124,6 +139,20 @@ export function ShopScreen({ api, lang, balance, playerId }: ShopScreenProps) {
   const [wearBusy, setWearBusy] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [alert, setAlert] = useState<string | null>(null)
+  /**
+   * Set, afresh, by each purchase: the dialog hands focus back to the "Mua" that opened it, which the purchase just replaced
+   * with "✓ Đã có", so focus would fall to `<body>`. The effect runs after the dialog's cleanup and lands it on
+   * "Mặc luôn", the next thing to do (or the card's "Mặc" link when the stage offers none).
+   */
+  const [focusWear, setFocusWear] = useState<{ itemId: string } | null>(null)
+  const layoutRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (focusWear === null) return
+    const root = layoutRef.current
+    const target =
+      root?.querySelector<HTMLElement>('[data-wear-now]') ?? root?.querySelector<HTMLElement>(`[data-item="${CSS.escape(focusWear.itemId)}"] a`)
+    target?.focus()
+  }, [focusWear])
 
   const phone = useMediaQuery(PHONE_QUERY)
   const desktop = useMediaQuery(DESKTOP_QUERY)
@@ -208,6 +237,7 @@ export function ShopScreen({ api, lang, balance, playerId }: ShopScreenProps) {
       setJustBought(result.itemId)
       setStatus(t('shop.bought', { item: nameOf(result.itemId) }))
       setConfirm(null)
+      setFocusWear({ itemId: result.itemId })
     } catch (cause) {
       if (cause instanceof ApiError && REFUSALS.has(cause.code)) {
         // The server said no: the same press would hear it again, so the dialog closes and this id is done with.
@@ -216,6 +246,11 @@ export function ShopScreen({ api, lang, balance, playerId }: ShopScreenProps) {
         setAlert(t(`shop.refusal.${cause.code}`))
         if (cause.code === 'ALREADY_OWNED') setBought((current) => new Set(current).add(confirm.entry.itemId))
         else if (cause.code !== 'INSUFFICIENT_POINTS') shop.reload()
+      } else if (isClientError(cause)) {
+        // A request the server could not read: nothing was bought, and pressing again would only be refused again.
+        setConfirm(null)
+        setStatus(null)
+        setAlert(t('outfits.error'))
       } else {
         // No answer, or not one of the shop's: it may have gone through. The dialog stays, with the same id.
         setConfirmError(t('shop.retry'))
@@ -273,7 +308,7 @@ export function ShopScreen({ api, lang, balance, playerId }: ShopScreenProps) {
     const entry = byId.get(id)
     return entry === undefined || !items.has(id) ? [] : [entry]
   })
-  const shelfEntries = entries.filter((entry) => entry.rarity === shelf && onShelves(entry) && matches(entry, filter))
+  const shelfEntries = entries.filter((entry) => entry.rarity === shelf && onShelves(entry) && matches(entry, filter)).sort(bySlotThenId)
   const week = weekParts(view.weekKey)
   const confirmName = confirm === null ? '' : nameOf(confirm.entry.itemId)
 
@@ -284,18 +319,7 @@ export function ShopScreen({ api, lang, balance, playerId }: ShopScreenProps) {
         <span className={n.rule} aria-hidden="true" />
       </div>
 
-      {alert === null ? null : (
-        <p className={n.alert} role="alert">
-          {alert}
-        </p>
-      )}
-      {status === null ? null : (
-        <p className={n.notice} role="status">
-          {status}
-        </p>
-      )}
-
-      <div className={s.layout}>
+      <div className={s.layout} ref={layoutRef}>
         <ShopStage
           subject={subject}
           portrait={lastTried?.slot === 'frame' && tryOn.frame === lastTried.id}
@@ -307,6 +331,22 @@ export function ShopScreen({ api, lang, balance, playerId }: ShopScreenProps) {
           onReset={trying ? reset : undefined}
           onWearNow={justBought !== null && owned.has(justBought) ? () => void wearNow() : undefined}
           wearBusy={wearBusy}
+          notice={
+            alert === null && status === null ? null : (
+              <>
+                {alert === null ? null : (
+                  <p className={`${n.alert} ${s.notice}`} role="alert">
+                    {alert}
+                  </p>
+                )}
+                {status === null ? null : (
+                  <p className={`${n.notice} ${s.notice}`} role="status">
+                    {status}
+                  </p>
+                )}
+              </>
+            )
+          }
         />
 
         <div className={s.shelves}>

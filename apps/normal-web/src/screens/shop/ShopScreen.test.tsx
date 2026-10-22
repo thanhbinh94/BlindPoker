@@ -1,6 +1,7 @@
 import { useTintedLayer } from '@bp/ui-kit'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent, { type UserEvent } from '@testing-library/user-event'
+import { I18nextProvider } from 'react-i18next'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ApiError,
@@ -121,6 +122,12 @@ const featuredShelf = (container: HTMLElement): HTMLElement => container.querySe
 const rarityShelf = (container: HTMLElement): HTMLElement => container.querySelector('[data-shelf]:not([data-shelf="featured"])') as HTMLElement
 const cardOf = (container: HTMLElement, id: string): HTMLElement => container.querySelector(`[data-item="${id}"]`) as HTMLElement
 const pickButton = (scope: HTMLElement, name: string): HTMLElement => within(scope).getByRole('button', { name: new RegExp(`^${name}, `) })
+
+/** Presses "Mua · 30.000" on the featured dealer outfit, then "Mua" in the confirmation. */
+async function buyDealer(user: UserEvent, container: HTMLElement): Promise<void> {
+  await user.click(within(cardOf(featuredShelf(container), 'outfit_dealer01')).getByRole('button', { name: 'Mua · 30.000' }))
+  await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: viNormal.shop.buy }))
+}
 
 async function toShelf(user: UserEvent, rarity: keyof typeof viNormal.inventory.rarity): Promise<void> {
   const group = screen.getByRole('group', { name: viNormal.shop.shelves })
@@ -337,6 +344,166 @@ describe('ShopScreen', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.shop.refusal.INSUFFICIENT_POINTS)
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('closes the dialog on ALREADY_OWNED and marks the card "✓ Đã có" without reloading', async () => {
+    const user = userEvent.setup()
+    const api = stubApi({ shopBuy: vi.fn().mockRejectedValue(new ApiError(409, 'ALREADY_OWNED', 'owned')) })
+    const { container } = renderShop(api)
+    await opened()
+
+    await buyDealer(user, container)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.shop.refusal.ALREADY_OWNED)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(within(cardOf(featuredShelf(container), 'outfit_dealer01')).getByText(viNormal.shop.owned)).toBeInTheDocument()
+    expect(api.shop).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['RANK_TOO_LOW', 'PURCHASE_UNDONE', 'SHOP_DISABLED'] as const)(
+    'closes the dialog on %s, says why, and reloads the shelves',
+    async (code) => {
+      const user = userEvent.setup()
+      const api = stubApi({ shopBuy: vi.fn().mockRejectedValue(new ApiError(409, code, 'no')) })
+      const { container } = renderShop(api)
+      await opened()
+
+      await buyDealer(user, container)
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.shop.refusal[code])
+      expect(screen.queryByRole('dialog')).toBeNull()
+      await waitFor(() => expect(api.shop).toHaveBeenCalledTimes(2))
+    },
+  )
+
+  it('keeps the shelves as they are on INSUFFICIENT_POINTS: no reload', async () => {
+    const user = userEvent.setup()
+    const api = stubApi({ shopBuy: vi.fn().mockRejectedValue(new ApiError(409, 'INSUFFICIENT_POINTS', 'no')) })
+    const { container } = renderShop(api)
+    await opened()
+
+    await buyDealer(user, container)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.shop.refusal.INSUFFICIENT_POINTS)
+    expect(api.shop).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes the dialog on a 4xx the shop has no words for, offering no retry', async () => {
+    const user = userEvent.setup()
+    const api = stubApi({ shopBuy: vi.fn().mockRejectedValue(new ApiError(400, 'INVALID_BODY', 'bad')) })
+    const { container } = renderShop(api)
+    await opened()
+
+    await buyDealer(user, container)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.outfits.error)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByText(viNormal.shop.retry)).toBeNull()
+  })
+
+  it.each([
+    ['a 5xx', new ApiError(503, 'UNAVAILABLE', 'down')],
+    ['a 429', new ApiError(429, 'RATE_LIMITED', 'slow down')],
+  ])('keeps the dialog open with the retry line on %s', async (_label, cause) => {
+    const user = userEvent.setup()
+    const api = stubApi({ shopBuy: vi.fn().mockRejectedValue(cause) })
+    const { container } = renderShop(api)
+    await opened()
+
+    await buyDealer(user, container)
+
+    expect(await within(screen.getByRole('dialog')).findByText(viNormal.shop.retry)).toBeInTheDocument()
+  })
+
+  it('marks the card the answer names when a repeated purchase id answers for another item', async () => {
+    const user = userEvent.setup()
+    const api = stubApi({ shopBuy: vi.fn().mockResolvedValue({ balance: 98_000, itemId: 'face_sunglasses01', repeated: true }) })
+    const { container } = renderShop(api)
+    await opened()
+
+    await buyDealer(user, container)
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+
+    expect(within(cardOf(featuredShelf(container), 'outfit_dealer01')).getByRole('button', { name: 'Mua · 30.000' })).toBeInTheDocument()
+    await toShelf(user, 'rare')
+    expect(within(cardOf(rarityShelf(container), 'face_sunglasses01')).getByText(viNormal.shop.owned)).toBeInTheDocument()
+  })
+
+  it('shows the live balance once it moves after a purchase', async () => {
+    const user = userEvent.setup()
+    const api = stubApi()
+    const { container, rerender, i18n } = renderShop(api)
+    await opened()
+
+    await buyDealer(user, container)
+    expect(await screen.findByText('Số dư: 98.000 điểm')).toBeInTheDocument()
+
+    rerender(
+      <I18nextProvider i18n={i18n}>
+        <ShopScreen api={api} lang="vi" balance={97_500} playerId="p1" />
+      </I18nextProvider>,
+    )
+    expect(screen.getByText('Số dư: 97.500 điểm')).toBeInTheDocument()
+  })
+
+  it('says what happened inside the pinned stage, not at the top of the page', async () => {
+    const user = userEvent.setup()
+    const shopBuy = vi
+      .fn()
+      .mockResolvedValueOnce({ balance: 98_000, itemId: 'outfit_dealer01', repeated: false })
+      .mockRejectedValueOnce(new ApiError(409, 'INSUFFICIENT_POINTS', 'no'))
+    const { container } = renderShop(stubApi({ shopBuy }))
+    await opened()
+    const stage = container.querySelector(`section[aria-label="${viNormal.shop.figure}"]`) as HTMLElement
+
+    await buyDealer(user, container)
+    expect(await within(stage).findByRole('status')).toHaveTextContent(`${viNormal.items.outfit_dealer01} đã vào tủ đồ`)
+
+    await toShelf(user, 'rare')
+    await user.click(within(cardOf(rarityShelf(container), 'haircolor_blue01')).getByRole('button', { name: 'Mua · 30.000' }))
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: viNormal.shop.buy }))
+    expect(await within(stage).findByRole('alert')).toHaveTextContent(viNormal.shop.refusal.INSUFFICIENT_POINTS)
+  })
+
+  it('hands focus to "Mặc luôn" after a purchase, since the button that opened the dialog is gone', async () => {
+    const user = userEvent.setup()
+    const { container } = renderShop()
+    await opened()
+
+    await buyDealer(user, container)
+
+    const wearNow = await screen.findByRole('button', { name: viNormal.shop.wearNow })
+    await waitFor(() => expect(document.activeElement).toBe(wearNow))
+  })
+
+  it('orders a shelf by slot, as the filters read, then by id', async () => {
+    const user = userEvent.setup()
+    const OUTFIT_CHEF = drawn('outfit_chef01', 'outfit', 'rare', 40)
+    const api = stubApi({
+      shop: vi.fn().mockResolvedValue({ ...VIEW, entries: [...VIEW.entries, entry(OUTFIT_CHEF)] }),
+      catalogItems: vi.fn().mockResolvedValue({ items: [...CATALOG, OUTFIT_CHEF] }),
+    })
+    const { container } = renderShop(api)
+    await opened()
+    await toShelf(user, 'rare')
+
+    const order = [...rarityShelf(container).querySelectorAll('[data-item]')].map((card) => card.getAttribute('data-item'))
+    expect(order).toEqual(['face_sunglasses01', 'outfit_chef01', 'outfit_dealer01', 'haircolor_blue01'])
+  })
+
+  it('shows a hairstyle that is for sale, hiding only the free ones', async () => {
+    const user = userEvent.setup()
+    const HAIR_PRICED = item({ id: 'hair_f_bun02', slot: 'hairStyle', rarity: 'rare', gender: 'f', asset: { layer: 60, file: 'item_hair_f_bun02_L60', fitsAvatarCrop: true } })
+    const api = stubApi({
+      shop: vi.fn().mockResolvedValue({ ...VIEW, entries: [...VIEW.entries, entry(HAIR_PRICED)] }),
+      catalogItems: vi.fn().mockResolvedValue({ items: [...CATALOG, HAIR_PRICED] }),
+    })
+    const { container } = renderShop(api)
+    await opened()
+
+    expect(cardOf(rarityShelf(container), 'hair_f_bob01')).toBeNull()
+    await toShelf(user, 'rare')
+    expect(cardOf(rarityShelf(container), 'hair_f_bun02')).not.toBeNull()
   })
 
   it('says so when the shop cannot load, and tries again', async () => {

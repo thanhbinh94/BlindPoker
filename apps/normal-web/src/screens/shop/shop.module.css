@@ -41,10 +41,12 @@
 
 /* ── the stage ─────────────────────────────────────────────────────────────── */
 
-/* The figure column: pinned while the shelves scroll, so a try-on stays in sight. */
+/* The figure column: pinned while the shelves scroll, so a try-on stays in sight. It pins under the Shell's sticky rail
+   (`--bp-bar`, 52 px or 56 px on touch, set on `.shell` in `normal.module.css`), not under the window's top edge,
+   where the rail (z-index 20) would cover its first 52 px. */
 .stageColumn {
   position: sticky;
-  top: var(--space-4);
+  top: calc(var(--bp-bar, 0px) + var(--space-4));
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -115,6 +117,13 @@
   gap: var(--space-2);
 }
 
+/* The page's last word (a purchase, a refusal), under the balance in the pinned stage: the Shell's `.notice` / `.alert`
+   look, without the paragraph margin the stage's gap already gives. */
+.notice {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .balance {
   margin: 0;
   font-size: 0.9375rem;
@@ -124,10 +133,11 @@
 }
 
 /* The phone's strip (≤ 767 px): the figure, the balance and the reputation line in a 96 px band, sticky above the
-   shelves; the try-on caption and the two buttons under it when there is a try-on. */
+   shelves; the try-on caption and the two buttons under it when there is a try-on. It pins just under the Shell's
+   rail (`--bp-bar`), which is sticky at the top with z-index 20 and would otherwise hide the strip behind it. */
 .stripWrap {
   position: sticky;
-  top: 0;
+  top: var(--bp-bar, 0px);
   z-index: 2;
   display: flex;
   flex-direction: column;

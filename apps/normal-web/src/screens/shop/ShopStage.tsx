@@ -1,4 +1,5 @@
 import { Button, Chibi, formatPoints, type ChibiConfig, type Language } from '@bp/ui-kit'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ReputationLine, type ReputationStanding } from '../ReputationLine.js'
 import s from './shop.module.css'
@@ -31,6 +32,11 @@ export interface ShopStageProps {
   /** "Mặc luôn": present after a purchase while what was bought is still on the figure. */
   onWearNow?: () => void
   wearBusy?: boolean
+  /**
+   * The page's last word (a purchase's "đã vào tủ đồ", a refusal), drawn under the balance: it is read where the player
+   * is looking, inside the pinned stage, and never sits scrolled off at the top of the page.
+   */
+  notice?: ReactNode
 }
 
 /**
@@ -39,7 +45,7 @@ export interface ShopStageProps {
  * saves it after a purchase. On a phone the column folds into one sticky strip above the shelves, so a try-on stays
  * in sight while the shelves scroll under it.
  */
-export function ShopStage({ subject, portrait, layout, balance, lang, standing, tryingName, onReset, onWearNow, wearBusy = false }: ShopStageProps) {
+export function ShopStage({ subject, portrait, layout, balance, lang, standing, tryingName, onReset, onWearNow, wearBusy = false, notice = null }: ShopStageProps) {
   const { t } = useTranslation('normal')
   const figure = portrait ? (
     <Chibi subject={subject} frame="head" size={PORTRAIT_SIZE[layout]} label={t('shop.figure')} />
@@ -51,7 +57,7 @@ export function ShopStage({ subject, portrait, layout, balance, lang, standing, 
     onReset === undefined && onWearNow === undefined ? null : (
       <div className={s.stageActions}>
         {onWearNow === undefined ? null : (
-          <Button variant="gold" size="sm" loading={wearBusy} onClick={onWearNow}>
+          <Button variant="gold" size="sm" loading={wearBusy} onClick={onWearNow} data-wear-now="">
             {t('shop.wearNow')}
           </Button>
         )}
@@ -74,6 +80,7 @@ export function ShopStage({ subject, portrait, layout, balance, lang, standing, 
             <ReputationLine standing={standing} lang={lang} />
           </div>
         </div>
+        {notice}
         {trying}
         {actions}
       </section>
@@ -88,6 +95,7 @@ export function ShopStage({ subject, portrait, layout, balance, lang, standing, 
       {trying}
       {actions}
       {balanceLine}
+      {notice}
       <ReputationLine standing={standing} lang={lang} />
     </section>
   )

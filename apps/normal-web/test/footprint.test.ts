@@ -41,8 +41,12 @@ const INDEX = join(DIST, 'index.html')
  * that: loose enough not to fail on the kilobyte a feature legitimately costs, tight enough to catch a
  * *step change* (a chart library, a moment.js, a locale bundle that stopped being split) rather than
  * let one slide in unnoticed.
+ *
+ * 2026-10-22 (Plan 27, Ruling 13): raised from 130 KB to 140 KB. Plan 27: shop/welcome/rank/GM strings live in the main
+ * bundle; splitting locale namespaces per lazy screen is a recorded residual. The vi and en `normal.json` are imported
+ * by the entry, so every screen's words ship with the first paint even when the screen itself is a lazy chunk.
  */
-const MAX_ENTRY_GZIP = 130 * 1024
+const MAX_ENTRY_GZIP = 140 * 1024
 const MAX_TOTAL_GZIP = 900 * 1024
 const MAX_CSS_GZIP = 60 * 1024
 
