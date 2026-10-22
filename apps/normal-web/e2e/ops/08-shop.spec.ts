@@ -415,9 +415,9 @@ test('P-05 on a 3G profile the wardrobe draws the stage and the first row within
     console.log(`P-05 ${name}: stage drawn and first row on screen in ${shownMs} ms, first row's pictures in ${drawnMs} ms`)
 
     expect(shownMs, `${name}: the stage and the first row of cards within 2 s on fast 3G`).toBeLessThanOrEqual(2_000)
-    // A laptop's first row has its pictures in time too. A phone's does not yet: at DPR 2 a 72 px hairstyle portrait loads
-    // its layers at @2x (≈ 440 KB for the row), the kit's density rule — logged above, recorded in known-limitations.
-    if (shape === LAPTOP) expect(drawnMs, `${name}: the first row's pictures within 2 s on fast 3G`).toBeLessThanOrEqual(2_000)
+    // The first row's pictures are in time at both sizes: a 72 px hairstyle portrait on a DPR-2 phone loads its layers @1x
+    // (Ruling 16), where @2x made the row ≈ 440 KB and 3.2 s.
+    expect(drawnMs, `${name}: the first row's pictures within 2 s on fast 3G`).toBeLessThanOrEqual(2_000)
 
     await context.close()
   }

@@ -42,6 +42,41 @@ describe('Chibi', () => {
     expect(img).toHaveAttribute('draggable', 'false')
   })
 
+  describe('a small portrait loads @1x only (Ruling 16: a 72 px head pulled ~440 KB @2x on a phone)', () => {
+    let saved: PropertyDescriptor | undefined
+    beforeEach(() => {
+      saved = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio')
+      Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 2 })
+    })
+    afterEach(() => {
+      if (saved === undefined) delete (window as { devicePixelRatio?: number }).devicePixelRatio
+      else Object.defineProperty(window, 'devicePixelRatio', saved)
+    })
+
+    it('a head of 72 px on a 2× screen (144 device px, under the crop’s 208) draws every plain layer @1x with no `srcset`', () => {
+      const { container } = render(<Chibi subject={SUBJECT} frame="head" size={72} />)
+      const imgs = [...container.querySelectorAll('img')]
+      expect(imgs.length).toBeGreaterThan(0)
+      for (const img of imgs) {
+        expect(img).not.toHaveAttribute('srcset')
+        expect(img.getAttribute('src')).toMatch(/@1x\.png$/)
+      }
+    })
+
+    it('a head of 120 px on a 2× screen (240 device px) keeps both densities', () => {
+      const { container } = render(<Chibi subject={SUBJECT} frame="head" size={120} />)
+      for (const img of container.querySelectorAll('img')) expect(img.getAttribute('srcset')).toMatch(/@2x\.png 2x$/)
+    })
+
+    it('a head with no fixed size, and a small full figure, keep both densities', () => {
+      const head = render(<Chibi subject={SUBJECT} frame="head" />)
+      for (const img of head.container.querySelectorAll('img')) expect(img.getAttribute('srcset')).toMatch(/@2x\.png 2x$/)
+      head.unmount()
+      const full = render(<Chibi subject={SUBJECT} size={72} />)
+      for (const img of full.container.querySelectorAll('img')) expect(img.getAttribute('srcset')).toMatch(/@2x\.png 2x$/)
+    })
+  })
+
   it('falls back to /avatar/ with no provider in the tree', () => {
     const { container } = render(<Chibi subject={SUBJECT} />)
     expect(container.querySelector('img')!.getAttribute('src')).toMatch(/^\/avatar\//)

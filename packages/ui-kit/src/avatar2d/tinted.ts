@@ -194,14 +194,16 @@ function cachedRender(
  * default ranks a layer by `-layer.order`, so a chibi's body and face start before its hat and frame; `Chibi` passes a
  * lower one for a lazy chibi so a card never holds up the stage. Two mounts asking for one key share the first one's
  * render and therefore its rank.
+ *
+ * `density` defaults to the screen's (`tintDensity`); `Chibi` passes `1` for a portrait small enough that @1x already
+ * covers it (Ruling 16). It is part of the key, so the two renders of one layer never share a cache entry.
  */
-export function useTintedLayer(prefix: string, layer: LayerRef, priority: number = -layer.order): string | null {
+export function useTintedLayer(prefix: string, layer: LayerRef, priority: number = -layer.order, density: 1 | 2 = tintDensity()): string | null {
   const [url, setUrl] = useState<string | null>(null)
   // Identifies the file (and asset prefix) the currently-shown `url`, if any, was rendered from — not necessarily
   // this render's `layer.file`, which may already have moved on to a new colour or a wholly different layer.
   const shownRef = useRef<string | null>(null)
   const tints = layer.tints
-  const density = tintDensity()
   const key = tints === undefined || tints.length === 0 ? null : tintKey(layer.file, density, tints)
   const identity = `${prefix}|${layer.file}`
 
@@ -228,8 +230,8 @@ export function useTintedLayer(prefix: string, layer: LayerRef, priority: number
       cancelled = true
       release()
     }
-    // `key` already encodes file, density and every tint; `identity` and `density` are both derived from
-    // `prefix`/`layer.file`, already listed — re-running on `layer`'s own (fresh-every-render) object identity
+    // `key` already encodes file, density and every tint, so `density` needs no place of its own; `identity` is
+    // derived from `prefix`/`layer.file`, already listed — re-running on `layer`'s own (fresh-every-render) object identity
     // or on those derived values would defeat the point of the cache. `priority` only ranks a render not yet
     // started, so a change to it alone starts nothing new.
     // eslint-disable-next-line react-hooks/exhaustive-deps

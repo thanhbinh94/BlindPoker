@@ -336,6 +336,20 @@ describe('useTintedLayer — with a faked canvas pipeline', () => {
       await waitFor(() => expect(result.current).not.toBeNull())
       expect(loaded).toEqual([`/avatar/${file}@${density}x.png`, `/avatar/${file}_hairmask@${density}x.png`].map((p) => new URL(p, document.baseURI).href))
     })
+
+    it('paints from @1x at any device pixel ratio when the caller asks for density 1 (a small portrait, Ruling 16)', async () => {
+      Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 3 })
+      const loaded: string[] = []
+      vi.mocked(HTMLImageElement.prototype.decode).mockImplementation(function (this: HTMLImageElement) {
+        loaded.push(this.src)
+        return Promise.resolve()
+      })
+      const file = 'tint_stub_dpr_forced_1x'
+      const tint: TintRef = { mask: `${file}_hairmask`, colour: '#123456', meanL: 0.4 }
+      const { result } = renderHook(() => useTintedLayer('/avatar/', { order: 60, file, tints: [tint] }, undefined, 1))
+      await waitFor(() => expect(result.current).not.toBeNull())
+      expect(loaded).toEqual([`/avatar/${file}@1x.png`, `/avatar/${file}_hairmask@1x.png`].map((p) => new URL(p, document.baseURI).href))
+    })
   })
 
   it('retries a render whose mask failed to load after a 2D context was available, instead of caching the failure', async () => {

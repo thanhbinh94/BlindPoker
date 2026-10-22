@@ -36,8 +36,21 @@ function clipMask(url: string): CSSProperties {
  * layer instead, so the worst case is the untinted character, not a missing head. A *different* tinted URL (the
  * next colour) is a new attempt and is tried again.
  */
-function ChibiLayer({ base, layer, className, tintPriority }: { base: string; layer: LayerRef; className?: string; tintPriority?: number }) {
-  const tinted = useTintedLayer(base, layer, tintPriority)
+function ChibiLayer({
+  base,
+  layer,
+  className,
+  tintPriority,
+  density,
+}: {
+  base: string
+  layer: LayerRef
+  className?: string
+  tintPriority?: number
+  /** `1` pins a small portrait to the @1x files, tinted and plain (Ruling 16); absent, the screen decides. */
+  density?: 1
+}) {
+  const tinted = useTintedLayer(base, layer, tintPriority, density)
   const clip = useLoadedClip(layer.clip === undefined ? null : assetUrl(base, layer.clip, 2))
   const [failedUrl, setFailedUrl] = useState<string | null>(null)
   const common = {
@@ -50,6 +63,8 @@ function ChibiLayer({ base, layer, className, tintPriority }: { base: string; la
   }
 
   if (tinted !== null && tinted !== failedUrl) return <img {...common} src={tinted} onError={() => setFailedUrl(tinted)} />
+
+  if (density === 1) return <img {...common} src={assetUrl(base, layer.file, 1)} />
 
   return <img {...common} src={assetUrl(base, layer.file, 1)} srcSet={`${assetUrl(base, layer.file, 1)} 1x, ${assetUrl(base, layer.file, 2)} 2x`} />
 }
@@ -82,6 +97,9 @@ export interface ChibiProps {
  * layers rank 100 lower still (−110 … −190), behind every layer of the stage or a seat, whatever its order. */
 const LAZY_TINT_PRIORITY = -100
 
+/** The head crop's side in the @1x art (the round 208×208 avatar crop): drawn no larger on screen, @1x is enough. */
+const HEAD_CROP_PX = 208
+
 /**
  * One chibi: every layer `layersFor` returns for this subject, expression and frame, stacked as absolutely
  * positioned `<img>`s inside a box that is either the full 6:7 frame or the round 208×208 avatar crop.
@@ -102,8 +120,21 @@ export function Chibi({ subject, expression = 'neutral', frame = 'full', size, l
   // size, not the head crop's geometry, which is a fixed percentage of whatever the root ends up rendered at.
   const style: CSSProperties | undefined = size === undefined ? undefined : frame === 'head' ? { width: `${size}px`, height: `${size}px` } : { width: `${size}px` }
 
+  // Ruling 16 (plan 27): a head whose crop covers no more than the art's own 208 px on this screen gains nothing from
+  // the @2x files — a 72 px portrait on a 2× phone is 144 device px — and they are four times the bytes (a row of
+  // portraits pulled ~440 KB @2x, 3.25 s on a 3G phone). It loads @1x, tinted and plain.
+  const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
+  const cheap = frame === 'head' && size !== undefined && size * dpr <= HEAD_CROP_PX
+
   const renderLayer = (layer: LayerRef, extraClassName?: string) => (
-    <ChibiLayer key={layer.file} base={base} layer={layer} className={extraClassName} tintPriority={lazy ? LAZY_TINT_PRIORITY - layer.order : undefined} />
+    <ChibiLayer
+      key={layer.file}
+      base={base}
+      layer={layer}
+      className={extraClassName}
+      tintPriority={lazy ? LAZY_TINT_PRIORITY - layer.order : undefined}
+      density={cheap ? 1 : undefined}
+    />
   )
 
   const rootProps = {

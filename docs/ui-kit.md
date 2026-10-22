@@ -530,10 +530,13 @@ loads in flight — higher priority first, first come first served within one pr
 with `value` without running the job or taking a slot; `useTintedLayer` counts the mounts waiting on each render, so a
 render every one of whose cards unmounted (a tab switch) is passed over, uncached, and a later mount asks again. Each
 image of a tinted render gives up after `TINT_LOAD_TIMEOUT_MS` (15 s), freeing its slot and leaving the plain layer,
-again uncached. `useTintedLayer(prefix, layer, priority = -layer.order)` ranks the body and face ahead of the hat and
+again uncached. `useTintedLayer(prefix, layer, priority = -layer.order, density = tintDensity())` ranks the body and face ahead of the hat and
 frame; a lazy chibi ranks its layers 100 lower, behind every eager chibi's. A tinted render paints from the @2x files only when
 `devicePixelRatio >= 1.5` (it was `> 1`); the plain layers keep their two-density `srcset`, and a hat's hair clip is
-always @2x.
+always @2x. One exception (Ruling 16, Plan 27): a `head` chibi with a `size` whose `size × devicePixelRatio` is at most
+208 (the crop's side in the @1x art) passes `density: 1`, so its tinted layers paint from @1x and its plain layers
+render the @1x `src` with no `srcset`. A 72 px portrait on a 2× phone is 144 device px, and @2x made a row of them
+about 440 KB.
 
 ### Lobby
 

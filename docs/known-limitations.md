@@ -764,14 +764,6 @@ threshold, but the slip has no button to the relief panel: `Toasts` carries no a
 from "Điểm danh" as before.
 *Tracked:* `packages/ui-kit/src/screens/Toasts.tsx`; CHANGELOG Plan 27 deviations.
 
-**On a phone over a slow link, the wardrobe's first row of pictures arrives in about 3.2 s (Plan 27, E2).** The stage and
-the first row's boxes are drawn in about 850 ms on "fast 3G" at 1366 × 768 and 375 × 812, and the pictures arrive in
-about 1.8 s on the laptop, but at DPR 2 a 72 px Kiểu tóc portrait loads its tinted hair layers at @2x (about 440 KB for
-the row): the kit picks the density by the screen, not by the drawn size. The spec's target was 2 s for both.
-*Why it stays:* until a small `head` frame draws its tinted layers @1x whatever the DPR (Ruling 16), parked for the final
-wave of Plan 27; this entry goes when that lands.
-*Tracked:* `docs/normal-web.md` ("Wardrobe loading"); `apps/normal-web/e2e/ops/08-shop.spec.ts`.
-
 **Every locale namespace ships in the entry chunk, so the first paint carries the shop's and the GM's strings (Plan
 27).** `normal.json` (vi and en) is one resource loaded at boot; the lazy screens' strings are not split out. Plan 27's
 strings took the entry chunk to about 134 KB gzip, and the budget `MAX_ENTRY_GZIP` was raised from 130 to 140 KB

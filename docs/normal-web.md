@@ -258,13 +258,14 @@ icon's size until then. A card icon's tint render queues behind every figure's, 
 
 Measured by the ops pack (`e2e/ops/08-shop.spec.ts`; Chromium, fresh HTTP cache):
 
-- **P-04** (375×812, DPR 2): opening the wardrobe asks for 11 `/avatar/` pictures, for the 5 figures and cards near the
-  screen. On Mũ with "Hiện cả món chưa có" ticked, 3 requests for the 4 hats near the screen out of 8, where loading
+- **P-04** (375×812, DPR 2): opening the wardrobe asks for 16 `/avatar/` pictures (the small portraits' @1x files), for
+  the 5 figures and cards near the screen. On Mũ with "Hiện cả món chưa có" ticked, 3 requests for the 4 hats near the screen out of 8, where loading
   every card (`IntersectionObserver` removed, the old behaviour) asks for 7. Back on Kiểu tóc it asks for none.
 - **P-05** ("fast 3G": 1.6 Mbps down, 750 kbps up, 150 ms RTT, from a tap with the app already open): the stage is
   drawn and the first row of cards is on screen in about 850 ms at both 1366×768 and 375×812. The first row's pictures
-  arrive in about 1.8 s at 1366×768, but about 3.2 s on the phone: at DPR 2 a 72 px Kiểu tóc portrait loads its hair
-  layers at @2x (about 440 KB for the row), because the kit picks the density by the screen and not by the drawn size.
+  arrive in about 1.7 s at both sizes. On the phone that rests on Ruling 16: a `head` chibi whose `size × DPR` is at most
+  the crop's 208 px loads its layers @1x, tinted and plain, whatever the screen's ratio. Before it, a 72 px Kiểu tóc
+  portrait at DPR 2 loaded its hair layers @2x (about 440 KB for the row) and the pictures took about 3.2 s.
 - In the desktop preview column (`overflow: auto`), the five saved-outfit heads draw on open at 1366×768 and 1920×940.
   Nothing appears late when the column scrolls, even though `rootMargin` does not apply inside a scrolling ancestor.
 
