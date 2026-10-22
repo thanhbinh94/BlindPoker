@@ -20,7 +20,7 @@ const SHOTS = fileURLToPath(new URL('./screenshots/', import.meta.url))
 mkdirSync(SHOTS, { recursive: true })
 
 const WAGER = 1_000
-/** `blindRequiredStack`: the ante plus the play, which is what a hand costs a player who does not fold. */
+/** The ante plus the play: what a hand costs a player with a full stack who does not fold. */
 const PLAY_COST = WAGER * 2
 /**
  * The table limit (spec 2026-09-29): five wagers go from the balance to the table at sit-down, and the whole stack
@@ -305,7 +305,7 @@ test.describe('Blind Luck Poker Lite', () => {
     expect(deltaA, 'playing costs two wagers, less anything paid or handed back').toBe(payoutA + returnedTo(nameA) - PLAY_COST)
 
     // Conservation, from two independent readings: the balances the database now holds, and what the result
-    // card told the players. The pot is what was paid out plus the fee skimmed off it; add back any uncalled
+    // card told the players. The pot is what was paid out plus any fee (none since plan 27); add back any uncalled
     // return and the humans' known stakes give the bot's, so all four numbers must cancel to the point.
     const paidOut = rows.reduce((sum, row) => {
       const hit = PAYOUT.exec(row)
@@ -316,7 +316,7 @@ test.describe('Blind Luck Poker Lite', () => {
     expect([WAGER, PLAY_COST], 'the bot either folded after its ante or paid to play').toContain(botStake)
     const botNet = payoutOf(rows, 'Bot 1') + returnedTo('Bot 1') - botStake
     expect(deltaA + deltaB + botNet + fee, 'no points are created or destroyed by a hand').toBe(0)
-    expect(fee, 'the table fee is 2% of the pot').toBe(Math.floor(pot * 0.02))
+    expect(fee, 'Blind takes no table fee (plan 27)').toBe(0)
 
     await contextA.close()
     await contextB.close()

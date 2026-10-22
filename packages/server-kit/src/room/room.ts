@@ -1,5 +1,5 @@
 import {
-  EngineError, blindRequiredStack, blindTableLimit, engineErrorToErrorCode, filterEvent, nextButton, playerView, roomConfigToRuleset,
+  ECONOMY, EngineError, blindTableLimit, engineErrorToErrorCode, filterEvent, nextButton, playerView, roomConfigToRuleset,
   type GameEvent, type PlayerAction, type PlayerIdentity, type RoomConfig, type RoomEvent, type RoomPlayerView,
   type RoomSummary, type RoomView, type Ruleset, type SeatStatus, type ServerMessage,
 } from '@bp/core'
@@ -329,7 +329,8 @@ export class Room {
       let pending = p.pendingBuyIn
       if (pending === undefined) {
         // Both modes bring a table stack out of the balance (spec 2026-09-29): Hold'em the buy-in the player chose, Blind
-        // the table limit — or the whole balance when that is less, as long as it covers one hand.
+        // the table limit — or the whole balance when that is less, as long as it covers one wager (plan 27 D2: the
+        // play goes all in for whatever the ante leaves).
         let amount: number
         if (this.rules.mode === 'holdem') {
           const bb = this.rules.bigBlind
@@ -339,7 +340,7 @@ export class Room {
           amount = buyIn
         } else {
           const balance = await this.deps.repos.balances.get(playerId)
-          if (balance < blindRequiredStack(this.rules)) throw new RoomError('INSUFFICIENT_BALANCE')
+          if (balance < this.rules.fixedWager) throw new RoomError('INSUFFICIENT_BALANCE')
           amount = Math.min(balance, blindTableLimit(this.rules))
         }
         pending = { sitId: newId(), amount }
@@ -732,13 +733,14 @@ export class Room {
     if (this.pendingRelease !== null) await this.settlePendingRelease()
     const required = this.requiredStack()
     if (this.rules.mode === 'blind') {
-      // Humans play from the stack they brought; only bots are topped up — back to the limit, never the ledger.
+      // Humans play from the stack they brought; only bots are topped up — back to the limit, never the ledger — and,
+      // like a human, a bot plays a short stack all in and is topped up only once it is spent (plan 27 D2).
       const limit = blindTableLimit(this.rules)
       for (const p of this.seated()) if (p.identity.isBot && p.stack < required) p.stack = limit
     }
-    // A seated human who cannot cover the requirement sits the hand out rather than silently
+    // A seated human who cannot cover the requirement (a stack of 0) sits the hand out rather than silently
     // vanishing from the table: playerView reports SITTING_OUT. Since the table limit (spec 2026-09-29)
-    // such a seat only exists when its stand-up in `onHandComplete` could not write, and it is retried
+    // such a seat only exists when its stand-up in `onHandComplete` did not finish, and it is retried
     // when this hand ends. A player who *asked* to sit out stays out whatever their stack says, and so does a seat
     // whose cash-out is pending (its stack may already be home).
     for (const p of this.seated()) if (!p.identity.isBot) this.setSittingOut(p, p.sitOutRequested || p.cashOutPending || p.stack < required)
@@ -798,7 +800,10 @@ export class Room {
     for (const event of events) {
       if (event.type === 'PLAYER_ACTED') {
         const p = this.seatPlayer(event.seat)
-        if (p && !p.identity.isBot) p.consecutiveTimeouts = event.timedOut ? p.consecutiveTimeouts + 1 : 0
+        // A seat the ante emptied is played for it (amount 0, all in): no timeout, and no decision of its own that would
+        // start the count over (spec R14).
+        const autoPlayed = event.action.kind === 'play' && event.amount === 0 && event.allIn && !event.timedOut
+        if (p && !p.identity.isBot && !autoPlayed) p.consecutiveTimeouts = event.timedOut ? p.consecutiveTimeouts + 1 : 0
       }
       this.seq += 1
       const isTurn = event.type === 'TURN_CHANGED' || event.type === 'DECISION_PHASE' || event.type === 'SQUEEZE_PHASE'
@@ -932,8 +937,9 @@ export class Room {
     return this.seated().filter((p) => p.ready && !p.sittingOut)
   }
 
+  /** What a seat needs to be dealt: any point at all, in both modes (plan 27 D2) — a short Blind seat goes all in. */
   private requiredStack(): number {
-    return this.rules.mode === 'blind' ? blindRequiredStack(this.rules) : 1
+    return 1
   }
 
   /**
@@ -999,22 +1005,21 @@ export class Room {
   }
 
   /**
-   * Spec 2026-09-29 (table limit): a seat whose stack can no longer cover a hand goes back to the rail when the hand
-   * ends — whatever is left goes home — and a Blind player is told why, so the empty seat reads as "your limit is
-   * spent, sit again" rather than a glitch. Hold'em's busted seat (stack 0) takes the same path without the notice.
+   * Plan 27 D2: a seat that ends a hand at 0 — in either mode — goes back to the rail, and its player is told why,
+   * with the way back: relief under `ECONOMY.reliefThreshold`, or an empty seat once there are points again. Nothing
+   * is left to cash out, so the stand-up writes no ledger row.
    *
-   * Their antes may be sitting in a carried-over pot (`onHandComplete` has already set `carryOverPot` to this hand's
-   * `carryOverOut`), so they keep a claim on it while they stay in the room: a release pays them as if still seated.
+   * A carried-over pot can no longer be pending here (a seat only reaches 0 by playing, and a hand someone plays is
+   * not carried over), but the claim is kept for safety: a release pays a claimant as if still seated.
    */
   private async standUpSpent(p: RoomPlayer): Promise<void> {
-    const returned = p.stack
     await this.standUpNow(p)
     if (this.carryOverPot > 0) this.carryOverClaimants.add(p.identity.playerId)
-    if (this.rules.mode === 'blind' && p.connected) {
+    if (p.connected) {
       this.deps.outbox.send(p.identity.playerId, {
         t: 'NOTIFICATION',
-        kind: 'TABLE_LIMIT_SPENT',
-        payload: { roomId: this.roomId, limit: blindTableLimit(this.rules), amount: returned },
+        kind: 'STACK_SPENT',
+        payload: { roomId: this.roomId, threshold: ECONOMY.reliefThreshold },
       })
     }
   }

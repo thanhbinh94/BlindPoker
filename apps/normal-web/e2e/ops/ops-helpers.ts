@@ -371,7 +371,7 @@ export async function autopilot(page: Page, prefer: Move[], until: () => Promise
     check: action(/^Xem$/),
     call: action(/^Theo( [\d.]+)?$/),
     fold: action(/^Bỏ bài$/),
-    allIn: action(/^Tất tay$/),
+    allIn: action(/^Tất tay( [\d.]+)?$/), // "Tất tay 500": a Blind seat short of the wager (plan 27 D2)
     play: action(/^Chơi( [\d.]+)?$/),
   }
   const deadline = Date.now() + timeoutMs

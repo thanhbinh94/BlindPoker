@@ -82,8 +82,7 @@ export function Toasts({ error, notifications, onClearError, onDismiss, lang }: 
 
   const describe = (n: ClientNotification): string => {
     const amount = amountOf(n.payload)
-    // A spent table limit with nothing left over has no "went back to your balance" to report (spec 2026-09-29).
-    const key = n.kind === 'TABLE_LIMIT_SPENT' && amount === 0 ? 'notify.TABLE_LIMIT_SPENT_none' : `notify.${n.kind}`
+    const key = `notify.${n.kind}`
     // A rank travels as its number and is read out as its name (Plan 27): "Bạn vừa lên bậc Cao thủ".
     const rank = numberOf(n.payload, 'rank')
     const threshold = numberOf(n.payload, 'threshold')

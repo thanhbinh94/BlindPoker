@@ -628,6 +628,32 @@ describe('squeeze mode (spec 2026-10-08)', () => {
   })
 })
 
+describe('short stacks in play-or-fold (plan 27 D2)', () => {
+  const deal = (stacks: number[]) =>
+    createHand({ handId: 'hs', rules: BLIND_B, seats: stacks.map((stack, seat) => ({ seat, playerId: `p${seat}`, stack, isBot: false })), button: 0, carryOverIn: 0 }, seededRng(3))
+
+  it('offers a seat short of the second wager the play for what the ante left: callAmount is min(stack, wager)', () => {
+    const res = deal([1_500, 5_000])
+    const s = feed(start('blind', BLIND_B, [1_500, 5_000], 0), res.events, 0, { seq: 10 })
+    expect(s.hand?.legal).toMatchObject({ kinds: ['play', 'fold'], callAmount: 500 })
+    expect(s.hand?.legal?.callAmount).toBe(legalActions(res.state, 0).callAmount)
+    const other = feed(start('blind', BLIND_B, [1_500, 5_000], 1), res.events, 1, { seq: 10 })
+    expect(other.hand?.legal?.callAmount).toBe(1_000) // a full stack still plays the wager
+  })
+
+  it('marks a seat the ante emptied all in from the post, and never offers it a choice', () => {
+    const res = deal([800, 5_000])
+    const posted = res.events.findIndex((e) => e.type === 'BLINDS_POSTED')
+    const ref = { seq: 10 }
+    let s = feed(start('blind', BLIND_B, [800, 5_000], 0), res.events.slice(0, posted + 1), 0, ref)
+    expect(s.hand?.seats[0]).toMatchObject({ stack: 0, allIn: true })
+    expect(s.hand?.seats[1]?.allIn).toBe(false)
+    s = feed(s, res.events.slice(posted + 1), 0, ref)
+    expect(s.hand?.legal).toBeNull()
+    expect(s.hand?.seats[0]).toMatchObject({ allIn: true, hasDecided: true })
+  })
+})
+
 describe('arrival stamps (the card motion reads them)', () => {
   const event = (seq: number, e: GameEvent): ServerMessage => ({ t: 'GAME_EVENT', seq, event: e })
   const flop = parseCards('Ah Kd 2c')

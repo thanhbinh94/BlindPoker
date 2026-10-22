@@ -1,4 +1,4 @@
-import { blindRequiredStack, type PlayerAction, type RoomPlayerView } from '@bp/core'
+import type { PlayerAction, RoomPlayerView } from '@bp/core'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useTableExpressions, type ChibiSubject } from '../avatar2d/index.js'
@@ -222,11 +222,11 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
             : 'room.startHint'
   /**
    * What sitting down needs, when the balance cannot cover it (finding T4 of the 2026-09-28 run, reworked for the table
-   * limit of 2026-09-29). Blind only, and only for a player who is not seated: a seat plays from the stack it brought,
-   * and a seat whose stack cannot cover the next hand is stood up — so the one who can be short is the one watching.
+   * limit of 2026-09-29): one wager (plan 27 D2, R11). Blind only, and only for a player who is not seated: a seat
+   * plays from the stack it brought down to 0 and is stood up there — so the one who can be short is the one watching.
    * Hold'em's buy-in dialog states its own range.
    */
-  const needed = room.config.blind === undefined ? null : blindRequiredStack(room.config.blind)
+  const needed = room.config.blind === undefined ? null : room.config.blind.fixedWager
   const shortToSit = canSit && needed !== null && state.balance < needed ? needed : null
   const hint = shortToSit !== null ? t('room.shortToSit', { amount: formatPoints(shortToSit, lang) }) : hintKey === null ? null : t(hintKey)
   /** Everyone the host could ask to leave: the other seats and the spectators, bots included. */

@@ -154,16 +154,16 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 
 | Mã | Bước | Kỳ vọng | Ưu tiên |
 |---|---|---|---|
-| F-01 | Kiểu Hoàn toàn may rủi, 2 lá, 3 bot | Mỗi ván trừ đúng mức cược cố định **từ chồng trên bàn**; không có lượt quyết định; lật bài và chia pot trừ 2% phí; lá của đối thủ nhấc lên rồi lật (~0,7 giây một lá, cách nhau 0,2 giây; sau lá river thì đợi lá ấy nằm yên) rồi phiếu kết quả mới hiện — dòng kết quả dưới các ghế và số tiền trên tấm tên cũng đợi đến lúc đó; tắt khi bật giảm chuyển động | P1 |
+| F-01 | Kiểu Hoàn toàn may rủi, 2 lá, 3 bot | Mỗi ván trừ đúng mức cược cố định **từ chồng trên bàn**; không có lượt quyết định; lật bài và chia pot (Blind không thu phí bàn); lá của đối thủ nhấc lên rồi lật (~0,7 giây một lá, cách nhau 0,2 giây; sau lá river thì đợi lá ấy nằm yên) rồi phiếu kết quả mới hiện — dòng kết quả dưới các ghế và số tiền trên tấm tên cũng đợi đến lúc đó; tắt khi bật giảm chuyển động | P1 |
 | F-02 | Kiểu 3 lá | Mỗi người nhận 3 lá; xếp hạng dùng 5 lá tốt nhất trong 8 | P2 |
 | F-03 | Kiểu Chơi hoặc bỏ, 2 người thật | Hai người quyết định cùng lúc, không ai thấy lựa chọn của người kia trước khi hết pha | P1 |
 | F-04 | Cả hai chọn Bỏ | Pot chuyển sang ván sau, bàn hiện "Cộng dồn" | P1 |
-| F-05 | Sau F-04, mọi người thật bấm Tạm nghỉ (vẫn giữ ghế) để không ván nào bắt đầu, chờ > 60 giây | Pot cộng dồn chia đều cho người thật đang ngồi ghế (cùng người bị mời đứng dậy vì hết hạn mức trong lúc pot đang cộng dồn, nếu còn trong phòng), phần lẻ bị thu; nếu không còn ai để chia thì cả pot bị thu | P2 |
+| F-05 | Sau F-04, mọi người thật bấm Tạm nghỉ (vẫn giữ ghế) để không ván nào bắt đầu, chờ > 60 giây | Pot cộng dồn chia đều cho người thật đang ngồi ghế, phần lẻ bị thu; nếu không còn ai để chia thì cả pot bị thu | P2 |
 | F-06 | Chỉ một người chọn Chơi | Người đó thắng cả pot, không lật lá chung, lá riêng không lộ | P1 |
-| F-07 | (a) Bấm Ngồi vào bàn khi số dư < mức cược (kiểu A) hoặc < 2 × mức cược (kiểu B); (b) đang ngồi mà chồng trên bàn không đủ cho ván sau | (a) Bị từ chối, báo "Số dư không đủ", không bị trừ điểm (FR-R07); (b) bị mời đứng dậy sau ván, phần còn lại về số dư (xem F-10) | P2 |
+| F-07 | (a) Bấm Ngồi vào bàn khi số dư < mức cược (cả hai kiểu); (b) đang ngồi mà chồng trên bàn ít hơn mức cược | (a) Bị từ chối, báo "Số dư không đủ", không bị trừ điểm (FR-R07); (b) vẫn được chia bài và tất tay phần còn lại, chỉ bị mời đứng dậy khi về 0 (xem F-10) | P2 |
 | F-08 | Chủ phòng bấm Mời ra một bot | Bot rời ghế, ghế trống | P2 |
 | F-09 | Bật "Tự động chơi" | Tự quyết định mỗi ván cho tới khi tắt | P3 |
-| F-10 | Phòng mức cược 1.000, Chơi hoặc bỏ, 1 bot; ngồi vào bàn rồi Bỏ mọi ván | Ngồi: số dư −5.000 (hạn mức 5×), đầu phòng ghi "Hạn mức 5.000"; sau 4 ván chồng còn 1.000 < 2.000 → bị mời đứng dậy, thông báo "Bạn đã dùng hết hạn mức…", 1.000 về số dư, vẫn ở trong phòng; bấm ghế lại → hạn mức mới 5.000 | P1 |
+| F-10 | Chơi về 0 rồi bị mời đứng dậy, kèm lời nhắc Cứu trợ. Số dư 2.500 (GM chỉnh nếu cần); phòng mức cược 1.000, Chơi hoặc bỏ, 1 bot; ngồi vào bàn; ván 1 Bỏ, ván 2 bấm "Tất tay 500", sau đó Bỏ được thì Bỏ, không bỏ được thì tất tay, tối đa 30 ván | Ngồi: mang cả 2.500 vào bàn (dưới hạn mức 5.000, đủ một mức cược), đầu phòng ghi "Hạn mức 5.000"; ván 1 nút là "Chơi 1.000"; ván 2 ante chỉ để lại 500 nên nút đổi thành "Tất tay 500"; ghế còn điểm thì vẫn được chia bài; ghế hết sạch sau ante thì được chơi tự động, không bị hỏi; về đúng 0 thì bị mời đứng dậy, thông báo "Bạn đã hết điểm ở bàn này. Nhận Cứu trợ nếu số dư dưới 5.000 điểm, hoặc chọn ghế trống khi có điểm.", không có dòng trả tiền về số dư, vẫn ở trong phòng; dưới bàn hiện "Số dư không đủ để vào bàn (cần 1.000 điểm)" | P1 |
 | F-11 | Phòng Blind "Hoàn toàn may rủi" có tick "Nặn bài", 2 người thật; vào ván; người thứ nhất bóc cả hai lá bằng chuột (kéo từ mép dưới vào), người thứ hai bấm "Lật" | Đầu phòng có huy hiệu "Nặn bài"; mỗi người thấy bài của mình úp, dòng "Mời nặn bài…" và đồng hồ vòng ngay trên tấm tên của mình; bóc một lá chưa tính là đã lật (ghế kia chưa thấy "Đã lật"), bóc lá thứ hai thì ghế kia thấy "Đã lật" và khay báo "Đã lật — chờ người chơi khác"; người thứ hai bấm "Lật" thì cả hai lá mở, vòng nặn kết thúc **trước 20 giây**, lá chung ra và phiếu kết quả hiện | P1 |
 | F-12 | Như F-11 trên điện thoại 375 × 812 có cảm ứng, 1 người thật + 1 bot; bóc một lá bằng ngón tay, lá còn lại bằng "Lật" | Hai lá, nút "Lật" và đồng hồ nằm trọn trong màn hình, trên khay; trang không cuộn ngang, trang và bàn không cuộn dọc, tên người chơi hiện đủ cạnh đồng hồ vòng, không chữ nào đè lên chữ khác; cú chạm là `pointerType: touch` và bóc được lá; bot đã lật từ đầu nên vòng kết thúc ngay khi người thật lật nốt | P2 |
 | F-12b | **Tự động — `04-blind.spec.ts`, project `mobile`.** Như F-12 nhưng phòng "Chơi hoặc bỏ" có "Nặn bài" (1 người thật + 1 bot), 375 × 812 | Huy hiệu vàng "Nặn bài" nằm cạnh tên phòng trong đầu phòng; nút "Lật" nằm trên đáy hai lá bài chứ không chiếm hàng riêng; trang và bàn không cuộn dọc (trước Plan 26 bàn này cuộn thừa 11 px); không chữ đè chữ. Nút "Lật" chỉ cao 40 × 28 px: thử bóc lá bằng ngón tay thật, bắt đầu ở góc dưới bên trái lá trái (`docs/known-limitations.md`) | P2 |
@@ -216,7 +216,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 | Mã | Bước | Kỳ vọng | Ưu tiên |
 |---|---|---|---|
 | K-01 | Hồ sơ: nhìn các nút dưới tên; rồi mở địa chỉ cũ `#/inventory` (dán vào thanh địa chỉ), sau đó bấm Back của trình duyệt | Hồ sơ chỉ còn hai nút: Phòng thay đồ và Thành tựu, không còn "Kho đồ". Địa chỉ cũ mở thẳng Phòng thay đồ (thanh địa chỉ đổi thành `#/avatar`); Back về trang trước đó chứ không quay lại `#/inventory` (review 29/09 No5; ngày nhận và nguồn gốc của món không còn hiện ở đâu cả, có chủ đích) | P2 |
-| K-02 | Chơi đủ 10 ván Blind (bàn có bot, bật tự động bắt đầu). Hết hạn mức thì bị mời đứng dậy (F-10) nên phải bấm ghế để ngồi lại (Sẵn sàng, bật lại Tự động chơi) thì mới đủ 10 ván | Hiện thông báo "Đạt thành tựu mới: Mười ván Blind Poker", +2.000 điểm; trang Thành tựu cập nhật | P1 |
+| K-02 | Chơi đủ 10 ván Blind (bàn có bot, bật tự động bắt đầu). Về 0 thì bị mời đứng dậy (F-10) nên phải bấm ghế để ngồi lại (Sẵn sàng, bật lại Tự động chơi) thì mới đủ 10 ván | Hiện thông báo "Đạt thành tựu mới: Mười ván Blind Poker", +2.000 điểm; trang Thành tựu cập nhật | P1 |
 | K-03 | Vào 10 phòng khác nhau | Thành tựu "Mười phòng" mở | P3 |
 | K-04 | Hồ sơ → Thống kê sau vài ván | Số ván chơi/thắng tăng đúng; "Ván gần đây" ghi "Tại bàn `<tên phòng>`" (hoặc "Tại `<tên phòng>`" khi tên phòng đã bắt đầu bằng "Bàn", không lặp chữ), đối thủ là bot hiện "Bot 1", "Bot 2"… chứ không hiện mã kiểu `bot:…` (review 29/09 No4); tên bot in nghiêng, không có huy hiệu "bot" nhìn thấy (vòng 2 R2-2) | P2 |
 | K-05 | Hồ sơ → đổi tên hiển thị | Tên mới hiện ở sảnh, bàn, cài đặt; tên trùng người khác bị từ chối | P2 |
@@ -301,7 +301,7 @@ server thử). Mục "Quản trị" chỉ hiện trong Cài đặt cho tài kho�
 4. Khi A hết stack: A đứng dậy rồi ngồi lại với mức mang vào mới — kiểm số dư A (H-01).
 5. A rời phòng khi đang là chủ phòng → kiểm chủ phòng mới (G-04).
 6. Chuyển sang phòng Blind "Chơi hoặc bỏ", mức cược 1.000, 2 lá, 1 bot. Chơi 10 ván; có ít nhất một ván
-   cả nhóm cùng Bỏ để xem pot cộng dồn (F-04). Ai tiêu hết hạn mức 5.000 bị mời đứng dậy — bấm ghế để vào lại (F-10).
+   cả nhóm cùng Bỏ để xem pot cộng dồn (F-04). Ai chơi về 0 bị mời đứng dậy — bấm ghế để vào lại khi còn điểm (F-10).
 7. Mọi người thật bấm Tạm nghỉ, chờ 60 giây → pot cộng dồn được chia (F-05). Rời hết → phòng (còn 1 bot) biến
    mất khỏi sảnh ngay (C-07); "Đang đóng…" 60 giây chỉ có ở phòng không bot (C-06).
 8. Mỗi người mở Hồ sơ → Lịch sử điểm, đối chiếu số dư (H-01), ghi lại số dư cuối.

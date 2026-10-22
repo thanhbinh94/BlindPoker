@@ -413,10 +413,10 @@ test.describe('Blind Luck Poker Normal', () => {
     // player. Playing costs the ante plus the play; anything won or handed back comes off that.
     expect(end - start - rewards, 'the balance is the stake, less the payout and anything returned').toBe(payout + returned - PLAY_COST)
 
-    // The card must also add up on its own. The pot is what was paid out plus the fee skimmed off it;
-    // add back any uncalled return and this player's known stake leaves the bot's — which the rules allow
-    // to be exactly two values, so a card that printed a payout or a fee the pot cannot account for lands
-    // outside the pair.
+    // The card must also add up on its own. The pot is what was paid out plus any fee skimmed off it (none: Blind
+    // takes no table fee since plan 27, so the card prints no "Phí bàn" line); add back any uncalled return and this
+    // player's known stake leaves the bot's — which the rules allow to be exactly two values, so a card that printed
+    // a payout or a fee the pot cannot account for lands outside the pair.
     //
     // (Lite reconciles a third number here — a second *human*'s balance, read from the database. With one
     // human that sum reduces to `0 === 0`, because the bot's stake is derived from the same card figures
@@ -427,7 +427,7 @@ test.describe('Blind Luck Poker Normal', () => {
     }, 0)
     const pot = paidOut + fee
     expect([WAGER, PLAY_COST], 'the bot either folded after its ante or paid to play').toContain(pot + uncalled.amount - PLAY_COST)
-    expect(fee, 'the table fee is 2% of the pot').toBe(Math.floor(pot * 0.02))
+    expect(fee, 'Blind takes no table fee (plan 27)').toBe(0)
 
     // The third source, and the one that would catch a buy-in or cash-out moving a balance without writing a row
     // for it (§18.4 rests on this): the ledger. Its rows sum to the balance the account now holds (polled above),

@@ -79,11 +79,12 @@ describe('Blind hands', () => {
     expect(h.repos.hands).toHaveLength(1)
     const summary = h.repos.hands[0]!
     expect(summary.players).toHaveLength(4)
-    expect(summary.players.reduce((s, p) => s + p.net, 0) + summary.fee).toBe(0) // money conservation
-    // Spec 2026-09-29 (table limit): both seats bought in with 5.000; the hand moves table stacks only, and its one
-    // ledger row is the fee sink.
+    expect(summary.fee).toBe(0) // plan 27 D1: Blind takes no table fee
+    expect(summary.players.reduce((s, p) => s + p.net, 0)).toBe(0) // money conservation
+    // Spec 2026-09-29 (table limit): both seats bought in with 5.000; the hand moves table stacks only and writes no
+    // ledger row at all — no fee, so no fee sink.
     expect(h.repos.entries.map((e) => e.entry.reason)).toEqual(['buy_in', 'buy_in'])
-    expect(h.repos.sinks).toEqual([{ refId: summary.handId, fee: summary.fee, kind: 'table_fee' }])
+    expect(h.repos.sinks).toEqual([])
     expect(h.room.players.get('a')!.stack).toBe(5_000 - 1_000) // folded: lost the ante
     expect(await h.repos.balances.get('a')).toBe(100_000 - 5_000)
     expect(h.last('a', 'BALANCE')).toEqual({ t: 'BALANCE', balance: 95_000 }) // pushed at the buy-in, not by the hand
@@ -124,8 +125,8 @@ describe('Blind hands', () => {
     await playOut(h, (id) => ({ kind: id === 'h' ? 'play' : 'fold' }))
     expect(h.room.carryOverPot).toBe(0)
     // hand 1: h −1000, a −1000 (both fold, 2000 carried). hand 2: antes 1000 each on top of the 2000 carry; h plays (+1000);
-    // a folds → h's uncalled 1000 is returned; pot 4000, fee 80, h receives 3920 → h's stack 5000 + 1920, a's 5000 − 2000.
-    expect(h.room.players.get('h')!.stack).toBe(5_000 + 1_920)
+    // a folds → h's uncalled 1000 is returned; pot 4000, no fee, h receives it all → h's stack 5000 + 2000, a's 5000 − 2000.
+    expect(h.room.players.get('h')!.stack).toBe(5_000 + 2_000)
     expect(h.room.players.get('a')!.stack).toBe(5_000 - 2_000)
     expect(await h.repos.balances.get('h')).toBe(95_000) // the balances only moved at the buy-in
   })
@@ -226,21 +227,22 @@ describe('Blind hands', () => {
   })
 
   it('records and emits a hand whose settlement failed, flagged, and pushes nothing to clients', async () => {
-    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 1 } })
-    await seatAndStart(h, ['h', 'a'])
+    // Blind writes no settlement row since plan 27 (no fee), so the one table that still settles — Hold'em — is used.
+    const h = createRoomHarness(HOLDEM)
+    await seatAndStart(h, ['h', 'a'], 20_000)
     const real = h.repos.balances.apply.bind(h.repos.balances)
     h.repos.balances.apply = async (batch, meta, opts) => {
       if (meta?.kind === 'table_fee') throw new Error('ledger unavailable')
       return real(batch, meta, opts)
     }
     const pushedBefore = h.ofType('h', 'BALANCE').length
-    await playOut(h, (id) => ({ kind: id === 'h' ? 'play' : 'fold' }))
+    await playOut(h)
     const summary = h.repos.hands[0]!
     expect(summary.settlementError).toContain('ledger unavailable')
     expect(h.domainEvents.at(-1)).toMatchObject({ type: 'HAND_SETTLED', summary: { handId: summary.handId } })
     expect(h.ofType('h', 'BALANCE').length).toBe(pushedBefore) // nothing moved, so nothing is pushed
-    expect(await h.repos.balances.get('h')).toBe(95_000)
-    expect(await h.repos.balances.get('a')).toBe(95_000)
+    expect(await h.repos.balances.get('h')).toBe(80_000)
+    expect(await h.repos.balances.get('a')).toBe(80_000)
     expect(h.repos.sinks).toEqual([]) // the fee sink is part of the same rejected transaction
   })
 
@@ -362,16 +364,35 @@ describe('Blind decision timeouts (spec §8.7)', () => {
     expect(stoodNotices(h, 'a', 'h')).toHaveLength(1)
     expect(h.room.players.get('a')!.seat).toBe(1) // the other seat is not touched
     // Three antes went into the pot; the other 2.000 of the 5.000 limit came home, once. It was the timeouts that stood
-    // them up: the table limit was not spent (2.000 still covers a hand), so no notice says it was.
+    // them up: the stack was not spent (2.000 is left), so no notice says it was.
     expect(h.repos.entries.filter((e) => e.entry.playerId === 'h' && e.entry.reason === 'cash_out').map((e) => e.entry.delta)).toEqual([2_000])
     expect(await h.repos.balances.get('h')).toBe(97_000)
-    expect(h.ofType('h', 'NOTIFICATION').some((m) => m.kind === 'TABLE_LIMIT_SPENT')).toBe(false)
+    expect(h.ofType('h', 'NOTIFICATION').some((m) => m.kind === 'STACK_SPENT')).toBe(false)
     expect(strikes(h, 'h')).toBe(0) // and the count goes with the seat
 
     h.clock.advance(100)
     await tick(h)
     expect(h.room.status).toBe('OPEN') // only one seat left → back to OPEN, ready cleared
     expect(h.room.players.get('a')!.ready).toBe(false)
+  })
+
+  it('a seat the ante empties is played for it, and that counts neither way: two timeouts before it stay two', async () => {
+    // 'h' brings 3.000: two hands the timer folds take 1.000 each, and the third ante takes the last 1.000, so the seat
+    // plays all in without being asked. Spec R14: that auto-play is no timeout, and no decision that starts the count over.
+    const h = createRoomHarness(PLAY_OR_FOLD, { players: [['h', 3_000], ['a', 100_000]] })
+    await seatAndStart(h, ['h', 'a'])
+    for (const expected of [1, 2]) {
+      await playOut(h, aPlays, { humanTimeouts: new Set(['h']) })
+      expect(strikes(h, 'h')).toBe(expected)
+      await nextHand(h)
+    }
+    expect(h.room.players.get('h')!.stack).toBe(1_000)
+    expect(h.room.snapshot('h').hand!.legal?.kinds ?? []).toEqual([]) // never asked
+    await h.room.action('a', { kind: 'play' }, h.room.seq) // the last decision: the round resolves
+    const acted = h.ofType('a', 'GAME_EVENT').map((m) => m.event).filter((e) => e.type === 'PLAYER_ACTED' && e.seat === 0).at(-1)
+    expect(acted).toMatchObject({ action: { kind: 'play' }, amount: 0, allIn: true, timedOut: false })
+    expect(h.room.handActive).toBe(true) // still revealing: the end-of-hand sweep has not run
+    expect(strikes(h, 'h')).toBe(2)
   })
 
   it('a decision made in between starts the count over: three timeouts that are not in a row stand nobody up', async () => {
@@ -562,17 +583,17 @@ describe('Leaving, disconnecting, shutting down', () => {
   })
 
   it('releases a carry-over pot to the seated humans once the room cannot start a hand for carryOverReleaseMs', async () => {
-    // 'poor' brings its whole 2.500 (under the 5.000 limit); after the all-fold hand 1.500 is left, short of the
-    // 2 × 1000 a hand needs, so it is stood up and only h stays seated — no hand can start, and the pot waits.
-    // 'poor' was stood up for its spent limit while the pot was carried and is still in the room, so it keeps its
-    // claim on that pot (spec §8.4) and shares it with the seated h.
+    // 'poor' brings its whole 2.500 (under the 5.000 limit). Both fold the hand and both asked to sit out during it, so
+    // when it ends nobody can be dealt in — no hand can start, and the pot waits. The two seats are still taken, so
+    // the release shares the pot between them (spec §8.4).
     const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 0 } }, { players: [['h', 100_000], ['poor', 2_500]] })
     await seatAndStart(h, ['h', 'poor'])
+    await h.room.sitOut('h', true)
+    await h.room.sitOut('poor', true)
     await playOut(h, () => ({ kind: 'fold' }))
     expect(h.room.carryOverPot).toBe(2_000)
-    expect(h.room.players.get('poor')!.seat).toBeNull()
-    expect(await h.repos.balances.get('poor')).toBe(1_500)
-    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs) // next-hand timer fires, one seat left → OPEN + release armed
+    expect(h.room.players.get('poor')!.stack).toBe(1_500)
+    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs) // next-hand timer fires, nobody to deal → OPEN + release armed
     await tick(h)
     expect(h.room.status).toBe('OPEN')
     expect(h.room.carryOverPot).toBe(2_000)
@@ -580,12 +601,13 @@ describe('Leaving, disconnecting, shutting down', () => {
     await tick(h)
     expect(h.room.carryOverPot).toBe(0)
     expect(h.repos.entries.filter((e) => e.entry.reason === 'refund').map((e) => [e.entry.playerId, e.entry.delta])).toEqual([['h', 1_000], ['poor', 1_000]])
-    expect(await h.repos.balances.get('h')).toBe(95_000 + 1_000) // half the pot: h shares it with the stood-up 'poor'
+    expect(await h.repos.balances.get('h')).toBe(95_000 + 1_000) // half the pot: h shares it with 'poor'
     expect(h.room.players.get('h')!.stack).toBe(4_000)
-    expect(await h.repos.balances.get('poor')).toBe(1_500 + 1_000)
+    expect(await h.repos.balances.get('poor')).toBe(1_000)
+    expect(h.room.players.get('poor')!.stack).toBe(1_500)
     expect(h.repos.sinks).toEqual([])
     expect(h.last('h', 'BALANCE')).toEqual({ t: 'BALANCE', balance: 96_000 })
-    expect(h.last('poor', 'BALANCE')).toEqual({ t: 'BALANCE', balance: 2_500 })
+    expect(h.last('poor', 'BALANCE')).toEqual({ t: 'BALANCE', balance: 1_000 })
     expect(h.last('h', 'ROOM_EVENT')?.event).toMatchObject({ type: 'ROOM_STATUS', status: 'OPEN' })
     expect(h.room.view().carryOverPot).toBe(0)
   })
@@ -673,31 +695,75 @@ describe('Blind table limit (spec 2026-09-29)', () => {
     expect(await h.repos.balances.get('h')).toBe(95_000)
     expect(h.last('h', 'BALANCE')).toEqual({ t: 'BALANCE', balance: 95_000 }) // pushed at the buy-in
     await playOut(h, (id) => ({ kind: id === 'h' ? 'play' : 'fold' }))
-    // a folded the 1.000 ante; h's play went uncalled and came back, and h took the 2.000 pot less the 2% fee.
+    // a folded the 1.000 ante; h's play went uncalled and came back, and h took the whole 2.000 pot: Blind has no fee.
     expect(h.room.players.get('a')!.stack).toBe(4_000)
-    expect(h.room.players.get('h')!.stack).toBe(5_000 + 1_000 - 40)
+    expect(h.room.players.get('h')!.stack).toBe(5_000 + 1_000)
     expect(h.repos.entries).toHaveLength(2) // no per-hand rows: the balances did not move
     expect(await h.repos.balances.get('a')).toBe(95_000)
-    expect(h.repos.sinks).toEqual([{ refId: h.repos.hands[0]!.handId, fee: 40, kind: 'table_fee' }])
+    expect(h.repos.sinks).toEqual([])
   })
 
-  it('a seat that spends its table limit is stood up after the hand, told why, and stays to watch', async () => {
-    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 1 } }, { players: [['h', 100_000], ['poor', 2_500]] })
+  it('sitting down needs one wager, not two, in play-or-fold', async () => {
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 0 } }, { players: [['h', 100_000], ['one', 1_000], ['short', 999]] })
+    await h.room.join(h.identity('one'))
+    await h.room.join(h.identity('short'))
+    expect(await code(h.room.sitDown('short', 1))).toBe('INSUFFICIENT_BALANCE') // a point short of one wager
+    expect(await h.repos.balances.get('short')).toBe(999)
+    await h.room.sitDown('one', 1) // one wager is enough: the play goes all in for what is left after the ante
+    expect(h.room.players.get('one')!.stack).toBe(1_000)
+    expect(await h.repos.balances.get('one')).toBe(0)
+  })
+
+  it('a Blind seat with 3,000 at a 5,000 table is dealt and plays all in', async () => {
+    // A 5.000 wager: 'poor' sits with all of an 8.000 balance, folds the first hand (the ante goes → 3.000), and is
+    // dealt the next one anyway. Its 3.000 ante is all it has, so it plays all in without being asked.
+    const WIDE: RoomConfig = { ...BLIND, blind: { ...BLIND.blind!, fixedWager: 5_000, botCount: 0 } }
+    const h = createRoomHarness(WIDE, { players: [['h', 100_000], ['poor', 8_000]] })
     await seatAndStart(h, ['h', 'poor'])
-    expect(h.room.players.get('poor')!.stack).toBe(2_500) // all of it: under the 5.000 limit, over the 2.000 a hand needs
-    await playOut(h, (id) => ({ kind: id === 'poor' ? 'fold' : 'play' })) // the ante goes → 1.500, short of 2.000
+    expect(h.room.players.get('poor')!.stack).toBe(8_000)
+    await playOut(h, (id) => ({ kind: id === 'poor' ? 'fold' : 'play' }))
+    expect(h.room.players.get('poor')!.stack).toBe(3_000)
+    expect(h.room.players.get('poor')!.seat).toBe(1) // short of a wager, and still seated
+    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
+    await tick(h)
+    const hand = h.room.snapshot('poor').hand!
+    const mine = hand.seats.find((s) => s.playerId === 'poor')!
+    expect(mine).toBeDefined() // dealt in
+    expect(mine.hasDecided).toBe(true) // never asked
+    expect(hand.legal?.kinds ?? []).toEqual([])
+    const from = h.ofType('poor', 'GAME_EVENT').length
+    await playOut(h, () => ({ kind: 'play' }))
+    const later = h.ofType('poor', 'GAME_EVENT').slice(from).map((m) => m.event)
+    expect(later.find((e) => e.type === 'PLAYER_ACTED' && e.seat === 1)).toMatchObject({ action: { kind: 'play' }, amount: 0, stack: 0, allIn: true, timedOut: false })
+    const net = h.repos.hands[1]!.players.find((p) => p.playerId === 'poor')!.net
+    // Its 3.000 is matched by 3.000 of h's: it wins that 6.000 main pot (+3.000) or loses its 3.000; the rest is h's.
+    expect([-3_000, 3_000]).toContain(net)
+    expect(h.repos.sinks).toEqual([])
+    expect(await books(h, { h: 100_000, poor: 8_000 })).toBe(0)
+  })
+
+  it('a seat that reaches 0 is stood up after the hand with STACK_SPENT and books() stays 0', async () => {
+    // Pure luck (`none`): nobody decides, so a lost hand takes the whole 1.000 a one-wager seat brought.
+    const h = createRoomHarness(
+      { ...BLIND, blind: { ...BLIND.blind!, decisionMode: 'none', botCount: 0 } },
+      { players: [['h', 100_000], ['poor', 1_000]], seed: 2 },
+    )
+    await seatAndStart(h, ['h', 'poor'])
+    expect(h.room.players.get('poor')!.stack).toBe(1_000)
+    await playOut(h)
+    // Precondition: this seed deals 'poor' the losing hand. If dealing changes, pick another seed where it still does.
+    expect(h.repos.hands[0]!.players.find((p) => p.playerId === 'poor')!.net).toBe(-1_000)
     expect(h.room.players.get('poor')!.seat).toBeNull()
     expect(h.room.hasPlayer('poor')).toBe(true) // still in the room, watching
-    expect(h.repos.entries.filter((e) => e.entry.playerId === 'poor').map((e) => [e.entry.delta, e.entry.reason])).toEqual([
-      [-2_500, 'buy_in'],
-      [1_500, 'cash_out'],
-    ])
-    expect(await h.repos.balances.get('poor')).toBe(1_500)
-    expect(h.last('poor', 'NOTIFICATION')).toEqual({ t: 'NOTIFICATION', kind: 'TABLE_LIMIT_SPENT', payload: { roomId: 'room-1', limit: 5_000, amount: 1_500 } })
+    // Nothing was left to go home, so no cash-out row is written.
+    expect(h.repos.entries.filter((e) => e.entry.playerId === 'poor').map((e) => [e.entry.delta, e.entry.reason])).toEqual([[-1_000, 'buy_in']])
+    expect(await h.repos.balances.get('poor')).toBe(0)
+    expect(h.last('poor', 'NOTIFICATION')).toEqual({ t: 'NOTIFICATION', kind: 'STACK_SPENT', payload: { roomId: 'room-1', threshold: 5_000 } })
     expect(h.ofType('h', 'ROOM_EVENT').some((m) => m.event.type === 'PLAYER_STOOD' && m.event.playerId === 'poor')).toBe(true)
-    expect(h.ofType('h', 'NOTIFICATION').some((m) => m.kind === 'TABLE_LIMIT_SPENT')).toBe(false) // only the one it concerns
+    expect(h.ofType('h', 'NOTIFICATION').some((m) => m.kind === 'STACK_SPENT')).toBe(false) // only the one it concerns
+    expect(await books(h, { h: 100_000, poor: 1_000 })).toBe(0)
 
-    // Sitting again is a fresh buy-in: refused while 1.500 cannot cover a hand, the limit again once it can.
+    // Sitting again is a fresh buy-in: refused with nothing to bring, the limit again once there is enough.
     expect(await code(h.room.sitDown('poor', 1))).toBe('INSUFFICIENT_BALANCE')
     h.repos.records.get('poor')!.balance = 50_000
     await h.room.sitDown('poor', 1)
@@ -722,13 +788,19 @@ describe('Blind table limit (spec 2026-09-29)', () => {
     for (const id of ['h', 'a', 'b']) expect(await h.repos.balances.get(id)).toBe(100_000)
   })
 
-  it('bots play from a virtual table limit, topped back up when it cannot cover a hand', async () => {
+  it('bots play from a virtual table limit, play a short stack all in, and are topped back up once it is spent', async () => {
     const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 1 } })
     const bot = [...h.room.players.values()].find((p) => p.identity.isBot)!
     expect(bot.stack).toBe(5_000)
     await seatAndStart(h, ['h'])
     await playOut(h, () => ({ kind: 'fold' }))
-    bot.stack = 500 // as if it had lost its limit
+    bot.stack = 500 // as if it had lost most of its limit: like a human seat, it is dealt and goes all in (plan 27 D2)
+    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
+    await tick(h)
+    expect(h.room.snapshot(null).hand!.seats.some((s) => s.playerId === bot.identity.playerId)).toBe(true)
+    expect(bot.stack).toBe(500)
+    await playOut(h, () => ({ kind: 'fold' }))
+    bot.stack = 0 // as if it had lost all of it
     h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
     await tick(h)
     expect(h.room.snapshot(null).hand!.seats.some((s) => s.playerId === bot.identity.playerId)).toBe(true)
@@ -757,56 +829,44 @@ describe('Blind table limit (spec 2026-09-29)', () => {
       }
       return real(batch, meta, opts)
     }
-    const notices = () => h.ofType('poor', 'NOTIFICATION').filter((m) => m.kind === 'TABLE_LIMIT_SPENT')
+    await h.room.standUp('poor') // mid-hand: it takes effect when the hand ends
     await playOut(h, (id) => ({ kind: id === 'poor' ? 'fold' : 'play' }))
     expect(h.room.players.get('poor')!.seat).toBe(1) // the stand-up could not write, so the seat stays…
     expect(h.room.nextHandAt).not.toBeNull() // …and the room still deals on
     expect(h.logs.filter((l) => l.level === 'error')).toEqual([
       { level: 'error', msg: 'stand-up after hand failed', data: expect.objectContaining({ playerId: 'poor', err: 'Error: ledger unavailable' }) },
-    ]) // …said out loud, not swallowed…
-    expect(notices()).toEqual([]) // …and nobody is told a seat they still hold is spent
+    ]) // …said out loud, not swallowed
     h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
     await tick(h)
-    expect(h.room.snapshot(null).hand!.seats.some((s) => s.playerId === 'poor')).toBe(false) // short: not dealt in
+    expect(h.room.snapshot(null).hand!.seats.some((s) => s.playerId === 'poor')).toBe(false) // frozen: not dealt in
     await playOut(h, () => ({ kind: 'fold' }))
     expect(h.room.players.get('poor')!.seat).toBeNull()
+    expect(h.repos.entries.filter((e) => e.entry.playerId === 'poor' && e.entry.reason === 'cash_out').map((e) => e.entry.delta)).toEqual([1_500])
     expect(await h.repos.balances.get('poor')).toBe(1_500)
-    expect(notices()).toEqual([{ t: 'NOTIFICATION', kind: 'TABLE_LIMIT_SPENT', payload: { roomId: 'room-1', limit: 5_000, amount: 1_500 } }]) // once, on the retry that worked
+    expect(h.ofType('poor', 'NOTIFICATION').some((m) => m.kind === 'STACK_SPENT')).toBe(false) // it stood up of its own accord
   })
 
   it('a seat that runs short in the hand its player chose to stand or leave is cashed out once, and not told it is spent', async () => {
-    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 0 } }, { players: [['h', 100_000], ['s', 2_500], ['l', 2_500]] })
+    // Pure luck: a lost hand takes all of the 1.000 each of 's' and 'l' brought.
+    const h = createRoomHarness(
+      { ...BLIND, blind: { ...BLIND.blind!, decisionMode: 'none', botCount: 0 } },
+      { players: [['h', 100_000], ['s', 1_000], ['l', 1_000]], seed: 1 },
+    )
     await seatAndStart(h, ['h', 's', 'l'])
     await h.room.standUp('s')
     await h.room.leave('l')
-    await playOut(h, (id) => ({ kind: id === 'h' ? 'play' : 'fold' }))
+    await playOut(h)
     const net = (id: string) => h.repos.hands[0]!.players.find((p) => p.playerId === id)!.net
-    expect([net('s'), net('l')]).toEqual([-1_000, -1_000]) // precondition: both fell to 1.500, short of the 2.000 a hand needs
+    // Precondition: this seed deals both of them a losing hand. If dealing changes, pick another seed where it does.
+    expect([net('s'), net('l')]).toEqual([-1_000, -1_000])
     for (const id of ['s', 'l']) {
-      expect(h.repos.entries.filter((e) => e.entry.playerId === id && e.entry.reason === 'cash_out').map((e) => e.entry.delta)).toEqual([1_500])
-      expect(await h.repos.balances.get(id)).toBe(1_500)
-      expect(h.ofType(id, 'NOTIFICATION').some((m) => m.kind === 'TABLE_LIMIT_SPENT')).toBe(false) // they left of their own accord
+      expect(h.repos.entries.filter((e) => e.entry.playerId === id && e.entry.reason === 'cash_out')).toEqual([]) // nothing left to send home
+      expect(await h.repos.balances.get(id)).toBe(0)
+      expect(h.ofType(id, 'NOTIFICATION').some((m) => m.kind === 'STACK_SPENT')).toBe(false) // they left of their own accord
     }
     expect(h.room.players.get('s')!.seat).toBeNull()
     expect(h.room.hasPlayer('s')).toBe(true)
     expect(h.room.hasPlayer('l')).toBe(false)
-  })
-
-  it('a stack that goes to exactly 0 writes no cash-out row, and the notice says nothing went back', async () => {
-    // Pure luck (`none`): nobody decides, so one wager is all a hand needs and a lost hand takes all of it.
-    const h = createRoomHarness(
-      { ...BLIND, blind: { ...BLIND.blind!, decisionMode: 'none', botCount: 0 } },
-      { players: [['h', 100_000], ['poor', 1_000]], seed: 2 },
-    )
-    await seatAndStart(h, ['h', 'poor'])
-    expect(h.room.players.get('poor')!.stack).toBe(1_000)
-    await playOut(h)
-    // Precondition: this seed deals 'poor' the losing hand. If dealing changes, pick another seed where it still does.
-    expect(h.repos.hands[0]!.players.find((p) => p.playerId === 'poor')!.net).toBe(-1_000)
-    expect(h.room.players.get('poor')!.seat).toBeNull()
-    expect(h.repos.entries.filter((e) => e.entry.playerId === 'poor').map((e) => [e.entry.delta, e.entry.reason])).toEqual([[-1_000, 'buy_in']])
-    expect(await h.repos.balances.get('poor')).toBe(0)
-    expect(h.last('poor', 'NOTIFICATION')).toEqual({ t: 'NOTIFICATION', kind: 'TABLE_LIMIT_SPENT', payload: { roomId: 'room-1', limit: 5_000, amount: 0 } })
   })
 
   it('a reconnect window that lapses between hands takes the table stack home', async () => {
@@ -837,13 +897,14 @@ describe('Blind table limit (spec 2026-09-29)', () => {
     expect(h.room.players.get('a')!.seat).toBeNull()
     expect(h.repos.entries.filter((e) => e.entry.playerId === 'a' && e.entry.reason === 'cash_out').map((e) => e.entry.delta)).toEqual([4_000])
     expect(await h.repos.balances.get('a')).toBe(99_000)
-    expect(h.ofType('a', 'NOTIFICATION').some((m) => m.kind === 'TABLE_LIMIT_SPENT')).toBe(false) // not spent: taken back
+    expect(h.ofType('a', 'NOTIFICATION').some((m) => m.kind === 'STACK_SPENT')).toBe(false) // not spent: taken back
   })
 
-  it('seats stood up for a spent limit keep their share of the carried-over pot, so an all-fold table does not pay the house', async () => {
+  it('an all-fold table plays its last wagers all in, so the carried-over pot goes to a seat and never to the house', async () => {
     // Two humans fold four hands running: every ante stays in the carried pot (2.000 → 8.000) and each 5.000 limit
-    // falls to 1.000, short of the 2.000 a hand needs, so both are stood up. Nobody won a hand; the pot is theirs.
-    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 0 } })
+    // falls to 1.000 — one ante, still seated (plan 27 D2). The fifth ante takes all of both stacks, so both play all
+    // in without being asked, and the 10.000 goes to the better hand: nothing is left carried, nothing to the house.
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 0 } }, { seed: 2 })
     await seatAndStart(h, ['h', 'a'])
     for (let i = 0; i < 4; i++) {
       if (i > 0) {
@@ -854,67 +915,21 @@ describe('Blind table limit (spec 2026-09-29)', () => {
     }
     expect(h.room.carryOverPot).toBe(8_000)
     for (const id of ['h', 'a']) {
-      expect(h.room.players.get(id)!.seat).toBeNull()
-      expect(h.room.hasPlayer(id)).toBe(true)
-      expect(await h.repos.balances.get(id)).toBe(95_000 + 1_000) // the 1.000 left on the table went home
+      expect(h.room.players.get(id)!.seat).not.toBeNull()
+      expect(h.room.players.get(id)!.stack).toBe(1_000)
     }
-    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs) // nobody can be dealt in → OPEN + release armed
-    await tick(h)
-    expect(h.room.status).toBe('OPEN')
-    h.clock.advance(TEST_ROOM_OPTIONS.carryOverReleaseMs)
-    await tick(h)
-    expect(h.room.carryOverPot).toBe(0)
-    expect(h.repos.entries.filter((e) => e.entry.reason === 'refund').map((e) => [e.entry.playerId, e.entry.delta])).toEqual([['h', 4_000], ['a', 4_000]])
-    expect(h.repos.sinks).toEqual([]) // an even split: nothing to the house
-    for (const id of ['h', 'a']) {
-      expect(await h.repos.balances.get(id)).toBe(100_000)
-      expect(h.last(id, 'BALANCE')).toEqual({ t: 'BALANCE', balance: 100_000 })
-    }
-  })
-
-  it('a stood-up claimant who leaves the room before the carried-over pot is released gets none of it', async () => {
-    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 0 } }, { players: [['h', 100_000], ['poor', 2_500]] })
-    await seatAndStart(h, ['h', 'poor'])
-    await playOut(h, () => ({ kind: 'fold' })) // 2.000 carried; 'poor' is stood up at 1.500 with a claim on it
-    expect(h.room.players.get('poor')!.seat).toBeNull()
-    await h.room.leave('poor') // …which ends with the stay in the room
-    await h.room.join(h.identity('poor')) // coming back to watch does not bring the claim back
     h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
     await tick(h)
-    h.clock.advance(TEST_ROOM_OPTIONS.carryOverReleaseMs)
-    await tick(h)
+    expect(h.room.snapshot(null).hand!.seats.every((s) => s.hasDecided)).toBe(true) // nobody is asked
+    await playOut(h, () => ({ kind: 'fold' }))
     expect(h.room.carryOverPot).toBe(0)
-    expect(h.repos.entries.filter((e) => e.entry.reason === 'refund').map((e) => [e.entry.playerId, e.entry.delta])).toEqual([['h', 2_000]])
-    expect(await h.repos.balances.get('poor')).toBe(1_500)
-    expect(await h.repos.balances.get('h')).toBe(95_000 + 2_000)
+    const stacks = ['h', 'a'].map((id) => h.room.players.get(id)!.stack).sort((x, y) => x - y)
+    // Precondition: this seed gives one of them the better hand (no split). If dealing changes, pick another seed.
+    expect(stacks).toEqual([0, 10_000])
+    const loser = ['h', 'a'].find((id) => h.room.players.get(id)!.seat === null)!
+    expect(h.last(loser, 'NOTIFICATION')).toEqual({ t: 'NOTIFICATION', kind: 'STACK_SPENT', payload: { roomId: 'room-1', threshold: 5_000 } })
     expect(h.repos.sinks).toEqual([])
-  })
-
-  it('a claim ends when its pot goes into a new hand: a later release of a newer pot does not pay the claimant', async () => {
-    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 0 } }, { players: [['h', 100_000], ['a', 4_000], ['poor', 2_500]] })
-    await seatAndStart(h, ['h', 'a', 'poor'])
-    await playOut(h, () => ({ kind: 'fold' })) // 3.000 carried; 'poor' stood up at 1.500 with a claim; a at 3.000
-    expect(h.room.players.get('poor')!.seat).toBeNull()
-    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs) // h and a deal on, and the 3.000 goes into their hand
-    await tick(h)
-    expect(h.room.snapshot(null).hand!.carryOverIn).toBe(3_000)
-    await playOut(h, (id) => ({ kind: id === 'h' ? 'play' : 'fold' })) // h wins it; a at 2.000
-    expect(h.room.carryOverPot).toBe(0)
-    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
-    await tick(h)
-    await playOut(h, () => ({ kind: 'fold' })) // a new 2.000 carried; a falls to 1.000, stood up with a claim on it
-    expect(h.room.carryOverPot).toBe(2_000)
-    expect(h.room.players.get('a')!.seat).toBeNull()
-    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
-    await tick(h)
-    h.clock.advance(TEST_ROOM_OPTIONS.carryOverReleaseMs)
-    await tick(h)
-    expect(h.room.carryOverPot).toBe(0)
-    expect(h.repos.entries.filter((e) => e.entry.reason === 'refund').map((e) => [e.entry.playerId, e.entry.delta])).toEqual([['h', 1_000], ['a', 1_000]])
-    expect(await h.repos.balances.get('poor')).toBe(1_500) // its 1.500 cash-out, and nothing from either pot
-    const balances = (await h.repos.balances.get('h')) + (await h.repos.balances.get('a')) + (await h.repos.balances.get('poor'))
-    const sinks = h.repos.sinks.reduce((s, x) => s + x.fee, 0)
-    expect(balances + h.room.players.get('h')!.stack + sinks).toBe(100_000 + 4_000 + 2_500) // money conservation
+    expect(await books(h, { h: 100_000, a: 100_000 })).toBe(0)
   })
 })
 
@@ -1092,7 +1107,7 @@ describe('Closing a room whose hand has just ended', () => {
     // The last move queues the settlement behind whatever is already in the room's queue — here, the shutdown.
     const cases = [
       { move: 'fold', cashOut: 4_000, refunds: [['h', 3_000]] }, // everyone folded: three antes carried, released to h
-      { move: 'play', cashOut: 6_940, refunds: [] }, // h alone played: the 3.000 pot less its 60 fee
+      { move: 'play', cashOut: 7_000, refunds: [] }, // h alone played: the whole 3.000 pot, Blind has no fee
     ] as const
     for (const c of cases) {
       const h = await lastMoveIsHs()
@@ -1270,12 +1285,13 @@ describe('A ledger write is applied once, however often it is retried (Plan 20)'
     expect(await books(h, { h: 100_000, a: 100_000 })).toBe(0)
   })
 
-  it('end of hand: a spent seat whose cash-out landed but reported an error is credited once, and told once', async () => {
+  it('end of hand: a Stand Up whose cash-out landed but reported an error is credited once, and never told it is spent', async () => {
     const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 1 } }, { players: [['h', 100_000], ['poor', 2_500]] })
     await seatAndStart(h, ['h', 'poor'])
     ackLostOnce(h, isCashOut)
-    const notices = () => h.ofType('poor', 'NOTIFICATION').filter((m) => m.kind === 'TABLE_LIMIT_SPENT')
-    await playOut(h, (id) => ({ kind: id === 'poor' ? 'fold' : 'play' })) // 1.500 left: spent
+    const notices = () => h.ofType('poor', 'NOTIFICATION').filter((m) => m.kind === 'STACK_SPENT')
+    await h.room.standUp('poor') // mid-hand: it takes effect when the hand ends
+    await playOut(h, (id) => ({ kind: id === 'poor' ? 'fold' : 'play' })) // 1.500 left to cash out
     expect(await h.repos.balances.get('poor')).toBe(1_500)
     expect(h.room.players.get('poor')!.seat).toBe(1)
     expect(errors(h)).toEqual([
@@ -1288,7 +1304,7 @@ describe('A ledger write is applied once, however often it is retried (Plan 20)'
     expect(h.room.players.get('poor')!.seat).toBeNull()
     expect(rowsOf(h, 'poor', 'cash_out')).toEqual([1_500])
     expect(await h.repos.balances.get('poor')).toBe(1_500)
-    expect(notices()).toHaveLength(1)
+    expect(notices()).toHaveLength(0) // it stood up of its own accord, with points left
     expect(await books(h, { h: 100_000, poor: 2_500 })).toBe(0)
   })
 
@@ -1440,10 +1456,12 @@ describe('A ledger write is applied once, however often it is retried (Plan 20)'
     expect(await books(h, { h: 100_000, a: 100_000 })).toBe(0)
   })
 
-  /** h and `poor` fold one hand: 2.000 carried, `poor` stood up at 1.500 with a claim, the room back to OPEN. */
+  /** h and `poor` fold one hand they both asked to sit out after: 2.000 carried, both seated, the room back to OPEN. */
   async function carriedAndOpen(): Promise<RoomHarness> {
     const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 0 } }, { players: [['h', 100_000], ['poor', 2_500]] })
     await seatAndStart(h, ['h', 'poor'])
+    await h.room.sitOut('h', true)
+    await h.room.sitOut('poor', true)
     await playOut(h, () => ({ kind: 'fold' }))
     h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
     await tick(h)
@@ -1464,7 +1482,8 @@ describe('A ledger write is applied once, however often it is retried (Plan 20)'
     ])
     expect(h.room.view().carryOverPot).toBe(2_000) // …but not settled: still the room's, as far as anyone can tell
     expect(await books(h, { h: 100_000, poor: 2_500 })).toBe(2_000) // paid out and still held: counted twice until settled
-    await h.room.sitDown('poor', 1) // 2.500: enough for a hand
+    await h.room.sitOut('h', false) // both back in
+    await h.room.sitOut('poor', false)
     await h.room.setReady('h', true)
     await h.room.setReady('poor', true)
     await h.room.startGame('h') // the deal settles the release first, under its key
@@ -1482,13 +1501,14 @@ describe('A ledger write is applied once, however often it is retried (Plan 20)'
     h.clock.advance(TEST_ROOM_OPTIONS.carryOverReleaseMs)
     await tick(h)
     failOnce(h, isRelease) // the deal's retry fails too
-    await h.room.sitDown('poor', 1)
+    await h.room.sitOut('h', false)
+    await h.room.sitOut('poor', false)
     await h.room.setReady('h', true)
     await h.room.setReady('poor', true)
     await h.room.startGame('h')
     expect(h.room.snapshot(null).hand!.carryOverIn).toBe(0) // aside, not in this hand
     expect(h.room.pendingRelease?.pot).toBe(2_000)
-    await playOut(h, () => ({ kind: 'fold' })) // a new 2.000 is carried; poor is spent again at 1.500
+    await playOut(h, () => ({ kind: 'fold' })) // a new 2.000 is carried; poor is down to 500 on the table
     expect(h.room.carryOverPot).toBe(2_000)
     expect(h.room.pendingRelease?.pot).toBe(2_000) // the older pot is still aside
     expect(h.room.view().carryOverPot).toBe(4_000)
@@ -1511,7 +1531,8 @@ describe('A ledger write is applied once, however often it is retried (Plan 20)'
       if (isRelease(batch, meta)) throw new Error('ledger unavailable') // every release from here to the close
       return real(batch, meta, opts)
     }
-    await h.room.sitDown('poor', 1)
+    await h.room.sitOut('h', false)
+    await h.room.sitOut('poor', false)
     await h.room.setReady('h', true)
     await h.room.setReady('poor', true)
     await h.room.startGame('h')
@@ -1820,6 +1841,31 @@ describe('Money conservation over many hands', () => {
     expect(humanDelta + botNet + sinkTotal + h.room.carryOverPot).toBe(0)
     const seqs = h.ofType('h', 'GAME_EVENT').map((m) => m.seq)
     expect(seqs.every((s, i) => i === 0 || s > seqs[i - 1]!)).toBe(true)
+  })
+
+  it('Blind writes no table_fee sink', async () => {
+    // Plan 27 D1: Blind takes no fee, so twenty hands of a mixed policy leave the sinks empty (a carried pot stays a
+    // pot, not a sink) and every recorded hand says fee 0.
+    const h = createRoomHarness(BLIND, { seed: 11, players: [['h', 1_000_000], ['a', 1_000_000]] })
+    await seatAndStart(h, ['h', 'a'])
+    let n = 0
+    const policy: Policy = (id, legal) => ({ kind: legal.kinds.includes('play') && (id === 'h' ? n % 3 !== 0 : n % 2 === 0) ? 'play' : 'fold' })
+    while (n++ < 20) {
+      await playOut(h, policy)
+      // A seat that went to 0 is stood up (D2); it sits down again, so the twenty hands are played by the same two.
+      for (const [i, id] of ['h', 'a'].entries()) {
+        if (h.room.players.get(id)!.seat !== null) continue
+        await h.room.sitDown(id, i)
+        if (h.room.status === 'OPEN') await h.room.setReady(id, true)
+      }
+      if (h.room.status === 'OPEN') await h.room.startGame('h')
+      h.clock.advance(100)
+      await tick(h)
+    }
+    expect(h.repos.hands).toHaveLength(20)
+    expect(h.repos.hands.every((x) => x.fee === 0)).toBe(true)
+    expect(h.repos.sinks).toEqual([])
+    expect(await books(h, { h: 1_000_000, a: 1_000_000 })).toBe(0)
   })
 })
 
