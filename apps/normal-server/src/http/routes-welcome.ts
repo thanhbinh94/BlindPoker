@@ -4,7 +4,7 @@
  * lobby does not fetch.
  *
  * **The body.** `{ itemId: string | null }` — the key must be there: `null` is the deliberate "reputation only" of R17
- * (every choice already owned), and a body without the key is a malformed request (`400 INVALID_BODY`), not a quiet
+ * (every choice already owned), and a body without the key is a malformed request (`400 BAD_REQUEST`, the house code), not a quiet
  * vote for `null`.
  *
  * **Refusals.** `WELCOME_CLAIMED`, `NOT_A_CHOICE` and `ALREADY_OWNED` are each a 409 with the code in the usual error
@@ -43,7 +43,7 @@ export function registerWelcomeRoutes(app: FastifyInstance, deps: WelcomeRouteDe
     const body = (typeof req.body === 'object' && req.body !== null ? req.body : {}) as Record<string, unknown>
     const itemId = body['itemId']
     if (itemId !== null && (typeof itemId !== 'string' || itemId === '' || itemId.length > ITEM_ID_MAX)) {
-      throw new HttpError(400, 'INVALID_BODY', 'itemId must be a catalogue item id, or null')
+      throw new HttpError(400, 'BAD_REQUEST', 'itemId must be a catalogue item id, or null')
     }
     const result = await deps.welcome.claim(playerIdOf(req), itemId)
     if (!result.ok) throw new HttpError(409, result.code, REFUSAL_MESSAGE[result.code])

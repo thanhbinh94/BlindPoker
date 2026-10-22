@@ -390,13 +390,14 @@ describe('ShopScreen', () => {
 
   it('closes the dialog on a 4xx the shop has no words for, offering no retry', async () => {
     const user = userEvent.setup()
-    const api = stubApi({ shopBuy: vi.fn().mockRejectedValue(new ApiError(400, 'INVALID_BODY', 'bad')) })
+    const api = stubApi({ shopBuy: vi.fn().mockRejectedValue(new ApiError(400, 'BAD_REQUEST', 'bad')) })
     const { container } = renderShop(api)
     await opened()
 
     await buyDealer(user, container)
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.outfits.error)
+    expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.shop.failed)
+    expect(viNormal.shop.failed).toBe('Không thực hiện được, vui lòng thử lại')
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.queryByText(viNormal.shop.retry)).toBeNull()
   })

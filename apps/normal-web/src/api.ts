@@ -771,8 +771,8 @@ export interface NormalApi {
   /**
    * Buys one item for points. `purchaseId` is a fresh lower-case UUID per press of "Mua" (`crypto.randomUUID()`), and
    * the *same* one on a retry: the server charges once per id and answers a repeat `repeated: true`. A malformed id is
-   * `400 INVALID_BODY`. A refusal rejects with an `ApiError` whose `status` is 409 and whose `code` is `SHOP_DISABLED`,
-   * `RANK_TOO_LOW`, `ALREADY_OWNED` or `INSUFFICIENT_POINTS` (read from the `{ error: { code } }` envelope by `failure`;
+   * `400 BAD_REQUEST`. A refusal rejects with an `ApiError` whose `status` is 409 and whose `code` is `SHOP_DISABLED`,
+   * `RANK_TOO_LOW`, `ALREADY_OWNED`, `INSUFFICIENT_POINTS` or `PURCHASE_UNDONE` (read from the `{ error: { code } }` envelope by `failure`;
    * there are no side fields), or 404 `UNKNOWN_ITEM`.
    */
   shopBuy(itemId: string, purchaseId: string): Promise<BuyResultDto>
@@ -781,7 +781,7 @@ export interface NormalApi {
   /**
    * Takes the welcome gift: one unowned choice, granted and worn at once, with the `welcome` reputation; `null` only
    * when every choice is already owned (reputation alone). A refusal rejects with an `ApiError` of status 409 and
-   * code `WELCOME_CLAIMED`, `NOT_A_CHOICE` or `ALREADY_OWNED`; a malformed body is 400 `INVALID_BODY`.
+   * code `WELCOME_CLAIMED`, `NOT_A_CHOICE` or `ALREADY_OWNED`; a malformed body is 400 `BAD_REQUEST`.
    */
   welcomeClaim(itemId: string | null): Promise<WelcomeClaimDto>
 

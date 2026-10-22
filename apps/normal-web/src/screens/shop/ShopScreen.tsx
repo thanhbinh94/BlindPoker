@@ -250,7 +250,7 @@ export function ShopScreen({ api, lang, balance, playerId }: ShopScreenProps) {
         // A request the server could not read: nothing was bought, and pressing again would only be refused again.
         setConfirm(null)
         setStatus(null)
-        setAlert(t('outfits.error'))
+        setAlert(t('shop.failed'))
       } else {
         // No answer, or not one of the shop's: it may have gone through. The dialog stays, with the same id.
         setConfirmError(t('shop.retry'))

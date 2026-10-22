@@ -3,11 +3,14 @@
  *
  * The shop service has its own tests for the rules — the locks, the rank, the once-per-click key, conservation. What
  * is checked here is the translation: the session gate, the `purchaseId` shape refused before the service is asked,
- * and each refusal's status (`UNKNOWN_ITEM` a 404, the other four a 409 carrying the code in the error envelope).
+ * and each refusal's status (`UNKNOWN_ITEM` a 404, the other five a 409 carrying the code in the error envelope, with a
+ * message of its own).
  */
 import { ECONOMY } from '@bp/core'
+import { and, eq } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { AppDb } from '../db/client.js'
+import { inventory, players, shopPrices } from '../db/schema.js'
 import { createTestDb, type TestDb } from '../db/test-db.js'
 import type { ShopEntry, ShopView } from '../shop/shop-service.js'
 import { buildTestApp, resetDb, type Account, type Harness } from '../test-harness.js'
@@ -92,11 +95,11 @@ describe('the shop routes', () => {
     for (const purchaseId of ['', 'click-1', PURCHASE_A.toUpperCase(), `${PURCHASE_A}0`, 42, null, undefined]) {
       const res = await buy(item.itemId, purchaseId)
       expect(res.statusCode, String(purchaseId)).toBe(400)
-      expect(errorCode(res), String(purchaseId)).toBe('INVALID_BODY')
+      expect(errorCode(res), String(purchaseId)).toBe('BAD_REQUEST')
     }
     const noItem = await buy(42, PURCHASE_A)
     expect(noItem.statusCode).toBe(400)
-    expect(errorCode(noItem)).toBe('INVALID_BODY')
+    expect(errorCode(noItem)).toBe('BAD_REQUEST')
     expect(await h.app.services.repos.balances.get(me.playerId)).toBe(ECONOMY.startingBalance)
   })
 
@@ -107,6 +110,37 @@ describe('the shop routes', () => {
     expect(res.statusCode).toBe(409)
     expect(errorCode(res)).toBe('RANK_TOO_LOW')
     expect(await h.app.services.repos.balances.get(me.playerId)).toBe(ECONOMY.startingBalance)
+  })
+
+  it('an item off sale is 409 SHOP_DISABLED', async () => {
+    const shop = await view()
+    const item = pick(shop, (e) => e.minRank <= shop.me.rank && e.price <= shop.me.balance)
+    await db.update(shopPrices).set({ enabled: false }).where(eq(shopPrices.itemId, item.itemId))
+    const res = await buy(item.itemId, PURCHASE_A)
+    expect(res.statusCode).toBe(409)
+    expect(res.json()).toEqual({ error: { code: 'SHOP_DISABLED', message: 'this item is not on sale' } })
+    expect(await h.app.services.repos.balances.get(me.playerId)).toBe(ECONOMY.startingBalance)
+  })
+
+  it('a price above the balance is 409 INSUFFICIENT_POINTS', async () => {
+    const shop = await view()
+    const item = pick(shop, (e) => e.minRank <= shop.me.rank && e.price > 0)
+    await db.update(players).set({ balance: item.price - 1 }).where(eq(players.id, me.playerId))
+    const res = await buy(item.itemId, PURCHASE_A)
+    expect(res.statusCode).toBe(409)
+    expect(res.json()).toEqual({ error: { code: 'INSUFFICIENT_POINTS', message: 'not enough points for this item' } })
+    expect(await h.app.services.repos.balances.get(me.playerId)).toBe(item.price - 1)
+  })
+
+  it('a purchaseId replayed after its item was taken back is 409 PURCHASE_UNDONE, with its own message', async () => {
+    const shop = await view()
+    const item = pick(shop, (e) => e.minRank <= shop.me.rank && e.price > 0 && e.price <= shop.me.balance)
+    expect((await buy(item.itemId, PURCHASE_A)).statusCode).toBe(200)
+    await db.delete(inventory).where(and(eq(inventory.playerId, me.playerId), eq(inventory.itemId, item.itemId)))
+    const res = await buy(item.itemId, PURCHASE_A)
+    expect(res.statusCode).toBe(409)
+    expect(res.json()).toEqual({ error: { code: 'PURCHASE_UNDONE', message: 'this purchase was undone; a new purchase buys the item again' } })
+    expect(await h.app.services.repos.balances.get(me.playerId)).toBe(ECONOMY.startingBalance - item.price)
   })
 
   it('an unknown item is 404', async () => {

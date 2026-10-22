@@ -73,7 +73,7 @@ describe('the welcome routes', () => {
     for (const body of [{}, { itemId: 42 }, { itemId: '' }, { itemId: 'x'.repeat(101) }]) {
       const res = await claim(body)
       expect(res.statusCode, JSON.stringify(body)).toBe(400)
-      expect(errorCode(res), JSON.stringify(body)).toBe('INVALID_BODY')
+      expect(errorCode(res), JSON.stringify(body)).toBe('BAD_REQUEST')
     }
 
     const notAChoice = await claim({ itemId: 'head_crown_gold01' })

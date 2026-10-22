@@ -760,6 +760,7 @@
     "close": "Close",
     "bought": "{{item}} is in your wardrobe",
     "retry": "Not sure the purchase went through. Press Buy again: you will not be charged twice.",
+    "failed": "Couldn't do that, please try again",
     "error": "Could not load the shop",
     "refusal": {
       "SHOP_DISABLED": "This item is not for sale right now",

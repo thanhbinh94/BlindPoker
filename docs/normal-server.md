@@ -664,7 +664,7 @@ prune of `ledger_keys`, P15); then the key; then the price, lock and rank checks
 row `shop_purchase` (−price, ref = itemId) and the sink row `shop` (`SettlementMeta.kind`), **debit before grant**;
 then `inventory.grant(…, 'shop', ref)`, whose `false` (a racing buy) rolls the debit back as `ALREADY_OWNED`. Refusals:
 `UNKNOWN_ITEM` 404; `SHOP_DISABLED`, `RANK_TOO_LOW`, `ALREADY_OWNED`, `INSUFFICIENT_POINTS`, `PURCHASE_UNDONE` (the id
-was used for an item a GM has since revoked) 409; a malformed body 400 `INVALID_BODY`. `shop` is in `SINK_REASONS` and
+was used for an item a GM has since revoked) 409, each with a message of its own; a malformed body 400 `BAD_REQUEST`. `shop` is in `SINK_REASONS` and
 `shop_purchase` is a transfer like `buy_in`, so the overview and "Theo ngày" count a purchase once. Conservation: 40
 random buys across three players keep `Σ balances + Σ sinks`, and the shop sink equals what was paid.
 
@@ -673,7 +673,8 @@ random buys across three players keep `Σ balances + Σ sinks`, and the shop sin
 welcome_claimed_at … WHERE welcome_claimed_at IS NULL RETURNING id`): grant the item (source `welcome`), wear it
 (`wearItemWithin`, `inventory/avatar.ts`, through `tx`), `+rules.welcome` reputation (ref `welcome`), and day 1 of the
 newcomer calendar with `last_day_key` = today. `null` is allowed only when every choice is owned (reputation only,
-R17). Refusals, each 409: `WELCOME_CLAIMED`, `NOT_A_CHOICE`, `ALREADY_OWNED`. The choices are
+R17). Refusals, each 409: `WELCOME_CLAIMED`, `NOT_A_CHOICE`, `ALREADY_OWNED`; a body without `itemId` (or a bad one) 400
+`BAD_REQUEST`. The choices are
 `shop_config.welcome_choices` (default `outfit_dealer01`, `outfit_tet_red01`, `head_conical_hat01`).
 
 **The newcomer calendar (`claimDaily`).** `newcomer_progress(player_id, day, claimed_days, last_day_key, finished_at)`.

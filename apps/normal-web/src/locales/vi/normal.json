@@ -760,6 +760,7 @@
     "close": "Đóng",
     "bought": "{{item}} đã vào tủ đồ",
     "retry": "Chưa rõ đã mua được chưa. Bấm Mua lần nữa: bạn sẽ không bị trừ điểm hai lần.",
+    "failed": "Không thực hiện được, vui lòng thử lại",
     "error": "Không tải được cửa hàng",
     "refusal": {
       "SHOP_DISABLED": "Món này hiện không bán",
