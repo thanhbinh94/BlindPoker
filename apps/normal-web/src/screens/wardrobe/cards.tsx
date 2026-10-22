@@ -105,6 +105,12 @@ export interface ItemCardProps {
   /** The card's picture, drawn in place of the item's icon (`ItemPreview`): a hairstyle's head portrait (Kiểu tóc,
    * avatar v4 — a hairstyle has no icon of its own, and is only worth seeing on a head). */
   thumb?: ReactNode
+  /** Whether a press reaches `onPick` (Plan 27, P21): `owned` unless the caller says otherwise. The shop picks every
+   * card — a press there is a try-on, not an equip — whoever owns it. */
+  pickable?: boolean
+  /** A row under the card's own content, inside its border, outside its pick button (Plan 27, P21): the shop's price,
+   * "Mua" button or source label. A button may sit in it, since it is not inside the pick button. */
+  footer?: ReactNode
   onPick: (id: string) => void
 }
 
@@ -118,7 +124,21 @@ export interface ItemCardProps {
  * box instead of the dots sitting below/outside it. Between the two, outside the button, can sit the locked original's
  * hint line (`familyHint`, Plan 20 T3).
  */
-export function ItemCard({ item, family = item, wear, owned, wearing, hint, variants, familyHint, reserveDots = false, thumb, onPick }: ItemCardProps) {
+export function ItemCard({
+  item,
+  family = item,
+  wear,
+  owned,
+  wearing,
+  hint,
+  variants,
+  familyHint,
+  reserveDots = false,
+  thumb,
+  pickable = owned,
+  footer,
+  onPick,
+}: ItemCardProps) {
   const { t } = useTranslation('normal')
   const name = itemName(item.id, t)
   const hasVariants = variants !== undefined && variants.length > 0
@@ -130,10 +150,10 @@ export function ItemCard({ item, family = item, wear, owned, wearing, hint, vari
           type="button"
           className={s.cardPick}
           aria-pressed={wearing}
-          aria-disabled={!owned}
+          aria-disabled={!pickable}
           aria-label={cardLabel(name, item.rarity, owned, wearing, hint, t)}
           onClick={() => {
-            if (owned) onPick(item.id)
+            if (pickable) onPick(item.id)
           }}
         >
           {wearing ? <WearingPill /> : null}
@@ -174,6 +194,7 @@ export function ItemCard({ item, family = item, wear, owned, wearing, hint, vari
             })}
           </div>
         )}
+        {footer}
       </div>
     </div>
   )
@@ -188,25 +209,79 @@ export interface ColourCardProps {
   /** The "Natural" swatch's fill, when that colour is known (Màu da: the body's own skin); left out, the swatch is the
    * half-and-half mark. Ignored on any other swatch. */
   naturalColour?: string
+  /** Whether a press reaches `onPick` (Plan 27, P21): `owned` unless the caller says otherwise (always for "Natural"). */
+  pickable?: boolean
+  /** A row under the swatch, inside the card's border and outside its pick button (Plan 27, P21) — see `ItemCard`. */
+  footer?: ReactNode
   onPick: (id: string | undefined) => void
+}
+
+/**
+ * The card's own chrome around one pick button, in the shape that fits what the caller asked for. Without a footer,
+ * the button *is* the card (`.card`), as `ColourCard` and `WordCard` always were. With one, `ItemCard`'s shape: a plain
+ * bordered `.card` holding a `.cardPick` button and the footer beside it — a footer may hold a button of its own, and a
+ * `<button>` cannot contain another.
+ */
+function CardShell({
+  rarity,
+  wearing,
+  disabled,
+  label,
+  onClick,
+  footer,
+  children,
+}: {
+  rarity: Rarity | undefined
+  wearing: boolean
+  disabled: boolean
+  label: string
+  onClick: () => void
+  footer: ReactNode
+  children: ReactNode
+}) {
+  if (footer === undefined || footer === null) {
+    return (
+      <button
+        type="button"
+        className={s.card}
+        data-rarity={rarity}
+        aria-pressed={wearing}
+        aria-disabled={disabled}
+        aria-label={label}
+        onClick={onClick}
+      >
+        {children}
+      </button>
+    )
+  }
+  return (
+    <div className={s.cardCell}>
+      <div className={s.card} data-rarity={rarity} data-wearing={wearing}>
+        <button type="button" className={s.cardPick} aria-pressed={wearing} aria-disabled={disabled} aria-label={label} onClick={onClick}>
+          {children}
+        </button>
+        {footer}
+      </div>
+    </div>
+  )
 }
 
 /** A colour swatch (Màu tóc, Màu da, Màu mắt — design §4.3): same wearing/lock chrome as `ItemCard`, a round
  * swatch of `item.colour` instead of a picture. */
-export function ColourCard({ item, owned, wearing, hint, naturalColour, onPick }: ColourCardProps) {
+export function ColourCard({ item, owned, wearing, hint, naturalColour, pickable = owned, footer, onPick }: ColourCardProps) {
   const { t } = useTranslation('normal')
   const name = item === null ? t('wardrobe.natural') : itemName(item.id, t)
-  const clickable = item === null || owned
+  const clickable = item === null || pickable
+  const locked = item !== null && !owned
   const label = item === null ? name : cardLabel(name, item.rarity, owned, wearing, hint, t)
 
   return (
-    <button
-      type="button"
-      className={s.card}
-      data-rarity={item?.rarity}
-      aria-pressed={wearing}
-      aria-disabled={!clickable}
-      aria-label={label}
+    <CardShell
+      rarity={item?.rarity}
+      wearing={wearing}
+      disabled={!clickable}
+      label={label}
+      footer={footer}
       onClick={() => {
         if (clickable) onPick(item?.id)
       }}
@@ -217,12 +292,12 @@ export function ColourCard({ item, owned, wearing, hint, naturalColour, onPick }
       ) : (
         <span className={s.colourSwatchBig} style={{ background: item.colour }} aria-hidden="true" />
       )}
-      <span className={s.cardName} data-locked={!clickable}>
+      <span className={s.cardName} data-locked={locked}>
         {name}
       </span>
       {item === null ? null : <RarityLabel rarity={item.rarity} />}
-      {clickable ? null : <LockHint hint={hint} />}
-    </button>
+      {locked ? <LockHint hint={hint} /> : null}
+    </CardShell>
   )
 }
 
@@ -231,25 +306,28 @@ export interface WordCardProps {
   owned: boolean
   wearing: boolean
   hint: string
+  /** Whether a press reaches `onPick` (Plan 27, P21): `owned` unless the caller says otherwise. */
+  pickable?: boolean
+  /** A row under the words, inside the card's border and outside its pick button (Plan 27, P21) — see `ItemCard`. */
+  footer?: ReactNode
   onPick: (id: string) => void
 }
 
 /** A text-only card (Danh hiệu, Huy hiệu — design §4.4): the same wearing/lock chrome as `ItemCard`
  * with no picture to draw. */
-export function WordCard({ item, owned, wearing, hint, onPick }: WordCardProps) {
+export function WordCard({ item, owned, wearing, hint, pickable = owned, footer, onPick }: WordCardProps) {
   const { t } = useTranslation('normal')
   const name = itemName(item.id, t)
 
   return (
-    <button
-      type="button"
-      className={s.card}
-      data-rarity={item.rarity}
-      aria-pressed={wearing}
-      aria-disabled={!owned}
-      aria-label={cardLabel(name, item.rarity, owned, wearing, hint, t)}
+    <CardShell
+      rarity={item.rarity}
+      wearing={wearing}
+      disabled={!pickable}
+      label={cardLabel(name, item.rarity, owned, wearing, hint, t)}
+      footer={footer}
       onClick={() => {
-        if (owned) onPick(item.id)
+        if (pickable) onPick(item.id)
       }}
     >
       {wearing ? <WearingPill /> : null}
@@ -258,6 +336,6 @@ export function WordCard({ item, owned, wearing, hint, onPick }: WordCardProps) 
       </span>
       <RarityLabel rarity={item.rarity} />
       {owned ? null : <LockHint hint={hint} />}
-    </button>
+    </CardShell>
   )
 }

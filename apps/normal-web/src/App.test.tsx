@@ -329,6 +329,39 @@ describe('App — the shell', () => {
     expect(screen.getByRole('navigation', { name: viNormal.nav.main })).toBeInTheDocument()
   })
 
+  /** Plan 27 (P20): the shop is a lazy account route, reached from the lobby beside the wardrobe — not a fifth tab. */
+  it('routes #/shop to the Cửa hàng, which the lobby links beside the wardrobe and the rail does not', async () => {
+    expect(ACCOUNT_ROUTES).toEqual(['/profile', '/avatar', '/achievements', '/daily', '/settings', '/gm', '/shop'])
+    window.history.replaceState(null, '', '/#/lobby')
+    const avatar = { v: 4, gender: 'f', hairStyle: 'hair_f_bob01', outfit: 'outfit_casual01' }
+    renderApp(
+      stubApi({
+        shop: vi.fn().mockResolvedValue({
+          weekKey: '2026-W43',
+          featured: [],
+          featuredSource: 'auto',
+          entries: [],
+          me: { balance: 123_000, reputation: 0, rank: 1, ranks: [{ rank: 1, threshold: 0 }] },
+        }),
+        inventory: vi.fn().mockResolvedValue({ items: [], avatar }),
+      }),
+    )
+    await settled()
+    await welcome()
+
+    const doors = await screen.findByRole('navigation', { name: viNormal.shop.lobbyLinks })
+    expect(within(doors).getAllByRole('link').map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+      [viNormal.wardrobe.title, '#/avatar'],
+      [viNormal.shop.title, '#/shop'],
+    ])
+    const rail = screen.getByRole('navigation', { name: viNormal.nav.main })
+    expect(within(rail).queryByRole('link', { name: new RegExp(viNormal.shop.title) })).toBeNull()
+
+    await userEvent.setup().click(within(doors).getByRole('link', { name: viNormal.shop.title }))
+    expect(await screen.findByRole('heading', { name: viNormal.shop.title, level: 1 })).toBeInTheDocument()
+    expect(window.location.hash).toBe('#/shop')
+  })
+
   it('keeps the rail balance on the routes that print none of their own', async () => {
     window.history.replaceState(null, '', '/#/daily')
     const { container } = renderApp()

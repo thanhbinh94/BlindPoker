@@ -10,6 +10,7 @@ import { LedgerPanel } from './LedgerPanel.js'
 import { formatDay, formatMoment, formatSigned } from './format.js'
 import s from './normal.module.css'
 import { refusalText } from './refusal.js'
+import { ReputationLine } from './ReputationLine.js'
 import { useAsync } from './useAsync.js'
 
 /** §19.2 serves the last twenty hands by default, and twenty is what a profile page is for. */
@@ -66,48 +67,6 @@ function tableLine(roomName: string, lang: Language, t: TFunction): string {
 
 /** The mode label belongs to the game, so it comes from the kit's `game` namespace, not this app's. */
 const modeLabel = (mode: string, t: TFunction): string => t(`game:mode.${mode}`, { defaultValue: mode })
-
-/**
- * The reputation line (Plan 27, spec 2026-10-21 §2 A4): "Danh vọng 455 · Cao thủ · còn 1.345 tới Bậc thầy", and a bar
- * as far along from this rank's threshold to the next one's. At the top of the ladder there is no next step: the line
- * stops at the rank and the bar goes. The rank is a high-water mark, so a GM raising a threshold can leave the
- * reputation under the rank's own threshold (R15): the bar then reads empty, never negative. Nothing at all from a
- * server older than Plan 27, which sends no reputation.
- */
-function ReputationLine({ me, lang }: { me: MeDto; lang: Language }) {
-  const { t } = useTranslation('normal')
-  if (typeof me.reputation !== 'number' || typeof me.rank !== 'number') return null
-  const ranks = Array.isArray(me.ranks) ? me.ranks : []
-  const rankName = (rank: number): string => t(`game:rank.${rank}`, { defaultValue: String(rank) })
-  const points = formatPoints(me.reputation, lang)
-  const here = ranks.find((r) => r.rank === me.rank)?.threshold ?? 0
-  const next = ranks.filter((r) => r.rank > me.rank).sort((x, y) => x.rank - y.rank)[0]
-  const progress =
-    next === undefined ? null : Math.min(1, Math.max(0, (me.reputation - here) / Math.max(1, next.threshold - here)))
-  return (
-    <div className={s.repLine} data-reputation="">
-      <p className={s.repText}>
-        {next === undefined
-          ? t('profile.reputationTop', { points, rank: rankName(me.rank) })
-          : t('profile.reputation', {
-              points,
-              rank: rankName(me.rank),
-              left: formatPoints(Math.max(0, next.threshold - me.reputation), lang),
-              next: rankName(next.rank),
-            })}
-      </p>
-      {progress === null ? null : (
-        <span className={s.repBar} aria-hidden="true">
-          <span
-            className={s.repFill}
-            data-progress=""
-            style={{ width: `${Math.round(progress * 1000) / 10}%`, background: `var(--rank-${me.rank}, var(--ink-muted))` }}
-          />
-        </span>
-      )}
-    </div>
-  )
-}
 
 export interface ProfileScreenProps {
   api: NormalApi
@@ -307,7 +266,7 @@ export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenPr
             {badgeId === undefined || badgeId === '' ? null : <Badge tone="teal">{itemName(badgeId, t)}</Badge>}
           </p>
           <p className={s.footnote}>{t('profile.memberSince', { date: formatDay(me.createdAt, lang) })}</p>
-          <ReputationLine me={me} lang={lang} />
+          <ReputationLine standing={me} lang={lang} />
           <p className={s.balanceLine}>
             <span className={s.rowMeta}>{t('profile.balance')}</span>
             <span className={s.balance}>{balanceText}</span>

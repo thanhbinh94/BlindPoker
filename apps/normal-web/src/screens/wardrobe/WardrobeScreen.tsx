@@ -1,6 +1,6 @@
 import { Button, defaultChibi, Modal, Segmented, useMediaQuery, type Expression } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ApiError,
@@ -22,7 +22,7 @@ import { useAvatars } from '../../avatar/useAvatars.js'
 import type { HintSources } from '../catalog.js'
 import s from '../normal.module.css'
 import { useAsync } from '../useAsync.js'
-import { counts, GROUPS, PHONE_QUERY, panelId, slotCards, subTabId, type TabId } from './categories.js'
+import { counts, GROUPS, PHONE_QUERY, panelId, slotCards, subTabId, tabOfSlot, type TabId } from './categories.js'
 import { CategoryNav } from './CategoryNav.js'
 import { ColourTab } from './ColourTab.js'
 import { EquippedList } from './EquippedList.js'
@@ -67,6 +67,10 @@ export interface WardrobeScreenProps {
    * table and the lobby bar draw from has a minute-long entry that would otherwise keep the old face on
    * screen for up to that long. */
   playerId: string | null
+  /** `#/avatar?item=<id>` (Plan 27, P22): the shop's "Mặc" on a card the player owns. Once the wardrobe has loaded, it
+   * opens that item's tab and puts the item on the draft — unsaved, like any other pick, so "Lưu trang phục" keeps it
+   * and "Hoàn tác" takes it back. An id the catalogue does not know, or one the player does not own, opens nothing. */
+  initialItem?: string | null
 }
 
 interface WardrobeData {
@@ -120,7 +124,7 @@ type Note = 'saved' | null
  * Leaving with unsaved changes is guarded twice — `beforeunload` for a reload or a closed tab, an in-app
  * confirmation for a `#/…` link elsewhere in the app — both wired up where `dirty` is computed, below.
  */
-export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
+export function WardrobeScreen({ api, playerId, initialItem = null }: WardrobeScreenProps) {
   const { t } = useTranslation('normal')
   const wardrobe = useAsync<WardrobeData>(async () => {
     const [inventory, catalogAnswer, avatarCatalog, outfitsAnswer, achievementsAnswer] = await Promise.all([
@@ -221,6 +225,21 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
     for (const id of ALL_TABS) map[id] = counts(id, catalog, owned, gender)
     return map
   }, [loaded, owned, gender])
+
+  // `initialItem`, once: the first load that knows the item opens its tab and wears it on the draft. A hairstyle of the
+  // other gender is only shown — the Kiểu tóc tab lists the draft's gender's, and the server refuses the pair.
+  const initialDone = useRef(false)
+  useEffect(() => {
+    if (initialDone.current || loaded === null || initialItem === null) return
+    initialDone.current = true
+    const wanted = loaded.catalog.find((row) => row.id === initialItem)
+    if (wanted === undefined) return
+    setTab(tabOfSlot(wanted.slot))
+    const base = loaded.inventory.avatar
+    if (!owned.has(wanted.id) || base[wanted.slot] === wanted.id) return
+    if (wanted.slot === 'hairStyle' && wanted.gender !== base.gender) return
+    setDraft(withSlot(base, wanted.slot, wanted.id))
+  }, [loaded, initialItem, owned])
 
   if (wardrobe.loading && loaded === null) {
     return (

@@ -59,9 +59,10 @@ const AchievementsScreen = lazyScreen(async () => ({ default: (await import('./s
 const DailyScreen = lazyScreen(async () => ({ default: (await import('./screens/DailyScreen.js')).DailyScreen }))
 const SettingsScreen = lazyScreen(async () => ({ default: (await import('./screens/SettingsScreen.js')).SettingsScreen }))
 const GmScreen = lazyScreen(async () => ({ default: (await import('./screens/gm/GmScreen.js')).GmScreen }))
+const ShopScreen = lazyScreen(async () => ({ default: (await import('./screens/shop/ShopScreen.js')).ShopScreen }))
 
 /** The routes served by a lazy chunk rather than by the entry bundle. */
-export const ACCOUNT_ROUTES = ['/profile', '/avatar', '/achievements', '/daily', '/settings', '/gm']
+export const ACCOUNT_ROUTES = ['/profile', '/avatar', '/achievements', '/daily', '/settings', '/gm', '/shop']
 
 /**
  * The inventory's old route. The inventory folded into the wardrobe (review 2026-09-29, No5), but a bookmark, a
@@ -344,7 +345,10 @@ export function App({ api, socketFactory }: AppProps) {
                 {path === '/profile' ? (
                   <ProfileScreen api={guarded} lang={lang} balance={balance} onRenamed={onRenamed} />
                 ) : path === '/avatar' ? (
-                  <WardrobeScreen api={guarded} playerId={myId} />
+                  // `#/avatar?item=<id>`: the shop's "Mặc" on an owned card opens the wardrobe with that item picked.
+                  <WardrobeScreen api={guarded} playerId={myId} initialItem={route.query.get('item')} />
+                ) : path === '/shop' ? (
+                  <ShopScreen api={guarded} lang={lang} balance={balance} playerId={myId} />
                 ) : path === '/daily' ? (
                   <DailyScreen api={guarded} lang={lang} checkinResets={checkinResets} />
                 ) : path === '/settings' ? (
@@ -395,6 +399,17 @@ export function App({ api, socketFactory }: AppProps) {
                 </a>
               }
               rank={myId === null ? null : (avatars.get(myId)?.rank ?? null)}
+              // The wardrobe and the shop, by name, under the bar (Plan 27, P20): the rail holds four tabs and no more.
+              header={
+                <nav className={a.lobbyLinks} aria-label={t('shop.lobbyLinks')}>
+                  <a className={a.lobbyLink} href="#/avatar">
+                    {t('wardrobe.title')}
+                  </a>
+                  <a className={a.lobbyLink} href="#/shop">
+                    {t('shop.title')}
+                  </a>
+                </nav>
+              }
             />
           )}
         </Shell>

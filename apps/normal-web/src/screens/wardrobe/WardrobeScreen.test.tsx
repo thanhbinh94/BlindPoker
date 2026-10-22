@@ -1081,6 +1081,42 @@ describe('WardrobeScreen', () => {
     })
   })
 
+  /** Plan 27 (P22): `#/avatar?item=<id>`, the shop's "Mặc" on an owned card. */
+  describe('initialItem', () => {
+    it('opens the item’s tab and puts it on the draft, unsaved, for "Lưu trang phục" to keep', async () => {
+      const user = userEvent.setup()
+      const api = stubApi()
+      renderWithI18n(<WardrobeScreen api={api} playerId="p1" initialItem="head_beret_blue01" />, makeI18n('vi'))
+      await opened()
+
+      const subList = await screen.findByRole('tablist', { name: viNormal.wardrobe.groups.wear })
+      expect(within(subList).getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.head}`) })).toHaveAttribute('aria-selected', 'true')
+      expect(card(viNormal.items.head_beret_blue01)).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByText(viNormal.wardrobe.dirty)).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: viNormal.wardrobe.save }))
+      await waitFor(() => expect(api.setAvatar).toHaveBeenCalledWith({ ...AVATAR, head: 'head_beret_blue01' }))
+    })
+
+    it('opens the tab of an item the player does not own without wearing it', async () => {
+      renderWithI18n(<WardrobeScreen api={stubApi()} playerId="p1" initialItem="head_tophat01" />, makeI18n('vi'))
+      await opened()
+
+      const subList = await screen.findByRole('tablist', { name: viNormal.wardrobe.groups.wear })
+      expect(within(subList).getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.head}`) })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.queryByText(viNormal.wardrobe.dirty)).toBeNull()
+    })
+
+    it('ignores an id the catalogue does not know', async () => {
+      renderWithI18n(<WardrobeScreen api={stubApi()} playerId="p1" initialItem="hat_from_the_future" />, makeI18n('vi'))
+      await opened()
+
+      const subList = screen.getByRole('tablist', { name: viNormal.wardrobe.groups.look })
+      expect(within(subList).getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.hairStyle}`) })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.queryByText(viNormal.wardrobe.dirty)).toBeNull()
+    })
+  })
+
   describe('CategoryNav wiring (design §3.1, §5.5)', () => {
     it('jumps to a slot’s group and tab when its wearing-list row is clicked', async () => {
       const user = userEvent.setup()

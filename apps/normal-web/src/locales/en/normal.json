@@ -551,6 +551,57 @@
     "delete": "Delete",
     "error": "Could not complete that action — please try again"
   },
+  "shop": {
+    "title": "Shop",
+    "lobbyLinks": "Wardrobe and shop",
+    "featured": "This week's shelf",
+    "week": "Week {{week}}/{{year}}",
+    "shelves": "By rarity",
+    "slotFilter": "Filter by slot",
+    "slot": {
+      "all": "All",
+      "colour": "Colours"
+    },
+    "empty": "Nothing on this shelf yet",
+    "figure": "Your character",
+    "balance": "Balance: {{points}} points",
+    "trying": "Trying on: {{item}}",
+    "reset": "Back to my outfit",
+    "wearNow": "Wear it now",
+    "worn": "Your character is wearing it.",
+    "buy": "Buy",
+    "buyPrice": "Buy · {{price}}",
+    "price": "{{price}} points",
+    "short": "{{amount}} points short",
+    "needRank": "🔒 needs {{rank}}",
+    "owned": "✓ Owned",
+    "wear": "Wear",
+    "wearLabel": "Wear {{item}} in the wardrobe",
+    "lock": {
+      "achievement": "🏆 Achievement: {{name}}",
+      "giftMonth": "📅 Gift of {{month}}",
+      "giftDefault": "📅 Check-in gift",
+      "free": "Free — already in your wardrobe",
+      "default": "Not for sale",
+      "disabled": "Not for sale",
+      "unpriced": "Not for sale"
+    },
+    "confirmTitle": "Buy this item?",
+    "confirm": "Buy {{item}} for {{price}} points? {{left}} left.",
+    "cancel": "Cancel",
+    "close": "Close",
+    "bought": "{{item}} is in your wardrobe",
+    "retry": "Not sure the purchase went through. Press Buy again: you will not be charged twice.",
+    "error": "Could not load the shop",
+    "refusal": {
+      "SHOP_DISABLED": "This item is not for sale right now",
+      "RANK_TOO_LOW": "Your rank is too low for this item",
+      "ALREADY_OWNED": "You already own this item",
+      "INSUFFICIENT_POINTS": "You do not have enough points for this item",
+      "PURCHASE_UNDONE": "That purchase was undone. Open it again to buy once more.",
+      "UNKNOWN_ITEM": "This item does not exist"
+    }
+  },
   "items": {
     "head_beanie01": "Beanie",
     "head_dealer_visor01": "Dealer's visor",

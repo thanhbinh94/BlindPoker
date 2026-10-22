@@ -551,6 +551,57 @@
     "delete": "Xóa",
     "error": "Không thực hiện được thao tác, vui lòng thử lại"
   },
+  "shop": {
+    "title": "Cửa hàng",
+    "lobbyLinks": "Phòng thay đồ và cửa hàng",
+    "featured": "Kệ tuần này",
+    "week": "Tuần {{week}}/{{year}}",
+    "shelves": "Theo độ hiếm",
+    "slotFilter": "Lọc theo ô",
+    "slot": {
+      "all": "Tất cả",
+      "colour": "Màu sắc"
+    },
+    "empty": "Kệ này chưa có món nào",
+    "figure": "Nhân vật của bạn",
+    "balance": "Số dư: {{points}} điểm",
+    "trying": "Mặc thử: {{item}}",
+    "reset": "Về đồ đang mặc",
+    "wearNow": "Mặc luôn",
+    "worn": "Đã mặc lên nhân vật.",
+    "buy": "Mua",
+    "buyPrice": "Mua · {{price}}",
+    "price": "{{price}} điểm",
+    "short": "thiếu {{amount}} điểm",
+    "needRank": "🔒 cần {{rank}}",
+    "owned": "✓ Đã có",
+    "wear": "Mặc",
+    "wearLabel": "Mặc {{item}} trong Phòng thay đồ",
+    "lock": {
+      "achievement": "🏆 Thành tựu: {{name}}",
+      "giftMonth": "📅 Quà tháng {{month}}",
+      "giftDefault": "📅 Quà điểm danh",
+      "free": "Miễn phí — có sẵn trong Phòng thay đồ",
+      "default": "Không bán",
+      "disabled": "Không bán",
+      "unpriced": "Không bán"
+    },
+    "confirmTitle": "Mua món này?",
+    "confirm": "Mua {{item}} với {{price}} điểm? Còn lại {{left}}.",
+    "cancel": "Thôi",
+    "close": "Đóng",
+    "bought": "{{item}} đã vào tủ đồ",
+    "retry": "Chưa rõ đã mua được chưa. Bấm Mua lần nữa: bạn sẽ không bị trừ điểm hai lần.",
+    "error": "Không tải được cửa hàng",
+    "refusal": {
+      "SHOP_DISABLED": "Món này hiện không bán",
+      "RANK_TOO_LOW": "Bậc của bạn chưa đủ để mua món này",
+      "ALREADY_OWNED": "Bạn đã có món này",
+      "INSUFFICIENT_POINTS": "Bạn không đủ điểm để mua món này",
+      "PURCHASE_UNDONE": "Lần mua này đã bị hoàn tác. Mở lại để mua lần nữa.",
+      "UNKNOWN_ITEM": "Không tìm thấy món này"
+    }
+  },
   "items": {
     "head_beanie01": "Mũ len",
     "head_dealer_visor01": "Mũ chia bài",

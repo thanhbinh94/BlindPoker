@@ -56,3 +56,32 @@
   border: 1px solid color-mix(in srgb, var(--gold) 42%, transparent);
   border-radius: 50%;
 }
+
+/* ── the lobby's two named doors under the bar: Phòng thay đồ and Cửa hàng (Plan 27, P20) ── */
+
+.lobbyLinks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+.lobbyLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--bg-elev);
+  color: var(--ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.lobbyLink:hover {
+  border-color: var(--gold);
+}

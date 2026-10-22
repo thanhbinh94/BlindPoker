@@ -25,7 +25,8 @@ const NAV: { path: string; key: string; icon: IconPath }[] = [
 type IconPath = string
 
 /**
- * Routes that print the balance in the page itself, and there is exactly one: the profile header carries it.
+ * Routes that print the balance in the page itself: the profile header carries it, and the shop's figure (Plan 27 —
+ * the live balance, the socket's, with a purchase's answer until the socket's next push).
  * On a phone the rail has room for the mark, four tabs and the connection dot — and not for a second copy of a
  * number the page below is already showing, which is what would push the fourth tab off the edge at 375 px.
  *
@@ -33,7 +34,7 @@ type IconPath = string
  * frame, and a fetched copy would go stale on the next settlement), so on those the rail's copy is the only
  * one there is and hiding it would leave a player on `/daily` unable to see their points at all.
  */
-const BALANCE_IN_PAGE = ['/profile']
+const BALANCE_IN_PAGE = ['/profile', '/shop']
 
 /**
  * The width at which the rail stops being able to hold everything, and the same 900 px at which the stylesheet

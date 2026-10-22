@@ -1,0 +1,346 @@
+/* The Cửa hàng (Plan 27, spec 2026-10-21 §3 B3): a figure column and the shelves beside it. The cards themselves are the
+   wardrobe's (`../wardrobe/cards.tsx`, styled by `wardrobe.module.css`); what is here is the page around them, the
+   stage and the footer the shop adds under each card. */
+
+/* Title and gold rule: the wardrobe's title row, so the two wide screens read alike. */
+.header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.title {
+  flex: none;
+}
+
+/* One column on a phone, the strip on top; 240 px | shelves on a tablet; 320 px | shelves from 1024 px. */
+.layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  min-width: 0;
+}
+
+@media (min-width: 768px) {
+  .layout {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-5);
+  }
+}
+
+@media (min-width: 1024px) {
+  .layout {
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: 28px;
+  }
+}
+
+/* ── the stage ─────────────────────────────────────────────────────────────── */
+
+/* The figure column: pinned while the shelves scroll, so a try-on stays in sight. */
+.stageColumn {
+  position: sticky;
+  top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elev);
+}
+
+/* A window too short to hold the whole column (a phone held sideways, 915×412) scrolls it with the page instead: pinned,
+   its balance and reputation would sit below the fold until the shelves ran out. */
+@media (max-height: 600px) {
+  .stageColumn {
+    position: static;
+  }
+}
+
+/* A lit podium the figure stands on: 310 px tall in the 320 px column, 230 px in the 240 px one (`FIGURE_SIZE`). */
+.stage {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+  height: 230px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 85%, black) 0%, var(--bg) 100%);
+}
+
+@media (min-width: 1024px) {
+  .stage {
+    height: 310px;
+  }
+}
+
+.stage::before {
+  content: '';
+  position: absolute;
+  top: 10%;
+  left: 50%;
+  width: 70%;
+  height: 70%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--gold) 30%, transparent) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.stageFigure {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.trying {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--gold);
+}
+
+.stageActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.balance {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+/* The phone's strip (≤ 767 px): the figure, the balance and the reputation line in a 96 px band, sticky above the
+   shelves; the try-on caption and the two buttons under it when there is a try-on. */
+.stripWrap {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elev);
+  box-shadow: var(--shadow-1);
+}
+
+.strip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 96px;
+}
+
+.stripFigure {
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  justify-content: center;
+  width: 84px;
+  height: 96px;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--gold) 22%, transparent) 0%, var(--bg) 72%);
+}
+
+.stripText {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* ── the shelves ───────────────────────────────────────────────────────────── */
+
+.shelves {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  color: var(--ink);
+}
+
+.week {
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+}
+
+.shelfSwitch {
+  align-self: flex-start;
+}
+
+/* The slot filter: one scrolling row on a phone, wrapping rows from the tablet floor up. */
+.filters {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+@media (min-width: 768px) {
+  .filters {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+}
+
+.filter {
+  flex: none;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.filter[aria-pressed='true'] {
+  border-color: var(--gold);
+  background: var(--gold-soft);
+  color: var(--ink);
+}
+
+.empty {
+  margin: 0;
+  padding: var(--space-4) 0;
+  color: var(--ink-muted);
+}
+
+/* The card grid: two columns on a phone (a footer button needs the width), then as many as fit. `min-width: 0` on
+   each cell lets a long name wrap instead of widening the track. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 14px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  }
+}
+
+/* One card's cell. The card inside (the wardrobe's `.cardCell`) fills it, so a row's borders end on one line. */
+.slot {
+  display: flex;
+  min-width: 0;
+  border-radius: var(--radius-md);
+}
+
+.slot > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The card on try-on: a teal ring outside the card's own border, which keeps its rarity and "wearing" colours. */
+.slot[data-trying='true'] {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+/* ── a card's footer ───────────────────────────────────────────────────────── */
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+  width: 100%;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--line);
+}
+
+.buy {
+  width: 100%;
+}
+
+.price {
+  font-size: 0.875rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+}
+
+.short,
+.need,
+.note {
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+}
+
+.short {
+  color: var(--red);
+}
+
+.owned {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--teal);
+}
+
+.wearLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.wearLink:hover {
+  border-color: var(--gold);
+}

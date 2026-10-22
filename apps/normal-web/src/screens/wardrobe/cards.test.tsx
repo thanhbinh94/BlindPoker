@@ -396,4 +396,49 @@ describe('cards', () => {
       ).toHaveAttribute('aria-pressed', 'true')
     })
   })
+
+  /** Plan 27 (P21): the shop picks a card the player does not own (a try-on) and draws a footer under it. */
+  describe('pickable and footer', () => {
+    const footer = (
+      <button type="button" data-testid="footer-button">
+        {'footer'}
+      </button>
+    )
+
+    it.each([
+      ['ItemCard', HEAD_TOPHAT, (onPick: (id: string) => void) => <ItemCard item={HEAD_TOPHAT} owned={false} wearing={false} hint="h" pickable footer={footer} onPick={onPick} />],
+      ['ColourCard', HAIRCOLOR_RED, (onPick: (id: string) => void) => <ColourCard item={HAIRCOLOR_RED} owned={false} wearing={false} hint="h" pickable footer={footer} onPick={(id) => onPick(id!)} />],
+      ['WordCard', TITLE_ROOKIE, (onPick: (id: string) => void) => <WordCard item={TITLE_ROOKIE} owned={false} wearing={false} hint="h" pickable footer={footer} onPick={onPick} />],
+    ] as const)('%s: a pickable unowned card calls onPick, and its footer sits inside the card beside the pick button', async (_name, row, draw) => {
+      const user = userEvent.setup()
+      const onPick = vi.fn()
+      render(draw(onPick))
+
+      const pick = screen.getByRole('button', { name: new RegExp(`^${viNormal.items[row.id as keyof typeof viNormal.items]}, `) })
+      expect(pick).toHaveAttribute('aria-disabled', 'false')
+      await user.click(pick)
+      expect(onPick).toHaveBeenCalledWith(row.id)
+
+      const button = screen.getByTestId('footer-button')
+      // Beside the pick button, never inside it (a button cannot hold another), and inside the same bordered card.
+      expect(pick.contains(button)).toBe(false)
+      expect(pick.parentElement!.contains(button)).toBe(true)
+    })
+
+    it('keeps a colour card without a footer the one button it always was', () => {
+      const { container } = render(<ColourCard item={HAIRCOLOR_RED} owned wearing={false} hint="" onPick={vi.fn()} />)
+
+      expect(container.querySelectorAll('button')).toHaveLength(1)
+      expect(container.firstElementChild!.tagName).toBe('BUTTON')
+    })
+
+    it('still refuses an unowned card when pickable is left to default', async () => {
+      const user = userEvent.setup()
+      const onPick = vi.fn()
+      render(<ColourCard item={HAIRCOLOR_RED} owned={false} wearing={false} hint="h" footer={footer} onPick={onPick} />)
+
+      await user.click(screen.getByRole('button', { name: new RegExp(`^${viNormal.items.haircolor_red01}, `) }))
+      expect(onPick).not.toHaveBeenCalled()
+    })
+  })
 })
