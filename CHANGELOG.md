@@ -9,7 +9,7 @@ below are the real history.
 
 ---
 
-## BP-28 — a landscape phone that keeps its browser bars seats the table on a stadium as wide as the screen — merged `MERGE` (2026-10-23)
+## BP-28 — a landscape phone that keeps its browser bars seats the table on a stadium as wide as the screen — merged `7ecea0c` (2026-10-23)
 
 The user's review round of 2026-10-22 (bug log §10, E1 and E2, photos 1–4): "lỗi chủ yếu ở ảnh 1-4 là giao diện không hợp
 lý, bài đè lên nhau hoặc không hiển thị đúng vị trí chia ô người chơi khi xoay ngang". Held sideways with Chrome's bars
