@@ -121,7 +121,7 @@ GATE
   excess, the room's sit-down, stand-up and timeout rules, the soak (`fees === 0` for Blind), `RankLabel`, the seat's
   rank, rank contrast, `PlayerBar`, `Toasts`, `lazy`, `tint-queue`, `tinted`. Web: `ShopScreen`, `ShopCard`, `ShopTab`,
   `WelcomeDialog`, `NewcomerPanel`, `DailyScreen`, `ProfileScreen`, the wardrobe's lazy cards and request counts, the
-  footprint (entry chunk 134 KB of a 140 KB budget). The ops pack is at 50 cases with section P (the welcome gift, a
+  footprint (entry chunk about 136 KB of a 140 KB budget, under 4 KB of headroom). The ops pack is at 50 cases with section P (the welcome gift, a
   purchase and the rank lock, the rank on a seat and the profile, the wardrobe's request count, the 3G first paint) and
   F-10 rewritten as the Blind-to-zero case. Docs: the player guide (Quà chào mừng, Tuần đầu tiên, Danh vọng và bậc, Cửa
   hàng, Blind chơi tới điểm cuối cùng, Chơi trên hai thiết bị), `docs/known-limitations.md` (a Plan 27 section and
@@ -171,15 +171,28 @@ GATE
     left in the month are derived on the client from `nextResetAt`; `daily.dayLabel` ("NGÀY 12") is kept, shared with the
     GM editor and the e2e suites.
   - Tinted layers load @1x below DPR 1.5 everywhere, table seats included (P32), not only in the wardrobe.
-  - F-10 became the Blind-to-zero case (P30), and the shop's ops cases take the prefix `M` (Ruling 15).
+  - F-10 became the Blind-to-zero case (P30), and the shop's ops cases take section P (Ruling 24, amending Ruling 15; `M` is the layout section).
   - The entry chunk's budget rose from 130 to 140 KB (Ruling 13).
 - **Deployed.** DEPLOY
 - **Still open.**
   - **Parked minors, declined:** range checks on `players.reputation`, `players.rank` and `newcomer_progress.day`
     (the services already keep them in range; a CHECK constraint is a migration for no behaviour); a visually hidden
-    separator between name and rank word.
-  - **English copy waiting for the user:** "Check-in 12 of 10/2026" and "1 days left" (G2), and the GM's
-    `gm.dialog.checkinBody` ("the streak is kept") and `gm.gifts.lead` ("check-in streak tier"), now wrong.
+    separator between name and rank word. From the whole-branch review: a GM's reputation grant out of range answers
+    with the points-worded `INVALID_AMOUNT` (`gm-service.ts`; the editor's own check stops it first); `ReputationLine`
+    reads "còn 0 tới …" for a moment after a GM lowers a threshold below a player's reputation (the rank catches up at
+    that player's next grant).
+  - **Deploy notes.** The server now seeds its config tables (reputation rules and ranks, welcome choices, shop prices)
+    at boot and **fails to start against a database without `0006`**. The Windows LAN host lacks `0004`–`0006`, so
+    `run.ps1 -NoMigrate` would leave it down: it must run once with migrate (writes the user's Neon database; ask first),
+    then the backfill (`deploy/normal-windows/README.md` §9e). The first boot puts every catalogue item on sale at its
+    seed price while nobody holds a rank above Tân binh until the backfill runs, so the two steps go back to back.
+  - **English copy waiting for the user.** New in this plan's fix wave, written by the implementer:
+    `gm.reputation.invalidRules` / `gm.reputation.invalidRanks` (split from `gm.reputation.invalid`),
+    `gm.shop.prices.invalidItems`, `shop.failed`, `gm.notice.reputation`, and `welcome.lead` ("Pick an item to start
+    with"). Existing en strings this plan **changed**: `daily.lead`, `daily.receipt.streak`, `daily.calendarLead`; and
+    **removed**: `daily.streak`, `notify.TABLE_LIMIT_SPENT*`. Awkward ones to reword: `daily.summaryCount` ("Check-in 12
+    of 10/2026"), `daily.daysLeft` (no plural: "1 days left"), `gm.dialog.checkinBody` ("the streak is kept", now
+    wrong), `gm.gifts.lead` ("check-in streak tier", now wrong), `game:rank.2` ("Card hand"), the ledger's "Shop (sink)".
   - **Residuals** (`docs/known-limitations.md`): reputation is never taken back; a GM's check-in reset leaves the newcomer
     calendar; a welcome at 23:59 and a check-in at 00:01 are two newcomer days; the welcome dialog's flag is per browser;
     the epic shelf is thin until the gift months pass; a new catalogue item sells at the next boot; a retry across a GM
@@ -189,7 +202,7 @@ GATE
     today's locks rather than each week's.
   - **Manual checks for the user:** the welcome gift on a real account, a purchase, the rank on a phone seat, a Blind
     table played to zero, the Điểm danh page after a missed day; the Windows LAN host still needs `0004`–`0006` and the
-    backfill (the user's Neon database; ask first).
+    backfill (the user's Neon database; ask first; see the deploy notes above).
   - **Next round:** K6, more poses for the figure (`docs/bug-log.md` §9), an art project to brainstorm on its own.
 
 ## Plan 26 — GM round 2, a landscape table and a sign-in picture — merged `837485c` (2026-10-21)

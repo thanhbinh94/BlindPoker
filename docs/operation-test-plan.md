@@ -190,7 +190,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 
 | Mã | Bước | Kỳ vọng | Ưu tiên |
 |---|---|---|---|
-| I-01 | Đăng nhập lần đầu trong ngày | Tự mở trang Điểm danh một lần; lần đăng nhập sau trong ngày thì vào sảnh | P2 |
+| I-01 | Đăng nhập lần đầu trong ngày | Tự mở trang Điểm danh một lần; lần đăng nhập sau trong ngày thì vào sảnh (trừ khi chưa nhận Quà chào mừng: sảnh mở hộp quà thay vào, xem S-02) | P2 |
 | I-02 | Nhận thưởng hai lần | Lần hai bị khoá | P1 |
 | I-03 | Xem "Lần điểm danh tiếp theo" | 00:00 giờ Việt Nam hôm sau | P3 |
 | I-04 | Ngày 7, 14, 21, 28 của chuỗi | Nhận thêm vật phẩm (không thử được trong một ngày — đã có test tự động; nếu có người chơi đủ chuỗi thì ghi lại) | P3 |
@@ -283,7 +283,7 @@ màn nào, trạng thái nào, cỡ nào và test nào: `docs/test-matrix.md`. N
 
 ### P. Cửa hàng, danh vọng và tủ đồ (Plan 27)
 
-Cả năm ca là **tự động** — `08-shop.spec.ts` (P-02 và P-04 chạy ở project `mobile`, P-03b ở project `landscape`, còn lại
+Cả sáu ca (P-01…P-05 và P-03b) là **tự động** — `08-shop.spec.ts` (P-02 và P-04 chạy ở project `mobile`, P-03b ở project `landscape`, còn lại
 ở `desktop`); ca đổi giá của GM là Q-04. Bộ test nâng bậc bằng lối cộng danh vọng của GM; người test làm bằng tay thì nhờ
 GM bấm "Cộng danh vọng" ở trang người chơi. Mã P- là mã ca test, khác với P1/P2 (điện thoại) và P1/P2/P3 (mức ưu tiên).
 
@@ -291,9 +291,9 @@ GM bấm "Cộng danh vọng" ở trang người chơi. Mã P- là mã ca test, 
 |---|---|---|---|
 | P-01 | **Tự động.** Tài khoản mới: hộp thoại chào mừng hiện trên sảnh, bấm "Để sau"; rồi bấm "🎁 Quà chào mừng", chọn "Đồng phục chia bài", "Nhận", "Vào chơi". Mở Phòng thay đồ. Sau đó đăng nhập tài khoản ấy trên trình duyệt khác khi chưa nhận Điểm danh hôm nay | Hộp thoại có ba món hiếm, mỗi món vẽ trên chính nhân vật của mình; "Nhận" còn khóa cho tới khi chọn một món. Sau "Nhận": dòng "Đồng phục chia bài đã vào tủ đồ, +100 danh vọng"; "Vào chơi" đóng hộp thoại, nút "🎁 Quà chào mừng" biến mất, hình nhân vật ở sảnh mặc món vừa chọn. Phòng thay đồ có món đó, nhãn "Đang dùng". Lần đăng nhập sau: không còn hộp thoại chào mừng, app tự mở trang Điểm danh, nút "Nhận thưởng" sáng | P1 |
 | P-02 | **Tự động, điện thoại.** Sảnh → "Cửa hàng". Ở kệ Thường bấm "Mua · 10.000" của "Mũ len" → "Mua". Chuyển sang kệ Hiếm. GM cộng 400 danh vọng; tải lại trang, mua một món hiếm. Mở Hồ sơ → Lịch sử điểm | Hộp thoại "Mua món này?" ghi giá và số dư còn lại; mua xong có dòng "Mũ len đã vào tủ đồ", thẻ ghi "✓ Đã có", "Số dư: … điểm" giảm đúng 10.000. Trước khi được cộng danh vọng, thẻ hiếm ghi "🔒 cần Cao thủ" và không có nút Mua (máy chủ cũng từ chối); sau khi lên Cao thủ thì mua được. Mỗi lần mua trừ điểm đúng một lần: Lịch sử điểm có đúng hai dòng "Mua ở Cửa hàng" | P1 |
-| P-03 | **Tự động.** Người chơi đã lên Cao thủ (400 danh vọng): mở Hồ sơ, rồi tạo bàn Blind có 1 bot và ngồi vào bàn. P-03b: làm lại trên điện thoại xoay ngang | Hồ sơ ghi "Danh vọng 400 · Cao thủ · còn 1.400 tới Bậc thầy". Ở bàn, chữ "Cao thủ" đứng cạnh tên (hoặc sau số điểm khi tên dài) trên bảng tên của mình. Xoay ngang: bảng tên hẹp nên bậc hiện thành viên "III" trên dòng số điểm. Lưu ý: hình đại diện được trình duyệt giữ 60 giây, nên vừa lên bậc mà vào bàn ngay thì bàn có thể còn hiện bậc cũ một lúc | P2 |
+| P-03 | **Tự động.** Người chơi đã lên Cao thủ (400 danh vọng): mở Hồ sơ, rồi tạo bàn Blind có 1 bot và ngồi vào bàn. P-03b: làm lại trên điện thoại xoay ngang | Hồ sơ ghi "Danh vọng 400 · Cao thủ · còn 1.400 tới Bậc thầy". Ở bàn, chữ "Cao thủ" đứng cạnh tên (hoặc sau số điểm khi tên dài) trên bảng tên của mình. Xoay ngang: bảng tên hẹp nên bậc hiện thành viên "III" trên dòng số điểm. Vừa được cộng danh vọng thì thanh trên của sảnh đổi sang "Cao thủ" ngay, không cần tải lại; tải lại trang cũng vẫn là Cao thủ. | P2 |
 | P-04 | **Tự động, điện thoại.** Tài khoản mới mở Phòng thay đồ; chuyển sang Trang phục → Mũ với ô "Hiện cả món chưa có" được tích; quay lại Ngoại hình | Trang chỉ tải hình của các thẻ gần màn hình (không quá 8 yêu cầu `/avatar/` cho mỗi hình nhân vật hay thẻ đang thấy), ít hơn hẳn cách tải mọi thẻ cùng lúc; chuyển tab không gây một loạt yêu cầu | P2 |
-| P-05 | **Tự động.** Mạng "3G nhanh" (1,6 Mbps, trễ 150 ms), app đang mở ở Hồ sơ, bấm sang Phòng thay đồ, ở 1366×768 và 375×812 | Sân khấu và hàng thẻ đầu tiên hiện trong 2 giây ở cả hai cỡ; ở 1366×768 hình của hàng đầu cũng tải xong trong 2 giây (trên điện thoại hình @2x có thể chậm hơn, xem `docs/known-limitations.md`) | P3 |
+| P-05 | **Tự động.** Mạng "3G nhanh" (1,6 Mbps, trễ 150 ms), app đang mở ở Hồ sơ, bấm sang Phòng thay đồ, ở 1366×768 và 375×812 | Sân khấu và hàng thẻ đầu tiên hiện trong 2 giây ở cả hai cỡ; hình của hàng đầu tải xong trong 2 giây ở cả hai cỡ (chân dung nhỏ luôn tải ảnh @1x) | P3 |
 
 ### Q. Quản trị (GM)
 

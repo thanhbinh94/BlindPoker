@@ -509,9 +509,9 @@ and holds four budgets:
 
 | | Budget | Today |
 |---|---:|---:|
-| entry chunk (first paint) | 130 KB | 108 KB |
-| every JS chunk together | 900 KB | 119 KB |
-| the stylesheet | 60 KB | 13 KB |
+| entry chunk (first paint) | 140 KB (Plan 27, Ruling 13) | ~136 KB |
+| every JS chunk together | 900 KB | ~174 KB |
+| the stylesheet | 60 KB | ~23 KB |
 | `public/avatar/*@2x.png`, raw bytes (design §8) | 32 MB total (design: 6 MB; raised 2026-09-24 for real art) | ~17 MB (the v4 art) |
 
 The first three are headroom rather than targets: their job is to catch a *step change* (a chart

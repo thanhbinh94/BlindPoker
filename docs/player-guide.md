@@ -454,7 +454,7 @@ Trang "Cài đặt" của **bản Lite** có "Giao diện", "Ngôn ngữ", "Phi�
 | Đầu tháng lịch điểm danh về ô 1 (bản Lite: chuỗi về ngày 1) | Đây là luật của trò chơi. Chỉ lịch điểm danh tính lại; số dư, đồ, danh vọng và thành tựu giữ nguyên. |
 | Mở trò chơi ở tab hay máy khác thì nơi cũ báo "Đã đăng nhập ở nơi khác" | Mỗi người chỉ có một kết nối; nơi sau tiếp quản ghế, nơi cũ bị ngắt và không tự kết nối lại. Tải lại trang ở nơi bạn muốn chơi (mục 7, "Chơi trên hai thiết bị"). |
 | "Bạn đã hết điểm ở bàn này" | Stack của bạn ở bàn đã về 0 nên bạn được mời đứng dậy. Nhận "Cứu trợ" ở trang "Điểm danh" nếu số dư dưới 5.000 điểm, rồi chọn một ghế trống (mục 5, "Chơi tới điểm cuối cùng"). |
-| (bản Normal) Nút "Mua" mờ, ghi "🔒 cần …" | Bậc của bạn chưa đủ cho món đó. Bậc tăng theo danh vọng: chơi, thắng, điểm danh và mở thành tựu (mục 2, "Danh vọng và bậc"). |
+| (bản Normal) Thẻ không có nút "Mua", chỉ ghi giá và "🔒 cần …" | Bậc của bạn chưa đủ cho món đó. Bậc tăng theo danh vọng: chơi, thắng, điểm danh và mở thành tựu (mục 2, "Danh vọng và bậc"). |
 | (bản Normal) "Đã có phiên bản mới của trò chơi." | Bấm "Tải lại". |
 | Đổi tên hay trang phục mà người cùng bàn chưa thấy | Thay đổi hiện ở bàn từ lần vào phòng tiếp theo. |
 | Bản Lite báo "Phiên đăng nhập đã hết hạn. Vui lòng nhập lại tên hiển thị." | Máy chủ không còn nhận ra trình duyệt của bạn, ví dụ dữ liệu máy chủ vừa được làm mới. Nhập một tên để chơi tiếp; nếu thấy "Tên hiển thị đã có người dùng" thì chọn tên khác. |
