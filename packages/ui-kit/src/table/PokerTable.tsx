@@ -31,7 +31,7 @@ export interface PokerTableProps {
   /** The room's frame. In `landscape` (a phone on its side) the table is always the ring: the stack needs height the
    * frame does not have. Defaults to `desktop`. */
   frame?: RoomFrame
-  /** The landscape frame's tier (BP-28): `short` — a stage under 290 px tall — seats the table on a stadium as wide as
+  /** The landscape frame's tier (BP-28): `short` — a stage under 300 px (`SHORT_STAGE_PX`) tall — seats the table on a stadium as wide as
    * the stage (`shortRingPositions`) with compact seats. Stamped as `data-tier` on the ring; ignored outside `landscape`.
    * Defaults to `normal`. */
   tier?: FrameTier

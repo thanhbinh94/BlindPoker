@@ -47,17 +47,19 @@ export function stageTier(frame: RoomFrame, height: number): FrameTier {
  * and the measuring starts then.
  */
 export function useStageTier(ref: RefObject<HTMLElement>, frame: RoomFrame, mounted = true): FrameTier {
-  const [height, setHeight] = useState(0)
+  // The tier, not the height, is the state: a browser bar sliding in or out resizes the stage pixel by pixel, and the
+  // room should re-render only when the tier flips, not on every pixel.
+  const [tier, setTier] = useState<FrameTier>('normal')
   const active = frame === 'landscape' && mounted
   useLayoutEffect(() => {
     const el = ref.current
     if (!active || el === null) return
-    const measure = (): void => setHeight(el.getBoundingClientRect().height)
+    const measure = (): void => setTier(stageTier('landscape', el.getBoundingClientRect().height))
     measure()
     if (typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(measure)
     observer.observe(el)
     return () => observer.disconnect()
   }, [ref, active])
-  return stageTier(frame, active ? height : 0)
+  return active ? tier : 'normal'
 }

@@ -374,7 +374,7 @@ export function Seat({
             ) : null}
           </div>
         ) : null}
-  
+
         <div className={s.plate} data-plate="">
           {/* Every seat gets the same framed disc: a bot's chibi chosen by its id, the app's chibi for a human, and
               the initial when the app has none. The frame is what makes a table of six read as six faces. */}

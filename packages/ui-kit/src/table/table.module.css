@@ -1261,6 +1261,12 @@
   max-width: 22cqw;
 }
 
+/* A plate as wide as its text ends where the name ends, and the dealer disc hangs over its right edge: leave the
+   name room under it, so the D never covers the name's last letter. */
+.ring[data-frame='landscape'][data-tier='short'] .seatMe .plate:has(.dealer) {
+  padding-right: 16px;
+}
+
 .ring[data-frame='landscape'][data-tier='short'] .seatMe .cardMd {
   --card-w: clamp(40px, 16cqh, 56px);
 }

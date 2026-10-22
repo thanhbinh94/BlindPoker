@@ -123,6 +123,23 @@ describe('shortRingPositions', () => {
     expect(Math.min(...xs)).toBeCloseTo(narrow.get(1)!.x, 6)
   })
 
+  it('gives every seat count from 1 to 9 a finite spot of its own, for any anchor and any box width', () => {
+    for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9]) {
+      for (const anchor of [null, 0, n - 1]) {
+        for (const w of [0, 500, 716, 831, 1000]) {
+          const pos = shortRingPositions(order(n), anchor, { w, h: 236 })
+          expect(pos.size, `${n} seats, anchor ${String(anchor)}, ${w} px`).toBe(n)
+          const spots = new Set<string>()
+          for (const p of pos.values()) {
+            expect(Number.isFinite(p.x) && Number.isFinite(p.y), `${n} seats, anchor ${String(anchor)}, ${w} px`).toBe(true)
+            spots.add(`${p.x.toFixed(3)},${p.y.toFixed(3)}`)
+          }
+          expect(spots.size, `${n} seats, anchor ${String(anchor)}, ${w} px: no two seats on one spot`).toBe(n)
+        }
+      }
+    }
+  })
+
   /**
    * The short tier's blocks as `table.module.css` lays them out, in the stage's pixels (measured in the playground on
    * 2026-10-22, `#worst/blindP/<n>/vi/short` and `/landscape` at 915 × 355): a top-line seat hangs 6 px under the stage's

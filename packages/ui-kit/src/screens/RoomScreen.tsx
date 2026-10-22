@@ -161,7 +161,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
   const frame = useRoomFrame(frameOverride)
   const fullscreen = useFullscreenActive()
   // The landscape frame's tier (BP-28): the stage itself is measured, so a phone that keeps its browser bars — or any
-  // stage under 290 px — gets the short one. A hook too, so above the early return; it starts measuring once the stage
+  // stage under 300 px (`SHORT_STAGE_PX`) — gets the short one. A hook too, so above the early return; it starts measuring once the stage
   // is in the tree.
   const tier = useStageTier(stageRef, frame, room !== null)
   const [nudgeDone, dismissNudge] = useFullscreenNudge()
