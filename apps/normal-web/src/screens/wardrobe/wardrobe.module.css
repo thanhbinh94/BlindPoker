@@ -189,6 +189,35 @@
   color: var(--ink);
 }
 
+/* BP-30 (spec K6 §3.2, P12): the stepper and "Xoay" share one row under the stage. Xoay is a sibling of the stepper's
+   `role="group"`, not a member; the stepper keeps the room Xoay leaves, so the face's name is the part that gives way
+   (at 375 px: 44 + name + 44 + Xoay in 343 px, the name still ~170 px). Xoay matches the arrows' height — a thumb's
+   `--tap` on a phone, the 30 px row from the tablet floor up — so the row, and the left column under it, stay as tall
+   as they were. */
+.stageControls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.stageControls > .expressionRow {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+
+.stageControls .stageTurn {
+  flex: none;
+  min-height: var(--tap);
+}
+
+@media (min-width: 768px) {
+  .stageControls .stageTurn {
+    min-height: 30px;
+  }
+}
+
 .picker {
   width: 100%;
   min-width: 0;
@@ -515,6 +544,13 @@
   height: 250px;
 }
 
+/* BP-30 (P14): the desktop stage already trims ~11.5 % off the top of its 290 px figure (`stageFullSize` in `WardrobeScreen.tsx`), so a cheer's hop lifts
+   it half the usual height there: the default -6 % left the bob's ahoge 5 px from the edge at 1920 × 940, and a
+   taller hat would have gone over it. The compact stages fit their figures whole and keep the full hop. */
+.stage[data-compact='false'] {
+  --chibi-hop: -3%;
+}
+
 @media (min-width: 768px) {
   .stage[data-compact='true'] {
     height: 280px;
@@ -550,9 +586,13 @@
   pointer-events: none;
 }
 
+/* BP-30: the figure is a `LiveFigure` now, an `inline-block` that shrinks to the `Chibi` inside it; a flex box here
+   keeps it off any line box, so its feet still sit on the stage's bottom edge exactly as the bare `Chibi`'s did. */
 .stageFigure {
   position: relative;
   z-index: 1;
+  display: flex;
+  align-items: flex-end;
 }
 
 /* The left column's "Đang mặc" list (design §3.1 item 3): one row per slot. */

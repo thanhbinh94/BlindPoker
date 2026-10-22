@@ -1,5 +1,5 @@
-import { Chibi, type ChibiConfig, type Expression } from '@bp/ui-kit'
-import { useId, type KeyboardEvent } from 'react'
+import { LiveFigure, TurnButton, type ChibiConfig, type ChibiFacing, type ChibiReaction, type Expression } from '@bp/ui-kit'
+import { useId, useState, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import s from './wardrobe.module.css'
 
@@ -29,6 +29,9 @@ export interface StagePanelProps {
    * stage was shorter than desktop's — the box shrank, the figure inside it did not. Defaults to 290, the
    * value for the 300 px desktop stage; a caller with a shorter stage passes a smaller one down. */
   fullSize?: number
+  /** A reaction from the screen (BP-30, spec K6 §3.2): a cheer when an item or a colour goes on. Each new `key` plays
+   * once; a tab change hands down the same one, so it plays nothing. */
+  react?: ChibiReaction | null
 }
 
 /**
@@ -38,10 +41,17 @@ export interface StagePanelProps {
  * `portrait` is a swap, not an addition — the frame tab replaces the full figure with its own framed portrait
  * rather than showing a second small chibi beside the first, unlike the picker column's pre-redesign
  * behaviour.
+ *
+ * BP-30 (spec K6 §3.2, P12): the figure is live — it breathes, blinks, cheers on `react`, waves when tapped — and
+ * "Xoay" beside the stepper turns it. One `LiveFigure` serves both frames, its `frame` and `size` swapped, so the
+ * Khung tab keeps the figure's life and facing rather than mounting a second one. Xoay sits outside the stepper's
+ * `role="group"`: the group is the faces' and nothing else.
  */
-export function StagePanel({ subject, expression, onExpression, portrait, compact = false, fullSize = 290 }: StagePanelProps) {
+export function StagePanel({ subject, expression, onExpression, portrait, compact = false, fullSize = 290, react = null }: StagePanelProps) {
   const { t } = useTranslation('normal')
   const nameId = useId()
+  // Kept here, not on the screen: which way the figure faces is a look at it, never part of the outfit (spec K6 §3.3).
+  const [facing, setFacing] = useState<ChibiFacing>('right')
 
   /** One step along `EXPRESSIONS`, wrapping at both ends — a list of six is short enough that going the
    * other way round is how a player reaches "Ngủ" from "Bình thường". */
@@ -63,37 +73,47 @@ export function StagePanel({ subject, expression, onExpression, portrait, compac
     <div className={s.stagePanel}>
       <div className={s.stage} data-compact={compact}>
         <div className={s.stageFigure}>
-          {portrait ? (
-            <Chibi subject={subject} frame="head" size={240} expression={expression} label={t('wardrobe.title')} />
-          ) : (
-            <Chibi subject={subject} frame="full" size={fullSize} expression={expression} label={t('wardrobe.title')} />
-          )}
+          <LiveFigure
+            subject={subject}
+            frame={portrait ? 'head' : 'full'}
+            size={portrait ? 240 : fullSize}
+            expression={expression}
+            label={t('wardrobe.title')}
+            live="idle"
+            greet
+            react={react}
+            facing={facing}
+          />
         </div>
       </div>
 
-      {/* Each button is described by the name between them (final fix wave, B5): focusing one reads the current face. */}
-      <div className={s.expressionRow} role="group" aria-label={t('wardrobe.expression.legend')} onKeyDown={onKeyDown}>
-        <button
-          type="button"
-          className={s.expressionStep}
-          aria-label={t('wardrobe.expression.prev')}
-          aria-describedby={nameId}
-          onClick={() => step(-1)}
-        >
-          <span aria-hidden="true">{PREV_GLYPH}</span>
-        </button>
-        <output id={nameId} className={s.expressionName} aria-live="polite">
-          {t(`wardrobe.expression.${expression}`)}
-        </output>
-        <button
-          type="button"
-          className={s.expressionStep}
-          aria-label={t('wardrobe.expression.next')}
-          aria-describedby={nameId}
-          onClick={() => step(1)}
-        >
-          <span aria-hidden="true">{NEXT_GLYPH}</span>
-        </button>
+      {/* The stepper and Xoay share one row; Xoay is the row's, not the group's (P12). */}
+      <div className={s.stageControls}>
+        {/* Each button is described by the name between them (final fix wave, B5): focusing one reads the current face. */}
+        <div className={s.expressionRow} role="group" aria-label={t('wardrobe.expression.legend')} onKeyDown={onKeyDown}>
+          <button
+            type="button"
+            className={s.expressionStep}
+            aria-label={t('wardrobe.expression.prev')}
+            aria-describedby={nameId}
+            onClick={() => step(-1)}
+          >
+            <span aria-hidden="true">{PREV_GLYPH}</span>
+          </button>
+          <output id={nameId} className={s.expressionName} aria-live="polite">
+            {t(`wardrobe.expression.${expression}`)}
+          </output>
+          <button
+            type="button"
+            className={s.expressionStep}
+            aria-label={t('wardrobe.expression.next')}
+            aria-describedby={nameId}
+            onClick={() => step(1)}
+          >
+            <span aria-hidden="true">{NEXT_GLYPH}</span>
+          </button>
+        </div>
+        <TurnButton facing={facing} onTurn={setFacing} className={s.stageTurn} />
       </div>
     </div>
   )

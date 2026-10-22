@@ -824,6 +824,86 @@ describe('WardrobeScreen', () => {
     expect(await screen.findByText(viNormal.wardrobe.saved)).toBeInTheDocument()
   })
 
+  // BP-30 (spec K6 §3.2, P13): the stage cheers when an item or a colour goes on, and at nothing else.
+  describe('the live stage', () => {
+    /** Counts each time the stage's figure starts a cheer: its `data-reacting` turning to "cheer". The figure's root is
+     * one element for the whole visit (a pick changes its layers, not the root), so one observer sees every cheer. */
+    function countCheers(root: HTMLElement): { readonly count: number; stop: () => void } {
+      let count = 0
+      const observer = new MutationObserver((records) => {
+        for (const record of records) {
+          if (record.oldValue !== 'cheer' && root.getAttribute('data-reacting') === 'cheer') count += 1
+        }
+      })
+      observer.observe(root, { attributes: true, attributeFilter: ['data-reacting'], attributeOldValue: true })
+      return {
+        get count() {
+          return count
+        },
+        stop: () => observer.disconnect(),
+      }
+    }
+
+    it('picking an item cheers the stage once; switching a tab does not', async () => {
+      const user = userEvent.setup()
+      renderScreen()
+      await opened()
+      const figure = stage()
+      expect(figure).toHaveAttribute('data-live', 'idle')
+      expect(figure).not.toHaveAttribute('data-reacting')
+      const cheers = countCheers(figure)
+
+      await user.click(card(viNormal.items.hair_f_ponytail01))
+      expect(stage()).toBe(figure)
+      expect(figure).toHaveAttribute('data-reacting', 'cheer')
+      expect(cheers.count).toBe(1)
+
+      // The cheer runs its 1.2 s and ends; a tab change after it starts nothing.
+      await waitFor(() => expect(figure).not.toHaveAttribute('data-reacting'), { timeout: 3000 })
+      await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
+      await goTo(user, 'look', viNormal.wardrobe.tabs.hairStyle)
+      expect(figure).not.toHaveAttribute('data-reacting')
+      expect(cheers.count).toBe(1)
+
+      // The next pick is the next cheer.
+      await user.click(card(viNormal.items.hair_f_hime01))
+      expect(figure).toHaveAttribute('data-reacting', 'cheer')
+      expect(cheers.count).toBe(2)
+      cheers.stop()
+    }, 10_000)
+
+    it('taking an item off does not cheer', async () => {
+      const user = userEvent.setup()
+      renderScreen()
+      await opened()
+      const cheers = countCheers(stage())
+      await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
+
+      // The worn beanie, clicked again: off it comes, and the draft is dirty — but nothing went on.
+      const beanie = within(screen.getByRole('tabpanel')).getByText(viNormal.items.head_beanie01).closest('button') as HTMLElement
+      await user.click(beanie)
+      expect(beanie).toHaveAttribute('aria-pressed', 'false')
+      expect(screen.getByText(viNormal.wardrobe.dirty)).toBeInTheDocument()
+
+      expect(stage()).not.toHaveAttribute('data-reacting')
+      expect(cheers.count).toBe(0)
+      cheers.stop()
+    })
+
+    it('a colour pick cheers', async () => {
+      const user = userEvent.setup()
+      renderScreen()
+      await opened()
+      const cheers = countCheers(stage())
+
+      await pickRedHair(user)
+
+      expect(stage()).toHaveAttribute('data-reacting', 'cheer')
+      expect(cheers.count).toBe(1)
+      cheers.stop()
+    })
+  })
+
   describe('colour tabs (Plan 13)', () => {
     it('lists a Natural swatch plus owned and locked colour swatches in the hair colour tab', async () => {
       const user = userEvent.setup()

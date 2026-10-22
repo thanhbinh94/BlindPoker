@@ -2,10 +2,11 @@ import type { ChibiConfig, Expression } from '@bp/ui-kit'
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
+import { I18nextProvider } from 'react-i18next'
 import { describe, expect, it, vi } from 'vitest'
 import viNormal from '../../locales/vi/normal.json'
 import { makeI18n, renderWithI18n } from '../../test-i18n.js'
-import { StagePanel } from './StagePanel.js'
+import { StagePanel, type StagePanelProps } from './StagePanel.js'
 
 const FACES = {
   neutral: 'body_f_face_neutral_L50',
@@ -24,6 +25,24 @@ const SUBJECT: ChibiConfig = {
 }
 
 const render = (ui: React.ReactElement) => renderWithI18n(ui, makeI18n('vi'))
+
+/** The kit's own words (`avatar.turn`, `avatar.greet` in ui-kit's `game.json`), on the live figure's two controls. */
+const TURN = 'Xoay'
+const GREET = 'Nhân vật của bạn, bấm để chào'
+
+const BASE: StagePanelProps = { subject: SUBJECT, expression: 'neutral', onExpression: () => {}, portrait: false }
+
+/** Renders the stage, and hands back a way to render it again with other props inside the same i18n provider:
+ * testing-library's own `rerender` drops the provider `renderWithI18n` wrapped it in, and that remounts the tree. */
+function renderStage(props: Partial<StagePanelProps> = {}): (next: Partial<StagePanelProps>) => void {
+  const view = render(<StagePanel {...BASE} {...props} />)
+  return (next) =>
+    view.rerender(
+      <I18nextProvider i18n={view.i18n}>
+        <StagePanel {...BASE} {...props} {...next} />
+      </I18nextProvider>,
+    )
+}
 
 /** `StagePanel` is controlled — the screen owns the expression — so a test that steps through the faces needs
  * something to hold it. `onExpression` is still called for every step, so a test can read what the screen would get. */
@@ -207,6 +226,66 @@ describe('StagePanel', () => {
     await user.keyboard('{Alt>}{ArrowLeft}{/Alt}')
 
     expect(onExpression).not.toHaveBeenCalled()
+  })
+
+  // BP-30 (spec K6 §3.2): the stage's figure lives, and keeps the name three e2e suites find it by (R6).
+  it('renders the figure live with a Xoay button and keeps the name "Phòng thay đồ"', () => {
+    const update = renderStage()
+
+    const figure = screen.getByRole('img', { name: 'Phòng thay đồ' })
+    expect(viNormal.wardrobe.title).toBe('Phòng thay đồ')
+    expect(figure).toHaveAttribute('data-live', 'idle')
+    expect(screen.getByRole('button', { name: TURN })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: GREET })).toBeInTheDocument()
+
+    // The Khung tab's head portrait is the same live figure, with its own Xoay.
+    update({ portrait: true })
+    const head = screen.getByRole('img', { name: 'Phòng thay đồ' })
+    expect(head).toHaveAttribute('data-frame', 'head')
+    expect(head).toHaveAttribute('data-live', 'idle')
+    expect(screen.getByRole('button', { name: TURN })).toBeInTheDocument()
+  })
+
+  it('the expression group still has exactly [prev, next]', () => {
+    render(<StagePanel subject={SUBJECT} expression="neutral" onExpression={vi.fn()} portrait={false} />)
+
+    const group = screen.getByRole('group', { name: viNormal.wardrobe.expression.legend })
+    expect(within(group).getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
+      viNormal.wardrobe.expression.prev,
+      viNormal.wardrobe.expression.next,
+    ])
+    // Xoay sits beside the group, not in it: ArrowLeft/ArrowRight there step the faces, not the turn.
+    expect(group.contains(screen.getByRole('button', { name: TURN }))).toBe(false)
+  })
+
+  it('Xoay toggles data-facing on the figure', async () => {
+    const user = userEvent.setup()
+    const update = renderStage()
+    const turn = screen.getByRole('button', { name: TURN })
+    expect(screen.getByRole('img', { name: 'Phòng thay đồ' })).toHaveAttribute('data-facing', 'right')
+    expect(turn).toHaveAttribute('aria-pressed', 'false')
+
+    await user.click(turn)
+    expect(screen.getByRole('img', { name: 'Phòng thay đồ' })).toHaveAttribute('data-facing', 'left')
+    expect(turn).toHaveAttribute('aria-pressed', 'true')
+
+    // The facing survives the Khung swap: one figure, its frame changed, not a second figure mounted.
+    const full = screen.getByRole('img', { name: 'Phòng thay đồ' })
+    update({ portrait: true })
+    expect(screen.getByRole('img', { name: 'Phòng thay đồ' })).toBe(full)
+    expect(full).toHaveAttribute('data-frame', 'head')
+    expect(full).toHaveAttribute('data-facing', 'left')
+
+    await user.click(screen.getByRole('button', { name: TURN }))
+    expect(screen.getByRole('img', { name: 'Phòng thay đồ' })).toHaveAttribute('data-facing', 'right')
+  })
+
+  it('plays the reaction the screen hands it', () => {
+    const update = renderStage({ react: null })
+    expect(screen.getByRole('img', { name: 'Phòng thay đồ' })).not.toHaveAttribute('data-reacting')
+
+    update({ react: { kind: 'cheer', key: 1 } })
+    expect(screen.getByRole('img', { name: 'Phòng thay đồ' })).toHaveAttribute('data-reacting', 'cheer')
   })
 
   it('marks the stage compact when asked', () => {
