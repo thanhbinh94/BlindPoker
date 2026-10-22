@@ -118,6 +118,27 @@ describe('nextStreak', () => {
     expect(nextStreak({ streak: 14, consecutive: 20, lastClaimDate: '2026-08-30' }, '2026-09-01')).toMatchObject({ streak: 1, day: 1, consecutive: 1 })
   })
 
+  // A clock that ran ahead once (a host whose time was corrected backwards) leaves a last claim *after* today. Neither
+  // case throws; a later month starts the tier over, a later day of the same month counts one more claim, and the
+  // consecutive run restarts in both.
+  it('a last claim in a later month (clock skew) restarts the tier and the run', () => {
+    expect(nextStreak({ streak: 9, consecutive: 9, lastClaimDate: '2026-11-02' }, '2026-10-30')).toMatchObject({
+      alreadyClaimed: false,
+      streak: 1,
+      consecutive: 1,
+      day: 1,
+    })
+  })
+
+  it('a last claim later in the same month (clock skew) counts one more claim and restarts the run', () => {
+    expect(nextStreak({ streak: 9, consecutive: 9, lastClaimDate: '2026-10-20' }, '2026-10-18')).toMatchObject({
+      alreadyClaimed: false,
+      streak: 10,
+      consecutive: 1,
+      day: 10,
+    })
+  })
+
   it('caps the streak at 31', () => {
     expect(nextStreak({ streak: MAX_STREAK, consecutive: 40, lastClaimDate: '2026-03-30' }, '2026-03-31')).toMatchObject({ streak: 31, day: 31, consecutive: 41 })
   })

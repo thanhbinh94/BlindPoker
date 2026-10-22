@@ -255,6 +255,14 @@ describe('unlocking', () => {
     expect(await repos.balances.get(playerId)).toBe(10_000)
   })
 
+  it('does not unlock login_streak_7 on the month’s seventh claim when the consecutive run is 1 (Plan 27 Part G)', async () => {
+    const playerId = await seedPlayer()
+    // Seven claims this month with a gap before the last: the tier says 7, the run of days says 1.
+    await bus.publish({ type: 'DAILY_CLAIMED', playerId, day: 7, streak: 7, consecutive: 1 })
+
+    expect(await find(playerId, 'login_streak_7')).toMatchObject({ progress: 1, unlockedAt: null })
+  })
+
   it('records progress for every definition the event touched, unlocked or not', async () => {
     const playerId = await seedPlayer()
     await settle([seat(playerId, { won: true, net: 250_000 })])

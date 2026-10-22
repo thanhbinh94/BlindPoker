@@ -240,6 +240,7 @@ export interface CalendarEntryDto {
 export interface DailyStatusDto {
   claimable: boolean
   day: number
+  /** The month's claim count (Plan 27 Part G), not a run of consecutive days: a missed day keeps it. */
   streak: number
   reward: number
   item: string | null
@@ -306,6 +307,7 @@ export interface DailyClaimDto {
   /** §13.2's substitute when a random tier had nothing unowned left; 0 otherwise. */
   fallbackPoints: number
   balance: number
+  /** The month's claim count after this claim (Plan 27 Part G), not a run of consecutive days. */
   streak: number
   /** Plan 27 C2: present only when this claim advanced the newcomer calendar. */
   newcomer?: NewcomerClaimDto
