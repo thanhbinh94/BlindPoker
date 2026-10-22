@@ -19,7 +19,8 @@ import type { RoomFrame } from '../src/table/frame.js'
  * - `result`: every seat shown down, three pots, an uncalled bet returned, the countdown on the card — and my own
  *   seat carrying all it can: "Bạn", the host's crown, all-in, a bet, the longest hand name and a payout.
  *
- * Every player has a caption (the Normal edition prints a title there), so every plate runs three lines. The room
+ * Every human player has a caption (the Normal edition prints a title there), so every human plate runs three lines; a
+ * bot has none, as in Normal (`makeCaptionFor`). The room
  * takes the whole viewport, as Normal's room route does; `seats` is 2–9 (6 by default), `lang` `vi` (default) or `en`.
  *
  * - `blindS`: a Blind Poker squeeze table (pure luck, two hole cards, one bot) in its `SQUEEZE` round — my two cards face
@@ -30,9 +31,23 @@ import type { RoomFrame } from '../src/table/frame.js'
  * "…" (review round 2, R2-3); without it the viewer keeps `NAMES[0]`, which earlier measurements use. `/landscape`
  * or `/desktop` forces that room frame whatever the window is; without either, the window's own media query chooses.
  * `/rank<N>` (1–5) gives the viewer that rank instead of `RANKS[ME]`, to see the longest rank word beside the own name.
+ *
+ * BP-28, the short landscape tier — the user's own table on a phone that keeps its browser bars:
+ *
+ * - `blindP`: a Blind Poker play-or-fold table (three hole cards, a 2.000 wager), the viewer and bots in every other
+ *   seat, in its `DECISION` round after every bot has chosen: "Bot · Đã chọn · 2.000" under each bot, my three cards up,
+ *   my Chơi / Bỏ bài to press.
+ * - `blindW`: the same table taking seats — every bot ready, me the host and not ready, so the hint says
+ *   "Bấm Sẵn sàng để bắt đầu — ván cần ít nhất một người chơi thật."
+ *
+ * `/short` lays the room out in an 855 × 319 box in the landscape frame, whatever the window — the user's phone with its
+ * address bar (bug log §10): the stage measures 255 px, so the room takes the short tier.
  */
 
-export type WorstState = 'waiting' | 'turn' | 'result' | 'blindS'
+export type WorstState = 'waiting' | 'turn' | 'result' | 'blindS' | 'blindP' | 'blindW'
+
+/** `/short`: the box the room is laid out in, the user's 855 × 319 phone (bug log §10, E1/E2). */
+export const SHORT_BOX = { w: 855, h: 319 } as const
 
 export interface WorstSpec {
   state: WorstState
@@ -44,28 +59,36 @@ export interface WorstSpec {
   frame: RoomFrame | null
   /** The viewer's own rank, from `/rank<N>`; absent, the viewer keeps `RANKS[ME]`. */
   meRank?: number
+  /** `/short`: the room in a box this size (and the landscape frame) rather than the whole window. */
+  box?: { w: number; h: number }
 }
 
-const STATES: readonly WorstState[] = ['waiting', 'turn', 'result', 'blindS']
+const STATES: readonly WorstState[] = ['waiting', 'turn', 'result', 'blindS', 'blindP', 'blindW']
 
 /**
- * Reads `#worst/<state>/<seats>/<lang>[/long][/landscape|/desktop]`; `null` for any other hash. The tokens after the
- * language are read by name, in any order, and one it does not know is ignored.
+ * Reads `#worst/<state>/<seats>/<lang>[/long][/landscape|/desktop][/short]`; `null` for any other hash. The tokens after
+ * the language are read by name, in any order, and one it does not know is ignored. `/short` forces the landscape frame.
  */
 export function parseWorstHash(hash: string): WorstSpec | null {
   const [head, state, seats, lang, ...flags] = hash.replace(/^#/, '').split('/')
   if (head !== 'worst') return null
   const n = Number(seats ?? 6)
   const meRank = flags.map((flag) => /^rank([1-5])$/.exec(flag)?.[1]).find((digit) => digit !== undefined)
+  const short = flags.includes('short')
   return {
     state: STATES.includes(state as WorstState) ? (state as WorstState) : 'result',
     seats: Number.isInteger(n) && n >= 2 && n <= 9 ? n : 6,
     lang: SUPPORTED_LANGUAGES.includes(lang as Language) ? (lang as Language) : 'vi',
     long: flags.includes('long'),
-    frame: flags.includes('landscape') ? 'landscape' : flags.includes('desktop') ? 'desktop' : null,
+    frame: short || flags.includes('landscape') ? 'landscape' : flags.includes('desktop') ? 'desktop' : null,
     ...(meRank === undefined ? {} : { meRank: Number(meRank) }),
+    ...(short ? { box: { ...SHORT_BOX } } : {}),
   }
 }
+
+/** The Blind Poker states of BP-28: every seat but mine a bot. */
+const allBots = (state: WorstState): boolean => state === 'blindP' || state === 'blindW'
+const BLIND_WAGER = 2_000
 
 const ME = 'me'
 /** Thirty characters: wider than the viewer's own plate may grow at any seat count. */
@@ -103,6 +126,20 @@ const cards = (text: string): Card[] => parseCards(text)
 const nameOf = (i: number, long: boolean): string => (i === 0 && long ? LONG_NAME : (NAMES[i] ?? `Người chơi ${i}`))
 
 function players(n: number, state: WorstState, long: boolean): RoomPlayerView[] {
+  if (allBots(state)) {
+    return Array.from({ length: n }, (_, seat) => ({
+      playerId: seat === 0 ? ME : `bot:worst:${seat}`,
+      displayName: seat === 0 ? nameOf(0, long) : `Bot ${seat}`,
+      isBot: seat !== 0,
+      isHost: seat === 0,
+      connected: true,
+      seat,
+      status: state === 'blindW' ? (seat === 0 ? ('SEATED' as const) : ('READY' as const)) : ('IN_HAND' as const),
+      sittingOut: false,
+      stack: seat === 0 ? 5_000 : 10_000,
+      ready: state !== 'blindW' || seat !== 0,
+    }))
+  }
   return Array.from({ length: n }, (_, seat) => ({
     playerId: seat === 0 ? ME : `p${seat}`,
     displayName: nameOf(seat, long),
@@ -122,6 +159,24 @@ const BOT_SEAT = 1
 const FIXED_WAGER = 1_000
 
 function room(n: number, state: WorstState, now: number, long: boolean): RoomView {
+  if (allBots(state)) {
+    const name = 'Góc Bến Nhà Rồng'
+    const blind = { holeCards: 3 as const, decisionMode: 'playOrFold' as const, fixedWager: BLIND_WAGER, botCount: n - 1 }
+    return {
+      roomId: 'worst',
+      code: 'WRST28',
+      name,
+      mode: 'blind',
+      config: { name, mode: 'blind', maxPlayers: n, isPrivate: false, turnTimerSec: 20, autoStart: false, hasPassword: false, blind },
+      playerCount: n,
+      maxPlayers: n,
+      status: state === 'blindW' ? 'OPEN' : 'IN_GAME',
+      hostPlayerId: ME,
+      players: players(n, state, long),
+      carryOverPot: 0,
+      nextHandAt: null,
+    }
+  }
   const squeeze = state === 'blindS'
   return {
     roomId: 'worst',
@@ -152,6 +207,26 @@ function room(n: number, state: WorstState, now: number, long: boolean): RoomVie
 }
 
 function seat(n: number, i: number, state: WorstState, long: boolean): ClientSeat {
+  if (state === 'blindP') {
+    // The decision round, every bot chosen: their three cards down, "Đã chọn" and the wager in front of them; mine up,
+    // my choice still to make.
+    return {
+      seat: i,
+      playerId: i === 0 ? ME : `bot:worst:${i}`,
+      displayName: i === 0 ? nameOf(0, long) : `Bot ${i}`,
+      isBot: i !== 0,
+      stack: i === 0 ? 3_000 : 8_000,
+      betThisStreet: BLIND_WAGER,
+      folded: false,
+      allIn: false,
+      cardCount: 3,
+      holeCards: i === 0 ? cards('Kh 9c 4d') : null,
+      hasDecided: i !== 0,
+      decision: null,
+      lastAction: null,
+      timedOut: false,
+    }
+  }
   if (state === 'blindS') {
     // The squeeze round: my two cards are mine to turn (face down), the bot's are turned from the deal, and every third
     // person has turned theirs. Everyone has put the fixed wager in; nobody folds, nobody decides, nobody acts.
@@ -195,8 +270,29 @@ function seat(n: number, i: number, state: WorstState, long: boolean): ClientSea
 }
 
 function hand(n: number, state: WorstState, long: boolean): ClientHand | null {
-  if (state === 'waiting') return null
+  if (state === 'waiting' || state === 'blindW') return null
   const all = Array.from({ length: n }, (_, i) => i)
+  if (state === 'blindP') {
+    return {
+      handId: 'worst-blindP',
+      mode: 'blind',
+      phase: 'DECISION',
+      community: [],
+      pot: n * BLIND_WAGER,
+      carryOverIn: 0,
+      button: Math.min(3, n - 1),
+      actingSeat: null,
+      seats: all.map((i) => seat(n, i, state, long)),
+      mySeat: 0,
+      legal: { seat: 0, kinds: ['play', 'fold'], callAmount: BLIND_WAGER, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 },
+      result: null,
+      potPulse: 1,
+      restored: true,
+      dealtAt: null,
+      boardAt: null,
+      showdownAt: null,
+    }
+  }
   if (state === 'blindS') {
     return {
       handId: 'worst-blindS',
@@ -307,15 +403,30 @@ export function WorstPage({ spec }: { spec: WorstSpec }) {
       roomStale: false,
       room: room(spec.seats, spec.state, now, spec.long),
       hand: hand(spec.seats, spec.state, spec.long),
-      deadlineAt: spec.state === 'turn' ? now + 25_000 : spec.state === 'blindS' ? now + 15_000 : null,
+      deadlineAt: spec.state === 'turn' ? now + 25_000 : spec.state === 'blindS' || spec.state === 'blindP' ? now + 15_000 : null,
     })
   }, [spec])
   useEffect(() => {
-    document.title = `worst: ${spec.state}, ${spec.seats} seats, ${spec.lang}${spec.long ? ', long name' : ''}${spec.frame === null ? '' : `, ${spec.frame} frame`}`
+    document.title = `worst: ${spec.state}, ${spec.seats} seats, ${spec.lang}${spec.long ? ', long name' : ''}${spec.frame === null ? '' : `, ${spec.frame} frame`}${spec.box === undefined ? '' : `, ${spec.box.w} × ${spec.box.h}`}`
   }, [spec])
+  const screen = (
+    <RoomScreen
+      client={client}
+      lang={spec.lang}
+      onLeft={() => {}}
+      captionFor={(p) => (p.isBot ? null : CAPTION)}
+      rankFor={(p) => (p.playerId === ME && spec.meRank !== undefined ? spec.meRank : (RANKS[p.playerId] ?? null))}
+      frame={spec.frame ?? undefined}
+    />
+  )
   return (
     <I18nextProvider i18n={i18n}>
-      <RoomScreen client={client} lang={spec.lang} onLeft={() => {}} captionFor={() => CAPTION} rankFor={(p) => (p.playerId === ME && spec.meRank !== undefined ? spec.meRank : (RANKS[p.playerId] ?? null))} frame={spec.frame ?? undefined} />
+      {spec.box === undefined ? (
+        screen
+      ) : (
+        // The room's `--bp-stage` knob, as a host app with a bar of its own turns it: the box is the room's whole height.
+        <div style={{ width: spec.box.w, height: spec.box.h, overflow: 'hidden', ['--bp-stage' as string]: '100%' }}>{screen}</div>
+      )}
     </I18nextProvider>
   )
 }

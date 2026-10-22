@@ -431,3 +431,114 @@ test('L-05 @landscape a squeeze table: a touch peel turns a card, Lật turns th
   await leave(page)
   await expect(page.getByRole('button', { name: 'Tạo phòng' })).toBeVisible()
 })
+
+/** BP-28: the user's Android in landscape with Chrome's bars showing (bug log §10, E1/E2) — a 255 px stage. */
+const PHONE_WITH_BARS = { width: 855, height: 319 }
+const board = (page: Page) => page.getByRole('group', { name: 'Bài chung' })
+const FACE_UP = /^(\d+|Bồi|Đầm|Già|Át) (chuồn|rô|cơ|bích)$/
+
+/**
+ * Every seat's box against every other one, the board and the viewer's own cards; and every seat against the dock, the
+ * tray's corners and the full-screen nudge, whichever are showing. All named at once (`expectLaidOut`).
+ */
+async function expectTableClear(page: Page, where: string): Promise<void> {
+  const seats = await boxesOf(page.locator('[data-seat]'), 'the seat')
+  const mine = await boxesOf(page.locator('[data-me="true"] [class*="_seatCards_"]'), 'my cards')
+  const corners = tray(page).locator('[class*="_trayLeft_"], [class*="_trayRight_"]')
+  const clear = [
+    ...(await boxesOf(board(page), 'the board')),
+    ...(await boxesOf(dock(page), 'the dock')),
+    ...(await boxesOf(corners, 'a tray corner')),
+    ...(await boxesOf(page.locator('[class*="_nudge_"]').first(), 'the nudge')),
+  ].filter((box) => box.right - box.left > 0 && box.bottom - box.top > 0)
+  expectLaidOut(where, PHONE_WITH_BARS, seats, clear)
+  // My cards lie inside my own seat's box; against everyone else's seat they are measured on their own.
+  const myLabel = mine[0]?.label.replace('my cards', 'the seat')
+  expectLaidOut(`${where}, my cards`, PHONE_WITH_BARS, mine, seats.filter((box) => box.label !== myLabel))
+}
+
+test('L-06 @landscape a short landscape phone (855×319): after every bot has chosen, no seat box meets another, the community cards or my cards, and the waiting hint sits in the corner panel', async () => {
+  test.setTimeout(300_000)
+  const page = a.page
+  try {
+    // A Blind play-or-fold table, six bots and me: the user's table (bug log §10, ảnh 1–4), one bot more. The room is made
+    // at the project's 915 × 412 (the lobby's create dialog is not this case's subject), and the phone shrinks to the
+    // 855 × 319 its browser bars leave once the player is in it.
+    await createBlind(page, { name: unique('Bàn L06 '), bots: 6, maxPlayers: 7, cards: 3, mode: 'Chơi hoặc bỏ', timer: '30 giây' })
+    await page.setViewportSize(PHONE_WITH_BARS)
+    await takeSeat(page, 0, undefined, { via: 'menu' })
+    const table = page.getByRole('region', { name: 'Bàn' })
+    await expect(table, 'a 255 px stage takes the short tier').toHaveAttribute('data-tier', 'short')
+    await expect(page.locator('[data-seat]')).toHaveCount(7)
+
+    // Waiting: the hint is the dock's second line, under the ready count — not on the felt (R2).
+    const hint = 'Bấm Sẵn sàng để bắt đầu — ván cần ít nhất một người chơi thật.'
+    await expect(dock(page).getByText(hint, { exact: true })).toBeVisible()
+    await expect(table.getByText(hint, { exact: true })).toHaveCount(0)
+    await expect(dock(page).getByText('6/7 sẵn sàng', { exact: true })).toBeVisible()
+    await expectTableClear(page, 'Blind, seven seats, waiting')
+    await shot(page, 'landscape-L06-blind-waiting')
+    await expectRoomFits(page, 'landscape 855×319, Blind, waiting', [PHONE_WITH_BARS])
+    await expectNoTextOverlapAt(page, 'landscape 855×319, Blind, waiting')
+
+    // The decision, measured once every bot has chosen: "Bot · Đã chọn · 1.000" is the longest line a seat carries.
+    await ready(page)
+    await start(page)
+    await expect(action(page, /^Chơi/)).toBeVisible()
+    const chosen = page.locator('[data-seat]').filter({ hasText: 'Đã chọn' })
+    await expect(chosen, 'every bot has chosen').toHaveCount(6, { timeout: 30_000 })
+    await expect(page.locator('[data-me="true"]').getByRole('img', { name: FACE_UP })).toHaveCount(3)
+    await settled(page.locator('[data-me="true"]'))
+    await expectTableClear(page, 'Blind, seven seats, every bot chosen')
+    await shot(page, 'landscape-L06-blind-chosen')
+    await expectRoomFits(page, 'landscape 855×319, Blind, every bot chosen', [PHONE_WITH_BARS])
+    await expectNoTextOverlapAt(page, 'landscape 855×319, Blind, every bot chosen')
+    await action(page, /^Bỏ bài$/).click()
+    await expect(resultCard(page)).toBeVisible({ timeout: 60_000 })
+    await leave(page)
+
+    // A Hold'em table of eight seats, two of us, on the flop: the board's three cards against every seat.
+    await page.setViewportSize(LANDSCAPE_SCREEN)
+    const code = await createHoldemRoom(page, { name: unique('Bàn L06 HE '), maxPlayers: 8, tier: '100/200', timer: '60 giây' })
+    await joinByCode(b.page, code)
+    await expect(b.page).toHaveURL(/#\/room$/)
+    await page.setViewportSize(PHONE_WITH_BARS)
+    await b.page.setViewportSize(PHONE_WITH_BARS)
+    await takeSeat(page, 0, undefined, { via: 'menu' })
+    await takeSeat(b.page, 4, undefined, { via: 'menu' })
+    await ready(page)
+    await ready(b.page)
+    await start(page)
+    // Heads-up: the button calls, the big blind checks, and the flop comes. Whoever is offered a plain Xem or Theo presses it.
+    const move = async (): Promise<void> => {
+      for (const p of [page, b.page]) {
+        const plain = tray(p).locator('button:not([aria-pressed])').filter({ hasText: /^(Xem|Theo[\d.\s]*)$/ })
+        if ((await plain.count()) > 0 && (await plain.first().isEnabled({ timeout: 500 }).catch(() => false))) {
+          await plain.first().click({ timeout: 2_000 }).catch(() => undefined)
+          return
+        }
+      }
+    }
+    await expect
+      .poll(
+        async () => {
+          await move()
+          return board(page).getByRole('img', { name: FACE_UP }).count()
+        },
+        { message: 'the flop is on the felt', timeout: 60_000 },
+      )
+      .toBeGreaterThanOrEqual(3)
+    await expect(table).toHaveAttribute('data-tier', 'short')
+    await settled(board(page))
+    await settled(page.locator('[data-me="true"]'))
+    await expectTableClear(page, 'Hold’em, eight seats, the flop')
+    await shot(page, 'landscape-L06-holdem-flop')
+    await expectRoomFits(page, 'landscape 855×319, Hold’em, the flop', [PHONE_WITH_BARS])
+    await expectNoTextOverlapAt(page, 'landscape 855×319, Hold’em, the flop')
+    await leave(b.page)
+    await leave(page)
+  } finally {
+    await page.setViewportSize(LANDSCAPE_SCREEN)
+    await b.page.setViewportSize(LANDSCAPE_SCREEN)
+  }
+})

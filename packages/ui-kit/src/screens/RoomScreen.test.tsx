@@ -1265,6 +1265,124 @@ describe('RoomScreen', () => {
       expect(within(screen.getByRole('region', { name: 'Bàn' })).getByText(hint)).toBeInTheDocument()
     })
 
+    // BP-28: the short tier — a stage under 300 px tall, measured on the stage itself (jsdom lays nothing out, so the
+    // stage's box is stubbed: 255 px is the user's 855 × 319 phone with its address bar).
+    describe('the short tier', () => {
+      let rect: { mockRestore: () => void } | null = null
+      const stageHeight = (height: number): void => {
+        const original = HTMLElement.prototype.getBoundingClientRect
+        rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+          return this.tagName === 'MAIN' ? ({ width: 831, height, top: 0, left: 0, right: 831, bottom: height, x: 0, y: 0 } as DOMRect) : original.call(this)
+        })
+      }
+      const notReady = makeRoom({
+        ...readyRoom,
+        players: readyRoom.players.map((p) => (p.playerId === 'me' ? { ...p, ready: false, status: 'SEATED' as const } : p)),
+      })
+      const hint = 'Cần ít nhất 2 người sẵn sàng để bắt đầu'
+      const nudge = () => screen.queryByRole('button', { name: 'Dùng Toàn màn hình để bàn rộng hơn' })
+      afterEach(() => {
+        rect?.mockRestore()
+        rect = null
+        localStorage.clear()
+      })
+
+      it('stamps the tier on the room and the ring from the stage’s height: short under 300 px, normal from there', () => {
+        stageHeight(255)
+        const short = landscape(fakeClient(makeState({ room: notReady })))
+        expect(short.container.querySelector('[data-frame="landscape"]')).toHaveAttribute('data-tier', 'short')
+        expect(screen.getByRole('region', { name: 'Bàn' })).toHaveAttribute('data-tier', 'short')
+        short.unmount()
+        rect?.mockRestore()
+
+        stageHeight(348)
+        const normal = landscape(fakeClient(makeState({ room: notReady })))
+        expect(normal.container.querySelector('[data-frame="landscape"]')).toHaveAttribute('data-tier', 'normal')
+        expect(screen.getByRole('region', { name: 'Bàn' })).toHaveAttribute('data-tier', 'normal')
+        normal.unmount()
+
+        // the desktop frame has no tier to speak of
+        wrap(fakeClient(makeState({ room: notReady })))
+        expect(document.querySelector('[data-frame="desktop"]')).not.toHaveAttribute('data-tier')
+      })
+
+      it('lays the pre-hand hint in the dock, after the ready count, and not on the felt', () => {
+        // R2: the felt has no bare band under the board at 255 px; the dock carries the hint as its second line.
+        stageHeight(255)
+        landscape(fakeClient(makeState({ room: notReady })))
+        const dock = screen.getByRole('group', { name: 'Điều khiển bàn' })
+        const line = within(dock).getByText(hint)
+        expect(within(screen.getByRole('region', { name: 'Bàn' })).queryByText(hint)).toBeNull()
+        const count = within(dock).getByText('1/2 sẵn sàng')
+        expect(count.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING, 'the hint comes after the count').toBeTruthy()
+        expect(within(dock).getByRole('button', { name: 'Sẵn sàng' })).toBeInTheDocument()
+      })
+
+      describe('the full-screen nudge', () => {
+        const setFullscreenEnabled = (value: boolean | undefined): void => {
+          if (value === undefined) Reflect.deleteProperty(document, 'fullscreenEnabled')
+          else Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, get: () => value })
+        }
+        afterEach(() => setFullscreenEnabled(undefined))
+
+        it('shows once in the short tier where the browser offers full screen, and a ✕ puts it away for good', () => {
+          setFullscreenEnabled(true)
+          stageHeight(255)
+          const first = landscape(fakeClient(makeState({ room: notReady })))
+          expect(nudge()).toBeInTheDocument()
+          fireEvent.click(screen.getByRole('button', { name: 'Ẩn gợi ý Toàn màn hình' }))
+          expect(nudge()).toBeNull()
+          expect(localStorage.getItem('bp.fullscreenNudge')).toBe('dismissed')
+          first.unmount()
+          // the next room, the next visit: still gone
+          landscape(fakeClient(makeState({ room: notReady })))
+          expect(nudge()).toBeNull()
+        })
+
+        it('goes full screen from its words, and is done with then too', () => {
+          setFullscreenEnabled(true)
+          stageHeight(255)
+          const requestFullscreen = vi.fn().mockResolvedValue(undefined)
+          document.documentElement.requestFullscreen = requestFullscreen
+          try {
+            landscape(fakeClient(makeState({ room: notReady })))
+            fireEvent.click(nudge()!)
+            expect(requestFullscreen).toHaveBeenCalledTimes(1)
+            expect(nudge()).toBeNull()
+            expect(localStorage.getItem('bp.fullscreenNudge')).toBe('dismissed')
+          } finally {
+            Reflect.deleteProperty(document.documentElement, 'requestFullscreen')
+          }
+        })
+
+        it('stays away in the normal tier, without full screen, and while my hand holds the corner', () => {
+          setFullscreenEnabled(true)
+          stageHeight(348)
+          const normal = landscape(fakeClient(makeState({ room: notReady })))
+          expect(nudge(), 'normal tier').toBeNull()
+          normal.unmount()
+          rect?.mockRestore()
+
+          stageHeight(255)
+          setFullscreenEnabled(false)
+          const off = landscape(fakeClient(makeState({ room: notReady })))
+          expect(nudge(), 'no full screen to offer (iOS Safari)').toBeNull()
+          off.unmount()
+
+          setFullscreenEnabled(true)
+          const playing = makeRoom({ ...readyRoom, status: 'IN_GAME' })
+          landscape(fakeClient(makeState({ room: playing, hand: makeHand({ mySeat: 1 }) })))
+          expect(nudge(), 'the tray’s toggles hold the corner').toBeNull()
+        })
+
+        it('has no motion of its own, so reduced motion has nothing to stop', () => {
+          const rules = SCREENS_CSS.match(/[^{}]*\.nudge[A-Za-z]*[^{}]*\{[^}]*\}/g) ?? []
+          expect(rules.length).toBeGreaterThan(0)
+          for (const rule of rules) expect(rule).not.toMatch(/animation|transition/)
+        })
+      })
+    })
+
     it('leaves the desktop frame’s footer row as it was', () => {
       wrap(fakeClient(makeState({ room: readyRoom })))
       const controls = screen.getByRole('group', { name: 'Table controls' })

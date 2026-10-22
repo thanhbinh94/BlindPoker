@@ -441,6 +441,77 @@
   white-space: nowrap;
 }
 
+/* The short tier (BP-28, R2): the felt has no bare band under the board, so the pre-hand hint is the dock's second line,
+   under the ready count, in small type. The dock keeps clear of the viewer's own plate (at most 22 % of the room either
+   side of its centre less the plate's half) by its cap, and its two lines fit under the end seat above it: one row of
+   44 px buttons, a two-line hint, 90 px with the padding. */
+.room[data-frame='landscape'][data-tier='short'] .dock {
+  flex-wrap: wrap;
+  row-gap: var(--space-1);
+  max-width: min(38%, 20rem);
+}
+
+.room[data-frame='landscape'][data-tier='short'] .dock .hint {
+  flex: 1 0 100%;
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  text-align: right;
+  text-wrap: balance;
+}
+
+/* The short tier's one-time nudge towards full screen (BP-28, R3), in the bottom-left corner while no tray holds it: the
+   words are the button that goes full screen, the ✕ the one that says no. A night pill like the dock's; no motion. */
+.room[data-frame='landscape'] .nudge {
+  position: absolute;
+  left: max(var(--space-3), env(safe-area-inset-left));
+  bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  max-width: calc(35% - var(--space-2) - max(var(--space-3), env(safe-area-inset-left)));
+  padding: 0 0 0 var(--space-1);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+}
+
+.nudgeUse,
+.nudgeClose {
+  min-height: 34px;
+  border: 0;
+  background: none;
+  color: var(--gold);
+  font: 600 0.6875rem/1.2 var(--font-body);
+  cursor: pointer;
+}
+
+.nudgeUse {
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  text-align: left;
+}
+
+.nudgeClose {
+  flex: none;
+  min-width: 34px;
+  color: var(--ink-muted);
+}
+
+.nudgeUse:hover,
+.nudgeClose:hover {
+  color: var(--ink);
+}
+
+@media (pointer: coarse) {
+  .nudgeUse,
+  .nudgeClose {
+    min-height: var(--tap);
+  }
+
+  .nudgeClose {
+    min-width: var(--tap);
+  }
+}
+
 /* The reconnect banner (spec B2): it lies over the felt just under the one-line header instead of taking a row, so a
    dropped socket does not push the ring down. Above the felt and the docks, below the Thêm menu (z-modal − 1). */
 .room[data-frame='landscape'] .banner {
