@@ -457,7 +457,8 @@ async function squeezeFitsPhone({ id, mode, what, shot }: { id: string; mode: 'H
 
   await createBlind(page, { name: unique(`Bàn ${id} `), bots: 1, mode, squeeze: true })
   await expect(page.locator('header').getByText('Nặn bài', { exact: true })).toBeVisible()
-  await takeSeat(page, 0)
+  // BP-31 (R11): the upright phone keeps "Đứng dậy" in the header's "Thêm" menu.
+  await takeSeat(page, 0, undefined, { via: 'menu' })
   await ready(page)
   const t0 = Date.now()
   await start(page)

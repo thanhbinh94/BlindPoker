@@ -3,6 +3,7 @@ import sharp from 'sharp'
 import { expectNoTextOverlap } from './overlap.js'
 import {
   account,
+  closeRoomMenu,
   createBlindRoom,
   expectCardClearsMySeat,
   expectCreateRoomKeepsItsHeight,
@@ -18,6 +19,7 @@ import {
   LANDSCAPE_SCREEN,
   LAPTOP_SCREEN,
   lobbyAvatar,
+  openRoomMenu,
   OVERLAP_SCREENS,
   parsePoints,
   PHONE_SCREEN,
@@ -192,11 +194,21 @@ async function expectCountdownOnTheCard(card: Locator): Promise<void> {
 /**
  * Sits out while the hand is on, then plays it. The table is left with bots only, which cannot start a hand of their
  * own, so once this one is over the room goes back to taking seats and the result card stays on the felt — the
- * result state, held still for as long as a check needs.
+ * result state, held still for as long as a check needs. On the upright phone (BP-31, `via: 'menu'`) the sit-out toggle
+ * is the header menu's checkbox: ticked there, it reads "Chơi tiếp" and stays checked when the menu is opened again.
  */
-async function sitOutAndPlay(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Tạm nghỉ', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Chơi tiếp', exact: true })).toBeVisible()
+async function sitOutAndPlay(page: Page, opts?: { via?: 'menu' }): Promise<void> {
+  if (opts?.via === 'menu') {
+    const menu = await openRoomMenu(page)
+    await menu.getByRole('menuitemcheckbox', { name: 'Tạm nghỉ', exact: true }).click()
+    await expect(page.getByRole('menu', { name: 'Thêm' }), 'a pick closes the menu').toHaveCount(0)
+    const again = await openRoomMenu(page)
+    await expect(again.getByRole('menuitemcheckbox', { name: 'Chơi tiếp', exact: true })).toHaveAttribute('aria-checked', 'true')
+    await closeRoomMenu(page)
+  } else {
+    await page.getByRole('button', { name: 'Tạm nghỉ', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Chơi tiếp', exact: true })).toBeVisible()
+  }
   // "Chơi tiếp" (the sit-in toggle, in the room controls) also starts with "Chơi": the play button is the one in the tray.
   await page.getByRole('group', { name: 'Hành động' }).getByRole('button', { name: /^Chơi\b/ }).click()
 }
@@ -666,7 +678,8 @@ test.describe('Blind Luck Poker Normal', () => {
     // The create-room dialog on a phone: the same outer box in both modes (it scrolls inside, it does not jump).
     await expectCreateRoomKeepsItsHeight(page)
     await createBlindRoom(page, unique('Bàn '), 5)
-    await sit(page, 0)
+    // BP-31 (R11): the phone keeps the seat's controls in the header's "Thêm" menu, so the seat is read there.
+    await sit(page, 0, { via: 'menu' })
     await expect(page.getByRole('region', { name: 'Bàn', exact: true })).toBeVisible()
     await expect(page.getByRole('group', { name: 'Người chơi', exact: true }), 'the phone gets the stack layout').toBeVisible()
     await expectNoSidewaysScroll(page)
@@ -688,7 +701,18 @@ test.describe('Blind Luck Poker Normal', () => {
     await page.getByRole('button', { name: 'Bắt đầu', exact: true }).click()
     await expect(page.getByRole('button', { name: /^Chơi\b/ })).toBeVisible()
     await expectNoTextOverlap(page, 'room, in hand, 375×812')
-    await sitOutAndPlay(page)
+    // BP-31 (spec §3.1): the hand's tray is one row, at most 64 px with its padding, and my two cards fan out at least
+    // 52 px wide. `offsetWidth` is the card's own width: a rotated card's bounding box is wider than the card.
+    const handTray = page.getByRole('group', { name: 'Hành động' })
+    await expect(handTray).toHaveAttribute('data-layout', 'stack')
+    const trayHeight = (await handTray.boundingBox())?.height ?? Infinity
+    expect(trayHeight, `the tray is one row (${Math.round(trayHeight)} px)`).toBeLessThanOrEqual(64)
+    const fanCards = page.locator('[data-me="true"] [data-fan] > :not(button)')
+    await expect(fanCards).toHaveCount(2)
+    for (const width of await fanCards.evaluateAll((els) => els.map((el) => (el as HTMLElement).offsetWidth))) {
+      expect(width, 'each of my cards is at least 52 px wide').toBeGreaterThanOrEqual(52)
+    }
+    await sitOutAndPlay(page, { via: 'menu' })
     const card = resultCard(page)
     await expect(card).toBeVisible()
     await expectCountdownOnTheCard(card)
