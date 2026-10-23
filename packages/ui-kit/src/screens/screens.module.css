@@ -204,11 +204,17 @@
   gap: var(--space-3);
 }
 
+/* The ring's row of controls stops at the felt's own ceiling, 980 px, centred under it (BP-31 P10, R4): at 1920 px it
+   spread across the whole window, its buttons far from the table they act on. The footer itself is not capped: the
+   landscape corners are placed against the room. */
 .controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
+  width: 100%;
+  max-width: min(980px, 100%);
+  margin-inline: auto;
 }
 
 .readyCount,

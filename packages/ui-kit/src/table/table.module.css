@@ -951,6 +951,25 @@
   --seat-plate-max: 22cqw;
 }
 
+/* A desktop window (BP-31 P7, R8): the ring has room for wider plates, so a name of a dozen letters prints whole instead
+   of "Nguyễn…" — at least 132 px a seat, 118 px from seven seats (the percentages above still win on a big felt). The
+   points the seats stand on (`geometry.ts`) do not move; only the plates widen around them. A full table has no room
+   for a second line under the opponents' names, so their titles step aside from seven seats; the viewer's own stays.
+   Not on a phone held sideways, which sets its own floor on the seats. */
+@media (min-width: 1024px) {
+  .ring:not([data-frame='landscape']) {
+    --seat-min: 132px;
+  }
+
+  .ring:not([data-frame='landscape']):is([data-seats='7'], [data-seats='8'], [data-seats='9']) {
+    --seat-min: 118px;
+  }
+}
+
+.ring:is([data-seats='7'], [data-seats='8'], [data-seats='9']) .seat:not(.seatMe) .seatCaption {
+  display: none;
+}
+
 /* A ring squeezed into a short stage — a laptop window, or an app with a bar of its own above the room. The plates
    keep their size because they carry the names; the cards and the gaps give, so a hand never lands on the board and
    the viewer's own block — cards, plate, two lines — stays inside the stage above the tray. 400 px of felt is where
@@ -1621,6 +1640,15 @@
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   background: linear-gradient(180deg, rgba(22, 30, 56, 0.95), rgba(7, 11, 24, 0.98));
   box-shadow: 0 -14px 40px rgba(3, 6, 16, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* The tray stops where the felt does, 980 px, centred under it (BP-31 P10, R4): at 1920 px it was 1,880 px wide under a
+   921 px table. Not on a phone held sideways, where the tray is two corner docks (below), and not between hands in the
+   stack, where the tray sits in the dock's row beside it: a full width there left the dock none (Task 4b, real build). */
+.tray:not([data-frame='landscape']):not([data-between]) {
+  width: 100%;
+  max-width: min(980px, 100%);
+  margin-inline: auto;
 }
 
 .trayRow {
