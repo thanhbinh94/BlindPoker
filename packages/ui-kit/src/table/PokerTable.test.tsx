@@ -347,7 +347,7 @@ describe('PokerTable', () => {
         },
         players: [
           makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'IN_HAND', stack: 20_000 }),
-          makePlayer({ playerId: 'bot2', displayName: 'Bảo', isBot: true, seat: 2, status: 'IN_HAND', stack: 25_000 }),
+          makePlayer({ playerId: 'bot2', displayName: 'Bảo', isBot: true, seat: 2, status: 'IN_HAND', stack: 50_000 }),
         ],
       })
     const luckRoom = roomOf('none')

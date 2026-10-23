@@ -17,9 +17,9 @@ export interface CreateBlindInput {
 }
 
 /**
- * The most a Blind seat brings to the table: five wagers (spec 2026-09-29). A player with less sits down with all of
- * it; a seat plays down to its last point and is stood up at 0 (Plan 27). Takes only the field it reads, so a client
- * can ask it of the room config it was sent.
+ * The most a Blind seat brings to the table: ten wagers (spec 2026-09-29; five until BP-31). A player with less sits
+ * down with all of it; a seat plays down to its last point and is stood up at 0 (Plan 27). Takes only the field it
+ * reads, so a client can ask it of the room config it was sent.
  */
 export function blindTableLimit(rules: Pick<BlindRules, 'fixedWager'>): number {
   return rules.fixedWager * ECONOMY.blindTableLimitMultiplier

@@ -231,7 +231,7 @@ Sau đó, các máy khác mở `http://<IP-LAN>:8080` — đúng địa chỉ m�
 SIGTERM (trong Docker), còn Windows không gửi được tín hiệu đó tới một tiến trình chạy nền, và bản
 Normal cũng không có `--stop` như bản Lite.
 
-Hậu quả cụ thể: **mọi chồng đang nằm trên bàn — buy-in Hold'em và cả hạn mức bàn Blind (tới 250.000
+Hậu quả cụ thể: **mọi chồng đang nằm trên bàn — buy-in Hold'em và cả hạn mức bàn Blind (tới 500.000
 mỗi ghế ở mức cược 50.000) — cùng pot cộng dồn của Blind B sẽ mất**. Số dư đã ghi vào database thì
 luôn an toàn.
 

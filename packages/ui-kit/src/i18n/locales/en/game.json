@@ -227,7 +227,7 @@
       "botCount": "There must be fewer bots than seats."
     },
     "buyInHint": "{{bb}} BB = {{points}}",
-    "tableLimitHint": "Table limit per player: {{points}} (5× the wager)"
+    "tableLimitHint": "Table limit per player: {{points}} (10× the wager)"
   },
   "room": {
     "title": "Room",

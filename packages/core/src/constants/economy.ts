@@ -8,7 +8,7 @@ export const ECONOMY = {
   reliefTarget: 5_000,
   reliefCooldownHours: 24,
   blindWagerTiers: [1_000, 2_000, 5_000, 10_000, 20_000, 50_000],
-  blindTableLimitMultiplier: 5,
+  blindTableLimitMultiplier: 10,
   holdemBlindTiers: [
     { smallBlind: 100, bigBlind: 200 },
     { smallBlind: 250, bigBlind: 500 },

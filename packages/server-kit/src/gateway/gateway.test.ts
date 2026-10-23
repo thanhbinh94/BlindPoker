@@ -183,7 +183,7 @@ describe('blind hand against a bot over the wire', () => {
     await a.next('GAME_EVENT', (m) => m.event.type === 'HAND_COMPLETE', 5000)
     // Spec 2026-09-29 (table limit): the hand moved the table stack only; standing up takes it home.
     expect(await a.request({ t: 'STAND_UP', reqId: rid() })).toMatchObject({ t: 'ACK' })
-    const balance = await a.next('BALANCE', (m) => m.balance !== 95_000)
+    const balance = await a.next('BALANCE', (m) => m.balance !== 90_000)
     expect(balance.balance).not.toBe(100_000)
     expect(await ts.repos.balances.get('a')).toBe(balance.balance)
     expect(ts.repos.hands).toHaveLength(1)
@@ -337,15 +337,15 @@ describe('out-of-band pushes', () => {
     const snap = await a.next('ROOM_SNAPSHOT')
     a.send({ t: 'SIT_DOWN', seat: 0 })
     await a.next('ROOM_EVENT', (m) => m.event.type === 'PLAYER_SAT')
-    expect((await a.next('BALANCE')).balance).toBe(95_000) // the buy-in's push: the table limit left the balance
+    expect((await a.next('BALANCE')).balance).toBe(90_000) // the buy-in's push: the table limit left the balance
     const room = ts.server.rooms.get(snap.room.roomId)!
-    expect(room.view().players.find((p) => p.playerId === 'a')!.stack).toBe(5_000)
+    expect(room.view().players.find((p) => p.playerId === 'a')!.stack).toBe(10_000)
 
     // points granted elsewhere (a purchase, a daily reward) must reach the client, and leave the table stack alone
     ts.repos.records.get('a')!.balance = 142_000
     await ts.server.balanceChanged('a')
     expect((await a.next('BALANCE')).balance).toBe(142_000)
-    expect(room.view().players.find((p) => p.playerId === 'a')!.stack).toBe(5_000)
+    expect(room.view().players.find((p) => p.playerId === 'a')!.stack).toBe(10_000)
 
     ts.server.notify('a', { t: 'NOTIFICATION', kind: 'DAILY_REWARD', payload: { amount: 500 } })
     expect(await a.next('NOTIFICATION')).toMatchObject({ kind: 'DAILY_REWARD', payload: { amount: 500 } })

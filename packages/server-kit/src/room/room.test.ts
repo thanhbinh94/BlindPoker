@@ -110,9 +110,9 @@ describe('Room seats and buy-ins', () => {
     await h.room.join(h.identity('poor'), 'pw12')
     expect(await code(h.room.sitDown('poor', 0))).toBe('INSUFFICIENT_BALANCE') // needs one wager, 1000 (plan 27 D2)
     await h.room.sitDown('h', 0)
-    expect(h.room.players.get('h')!.stack).toBe(5_000)
-    expect(h.repos.entries.map((e) => [e.entry.playerId, e.entry.delta, e.entry.reason])).toEqual([['h', -5_000, 'buy_in']])
-    expect(h.last('h', 'BALANCE')).toEqual({ t: 'BALANCE', balance: 95_000 })
+    expect(h.room.players.get('h')!.stack).toBe(10_000)
+    expect(h.repos.entries.map((e) => [e.entry.playerId, e.entry.delta, e.entry.reason])).toEqual([['h', -10_000, 'buy_in']])
+    expect(h.last('h', 'BALANCE')).toEqual({ t: 'BALANCE', balance: 90_000 })
     expect(await code(h.room.sitDown('h', 2))).toBe('ILLEGAL_ACTION') // seat 2 is a bot's — and h is already seated
 
     const g = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 0 } }, { players: [['h', 100_000], ['mid', 3_000]] })

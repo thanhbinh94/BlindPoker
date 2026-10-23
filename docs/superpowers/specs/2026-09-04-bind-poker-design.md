@@ -213,7 +213,7 @@ Royal flush (là straight flush cao nhất), Straight flush, Four of a kind, Ful
 | `holeCards` | 2 hoặc 3 |
 | `decisionMode` | `none` (kiểu A — thuần may rủi) hoặc `playOrFold` (kiểu B) |
 | `fixedWager` (W) | 1.000 / 2.000 / 5.000 / 10.000 / 20.000 / 50.000 |
-| Hạn mức (L) | 5 × `fixedWager` — cố định, không chọn khi tạo phòng (sửa đổi 2026-09-29) |
+| Hạn mức (L) | 10 × `fixedWager` — cố định, không chọn khi tạo phòng (sửa đổi 2026-09-29; BP-31 nâng từ 5 × lên 10 ×) |
 | `maxPlayers` | 2–8 |
 | `botCount` | 0 … maxPlayers − 1 |
 | `turnTimer` | 10/15/30 giây, mặc định 15 (chỉ dùng cho pha DECISION; bàn nặn bài: xem `squeeze`) |
@@ -262,6 +262,7 @@ Như mục 7.7.
 - 3 timeout liên tiếp → đứng dậy sau ván (như Normal).
 
 ### 8.8 Hạn mức bàn (sửa đổi 2026-09-29)
+- *(BP-31, spec `2026-10-23-phone-table-bet-slider-design.md` §3.6: L = 10 × `fixedWager`, trước đó 5 ×; bot cũng nhận stack bằng L. Luật chơi tới 0, `min(số dư, L)` và phí 0 không đổi.)*
 - **Vào bàn**: server lấy `min(số dư, L)` từ số dư lên bàn, ghi `buy_in` (từ chối `INSUFFICIENT_BALANCE` nếu số dư < mức cần cho một ván). Không có hộp thoại chọn số.
 - **Trong ván**: ante, tiền Chơi và tiền thắng chỉ đổi chồng trên bàn (có thể vượt L); sổ điểm mỗi ván chỉ ghi dòng sink phí bàn, không còn dòng `settlement` cho người chơi.
 - *(Plan 27 thay hai gạch đầu dòng "Hết hạn mức" và "Pot cộng dồn khi hết hạn mức" dưới đây bằng luật chơi tới 0, xem sửa đổi ở §12.3.)*
@@ -378,7 +379,7 @@ Server kiểm tra từng giá trị thuộc tập cho phép; sai → `ERROR INVA
 | `tableFeeCapHoldemBB` | 1 |
 | `reliefThreshold` / `reliefTarget` / `reliefCooldownHours` | 5.000 / 5.000 / 24 |
 | `blindWagerTiers` | 1k, 2k, 5k, 10k, 20k, 50k |
-| `blindTableLimitMultiplier` | 5 |
+| `blindTableLimitMultiplier` | 10 (5 trước BP-31) |
 | `holdemBlindTiers` | 100/200, 250/500, 500/1k, 1k/2k, 2.5k/5k |
 
 ### 12.3 Phí bàn

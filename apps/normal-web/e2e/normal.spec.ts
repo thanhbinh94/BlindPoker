@@ -59,10 +59,10 @@ const WAGER = 1_000
 /** The ante plus the play: what a hand costs a player who does not fold. */
 const PLAY_COST = WAGER * 2
 /**
- * The table limit (spec 2026-09-29): five wagers go from the balance to the table at sit-down, and the whole
- * stack comes home at stand-up. A hand moves the stack only, so the balance is read after leaving.
+ * The table limit (spec 2026-09-29; five until BP-31): ten wagers go from the balance to the table at sit-down, and
+ * the whole stack comes home at stand-up. A hand moves the stack only, so the balance is read after leaving.
  */
-const LIMIT = 5 * WAGER
+const LIMIT = 10 * WAGER
 /** The window sizes at which the lobby's tickets are as narrow as they get (see the busy-lobby step of the first test). */
 const TICKET_FLOOR_SCREENS = [
   { width: 656, height: 900 },

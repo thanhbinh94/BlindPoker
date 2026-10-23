@@ -227,7 +227,7 @@
       "botCount": "Số bot phải ít hơn số ghế."
     },
     "buyInHint": "{{bb}} BB = {{points}}",
-    "tableLimitHint": "Hạn mức mỗi người: {{points}} (5× mức cược)"
+    "tableLimitHint": "Hạn mức mỗi người: {{points}} (10× mức cược)"
   },
   "room": {
     "title": "Phòng chơi",

@@ -281,7 +281,7 @@ docker compose exec -T db psql -U postgres -d bind_poker
 chơi và **hoàn lại toàn bộ điểm cược cùng mọi chồng trên bàn (Hold'em và Blind) qua ledger**, đóng
 socket, rồi đóng pool. Nó tự cho mình 15 giây trước khi thoát khác 0. `docker compose kill` bỏ qua tất
 cả những việc đó: số dư đã ghi vẫn an toàn (mọi bút toán nằm trong transaction) nhưng mọi chồng đang
-trên bàn — buy-in Hold'em và hạn mức bàn Blind, tới 250.000 mỗi ghế — cùng pot cộng dồn thì mất.
+trên bàn — buy-in Hold'em và hạn mức bàn Blind, tới 500.000 mỗi ghế — cùng pot cộng dồn thì mất.
 
 **Đổi quà điểm danh theo tháng.** Lịch quà là `apps/normal-server/data/daily-gifts.json` và nằm trong image: sửa file,
 kiểm tra bằng `pnpm --filter @bp/normal-server exec vitest run src/economy/daily-gifts.test.ts`, rồi `docker compose up -d
