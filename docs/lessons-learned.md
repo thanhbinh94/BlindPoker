@@ -1075,6 +1075,52 @@ into the plan, one of them rejected. The rulings below are the SDD ledger's, in 
   limit two implementers (C3, E2) were still going; the ledger named them and their files, and the next session checked
   `git log` for their commits before dispatching anything.
 
+## BP-30 — the chibi's idle life: breathe, blink, cheer, greet, turn (merged `30d7661`, 2026-10-23)
+
+Spec `docs/superpowers/specs/2026-10-22-k6-chibi-idle-life-design.md`, plan `2026-10-22-bp30-chibi-idle-life.md` with
+pre-flight amendments P1–P21. Seven tasks, each with its own implementer and reviewer, one fix wave after the whole-branch
+review, then the gate (unit 3408/3409 with the known GM-console load flake green alone, e2e Normal 24, Lite 4, ops 55).
+
+### Rulings
+
+- Lead, pre-flight: the greet control is an overlaid sibling button, not a wrapper (P10); Xoay is on every shop size, strip
+  included (P15); `main` is merged before Task 6, not in Task 7, because Task 6 edits the same ten doc files BP-29 does (P20).
+- Task 3 (wardrobe): the desktop stage hops −3 % (`--chibi-hop`), because the 290 px figure already reaches the 300 px
+  stage's top; a colour change back to "Tự nhiên" cheers too, since the look changed; Xoay matches the arrows' 30 px from
+  768 px up and is 44 px on a phone.
+- Task 4 (shop): the strip's gaps go 12 → 8 px so a new player's strip stays 96 px (104 px for a 7-digit balance or a long
+  rank line); no hop override anywhere in the shop; the column's Xoay sits right under the stage; the same-card guard
+  was literal and the final wave widened it to the whole look.
+- Task 5 (welcome, profile): a re-click of the picked card is a no-op; the welcome figures carry no label, so the card's
+  accessible name stays the item's alone.
+- Task 6 (ops): P-06's blink window starts only after the spare faces have loaded; P-07 proves stillness with a
+  `MutationObserver` over the whole case; `playerState`'s welcome claim became a `claimWelcome` helper.
+- Final wave: the turn's spin is set in a `useLayoutEffect`, so no mirrored frame paints first (pinned by a test that
+  renders outside `act` and stubs `performance.now`); a restart is proven by a new sparkle-ring node and a cheer that
+  outlives the first 1.2 s, because `data-reacting` never leaves "cheer"; a stage's `react` going back to `null` keeps the
+  last key as seen; a `still` figure mounts only the `happy` spare face.
+- Lead, at the merge: `main` had moved only by docs commits touching none of the branch's files, so the gate's tree is
+  the merge's tree and no step was re-run.
+
+### Lessons
+
+- **Pin the numbers the spec gives to the constant that names them.** The CSS carried every duration by hand and
+  `CHIBI_LIFE` was never read by it; the whole-branch review found no test guarding 4000 / 420 / 600 / 500 / 700 ms. A raw-CSS
+  test per number now does.
+- **Ops cases assert data attributes and computed styles, never class names** (P17). A hashed CSS-module class is a
+  rename away from a silent pass.
+- **An agent's trailer is not yours.** One implementer signed "Claude Opus 5.5"; every brief now says the Fable line wins,
+  and the lead audits `git log --format='%(trailers)'` before the merge.
+- **A session restart mid-task loses nothing when the worktree holds the edits and the ledger names the agent.** Task 6's
+  implementer was stopped with ten files uncommitted; a `SendMessage` to the same agent id resumed it from its own diff.
+- **When both sides of a merge add the same table row, keep one.** The BP-28 resolution left CLAUDE.md with two "Ops pack"
+  rows (53 and 52); a reviewer caught it two merges later.
+- **A test that measures a column by walking `../..` from a landmark breaks the moment a row is inserted** (Task 3's new
+  Xoay row made `expectColumnFits` measure the stage panel, which never scrolls, so it could not fail). Prefer a locator
+  that names the box, or document the depth where it is walked.
+- **One writer per worktree is a scheduling rule, not a tooling one.** Read-only reviewers ran beside implementers all day
+  without harm; two writers never did. `git commit --only` kept each implementer's commit to its own files.
+
 ## 5. Open items
 
 The single list is `docs/known-limitations.md`. As of this writing, the items a next session is most likely to meet:

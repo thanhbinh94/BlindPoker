@@ -578,7 +578,7 @@ dùng chọn (a): tất tay phần còn lại + bỏ phí Blind (spec §5).
 - **K5 — đã làm.** Tủ đồ và cửa hàng chỉ tải hình trong tầm nhìn, hàng đợi nhuộm màu tối đa 4 việc, @2x chỉ khi DPR ≥ 1,5.
   Còn lại: trên điện thoại qua mạng chậm hàng thẻ đầu tới sau khoảng 3,2 s (mục tiêu 2 s; `docs/known-limitations.md`).
 - **Thêm trong cùng plan (Q13):** điểm danh bản Normal đếm **số lần trong tháng**, bỏ một hôm không về ô 1.
-- **K6 — đang làm trên BP-30** (brainstorm 2026-10-22, spec `2026-10-22-k6-chibi-idle-life-design.md`): chưa vẽ dáng
+- **K6 — đã ship trên BP-30, merge `30d7661` (23/10)** (brainstorm 2026-10-22, spec `2026-10-22-k6-chibi-idle-life-design.md`): chưa vẽ dáng
   mới; nhân vật ở Phòng thay đồ, Cửa hàng và Hồ sơ "sống" bằng chuyển động CSS trên các lớp sẵn có — thở, chớp mắt, cười
   và nhún khi mặc thử hay mua đồ, chào khi chạm vào, nút "Xoay" lật gương; thẻ chọn quà chào mừng reo khi được chọn; bàn
   chơi giữ nguyên. **Spike dáng thật** (xoay nghiêng, dáng ngồi) **vẫn mở**, chờ xem sau đợt này kho đồ còn "chán" không.

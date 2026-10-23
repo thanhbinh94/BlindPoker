@@ -9,7 +9,7 @@ below are the real history.
 
 ---
 
-## BP-30 — the chibi breathes, blinks, cheers, greets and turns in the wardrobe and the shop — merged `MERGE` (2026-10-23)
+## BP-30 — the chibi breathes, blinks, cheers, greets and turns in the wardrobe and the shop — merged `30d7661` (2026-10-23)
 
 K6 of the 2026-10-21 requests (`docs/bug-log.md` §9): "dáng đứng của nhân vật quá cố định nên cũng làm giảm hứng thú của
 người chơi". The brainstorm of 2026-10-22 chose life before poses (spec `2026-10-22-k6-chibi-idle-life-design.md`, Q1–Q3,
@@ -75,8 +75,8 @@ R1–R8): the figure moves with CSS on the PNG layers it already has, and nothin
   frame by each stage. `useChibiLife` returns `{ face, motion, breathing, reacting }` and `Chibi` stamps it as `data-*`,
   not `{ expression, className, style }`. Spin comes from a `facing` change, not from `react`. The ops cases assert
   attributes and `animation-name`, not class names (they are hashed in production).
-- **Still open.** The real-pose spike (a three-quarter or back view, sitting poses) stays open in bug log §9. One live
-  figure per screen: the cards, portraits and seats stay still by design. A turned figure is a mirror. A second cheer
+- **Still open.** The real-pose spike (a three-quarter or back view, sitting poses) stays open in bug log §9. One breathing
+  figure per screen: the welcome cards cheer but stay still, and the shop cards, portraits and seats stay still by design. A turned figure is a mirror. A second cheer
   inside 420 ms does not replay the hop. Real phones (iOS Safari, Firefox Android) are the user's to check. Lite picks the
   kit change up at its next `pnpm build:lite` (it draws no live figure).
 
