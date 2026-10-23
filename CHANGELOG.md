@@ -75,6 +75,10 @@ R1–R8): the figure moves with CSS on the PNG layers it already has, and nothin
   frame by each stage. `useChibiLife` returns `{ face, motion, breathing, reacting }` and `Chibi` stamps it as `data-*`,
   not `{ expression, className, style }`. Spin comes from a `facing` change, not from `react`. The ops cases assert
   attributes and `animation-name`, not class names (they are hashed in production).
+- **Deployed.** VPS (`play.14-225-254-250.sslip.io`) on 2026-10-23, before the user's push: the commits went over SSH as
+  a `git bundle` (`git pull --ff-only /tmp/bp30.bundle main` to `c25bb25`), after `backup.sh` (`bp-2026-10-23-0803.dump`)
+  and a health check with 0 rooms; no new migration; `docker compose up -d --build`; health `ok`. Lite: not rebuilt, not
+  shipped. The Windows LAN host was not deployed.
 - **Still open.** The real-pose spike (a three-quarter or back view, sitting poses) stays open in bug log §9. One breathing
   figure per screen: the welcome cards cheer but stay still, and the shop cards, portraits and seats stay still by design. A turned figure is a mirror. A second cheer
   inside 420 ms does not replay the hop. Real phones (iOS Safari, Firefox Android) are the user's to check. Lite picks the
