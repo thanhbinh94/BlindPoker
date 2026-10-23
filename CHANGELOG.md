@@ -63,6 +63,10 @@ that sit on the table: P1, P7, P10, P13 (Q5) — spec `2026-10-23-phone-table-be
   `docs/known-limitations.md` (four UI entries), `docs/copy-review-2026-10-10.md` (the chips, the panel's names),
   `docs/ui-review-2026-10-22.md` (P1, P7, P10, P11, P13), the deployment guides and the Lite README (ten wagers), `CLAUDE.md` §3.
 - **Rulings** (the spec's, then each task's):
+  - Lead, at the gate: `MAX_ENTRY_GZIP` rises from 140 to 150 KB. The bet panel, the phone tray's branches and the fan/strip
+    markup took the entry chunk to 140.3 KB gzip, 0.3 KB over the headroom Plan 27 left (its Ruling 13 had raised the
+    budget 130 → 140); the SRS's own §24 limit is 500 KB, and the locale-namespace split stays the recorded way back.
+    Costs if wrong: a step change under 10 KB could now pass unnoticed.
   - Spec: R1 Hold'em and plain Blind hands fan, a peel hand does not turn. R2 all in on a phone is the panel's chip, not a
     row button or a menu item. R3 the slider steps by the small blind, at most 200 steps. R4 the desktop ring keeps its
     controls row and its Tất tay button, with no ⋯. R5 bots take the new limit. R6 two steps in the stack and landscape,
@@ -92,7 +96,7 @@ that sit on the table: P1, P7, P10, P13 (Q5) — spec `2026-10-23-phone-table-be
   - Task 5: the new ops case is **M-06**, not M-01 — `docs/operation-test-plan.md` §M already owns M-01…M-05 (manual,
     cited by the copy review and the test runs), and the phone case belongs in that section. The Blind part seats seven
     bots at `maxPlayers: 8` (Blind's cap), not eight at nine. After-hand states of the full Blind table are read for text
-    overlap but their stage scroll is recorded, not asserted (below). `setBet` drives the keyboard (P8), never `fill`.
+    overlap but their stage scroll is recorded, not asserted (the final wave asserts it). `setBet` drives the keyboard (P8), never `fill`.
     P11 of the UI review is marked done too (its number field is gone).
   - Final fix wave (after the whole-branch review): the desktop controls row is centred, not capped (the cap wrapped the
     pre-hand hint at 1280–1536 px and failed `normal.spec.ts`'s desktop Blind test by 12 px); from seven opponents a chip

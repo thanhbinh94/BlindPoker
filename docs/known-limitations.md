@@ -820,7 +820,8 @@ from "Điểm danh" as before.
 **Every locale namespace ships in the entry chunk, so the first paint carries the shop's and the GM's strings (Plan
 27).** `normal.json` (vi and en) is one resource loaded at boot; the lazy screens' strings are not split out. Plan 27's
 strings took the entry chunk to about 136 KB gzip of a 140 KB budget (under 4 KB of headroom), and the budget `MAX_ENTRY_GZIP` was raised from 130 to 140 KB
-(Ruling 13).
+(Ruling 13). BP-31's bet panel and phone tray took it to 140.3 KB, and the budget rose again to 150 KB (the SRS's own
+limit in §24 is 500 KB).
 *Why it stays:* splitting namespaces per lazy screen is a change to the i18n bootstrap for about 10 KB.
 *Tracked:* `apps/normal-web/test/footprint.test.ts`.
 
