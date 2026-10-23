@@ -971,8 +971,9 @@ Biện pháp: delta events thay vì gửi lại snapshot; PlayerView tính một
 - Điện thoại xoay ngang (Plan 26, BP-28): như trước, trừ khay: góc phải Bỏ bài · Xem/Theo · Tố ▴ (→ Tố N khi bảng mở), góc trái các
   công tắc chọn sẵn / Tự động chơi và, sau khi chạm Tố/Cược, **bảng tố** (chip + thanh kéo + Hủy ▾) thay cho Min · ½ · Pot · Max · ✎;
   không còn hộp "Nhập số điểm". Tất tay là chip của bảng tố.
-- Desktop ≥ 1024 và tablet: khay và hàng điều khiển rộng tối đa 980 px, căn giữa; chip + thanh kéo luôn hiện khi được chọn mức
-  (một bước); Tất tay ngoài hàng.
+- Desktop ≥ 1024 và tablet: khay rộng tối đa 980 px, căn giữa; hàng điều khiển căn giữa, không giới hạn bề rộng (BP-31, đợt sửa
+  cuối: giới hạn 980 px làm dòng gợi ý xuống hai dòng ở 1280–1536 px); chip + thanh kéo luôn hiện khi được chọn mức (một bước),
+  số điểm đứng cạnh thanh kéo; Tất tay ngoài hàng.
 - Lá bài: đối thủ `clamp(26px, 6.4vw, 34px)`, mình ở ring `clamp(32px, 8vw, 46px)`, ở stack `clamp(52px, 15vw, 60px)`, bài chung
   `clamp(40px, 10.4vw, 62px)` (stack `clamp(40px, 11vw, 48px)`), landscape 60 px, tầng short 48 px.
 

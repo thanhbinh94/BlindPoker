@@ -688,19 +688,24 @@ touch pointer, under the 44 px tap rule (R12: they are jumps, the slider's 44 px
 32 px on the landscape short tier, whose slider row is 36 px. The landscape corner panel is 76 px tall with no floating
 amount over the thumb: the right corner's "Tố N" carries the amount instead (the upright phone's sheet does the same, its
 confirm reads "Tố N"). Between hands the upright phone's countdown dock is 38 px tall (a status line, no button). My strip
-is 44 px, 56 px at a showdown, and up to 66 px when the host badge, a state badge and a bet all wrap onto it.
-*Why it stays:* each was a ruling of BP-31's tasks, to keep a 375 × 812 phone from scrolling with eight seats.
-*Tracked:* `CHANGELOG.md` (BP-31, "Khác với spec / Deviations from the spec"); `docs/ui-kit.md` (The stack layout).
+is 44 px and 56 px at a showdown; a state badge (Tạm nghỉ, Tất tay) hides the host's crown on it (the badge stays for a
+screen reader) so the bet keeps the first line, and the strip can still reach 66 px when the host badge, the rank and a
+bet wrap onto it. After a hand at a table of seven opponents and more, an opponent's chip shows its hand's name and payout
+in place of its badges and bet, on one line: a long hand's name ("Thùng phá sảnh") is cut with "…" there, and the result
+card spells it out. The dock's labels ("Hủy sẵn sàng", "Tự động chơi") wrap to two lines inside their 44 px buttons.
+*Why it stays:* each was a ruling of BP-31's tasks, to keep a 375 × 812 phone from scrolling with eight seats, during the
+hand and after it (M-06 asserts both).
+*Tracked:* `CHANGELOG.md` (BP-31, "Khác với spec / Deviations from the spec"); `docs/ui-kit.md` (The stack layout);
+`apps/normal-web/e2e/ops/09-phone.spec.ts` → M-06.
 
-**After a hand at a full Blind table, the upright phone's stage scrolls (BP-31).** At 375 × 812 with seven opponents,
-once the hand is over every opponent's chip takes its hand's name (and the winner's payout) on extra lines, so the three
-rows of chips grow by about 100 px and the stage (`<main>`, not the page) scrolls 75–100 px, card up or closed, until the
-next deal; my strip stays pinned at the stage's foot (sticky), so at the top of the scroll it lies over the felt and my
-fanned cards cover part of the pot and the pre-hand hint. In the hand itself the room fits (M-06 asserts it). M-06 records
-the scroll as an annotation and does not assert it.
-*Why it stays:* found by M-06 at the end of BP-31; a fix (shorter chips after the hand, or the strip leaving the felt
-alone while the stage scrolls) is a `ui-kit` change for the next round.
-*Tracked:* `apps/normal-web/e2e/ops/09-phone.spec.ts` → M-06 (the annotation "stage scroll (known limitation)").
+**The phone table's last rough edges (BP-31 final wave).** In landscape, on corners narrower than ~70 px, "Tố ▴" /
+"Cược ▴" may break to two lines inside its 48 px button; the name stays "Tố". Between hands on the upright phone, with no
+Tự động chơi to keep, the tray remains as an empty "Hành động" group; screen readers may announce it. On the upright phone
+the dealer button sits on the strip's right corner, not on the avatar disc.
+*Why it stays:* found by the BP-31 reviews and judged too small to hold the merge: the corner's width is set by the
+landscape frame's geometry, the empty group keeps the tray's place stable between hands, and the strip's corner is where
+the ring's plates already carry the button.
+*Tracked:* `CHANGELOG.md` (BP-31, "Still open"); `docs/ui-kit.md` (The stack layout, The landscape frame).
 
 **On a landscape phone the opaque result card covers the side seats, and at 844 × 390 the top of the viewer's plate
 (Plan 26, B5).** The card needs the felt's width to keep the winners on one line each, so it lies over the seats at the

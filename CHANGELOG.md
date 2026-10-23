@@ -26,8 +26,8 @@ that sit on the table: P1, P7, P10, P13 (Q5) — spec `2026-10-23-phone-table-be
   a one-row dock holds Sẵn sàng / Hủy sẵn sàng, Bắt đầu and the ready count; the pre-hand hint lies on the felt. On a
   landscape phone the left corner becomes the same panel after the first tap on Tố, and the right corner's button turns
   into "Tố N"; the "✎" and its "Nhập số điểm" dialog are gone. On the desktop the chips and the slider stand over the
-  buttons whenever a size is legal, the number field is gone, and the tray stops at 980 px under the felt instead of
-  running 1 880 px across a 1920 screen. Desktop seats are at least 132 px wide (118 px from seven seats), so a name fits
+  buttons whenever a size is legal, the amount stands beside the slider, the number field is gone, and the tray stops at
+  980 px under the felt instead of running 1 880 px across a 1920 screen (the controls row above it is centred). Desktop seats are at least 132 px wide (118 px from seven seats), so a name fits
   on one line, and from seven seats other players' titles step aside. The smallest table text on a phone is 11 px (the
   chips' bets 12 px). A Blind table takes ten wagers from the balance at sit-down (wager 1.000 → limit 10.000), and the
   create-room hint says "(10× mức cược)"; bots sit with the same.
@@ -94,20 +94,40 @@ that sit on the table: P1, P7, P10, P13 (Q5) — spec `2026-10-23-phone-table-be
     bots at `maxPlayers: 8` (Blind's cap), not eight at nine. After-hand states of the full Blind table are read for text
     overlap but their stage scroll is recorded, not asserted (below). `setBet` drives the keyboard (P8), never `fill`.
     P11 of the UI review is marked done too (its number field is gone).
+  - Final fix wave (after the whole-branch review): the desktop controls row is centred, not capped (the cap wrapped the
+    pre-hand hint at 1280–1536 px and failed `normal.spec.ts`'s desktop Blind test by 12 px); from seven opponents a chip
+    with a showdown line hides its badge row (`.othersDense .seat:has(> .seatResult) > .tags`) and keeps that line to one
+    line (payout 14 px, a long hand name cut with "…"), and a strip with a state badge hides Chủ phòng
+    (`.stripLine:has(> .tagState) > .tagWho`), so a 375 × 812 Blind table of eight fits after the hand, card up or closed
+    (M-06 now asserts it: 0 px over seven runs, against 75–96 px before); the dock's labels wrap to two lines instead of an
+    ellipsis, and "Tự động chơi" beside them is at most 6em wide (one line of it left "Hủy sẵn sàng" three lines deep);
+    the desktop panel prints its amount beside the slider (the tray is 132 px on and off the turn, 145 before on it); a
+    dealt card's offset rides the `translate` property, outside a fanned card's `rotate`; one chip lights at a time (the
+    first that names the amount); the sheet's chips drop `.preset`'s 52 px floor (the last chip ended 13 px past the
+    tray's padding, now at its edge); the table-limit hint reads its multiplier from `ECONOMY`; `ActionBar`'s reset and
+    key listener are layout effects (no frame of the old panel, no key reaching the old turn); and the cheap tests the
+    reviews asked for. ui-kit 766 → 777.
 - **Khác với spec / Deviations from the spec.** The stack's sheet has no floating amount over the thumb (its confirm
   reads "Tố N"), and the landscape corner panel is 76 px without it. The countdown dock is 38 px, not 44. My strip runs to
-  66 px when the host badge, a state badge and a bet wrap (spec: 44 / 56). The dock has no `role="status"` (it would
+  66 px when the host badge, the rank and a bet wrap (spec: 44 / 56); with a state badge it hides Chủ phòng instead. The
+  caption rule (others' titles hidden from seven seats) has no media query, so it also hides the titles in landscape and
+  at 768–1023 px. The desktop controls row is centred, not capped: a 980 px cap wrapped the pre-hand hint at 1280–1536
+  and pushed the stage 12 px (spec §3.3 / P10 capped both). The dock's labels wrap to two lines inside their 44 px
+  buttons. Hủy keeps the amount chosen this turn (the panel reopens on it). After a hand at a table of seven opponents
+  and more, a chip shows its hand's line in place of its badges and bet. The dock has no `role="status"` (it would
   compete with the tray's wait line and the reconnect banner). The stack keeps the two-row header (so "Mức cược … · Hạn
   mức …" stays). The chips are 36 px (spec R12, recorded in SRS §27.1). The nine-seat fallback of R8 (13 % / 94 px) was
   not needed. The ops case is M-06, not M-01. M-06's Blind part has seven opponents, not eight.
 - **Still open.** UI review P3 (the lobby's void), P5 (the GM overview), P8 (tracked labels), P9 (emoji), P15 ("Lưu
-  tên"), P16 (the shop), P22 (the light theme) — the next round. After a hand at a full Blind table the upright phone's
-  stage scrolls 75–100 px (the opponents' chips grow by their hand names), and at the top of that scroll my fan covers
-  part of the pot; and after a hand at a Blind table that offers Tự động chơi, the host's footer at 375 px holds four
-  items in one row (the toggle beside Hủy sẵn sàng, Bắt đầu and the ready count), which clips the two buttons' labels
-  (M-06's screenshot `phone-M06-blind-result`; T4a had parked it as a minor). A finger on the slider (iOS Safari, Chrome
-  on Android, both orientations) and VoiceOver / TalkBack on it are the user's to try. Lite picks the kit up at its next
-  `pnpm build:lite`.
+  tên"), P16 (the shop), P22 (the light theme) — the next round. Bug E6 (pre-existing since 2026-09-04, found by the
+  BP-31 review): after a sit-out empties the table of humans and the room returns to waiting, the client still shows
+  "Hủy sẵn sàng" and "8/8 sẵn sàng", and "Chơi tiếp" then "Bắt đầu" is refused ("Chưa đủ người chơi": `toOpen()` clears
+  the ready flags without a `PLAYER_READY`) — logged in `docs/bug-log.md` §10 with options, (a)
+  recommended, for a bugfix branch after BP-31. Small corners in `docs/known-limitations.md`: "Tố ▴" may break to two
+  lines on landscape corners narrower than ~70 px; between hands on the upright phone an empty "Hành động" group stays
+  in the DOM; the upright phone's dealer button sits on the strip's right corner. A finger on the slider (iOS Safari,
+  Chrome on Android, both orientations) and VoiceOver / TalkBack on it are the user's to try. Lite picks the kit up at
+  its next `pnpm build:lite`.
 
 ## BP-30 — the chibi breathes, blinks, cheers, greets and turns in the wardrobe and the shop — merged `30d7661` (2026-10-23)
 

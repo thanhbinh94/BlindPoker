@@ -904,7 +904,7 @@ describe('Blind table limit (spec 2026-09-29)', () => {
   it('an all-fold table plays its last wagers all in, so the carried-over pot goes to a seat and never to the house', async () => {
     // Two humans with 5.000 each (all of it brought: under the 10.000 limit) fold four hands running: every ante stays
     // in the carried pot (2.000 → 8.000) and each stack falls to 1.000 — one ante, still seated (plan 27 D2). The fifth
-    // ante takes all of both stacks, so both play all in without being asked, and the 10.000 goes to the better hand:
+    // ante takes all of both stacks, so both play all in without being asked, and the whole pot goes to the better hand:
     // nothing is left carried, nothing to the house.
     const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 0 } }, { players: [['h', 5_000], ['a', 5_000]], seed: 2 })
     await seatAndStart(h, ['h', 'a'])
