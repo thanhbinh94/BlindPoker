@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { I18nextProvider } from 'react-i18next'
-import type { LegalActions, RoomView } from '@bp/core'
+import { parseCards, type LegalActions, type RoomView } from '@bp/core'
 import { createI18n } from '../i18n/index.js'
 import type { ClientHand, ClientSeat } from '../client/types.js'
 import p from '../primitives/primitives.module.css'
@@ -396,6 +396,46 @@ describe('ActionBar sizing and the one-row tray', () => {
     expect(tray()).toHaveAttribute('data-panel', 'open')
     expect(screen.getByRole('slider')).toHaveAttribute('aria-valuetext', '3,500')
     expect(raises().map((b) => b.textContent)).toEqual(['Raise 3,500'])
+  })
+
+  it('a new street with the same seat to act starts at the minimum with the panel shut', async () => {
+    // Heads-up, the big blind checks the flop round closed and acts first again on the turn: same hand, still my turn
+    // across the re-render, but a new street — the raise chosen on the old one must not carry over.
+    const view = wrap(<ActionBar hand={hand(raiseLegal)} room={holdemRoom} onAct={() => {}} lang="en" layout="stack" />)
+    await userEvent.click(screen.getByRole('button', { name: 'Raise' }))
+    screen.getByRole('slider').focus()
+    await userEvent.keyboard('{End}')
+    expect(raises().map((b) => b.textContent)).toEqual(['Raise 5,000'])
+    const flop = parseCards('Ah Kd 7c')
+    view.rerender(
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <ActionBar hand={hand(raiseLegal, { community: flop })} room={holdemRoom} onAct={() => {}} lang="en" layout="stack" />
+      </I18nextProvider>,
+    )
+    expect(tray()).toHaveAttribute('data-panel', 'closed')
+    await userEvent.click(screen.getByRole('button', { name: 'Raise' }))
+    expect(screen.getByRole('slider')).toHaveAttribute('aria-valuetext', '400')
+    expect(raises().map((b) => b.textContent)).toEqual(['Raise 400'])
+  })
+
+  it('the focused Tố ▴ opened with Enter puts focus on the slider', async () => {
+    // The stack's row unmounts under the panel, so the focus must move on, not fall to the page.
+    const first = wrapVi(<ActionBar hand={hand(raiseLegal)} room={holdemRoom} onAct={() => {}} lang="vi" layout="stack" />)
+    screen.getByRole('button', { name: 'Tố' }).focus()
+    await userEvent.keyboard('{Enter}')
+    expect(tray()).toHaveAttribute('data-panel', 'open')
+    expect(screen.getByRole('slider')).toHaveFocus()
+    first.unmount()
+
+    // Landscape keeps the button (it becomes "Tố N"): the keyboard still lands on the slider; a tap leaves the focus be.
+    const second = wrapVi(<ActionBar hand={hand(raiseLegal)} room={holdemRoom} onAct={() => {}} lang="vi" frame="landscape" />)
+    screen.getByRole('button', { name: 'Tố' }).focus()
+    await userEvent.keyboard('{Enter}')
+    expect(screen.getByRole('slider')).toHaveFocus()
+    second.unmount()
+    wrapVi(<ActionBar hand={hand(raiseLegal)} room={holdemRoom} onAct={() => {}} lang="vi" frame="landscape" />)
+    await userEvent.click(screen.getByRole('button', { name: 'Tố' }))
+    expect(screen.getByRole('slider')).not.toHaveFocus()
   })
 
   it('with no sizing the row offers Tất tay and no panel', async () => {

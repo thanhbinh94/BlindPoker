@@ -157,12 +157,14 @@ export function ActionBar({
   // Where the focus goes once the panel has drawn or gone: the slider (opened from the keyboard), or back to Tố ▴.
   const [focusNext, setFocusNext] = useState<'slider' | 'open' | null>(null)
   const yourTurn = legal !== null
-  // Each turn — and each hand — starts at the minimum with the panel shut. New bounds within the turn (a reconnect, a
-  // bot acting) keep the panel open and the amount re-clamps (P6).
+  // Each turn — each street and each hand — starts at the minimum with the panel shut: a seat can act last on one street
+  // and first on the next without `yourTurn` ever going false between them, so the board's length is in the key too.
+  // New bounds within the turn (a reconnect, a bot acting) keep the panel open and the amount re-clamps (P6).
+  const street = hand.community.length
   useEffect(() => {
     setAmount(null)
     setPanelOpen(false)
-  }, [hand.handId, yourTurn])
+  }, [hand.handId, yourTurn, street])
   useEffect(() => {
     setAmount((a) => (a === null ? null : Math.min(max, Math.max(min, a))))
   }, [min, max])
@@ -361,7 +363,9 @@ export function ActionBar({
       disabled={disabled}
       className={s.grow}
       aria-keyshortcuts="R Enter"
-      onClick={() => openPanel(false)}
+      // The stack's row unmounts under the panel, so its focus moves to the slider rather than falling to the page; in
+      // landscape the button stays (it becomes "Tố N"), and only a keyboard press (`detail` 0) moves the focus on.
+      onClick={(event) => openPanel(stack || event.detail === 0)}
     >
       {sizeVerb}
       <span aria-hidden="true">{OPEN_GLYPH}</span>
