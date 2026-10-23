@@ -578,7 +578,10 @@ dùng chọn (a): tất tay phần còn lại + bỏ phí Blind (spec §5).
 - **K5 — đã làm.** Tủ đồ và cửa hàng chỉ tải hình trong tầm nhìn, hàng đợi nhuộm màu tối đa 4 việc, @2x chỉ khi DPR ≥ 1,5.
   Còn lại: trên điện thoại qua mạng chậm hàng thẻ đầu tới sau khoảng 3,2 s (mục tiêu 2 s; `docs/known-limitations.md`).
 - **Thêm trong cùng plan (Q13):** điểm danh bản Normal đếm **số lần trong tháng**, bỏ một hôm không về ô 1.
-- **K6 — vẫn mở**, chờ brainstorm riêng.
+- **K6 — đang làm trên BP-30** (brainstorm 2026-10-22, spec `2026-10-22-k6-chibi-idle-life-design.md`): chưa vẽ dáng
+  mới; nhân vật ở Phòng thay đồ, Cửa hàng và Hồ sơ "sống" bằng chuyển động CSS trên các lớp sẵn có — thở, chớp mắt, cười
+  và nhún khi mặc thử hay mua đồ, chào khi chạm vào, nút "Xoay" lật gương; thẻ chọn quà chào mừng reo khi được chọn; bàn
+  chơi giữ nguyên. **Spike dáng thật** (xoay nghiêng, dáng ngồi) **vẫn mở**, chờ xem sau đợt này kho đồ còn "chán" không.
 
 | # | Yêu cầu | Ghi chú ban đầu của Claude |
 |---|---|---|
@@ -587,7 +590,7 @@ dùng chọn (a): tất tay phần còn lại + bỏ phí Blind (spec §5).
 | K3 | **Cửa hàng bán đồ:** mua trang phục/phụ kiện bằng **điểm (gold)** + **điểm danh vọng** kiếm trong game, giá theo độ hiếm; giá và danh vọng từng món **quản lý trong database, sửa được** (GM); lý do: "hiện tại không ai dùng kho đồ do chi phí kiếm trang phục hơi khó". | "Gold"/"tiền" = điểm trong game, không bao giờ là tiền thật (requirement.txt §3, spec §33). Cần: loại tiền tệ thứ hai `danh vọng` (nguồn: thắng ván? điểm danh? thành tựu?), bảng `item_prices(item_id, points, reputation, enabled, updated_by)`, màn Cửa hàng dùng chung khung thẻ với Phòng thay đồ, ledger cho danh vọng và sink cho tiền mua đồ, tab GM để sửa giá. |
 | K4 | **Quà lập tài khoản lần đầu:** tiền + danh vọng + một bộ trang phục. | Gắn với `starting_balance` hiện có; thêm nguồn ledger `welcome` cho danh vọng và một món quà; cân nhắc với người đã có tài khoản (có tặng bù không). |
 | K5 | **Kho đồ tải chậm lần đầu** (ảnh nhân vật, tóc, phụ kiện): cần lazy-load. (Gửi 2026-10-20.) | Hơn 490 tệp PNG `@1x/@2x` 384×448; tủ đồ vẽ nhiều chibi cùng lúc. Hướng: `loading="lazy"` + `IntersectionObserver` cho thẻ ngoài màn, ảnh đại diện nhỏ cho thẻ (icon 96 px đã có), tải trước theo ô đang mở, giới hạn số ảnh cùng lúc, WebP/sprite cho lớp. |
-| K6 | **Dáng đứng của nhân vật quá cố định** (2026-10-21, trong brainstorm K3): "dáng đứng của nhân vật quá cố định nên cũng làm giảm hứng thú của người chơi". | **Hoãn.** Mỗi dáng mới là vẽ lại toàn bộ lớp thân, tay và mọi trang phục cho cả hai giới qua pipeline avatar (`docs/avatar-2d.md`, cổng kiểm phong cách), tức một dự án nghệ thuật riêng, không phụ thuộc cửa hàng. Brainstorm sau Plan 27; hướng khả dĩ: 2–3 dáng ngồi/tư thế cho ghế ở bàn, giữ một dáng chuẩn cho tủ đồ. |
+| K6 | **Dáng đứng của nhân vật quá cố định** (2026-10-21, trong brainstorm K3): "dáng đứng của nhân vật quá cố định nên cũng làm giảm hứng thú của người chơi". | **Hoãn.** Mỗi dáng mới là vẽ lại toàn bộ lớp thân, tay và mọi trang phục cho cả hai giới qua pipeline avatar (`docs/avatar-2d.md`, cổng kiểm phong cách), tức một dự án nghệ thuật riêng, không phụ thuộc cửa hàng. Brainstorm sau Plan 27; hướng khả dĩ: 2–3 dáng ngồi/tư thế cho ghế ở bàn, giữ một dáng chuẩn cho tủ đồ. **2026-10-22:** chọn gói "sự sống" trước (Q1), đang làm trên BP-30; dáng thật vẫn là spike mở. |
 
 ## 10. Phản hồi 2026-10-22 (ảnh others/review/20261022)
 

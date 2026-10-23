@@ -258,8 +258,9 @@ icon's size until then. A card icon's tint render queues behind every figure's, 
 
 Measured by the ops pack (`e2e/ops/08-shop.spec.ts`; Chromium, fresh HTTP cache):
 
-- **P-04** (375×812, DPR 2): opening the wardrobe asks for 16 `/avatar/` pictures (the small portraits' @1x files), for
-  the 5 figures and cards near the screen. On Mũ with "Hiện cả món chưa có" ticked, 3 requests for the 4 hats near the screen out of 8, where loading
+- **P-04** (375×812, DPR 2): opening the wardrobe asks for 18 `/avatar/` pictures (the small portraits' @1x files), for
+  the 5 figures and cards near the screen. It was 16 before BP-30: the stage's figure is live and loads its spare
+  `closed` and `happy` faces once its own face is in (measured 2026-10-23). On Mũ with "Hiện cả món chưa có" ticked, 3 requests for the 4 hats near the screen out of 8, where loading
   every card (`IntersectionObserver` removed, the old behaviour) asks for 7. Back on Kiểu tóc it asks for none.
 - **P-05** ("fast 3G": 1.6 Mbps down, 750 kbps up, 150 ms RTT, from a tap with the app already open): the stage is
   drawn and the first row of cards is on screen in about 850 ms at both 1366×768 and 375×812. The first row's pictures

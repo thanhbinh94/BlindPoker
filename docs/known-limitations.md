@@ -810,6 +810,41 @@ centred, is never reached. The strip itself takes no presses (`pointer-events: n
 the top on a phone would put it over the rail and the room header instead.
 *Tracked:* `packages/ui-kit/src/screens/screens.module.css` (`.toasts`), `docs/bug-log.md` §10 E5.
 
+**A turned chibi is a mirror image, not a back view (BP-30, R2).** "Xoay" on the wardrobe and shop stages squeezes the
+figure and opens it out mirrored (`transform: scaleX(-1)`), so while it faces left everything on it is reversed: a
+frame's motif, an asymmetric hat or outfit, the side the hair is parted on, any letter or badge drawn on an item. There
+is no back and no three-quarter view, and the "wave" is a smile and a tilt because the layers have no arm of their own.
+The facing is never saved: a stage opens facing right again (R5).
+*Why it stays:* a real turn needs new pictures for every body, hairstyle and item, which K6 ruled out (Q1: life before
+poses). The spec accepts the mirror.
+*Tracked:* `docs/superpowers/specs/2026-10-22-k6-chibi-idle-life-design.md` R2, R5; `docs/bug-log.md` §9 K6 (the
+real-pose spike stays open).
+
+**One live figure per screen; every card, portrait and seat stays still (BP-30).** Only a stage's figure is live: the
+wardrobe's, the shop's and the profile's (`live="idle"`), plus the welcome dialog's three cards, which cheer when picked
+but never breathe or blink (`live="still"`). The wardrobe and shop cards, the saved-outfit heads, the lobby bar, the
+table's seats and the GM screens draw the figure as it was before BP-30 (`live="off"`, the same markup).
+*Why it stays:* spec K6 Q2 and §3.1. Each live figure mounts two more face pictures and runs its own timers, and a grid
+of breathing cards would tire the eye. The table keeps its own turn bounce.
+*Tracked:* `packages/ui-kit/src/avatar2d/Chibi.tsx` (`live`), `docs/ui-kit.md` → "The chibi's life".
+
+**A second cheer within 420 ms does not replay the hop (BP-30).** Two try-ons in quick succession restart the cheer:
+the smile runs its 1.2 s again from the second one, and the sparkle ring starts over. But if the second comes while the
+first hop (420 ms) is still in the air, the root's hop class is already on, so the browser does not restart the
+animation: the figure finishes the first hop and does not jump again.
+*Why it stays:* restarting it needs a remount or a forced reflow of the root, for a 0.4 s bob nobody double-taps for.
+The smile and the sparkles already say "again".
+*Tracked:* `packages/ui-kit/src/avatar2d/life.ts` (the cheer branch); BP-30 Task 4 review, M5.
+
+**The shop's phone strip is 8 px taller for a seven-digit balance or a long reputation line (BP-30).** On a phone "Xoay"
+sits at the end of the sticky strip above the shelves. To make room, the strip's gaps went from 12 to 8 px and the button
+is slim, so a new player's strip stays 96 px tall. A balance of 1.000.000 or more, or a reputation line as long as
+"… còn 1.345 tới Bậc thầy", still takes one more line beside it: 104 px, where it was 96 px before Xoay. The shelves
+start that much lower under the sticky band.
+*Why it stays:* the lead put Xoay on every shop size (P15), and the alternatives were a smaller tap target or a second
+row. The 8 px is the smallest of the three costs.
+*Tracked:* `apps/normal-web/src/screens/shop/shop.module.css` (`.strip .stageTurn`); BP-30 Task 4, Ruling 1.
+
 ---
 
 ## Not limitations — things that were never in scope

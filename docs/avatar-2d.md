@@ -1168,6 +1168,17 @@ Bots never carry a `ChibiConfig` at all: `botChibi(index)` answers a `BotChibi` 
 no wardrobe — and `layersFor` branches on `subject.kind` at the top, before any of the optional-slot logic
 runs.
 
+**Life without new layers (BP-30, spec 2026-10-22 K6).** The figure on the wardrobe, shop and profile stages breathes,
+blinks, cheers, greets and turns, and none of it needed a picture this pipeline did not already make. A live `Chibi`
+mounts, beside the face it shows, the same body's `closed` and `happy` faces from §4.6's six — the same L50 files,
+tinted the same way, at the same z-index, hidden with `opacity: 0` — and a blink or a smile only switches which one is
+visible (`data-face`); the expression is never changed at run time, so no layer is fetched or repainted mid-blink. The
+breath (a 1.5 % `scale` from the feet), the cheer's hop, the wave's tilt and the turn (a `scaleX` squeeze into a
+mirror) are CSS transforms on the root, over every layer at once, so a hat's hair clip, a tint and the head crop come
+along unchanged. What it cannot do follows from the art: there is no arm to wave (the "wave" is a smile and a tilt),
+no back view (a turn is a mirror, so an asymmetric item or a frame's motif is drawn reversed while turned), and no new
+pose — the real-pose spike stays open in `docs/bug-log.md` §9. The kit side is `docs/ui-kit.md` → "The chibi's life".
+
 ## 8. How Lite gets its assets
 
 Lite has no wardrobe and no per-account cosmetic config (design §7 — "Không tủ đồ, không profile"), so

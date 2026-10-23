@@ -557,6 +557,46 @@ keeps `facing`, hands it to the figure and places a `TurnButton` ("Xoay" / "Turn
 with `aria-pressed` while the figure faces left) wherever it fits. The button calls `onTurn(flipFacing(facing))`.
 Under reduced motion the turn is an instant mirror with no spin, because `Chibi` never sets the spin then.
 
+#### The chibi's life (BP-30, spec K6 §3.1)
+
+`Chibi` itself takes the three props `LiveFigure` passes on: `live?: ChibiLive` (`'off' | 'still' | 'idle'`, `'off'` by
+default), `react?: ChibiReaction | null` (`{ kind: 'cheer' | 'wave' | 'spin'; key }`, a new `key` plays it once) and
+`facing?: ChibiFacing` (`'right' | 'left'`), plus `onFacesReady`. **`off`** renders exactly the markup it rendered
+before BP-30 (pinned by an inline snapshot in `Chibi.test.tsx`), so the table, the seats, the lobby bar, every card and
+portrait and the GM screens are untouched. **`still`** (the welcome dialog's cards) answers `react` and `facing` but
+never breathes or blinks and starts no observer. **`idle`** (the wardrobe, shop and profile stages) also breathes and
+blinks while it is on screen.
+
+- **Faces.** A live chibi mounts the base face first and, once that face is loaded and tinted, the `closed` and `happy`
+  faces right after it at the same z-index (`data-face-layer`, hidden ones `opacity: 0` and `data-face-hidden`; never
+  `visibility: hidden`, so they load like a shown one). The extras wait for the base face so they never compete with the
+  first paint. Blinks and smiles start only when every mounted face reports ready (loaded and tinted), so a blink never
+  shows a blank or untinted face.
+- **`useChibiLife`** (`life.ts`, internal) is the state machine. It takes `{ live, react, facing, onScreen, facesReady,
+  baseExpression, reducedMotion, rng }` and returns `{ face: 'base' | 'closed' | 'happy', motion: 'none' | 'hop' |
+  'tilt' | 'spin', breathing, reacting }`. Its timings live in `CHIBI_LIFE`: breathe 4 s, a 120 ms blink every 3–6 s
+  (10 % double, 160 ms apart; none when the base face is `closed` or `sleep`), cheer `happy` 1.2 s with a 420 ms hop,
+  wave `happy` 800 ms with a 600 ms tilt, and spin 500 ms. A cheer always restarts. A wave during a cheer or a spin is
+  ignored. A cheer during a spin keeps the spin's motion and still smiles, so it reads as `spin`. The spin comes from a
+  `facing` change after mount, never from `react`. Reactions play whether or not the figure is on screen. Unmounting
+  clears every timer.
+- **On screen.** `useOnScreen(ref, { rootMargin, enabled })` (`on-screen.ts`, internal) is a continuous
+  `IntersectionObserver` plus `visibilitychange`, unlike `useInView`, which stops after the first sighting. Breathing and
+  blinking pause while the figure is scrolled off or the tab is hidden. `Chibi` enables it only for `idle`.
+- **The root's state.** A live root carries `data-live`, `data-face`, `data-facing`, `data-reacting` (absent when
+  nothing plays), `data-breathing="true|false"` and `data-motion`. Class names are hashed in production, so the tests
+  read these attributes and the computed `animation-name` (ops P-06, P-07), never a class.
+- **CSS** (`avatar2d.module.css`). Each effect uses its own transform property, so they never fight: the breath animates
+  `scale` (`chibiBreathe`), the hop `translate` (`chibiHop`), the tilt `rotate` (`chibiTilt`). A left facing is a static
+  `transform: scaleX(-1)`, and the turn animates `transform` (`chibiSpinLeft` / `chibiSpinRight`, picked by
+  `data-facing`). The pivot is `transform-origin: 50% 100%` on a live root only. Only one `animation` runs at a time:
+  `breathing` is false while a motion plays. The hop's height is `var(--chibi-hop, -6%)`, so a stage whose figure
+  already touches its top edge can hop lower: the wardrobe's desktop stage sets `--chibi-hop: -3%`. The root keeps
+  BP-29's `isolation: isolate`, so a running animation never changes the stacking order around it.
+- **Reduced motion.** Under `prefers-reduced-motion: reduce` (`useMediaQuery`), `global.css` stops every animation, and
+  the hook also returns the still state: face `base`, motion `none`, no `reacting`, so no face ever changes (R4). A turn
+  is an instant mirror. `LiveFigure` drops the greet button and the sparkle ring.
+
 ### Lobby
 
 | Component | Props |

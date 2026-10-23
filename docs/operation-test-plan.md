@@ -286,8 +286,8 @@ màn nào, trạng thái nào, cỡ nào và test nào: `docs/test-matrix.md`. N
 
 ### P. Cửa hàng, danh vọng và tủ đồ (Plan 27)
 
-Cả sáu ca (P-01…P-05 và P-03b) là **tự động** — `08-shop.spec.ts` (P-02 và P-04 chạy ở project `mobile`, P-03b ở project `landscape`, còn lại
-ở `desktop`); ca đổi giá của GM là Q-04. Bộ test nâng bậc bằng lối cộng danh vọng của GM; người test làm bằng tay thì nhờ
+Cả tám ca (P-01…P-07 và P-03b) là **tự động** — `08-shop.spec.ts` (P-02, P-04 và P-06 chạy ở project `mobile`, P-03b ở project `landscape`,
+còn lại ở `desktop`; P-07 mở một context bật giảm chuyển động); ca đổi giá của GM là Q-04. Bộ test nâng bậc bằng lối cộng danh vọng của GM; người test làm bằng tay thì nhờ
 GM bấm "Cộng danh vọng" ở trang người chơi. Mã P- là mã ca test, khác với P1/P2 (điện thoại) và P1/P2/P3 (mức ưu tiên).
 
 | Mã | Bước | Kỳ vọng | Ưu tiên |
@@ -297,6 +297,8 @@ GM bấm "Cộng danh vọng" ở trang người chơi. Mã P- là mã ca test, 
 | P-03 | **Tự động.** Người chơi đã lên Cao thủ (400 danh vọng): mở Hồ sơ, rồi tạo bàn Blind có 1 bot và ngồi vào bàn. P-03b: làm lại trên điện thoại xoay ngang | Hồ sơ ghi "Danh vọng 400 · Cao thủ · còn 1.400 tới Bậc thầy". Ở bàn, chữ "Cao thủ" đứng cạnh tên (hoặc sau số điểm khi tên dài) trên bảng tên của mình. Xoay ngang: bảng tên hẹp nên bậc hiện thành viên "III" trên dòng số điểm. Vừa được cộng danh vọng thì thanh trên của sảnh đổi sang "Cao thủ" ngay, không cần tải lại; tải lại trang cũng vẫn là Cao thủ. | P2 |
 | P-04 | **Tự động, điện thoại.** Tài khoản mới mở Phòng thay đồ; chuyển sang Trang phục → Mũ với ô "Hiện cả món chưa có" được tích; quay lại Ngoại hình | Trang chỉ tải hình của các thẻ gần màn hình (không quá 8 yêu cầu `/avatar/` cho mỗi hình nhân vật hay thẻ đang thấy), ít hơn hẳn cách tải mọi thẻ cùng lúc; chuyển tab không gây một loạt yêu cầu | P2 |
 | P-05 | **Tự động.** Mạng "3G nhanh" (1,6 Mbps, trễ 150 ms), app đang mở ở Hồ sơ, bấm sang Phòng thay đồ, ở 1366×768 và 375×812 | Sân khấu và hàng thẻ đầu tiên hiện trong 2 giây ở cả hai cỡ; hình của hàng đầu tải xong trong 2 giây ở cả hai cỡ (chân dung nhỏ luôn tải ảnh @1x) | P3 |
+| P-06 | **Tự động, điện thoại.** (BP-30) Tài khoản mới mở Cửa hàng; nhìn nhân vật vài giây; chạm vào nhân vật; bấm "Xoay"; rồi bấm thẻ "Mũ len" ở kệ Thường để mặc thử | Nhân vật thở nhẹ (phồng lên rất ít, chu kỳ 4 giây) và chớp mắt sau vài giây; chạm vào thì nhân vật cười và nghiêng đầu chào rồi đứng lại; "Xoay" quay nhân vật sang trái trong nửa giây và giữ nguyên hướng đó, nút "Xoay" ở trạng thái đang bấm; mặc thử thì nhân vật cười, nhún một cái, có tia lấp lánh, rồi tất cả tắt trong vòng 2 giây. Không chữ nào hiện thêm trên màn | P2 |
+| P-07 | **Tự động.** (BP-30) Bật "giảm chuyển động" của hệ điều hành (Windows: Cài đặt → Trợ năng → Hiệu ứng hình ảnh → tắt "Hiệu ứng hoạt hình"), mở Cửa hàng; nhìn nhân vật 8 giây; mặc thử "Mũ len"; bấm "Xoay" | Nhân vật đứng yên hoàn toàn: không thở, không chớp mắt, không đổi nét mặt; chạm vào nhân vật không có gì xảy ra (không có nút chào); mặc thử chỉ đổi đồ, không nhún, không lấp lánh; "Xoay" lật nhân vật sang trái ngay lập tức, không có hoạt ảnh | P2 |
 
 ### Q. Quản trị (GM)
 
