@@ -478,6 +478,44 @@ describe('PokerTable', () => {
     }
   })
 
+  // BP-31 §3.1: the felt pads its foot for my fan only while I hold cards — between hands the board keeps its height.
+  it('the stack section carries data-mine-cards only while the viewer holds cards', () => {
+    const table = (h: ClientHand | null, who: string, layout: 'stack' | 'ring' = 'stack') => (
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <PokerTable room={room} hand={h} myPlayerId={who} deadlineAt={null} serverNow={() => 0} turnTimerMs={30000} lang="en" layout={layout} canSit={false} />
+      </I18nextProvider>
+    )
+    const section = () => document.querySelector('section')!
+    const view = render(table(hand, 'a'))
+    expect(section().className).toContain(s.stack)
+    expect(section()).toHaveAttribute('data-mine-cards', 'true')
+    view.rerender(table(null, 'a'))
+    expect(section(), 'between hands').not.toHaveAttribute('data-mine-cards')
+    view.rerender(table({ ...hand, seats: hand.seats.map((seat) => (seat.seat === hand.mySeat ? { ...seat, cardCount: 0, holeCards: null } : seat)) }, 'a'))
+    expect(section(), 'dealt out of this hand').not.toHaveAttribute('data-mine-cards')
+    view.rerender(table(hand, 'zed'))
+    expect(section(), 'a spectator').not.toHaveAttribute('data-mine-cards')
+    view.rerender(table(hand, 'a', 'ring'))
+    expect(section(), 'the ring').not.toHaveAttribute('data-mine-cards')
+  })
+
+  it("the viewer's seat gets strip in the stack layout and not on the ring", () => {
+    for (const layout of ['stack', 'ring'] as const) {
+      const view = wrap(
+        <PokerTable room={room} hand={hand} myPlayerId="a" deadlineAt={null} serverNow={() => 0} turnTimerMs={30000} lang="en" layout={layout} canSit={false} />,
+      )
+      const me = document.querySelector<HTMLElement>('[data-me="true"]')!
+      const stripped = layout === 'stack'
+      expect(me.classList.contains(s.meStrip!), layout).toBe(stripped)
+      expect(me.querySelector('[data-fan]')?.getAttribute('data-fan') ?? null, layout).toBe(stripped ? '2' : null)
+      expect(me.closest(`.${s.mine}`) !== null, layout).toBe(stripped)
+      // nobody else's seat is a strip, nor fans
+      expect(document.querySelectorAll(`.${s.meStrip}`), layout).toHaveLength(stripped ? 1 : 0)
+      expect(document.querySelectorAll('[data-fan]'), layout).toHaveLength(stripped ? 1 : 0)
+      view.unmount()
+    }
+  })
+
   it('marks no seat as the viewer’s for a spectator', () => {
     wrap(<PokerTable room={fullRoom} hand={null} myPlayerId="zed" deadlineAt={null} serverNow={() => 0} turnTimerMs={30000} lang="en" layout="ring" canSit={false} />)
     expect(document.querySelectorAll('[data-me]')).toHaveLength(0)

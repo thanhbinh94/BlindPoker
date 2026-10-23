@@ -488,6 +488,130 @@ describe('Seat with a rank', () => {
   })
 })
 
+// BP-31 §3.1 (R1, R10): in the stack layout my cards fan out over the felt's foot and my seat is a one-line strip under
+// them — the plate itself, carrying what used to hang under it. The ring and the opponents keep the plate and its lines.
+describe('Seat as the stack strip', () => {
+  const plain = (patch: Partial<SeatProps> = {}): SeatProps =>
+    props({ squeezeRoom: false, squeezeRound: false, squeezeDecides: false, deadlineAt: null, ...patch })
+  const fan = (): string | null => document.querySelector(`.${s.seatCards}`)!.getAttribute('data-fan')
+  const plate = (): HTMLElement => document.querySelector<HTMLElement>('[data-plate]')!
+  /** One rule's body in the raw stylesheet: the first block whose selector is exactly `sel`. */
+  const rule = (sel: string): string => new RegExp(`(?:^|[}\\s])${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`).exec(TABLE_CSS)?.[1] ?? ''
+
+  it("the viewer's stack seat fans two or three cards and never a peel hand", () => {
+    const { revealed: _absent, ...two } = ann
+    const view = wrap(plain({ seat: two, strip: true }))
+    expect(fan()).toBe('2')
+    view.rerender(plain({ seat: { ...two, holeCards: parseCards('Qs Qd 2c'), cardCount: 3 }, strip: true }))
+    expect(fan()).toBe('3')
+    view.unmount()
+    // a squeeze table's cards are peeled by hand: they lie flat, at the fan's width
+    const peeling = wrap(props({ strip: true }))
+    expect(fan()).toBe('none')
+    expect(peelCards()).toHaveLength(2)
+    peeling.unmount()
+    // the ring's own seat and an opponent's never fan
+    const ring = wrap(plain({ seat: two }))
+    expect(fan()).toBeNull()
+    ring.unmount()
+    wrap(plain({ seat: makeSeat({ seat: 3, playerId: 'b', displayName: 'Bob' }), player: makePlayer({ playerId: 'b', displayName: 'Bob', seat: 3 }), isMe: false }))
+    expect(fan()).toBeNull()
+  })
+
+  it('the strip keeps the timer ring, the dealer button, the street bet and the host badge, and drops Bạn and the caption', () => {
+    const betting = makeSeat({ seat: 0, playerId: 'a', displayName: 'Ann', holeCards: parseCards('Qs Qd'), betThisStreet: 2_000 })
+    const host = makePlayer({ playerId: 'a', displayName: 'Ann', seat: 0, status: 'IN_HAND', isHost: true })
+    const live = { seat: betting, player: host, isActing: true, isButton: true, deadlineAt: 1_015_000, caption: 'Vua bài' }
+    // the ring's own seat, for contrast: "Bạn" and the caption are there
+    const ring = wrap(plain(live))
+    expect(screen.getByText('Bạn')).toBeInTheDocument()
+    expect(screen.getByText('Vua bài')).toBeInTheDocument()
+    ring.unmount()
+
+    const view = wrap(plain({ ...live, strip: true }))
+    const row = plate()
+    expect(within(row).getByRole('timer')).toHaveTextContent('15')
+    expect(within(row).getByRole('img', { name: 'Cái' })).toHaveTextContent('D')
+    expect(within(row).getByText('2.000')).toHaveClass(s.bet!)
+    expect(within(row).getByText('Chủ phòng')).toBeInTheDocument()
+    expect(within(row).getByText('20.000')).toHaveClass(s.seatStack!)
+    expect(screen.queryByText('Bạn')).toBeNull()
+    expect(screen.queryByText('Vua bài')).toBeNull()
+    // the seat's state, when it has one, is on the same row
+    view.rerender(plain({ ...live, seat: { ...betting, folded: true }, strip: true }))
+    expect(within(plate()).getByText('Đã bỏ bài')).toBeInTheDocument()
+    view.rerender(plain({ ...live, seat: { ...betting, allIn: true }, strip: true }))
+    expect(within(plate()).getByText('Tất tay')).toBeInTheDocument()
+    // the rank is its numeral's badge on the row, never a word that could cut the name
+    view.rerender(plain({ ...live, rank: 4, strip: true }))
+    expect(within(plate()).getByText('IV')).toHaveClass(s.rankPill!)
+    expect(screen.queryByText('Bậc thầy')).toBeNull()
+  })
+
+  it('the strip’s row is still .plate[data-plate]', () => {
+    const view = wrap(plain({ strip: true }))
+    const row = plate()
+    expect(row).toHaveClass(s.plate!)
+    expect(within(row).getByText('Ann')).toHaveClass(s.seatNameText!)
+    expect(row.closest('[data-me="true"]')).toHaveAttribute('role', 'group')
+    expect(row.closest('[data-me="true"]')).toHaveAttribute('aria-label', 'Ghế 1')
+    // nothing hangs under it: no badge line of its own
+    expect(document.querySelector(`.${s.tags}`)).toBeNull()
+    expect(document.querySelector(`.${s.seatResult}`)).toBeNull()
+    // at showdown the hand's name and the payout are the row's second line, inside the plate
+    view.rerender(plain({ strip: true, showdownLabel: 'Thùng', winnerPayout: 5_000 }))
+    const result = document.querySelector<HTMLElement>(`.${s.seatResult}`)!
+    expect(plate().contains(result)).toBe(true)
+    expect(within(result).getByText('Thùng')).toHaveClass(s.handTag!)
+    expect(within(result).getByText('+5.000')).toHaveClass(s.payout!)
+    expect(plate()).toHaveClass(s.plateTwoLine!)
+  })
+
+  it('the fan rotates ±7° for two cards and ±9° for three, overlaps 14 px, hangs 30 px below the felt and the felt pads by the rest of the card', () => {
+    const stack = rule('.stack')
+    expect(stack).toMatch(/--fan-overlap:\s*14px/)
+    expect(stack).toMatch(/--fan-drop:\s*30px/)
+    expect(stack).toMatch(/--fan-over:\s*calc\(var\(--fan-card\) \* 1\.4 - var\(--fan-drop\)\)/)
+    expect(rule('.stack[data-mine-cards] .stackFelt')).toMatch(/padding-bottom:\s*calc\(var\(--space-4\) \+ var\(--fan-over\)\)/)
+    const mine = rule('.stack[data-mine-cards] .mine')
+    expect(mine).toMatch(/margin-top:\s*calc\(-1 \* \(var\(--fan-over\) \+ var\(--space-3\)\)\)/)
+    expect(mine).toMatch(/background:\s*transparent/)
+    expect(rule('.stack[data-mine-cards] .mine::before')).toMatch(/content:\s*none/)
+    expect(TABLE_CSS).toMatch(/\.mine \[data-fan='2'\],\s*\.mine \[data-fan='3'\]\s*\{\s*gap:\s*0;?\s*\}/)
+    expect(TABLE_CSS).toMatch(/\.mine \[data-fan='2'\] > \* \+ \*,\s*\.mine \[data-fan='3'\] > \* \+ \*\s*\{\s*margin-left:\s*calc\(-1 \* var\(--fan-overlap\)\);?\s*\}/)
+    // the individual `rotate` property, pivoting on the card's foot: `.cardDealt` animates `transform`, and outranks nothing here
+    expect(TABLE_CSS).toMatch(/\.mine \[data-fan='2'\] > \.card,\s*\.mine \[data-fan='3'\] > \.card\s*\{\s*transform-origin:\s*50% 100%;?\s*\}/)
+    expect(rule(".mine [data-fan='2'] > .card:nth-child(1)")).toMatch(/rotate:\s*-7deg/)
+    expect(rule(".mine [data-fan='2'] > .card:nth-child(2)")).toMatch(/rotate:\s*7deg/)
+    expect(rule(".mine [data-fan='3'] > .card:nth-child(1)")).toMatch(/rotate:\s*-9deg/)
+    expect(rule(".mine [data-fan='3'] > .card:nth-child(2)")).toMatch(/rotate:\s*0deg/)
+    expect(rule(".mine [data-fan='3'] > .card:nth-child(3)")).toMatch(/rotate:\s*9deg/)
+    // a peel hand lies flat: nothing rotates it
+    expect(TABLE_CSS).not.toMatch(/\[data-fan='none'\][^{]*\{[^}]*rotate/)
+    // the fan is still: no motion of its own
+    expect(TABLE_CSS).not.toMatch(/\[data-fan[^{]*\{[^}]*(animation|transition)/)
+  })
+
+  it('stack cards are clamp(52px, 15vw, 60px) and community cards clamp(40px, 11vw, 48px)', () => {
+    expect(rule('.stack')).toMatch(/--fan-card:\s*clamp\(52px, 15vw, 60px\)/)
+    expect(rule('.mine .cardMd')).toMatch(/--card-w:\s*var\(--fan-card\)/)
+    expect(rule('.stackFelt')).toMatch(/--card-lg:\s*clamp\(40px, 11vw, 48px\)/)
+  })
+
+  it('chip tags are 11 px and the chip bet is 12 px on the phone', () => {
+    expect(rule('.othersChip .tags > *')).toMatch(/font-size:\s*0\.6875rem/)
+    expect(rule('.othersChip .bet')).toMatch(/font-size:\s*0\.75rem/)
+    expect(rule(".ring[data-frame='landscape'] .potLabel")).toMatch(/font-size:\s*0\.6875rem/)
+  })
+
+  it('the strip is one 44 px row with a 36 px disc, 56 px with the result under the name', () => {
+    expect(rule('.meStrip .plate')).toMatch(/min-height:\s*44px/)
+    expect(rule('.meStrip .plate')).toMatch(/gap:\s*var\(--space-2\)/)
+    expect(rule('.meStrip .avatar')).toMatch(/--seat-disc:\s*36px/)
+    expect(rule('.meStrip .plateTwoLine')).toMatch(/min-height:\s*56px/)
+  })
+})
+
 /** The rank stands on the stack line, beside the figure, and not on the name's line. */
 function expectOnStackLine(rank: HTMLElement): void {
   const line = rank.closest(`.${s.stackLine}`)

@@ -243,12 +243,14 @@ export function PokerTable({
     // The turn bounce (spec 08 §3.4): only the seat whose turn it is *and* only when that seat is the viewer's
     // own — an opponent's chibi does not bounce for the viewer, since it is not their decision to make.
     const bounce = hand !== null && hand.actingSeat === index && index === hand.mySeat
+    const isMe = myPlayerId !== null && player.playerId === myPlayerId
     return (
       <Seat
         key={index}
         seat={clientSeat}
         player={player}
-        isMe={myPlayerId !== null && player.playerId === myPlayerId}
+        isMe={isMe}
+        strip={mode === 'stack' && isMe}
         isActing={acting}
         isButton={hand !== null && hand.button === index}
         winnerPayout={payouts.get(index) ?? null}
@@ -302,9 +304,18 @@ export function PokerTable({
     // (layout audit L1, 2026-09-28 — at six seats the full plates pushed the felt off a 375 × 812 screen once
     // cards were out); seven or more and the plates also give up the app's caption so the third row fits.
     const opponents = order.filter((i) => i !== mySeat)
+    // BP-31 §3.1 (R1): while the viewer holds cards they fan out over the felt's foot, and the felt pads its own foot by
+    // as much, so the pot stays clear of them; between hands the board keeps its height.
+    const myHandSeat = mySeat === null || seated.get(mySeat)?.playerId !== myPlayerId ? undefined : handSeats.get(mySeat)
+    const myCards = myHandSeat === undefined ? 0 : (myHandSeat.holeCards?.length ?? myHandSeat.cardCount)
     return (
       <DeckAnchorProvider value={deckRef}>
-        <section className={cx(s.table, s.stack)} data-surface="night" aria-label={t('labels.table')}>
+        <section
+          className={cx(s.table, s.stack)}
+          data-surface="night"
+          data-mine-cards={myCards > 0 ? 'true' : undefined}
+          aria-label={t('labels.table')}
+        >
           <div
             className={cx(s.others, opponents.length > 3 && s.othersTwoRow, opponents.length > 3 && s.othersChip, opponents.length > 6 && s.othersDense)}
             role="group"

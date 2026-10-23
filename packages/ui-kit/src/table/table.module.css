@@ -1062,7 +1062,7 @@
 }
 
 .ring[data-frame='landscape'] .potLabel {
-  font-size: 0.625rem;
+  font-size: 0.6875rem;
 }
 
 /* Set on the seats, as the short-ring block above does: they are the ring's container children. The badge line may
@@ -1292,6 +1292,9 @@
 .stack {
   display: grid;
   grid-template-rows: minmax(min-content, auto) minmax(min-content, 1fr) auto;
+  /* One column exactly as wide as the table: an `auto` track grows to its widest item's min-content, and the viewer's
+     one-line strip (BP-31) would widen the whole table past the phone's edge instead of cutting the name. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
   align-self: stretch;
   /* inside `.roomMain`, which centres its child: without this the strip would only be as wide as its plates */
@@ -1299,6 +1302,12 @@
   min-height: 0;
   /* one opponent block in the strip = plate + its cards + its badge row; the two-row floor is measured in these */
   --plate-h: 104px;
+  /* The viewer's fan (BP-31 §3.1, R1): a card 56 × 78 at 375 px, 60 × 84 from 400 px; each overlaps the one before by
+     14 px, and the fan's foot hangs 30 px below the felt's, so the felt pads its foot by the rest of the card. */
+  --fan-card: clamp(52px, 15vw, 60px);
+  --fan-overlap: 14px;
+  --fan-drop: 30px;
+  --fan-over: calc(var(--fan-card) * 1.4 - var(--fan-drop));
 }
 
 /* `auto-fill`, not `auto-fit`: an empty trailing track keeps three columns at 360 px instead of stretching two
@@ -1388,15 +1397,16 @@
   gap: 2px;
 }
 
+/* 11 px is the floor of the table's text on a phone, and the bet a size above it (BP-31 §3.4, P1). */
 .othersChip .tags > * {
   padding: 0 5px;
-  font-size: 0.625rem;
+  font-size: 0.6875rem;
   letter-spacing: 0;
 }
 
 .othersChip .bet {
   padding: 0 6px;
-  font-size: 0.625rem;
+  font-size: 0.75rem;
 }
 
 .othersChip .bet::before {
@@ -1419,6 +1429,14 @@
     inset 0 0 0 2px rgba(217, 164, 65, 0.4),
     inset 0 0 0 6px rgba(8, 18, 20, 0.9),
     0 14px 34px rgba(3, 6, 16, 0.5);
+  /* the board a size up on a phone (BP-31 §3.1) */
+  --card-lg: clamp(40px, 11vw, 48px);
+}
+
+/* While the viewer holds cards, they lie over the felt's foot (`.mine`, below): the felt pads its foot by as much as the
+   cards rise over it, so the pot keeps clear of them. */
+.stack[data-mine-cards] .stackFelt {
+  padding-bottom: calc(var(--space-4) + var(--fan-over));
 }
 
 /* The viewer's own plate never scrolls out of sight (layout audit L1, 2026-09-28): on a 375 × 812 phone with five
@@ -1449,6 +1467,132 @@
 
 .mine .seat {
   width: min(100%, 340px);
+}
+
+/* BP-31 §3.1 (R1): the viewer's cards fan out over the felt's foot, their own foot 30 px below the felt's. The block is
+   pulled up by the part of the card that lies over the felt (and the grid's gap): its auto track shrinks by as much, and
+   the cards overflow up into the felt's row, painted over it by the block's `z-index`. Over the felt there is nothing to
+   hide, so the block drops its night ground and the fade above it; the strip's plate keeps its own. */
+.stack[data-mine-cards] .mine {
+  margin-top: calc(-1 * (var(--fan-over) + var(--space-3)));
+  padding-top: 0;
+  background: transparent;
+}
+
+.stack[data-mine-cards] .mine::before {
+  content: none;
+}
+
+/* Card and PeelCard both size by `.cardMd`: a peel hand is as wide as a fan. */
+.mine .cardMd {
+  --card-w: var(--fan-card);
+}
+
+.mine [data-fan='2'],
+.mine [data-fan='3'] {
+  gap: 0;
+}
+
+.mine [data-fan='2'] > * + *,
+.mine [data-fan='3'] > * + * {
+  margin-left: calc(-1 * var(--fan-overlap));
+}
+
+/* Each card turns on its own foot, with the individual `rotate` property: `.cardDealt`'s slide animates `transform`,
+   which composes after it, and this pivot outranks the slide's. A hand to peel (`data-fan='none'`) lies flat — the
+   peel measures the drag across the card's box. No motion: the fan simply is. */
+.mine [data-fan='2'] > .card,
+.mine [data-fan='3'] > .card {
+  transform-origin: 50% 100%;
+}
+
+.mine [data-fan='2'] > .card:nth-child(1) {
+  rotate: -7deg;
+}
+
+.mine [data-fan='2'] > .card:nth-child(2) {
+  rotate: 7deg;
+}
+
+.mine [data-fan='3'] > .card:nth-child(1) {
+  rotate: -9deg;
+}
+
+.mine [data-fan='3'] > .card:nth-child(2) {
+  rotate: 0deg;
+}
+
+.mine [data-fan='3'] > .card:nth-child(3) {
+  rotate: 9deg;
+}
+
+/* The viewer's strip (BP-31 R10): one row 44 px tall — the 36 px disc with its turn ring and dealer button, the name,
+   the stack, the rank's numeral, the host and state badges, the street bet — and 56 px with the hand's name and payout
+   under the name at showdown. The name is what gives when the row runs short. */
+/* the whole width of the phone: every pixel of the row the name can keep */
+.mine .meStrip {
+  width: 100%;
+}
+
+.meStrip .plate {
+  min-height: 44px;
+  gap: var(--space-2);
+  padding: 3px 12px 3px 4px;
+}
+
+.meStrip .plateTwoLine {
+  min-height: 56px;
+}
+
+.meStrip .avatar {
+  --seat-disc: 36px;
+}
+
+/* `Seat` asks for a 40 px ring here, centred on the disc (4 px in from the plate's padding edge), its seconds pill
+   tucked up to the plate's foot: the strip is the last thing in the room's scroll box, and a pill hanging below it
+   scrolled the room by 6 px. */
+.meStrip .timer {
+  left: 2px;
+}
+
+.meStrip .timerText {
+  bottom: -2px;
+}
+
+/* The name keeps 4.5em at the least and grows to its own width; the rest keep theirs. Only a row that cannot hold
+   them all — the host badge, all-in, a bet and a rank on a 375 px phone — wraps its last items under the name rather
+   than cutting the name to nothing. */
+.stripLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--space-1);
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.stripLine > .seatName {
+  flex: 1 1 4.5em;
+  min-width: 4.5em;
+  max-width: max-content;
+}
+
+.stripLine > :not(.seatName) {
+  flex: none;
+}
+
+/* the badges at the table's 11 px floor (P1), their spare padding and tracking given to the name */
+.stripLine > .tagWho,
+.stripLine > .tagState {
+  padding: 0 5px;
+  font-size: 0.6875rem;
+  letter-spacing: 0;
+}
+
+.meStrip .seatResult {
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  white-space: nowrap;
 }
 
 /* ---------------- Action tray ---------------- */
