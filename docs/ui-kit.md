@@ -548,7 +548,9 @@ vật của bạn, bấm để chào"), with the kit's `:focus-visible` ring. It
 its own `role="img"` and name (R6; the spec says "bọc", P10 chose the overlay). A tap waves. A wave during a cheer or a
 turn is `useChibiLife`'s to ignore. The **sparkle ring** is six `aria-hidden` marks at fixed spots over the figure's box
 that fade in and out once in `CHIBI_LIFE.sparkleMs` (700 ms). It is mounted for 700 ms from each cheer with a fresh
-`key`, so a second cheer starts it over, and a tap mid-cheer neither cuts it short nor adds to it. It is never mounted
+`key`, so a second cheer starts it over, and a tap mid-cheer neither cuts it short nor adds to it. A stage that takes
+its `react` back to `null` takes the ring away at once (the welcome dialog does when another card is picked, so only
+the new pick sparkles; the old one's smile and hop may finish). It is never mounted
 under `prefers-reduced-motion: reduce` or on a figure whose `live` is `off`. `LiveFigure` owns one sequence of
 reaction keys: a changed `react` key from the stage becomes the next key of that kind, a tap becomes the next `wave`, and
 the `react` already there at mount counts as seen, so a remount never replays the last cheer. A stage keeps its own
@@ -568,11 +570,11 @@ never breathes or blinks and starts no observer. **`idle`** (the wardrobe, shop 
 blinks while it is on screen.
 
 - **Faces.** A live chibi mounts the base face first and, once that face is loaded and tinted, the `closed` and `happy`
-  faces right after it at the same z-index (`data-face-layer`, hidden ones `opacity: 0` and `data-face-hidden`; never
+  faces right after it at the same z-index (a `still` chibi, which never blinks, only `happy`) (`data-face-layer`, hidden ones `opacity: 0` and `data-face-hidden`; never
   `visibility: hidden`, so they load like a shown one). The extras wait for the base face so they never compete with the
   first paint. Blinks and smiles start only when every mounted face reports ready (loaded and tinted), so a blink never
   shows a blank or untinted face.
-- **`useChibiLife`** (`life.ts`, internal) is the state machine. It takes `{ live, react, facing, onScreen, facesReady,
+- **`useChibiLife`** (`life.ts`, exported from the kit with `CHIBI_LIFE`) is the state machine. It takes `{ live, react, facing, onScreen, facesReady,
   baseExpression, reducedMotion, rng }` and returns `{ face: 'base' | 'closed' | 'happy', motion: 'none' | 'hop' |
   'tilt' | 'spin', breathing, reacting }`. Its timings live in `CHIBI_LIFE`: breathe 4 s, a 120 ms blink every 3–6 s
   (10 % double, 160 ms apart; none when the base face is `closed` or `sleep`), cheer `happy` 1.2 s with a 420 ms hop,
@@ -580,7 +582,7 @@ blinks while it is on screen.
   ignored. A cheer during a spin keeps the spin's motion and still smiles, so it reads as `spin`. The spin comes from a
   `facing` change after mount, never from `react`. Reactions play whether or not the figure is on screen. Unmounting
   clears every timer.
-- **On screen.** `useOnScreen(ref, { rootMargin, enabled })` (`on-screen.ts`, internal) is a continuous
+- **On screen.** `useOnScreen(ref, { rootMargin, enabled })` (`on-screen.ts`, exported from the kit) is a continuous
   `IntersectionObserver` plus `visibilitychange`, unlike `useInView`, which stops after the first sighting. Breathing and
   blinking pause while the figure is scrolled off or the tab is hidden. `Chibi` enables it only for `idle`.
 - **The root's state.** A live root carries `data-live`, `data-face`, `data-facing`, `data-reacting` (absent when
@@ -592,7 +594,10 @@ blinks while it is on screen.
   `data-facing`). The pivot is `transform-origin: 50% 100%` on a live root only. Only one `animation` runs at a time:
   `breathing` is false while a motion plays. The hop's height is `var(--chibi-hop, -6%)`, so a stage whose figure
   already touches its top edge can hop lower: the wardrobe's desktop stage sets `--chibi-hop: -3%`. The root keeps
-  BP-29's `isolation: isolate`, so a running animation never changes the stacking order around it.
+  BP-29's `isolation: isolate`, so a running animation never changes the stacking order around it. The CSS cannot read
+  `CHIBI_LIFE`, so `Chibi.test.tsx` and `LiveFigure.test.tsx` pin every duration (and the 1.015 breath, −4° tilt and
+  0.06 turn) to it: a change to one fails until the other follows. The hook sets the spin in a layout effect, in the
+  same commit as the new `data-facing`, so no frame of the new mirror is painted before the turn starts.
 - **Reduced motion.** Under `prefers-reduced-motion: reduce` (`useMediaQuery`), `global.css` stops every animation, and
   the hook also returns the still state: face `base`, motion `none`, no `reacting`, so no face ever changes (R4). A turn
   is an instant mirror. `LiveFigure` drops the greet button and the sparkle ring.

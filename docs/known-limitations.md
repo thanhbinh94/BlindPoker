@@ -824,7 +824,8 @@ real-pose spike stays open).
 wardrobe's, the shop's and the profile's (`live="idle"`), plus the welcome dialog's three cards, which cheer when picked
 but never breathe or blink (`live="still"`). The wardrobe and shop cards, the saved-outfit heads, the lobby bar, the
 table's seats and the GM screens draw the figure as it was before BP-30 (`live="off"`, the same markup).
-*Why it stays:* spec K6 Q2 and §3.1. Each live figure mounts two more face pictures and runs its own timers, and a grid
+*Why it stays:* spec K6 Q2 and §3.1. Each live figure mounts more face pictures (two on a stage, one on a welcome card)
+and runs its own timers, and a grid
 of breathing cards would tire the eye. The table keeps its own turn bounce.
 *Tracked:* `packages/ui-kit/src/avatar2d/Chibi.tsx` (`live`), `docs/ui-kit.md` → "The chibi's life".
 
@@ -844,6 +845,11 @@ start that much lower under the sticky band.
 *Why it stays:* the lead put Xoay on every shop size (P15), and the alternatives were a smaller tap target or a second
 row. The 8 px is the smallest of the three costs.
 *Tracked:* `apps/normal-web/src/screens/shop/shop.module.css` (`.strip .stageTurn`); BP-30 Task 4, Ruling 1.
+
+**The wardrobe's face name sits slightly left of centre on desktop (BP-30).** "Xoay" shares the row with the expression
+stepper, so the name is centred between the arrows, about 35 px left of the stage's centre at 1920×940.
+*Why it stays:* putting Xoay on its own row would make the left column taller than the 940 px screen allows.
+*Tracked:* `apps/normal-web/src/screens/wardrobe/wardrobe.module.css` (`.stageControls`).
 
 ---
 
