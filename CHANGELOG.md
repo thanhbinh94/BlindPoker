@@ -9,7 +9,7 @@ below are the real history.
 
 ---
 
-## BP-31 — the phone table gets a fanned hand and a one-row tray, a raise is a slider on every frame, and a Blind table takes ten wagers — merged `MERGE` (2026-10-23)
+## BP-31 — the phone table gets a fanned hand and a one-row tray, a raise is a slider on every frame, and a Blind table takes ten wagers — merged `e35ea39` (2026-10-23)
 
 The user, 2026-10-23: "khi xoay ngang màn hình hoặc xoay dọc ở lúc vào bàn, thiết kế các nút quá to, khá khó nhìn bài",
 "trên điện thoại ở cả 2 mode". The brainstorm the same day chose layout B with a fanned hand (Q1), a slider instead of a

@@ -1121,6 +1121,63 @@ review, then the gate (unit 3408/3409 with the known GM-console load flake green
 - **One writer per worktree is a scheduling rule, not a tooling one.** Read-only reviewers ran beside implementers all day
   without harm; two writers never did. `git commit --only` kept each implementer's commit to its own files.
 
+## BP-31 — the phone table: fanned hand, one-row tray, bet slider everywhere, Blind limit 10× (merged `e35ea39`, 2026-10-23)
+
+Spec `docs/superpowers/specs/2026-10-23-phone-table-bet-slider-design.md` (Q1–Q6, R1–R12, §8 = the new SRS §27.1),
+plan `2026-10-23-bp31-phone-table-bet-slider.md` with pre-flight amendments P1–P27 that split Tasks 2 and 4 in two.
+Brainstormed, specified, planned, built, gated, merged and deployed in one day from the user's own complaint after the
+2026-10-22 UI review ("các nút quá to, khá khó nhìn bài"). Gate: unit 3 479, e2e Normal 24, Lite 4, ops 56.
+
+### Rulings
+
+- Spec (the lead's, approved by the user when reading): R1 Hold'em and plain Blind hands fan, a peel hand does not turn;
+  R2 all-in on a phone is the panel's "Tất tay" chip; R3 the slider steps by the small blind, at most 200 steps; R4 the
+  desktop ring keeps its controls row and an all-in button; R5 bots take the new limit; R6 two-step panel on stack and
+  landscape, one-step on the desktop ring; R7 P13 was a check, not a fix (it passed at 34.9 % of the screen); R8 desktop
+  seats widen to 132/118 px, names stay one line, others' titles hide from 7 seats; R9 "phone" is the stack layout,
+  measured once in `RoomScreen`; R10 my strip keeps the disc, the timer, the D and the bet, drops "Bạn" and the title;
+  R11 the ⋯ lives in the header and a dock replaces the controls row between hands; R12 bet chips are 36 px.
+- Task 1: the shutdown-queued server tests were doubled, not re-seeded; the cosmetic bot stacks and `engine.test` follow
+  the constant; a comment inside the "must stay" region described the limit formula and changed.
+- Task 2a: chips set exact amounts, not grid values; the floating amount lives in a 16 px band; `data-shape`
+  inline/sheet/corner is the component's choice; `compact` means the short tier.
+- Task 2b: `ActionBar` takes `tier`; the landscape corner panel is 76 px without a floating amount (a 100 px one hit the
+  flank seat's badge line); `data-panel` is honest on the ring; Hủy keeps the amount chosen this turn; opening by
+  keyboard focuses the slider and closing returns focus; landscape has no all-in action button (chip only).
+- Task 3: the strip's rank is always the numeral pill; an overfull strip wraps instead of squeezing the name; the turn
+  ring is 40 px; `.stack` gets `grid-template-columns: minmax(0, 1fr)` because the one-line strip widened the table.
+- Task 4a: the stack footer itself is the dock bar; the empty between-hands tray stays in the DOM; no footer for a
+  spectator; the countdown-only dock is 38 px; the stack sheet drops the floating amount (the height budget at eight
+  opponents); Quản lý bàn only between hands.
+- Task 4b: the tray cap excludes `[data-between]` (the empty tray had taken the dock's row); the caption rule has no media
+  query; the 9-seat Hold'em shots came from an engine snapshot fed through a stubbed socket.
+- Task 5: the phone ops case is M-06 (M-01…M-05 exist as manual cases); 7 bots at 8 seats (Blind's maximum).
+- Final wave: the controls row is centred, not capped (the cap wrapped the pre-hand hint and pushed the stage 12 px at
+  1280–1536); a dense chip shows its showdown line instead of its tags, on one line; a strip with a state badge hides
+  "Chủ phòng"; dock labels wrap to two lines and "Tự động chơi" is at most 6em there; only the first matching chip lights.
+- Lead, at the gate: `MAX_ENTRY_GZIP` 140 → 150 KB (140.3 KB measured; the SRS's §24 limit is 500 KB).
+
+### Lessons
+
+- **Measure the state the budget is tightest in, not the one you drew.** Two reviews estimated the phone's post-hand
+  state at "0 px" and "≈ 5 px"; the real build scrolled 75–96 px because every opponent chip grows a showdown line.
+  The playground had no Blind result scenario, so nobody had looked. Playground states are a floor, not the field.
+- **A cap on a flex row is a wrap waiting to happen.** Capping `.controls` at 980 px folded the hint onto a second line
+  at 1280 px and failed a desktop e2e that had nothing to do with phones. Cap the thing that overflows (the tray), centre
+  the rest.
+- **A native range input cannot reach `max` on a stepped grid.** `step="1"` with an index → value map (`sliderLast`,
+  `sliderValue`, `sliderIndex`) is the only way End lands on the table's maximum; the pre-flight caught it before a line
+  was written.
+- **Every button on the page must answer Enter itself.** The document-level Enter that raises skipped only text fields,
+  so a focused "Bỏ bài" plus Enter would have raised. One `closest('button, a, [role=…]')` guard, found by a reviewer
+  reading the hand-off, not by a test.
+- **Pre-existing bugs surface when a screenshot script plays the game for real** (E6: the server clears "ready" when the
+  table empties of humans but never says so). Log them, do not fix them in the plan that found them.
+- **A session's own attribution line is not the repo's.** Three implementers signed as another model; the lead amended.
+  The rule is in every brief and the audit (`git log --format='%(trailers)'`) is part of the gate.
+- **One day is enough for a four-task plan when reviews run beside implementers** (read-only reviewers never blocked a
+  writer) and when a second worktree takes the one task that touches different files (Task 1 ran beside Task 2a).
+
 ## 5. Open items
 
 The single list is `docs/known-limitations.md`. As of this writing, the items a next session is most likely to meet:
