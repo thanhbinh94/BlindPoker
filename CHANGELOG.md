@@ -122,6 +122,10 @@ that sit on the table: P1, P7, P10, P13 (Q5) — spec `2026-10-23-phone-table-be
   compete with the tray's wait line and the reconnect banner). The stack keeps the two-row header (so "Mức cược … · Hạn
   mức …" stays). The chips are 36 px (spec R12, recorded in SRS §27.1). The nine-seat fallback of R8 (13 % / 94 px) was
   not needed. The ops case is M-06, not M-01. M-06's Blind part has seven opponents, not eight.
+- **Deployed.** VPS (`play.14-225-254-250.sslip.io`) on 2026-10-23, before the user's push: the commits went over SSH as
+  a `git bundle` (`git pull --ff-only /tmp/bp31.bundle main` to `6487c36`), after `backup.sh` (`bp-2026-10-23-1151.dump`)
+  and a health check with 0 rooms; no new migration; `docker compose up -d --build`; health `ok`. Lite: not rebuilt
+  (the exe step needs Node 22), not shipped. The Windows LAN host was not deployed.
 - **Still open.** UI review P3 (the lobby's void), P5 (the GM overview), P8 (tracked labels), P9 (emoji), P15 ("Lưu
   tên"), P16 (the shop), P22 (the light theme) — the next round. Bug E6 (pre-existing since 2026-09-04, found by the
   BP-31 review): after a sit-out empties the table of humans and the room returns to waiting, the client still shows
