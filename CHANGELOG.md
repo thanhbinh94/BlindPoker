@@ -84,6 +84,9 @@ over the next plate, the viewer's 50 px cards covered the board, and the waiting
 - **Khác với spec / Deviations from the spec.** Plan 26's spec §3 B3 lays out one landscape frame from 290 px up; below
   300 px it is now the short tier's stadium (Rulings 1–3). The waiting hint is in the dock there, as B3 had it before the
   felt note (R2).
+- **Deployed.** VPS (`play.14-225-254-250.sslip.io`) on 2026-10-23: `backup.sh` (`bp-2026-10-23-0700.dump`), `git pull`
+  to `50633b9`, no new migration, `docker compose up -d --build`, health `ok` with 0 rooms before and after. Lite: not
+  rebuilt, not shipped. The Windows LAN host was not deployed (it still lacks `0004`–`0006`, see Plan 27).
 - **Still open.** No real phone has run it (the user's Android is the check, L-06 in the operation test plan). Below a
   230 px stage the lines run into each other; after a showdown with the card closed the viewer's block ends 1 px under the
   board at 855 × 319; nine seats on a stage under about 800 px wide pass the top line over the end seats; the reconnect
