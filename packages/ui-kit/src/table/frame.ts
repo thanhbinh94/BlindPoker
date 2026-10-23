@@ -12,6 +12,15 @@ export type RoomFrame = 'desktop' | 'landscape'
  * window (a 640 × 360 phone) has no width for the ring's rim and keeps the stacked layout (Plan 26, ruling 8). */
 export const LANDSCAPE_PHONE = '(orientation: landscape) and (max-height: 500px) and (min-width: 700px)'
 
+/**
+ * The stacked table (BP-31 R9): under 768 px wide, or 620 px tall. The ring needs roughly 310 px of stage to seat
+ * everyone around it without the plates running into the board, and a short window has no more to give than a narrow
+ * one — so a laptop with a 600 px-tall viewport gets the vertical layout for the same reason a phone does. `RoomScreen`
+ * resolves it once and hands the answer to the table and to the tray; `PokerTable` reads it itself only when no room
+ * passes a layout. The landscape frame is always the ring, whatever this says.
+ */
+export const STACK_LAYOUT_QUERY = '(max-width: 767px), (max-height: 620px)'
+
 /** The room's frame: `override` when given (a host app, the playground), otherwise what the viewport says. */
 export function useRoomFrame(override?: RoomFrame): RoomFrame {
   // The hook runs either way, so the order of hooks does not change when an override comes and goes.

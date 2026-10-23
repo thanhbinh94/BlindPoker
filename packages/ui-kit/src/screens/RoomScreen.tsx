@@ -11,10 +11,11 @@ import { Modal } from '../primitives/Modal.js'
 import { cx } from '../primitives/cx.js'
 import { ActionBar } from '../table/ActionBar.js'
 import { HandResult } from '../table/HandResult.js'
-import { useRoomFrame, useStageTier, type RoomFrame } from '../table/frame.js'
+import { STACK_LAYOUT_QUERY, useRoomFrame, useStageTier, type RoomFrame } from '../table/frame.js'
 import { PokerTable, type TableLayout } from '../table/PokerTable.js'
 import { RankLabel } from '../table/RankLabel.js'
 import { RoomHeader } from '../table/RoomHeader.js'
+import { useMediaQuery } from '../table/useMediaQuery.js'
 import { useFullscreenNudge } from './fullscreen-nudge.js'
 import { useRevealHold } from './reveal-hold.js'
 import { useSeatClearance } from './seat-clearance.js'
@@ -165,6 +166,8 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
   // is in the tree.
   const tier = useStageTier(stageRef, frame, room !== null)
   const [nudgeDone, dismissNudge] = useFullscreenNudge()
+  // The stacked table (BP-31 R9), measured once here so the table and the tray agree; a hook, so above the early return.
+  const stackMatch = useMediaQuery(STACK_LAYOUT_QUERY)
 
   if (room === null) return null
 
@@ -296,6 +299,8 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
    * toggles, "Tự động chơi" among them — stays, so auto-play can be turned off during the countdown (B4).
    */
   const landscape = frame === 'landscape'
+  /** The table's layout, one answer for the table and the tray: an override, else the ring in landscape, else the query. */
+  const tableLayout: TableLayout = layout ?? (frame === 'landscape' ? 'ring' : stackMatch ? 'stack' : 'ring')
   const short = landscape && tier === 'short'
   const dockShown = landscape && (waiting || countdownHere)
   // R3: only where the browser offers it (iOS Safari on a phone does not).
@@ -357,7 +362,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
           lang={lang}
           canSit={canSit}
           onSeatClick={onSeatClick}
-          layout={layout}
+          layout={tableLayout}
           frame={frame}
           tier={tier}
           chibiFor={chibiFor}
@@ -452,6 +457,8 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
             autoPlay={state.autoPlay}
             onAutoPlay={client.setAutoPlay}
             frame={frame}
+            layout={tableLayout}
+            tier={tier}
             betweenHands={dockShown}
           />
         )}

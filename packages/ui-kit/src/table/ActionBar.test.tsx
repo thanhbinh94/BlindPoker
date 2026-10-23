@@ -5,7 +5,9 @@ import { I18nextProvider } from 'react-i18next'
 import type { LegalActions, RoomView } from '@bp/core'
 import { createI18n } from '../i18n/index.js'
 import type { ClientHand, ClientSeat } from '../client/types.js'
+import p from '../primitives/primitives.module.css'
 import { ActionBar, trayWaitKey } from './ActionBar.js'
+import TABLE_CSS from './table.module.css?raw'
 
 const room = { config: { mode: 'holdem', blind: undefined } } as unknown as RoomView
 const hand = (legal: LegalActions | null, extra: Partial<ClientHand> = {}): ClientHand => ({
@@ -57,27 +59,6 @@ describe('ActionBar', () => {
     expect(onAct).toHaveBeenLastCalledWith({ kind: 'allIn' })
     await userEvent.click(screen.getByRole('button', { name: /fold/i }))
     expect(onAct).toHaveBeenLastCalledWith({ kind: 'fold' })
-  })
-  it('clamps raise amounts to the legal range and supports presets', async () => {
-    const onAct = vi.fn()
-    wrap(
-      <ActionBar
-        hand={hand({ seat: 1, kinds: ['fold', 'call', 'raise', 'allIn'], callAmount: 200, minBet: 0, maxBet: 0, minRaiseTo: 400, maxRaiseTo: 5000 })}
-        room={room}
-        onAct={onAct}
-        lang="en"
-      />,
-    )
-    const amount = screen.getByRole('spinbutton')
-    expect(amount).toHaveValue(400)
-    await userEvent.clear(amount)
-    await userEvent.type(amount, '99999')
-    await userEvent.click(screen.getByRole('button', { name: /^raise/i }))
-    expect(onAct).toHaveBeenLastCalledWith({ kind: 'raise', amount: 5000 })
-    await userEvent.click(screen.getByRole('button', { name: /^pot$/i }))
-    expect(amount).toHaveValue(1000)
-    await userEvent.click(screen.getByRole('button', { name: /max/i }))
-    expect(amount).toHaveValue(5000)
   })
   it('acts on the F, C and Enter shortcuts it advertises', async () => {
     const onAct = vi.fn()
@@ -171,8 +152,8 @@ describe('ActionBar', () => {
   })
 })
 
-// Plan 26 (B4): a phone on its side keeps its height for the table. The betting buttons sit in a bottom-right dock, the
-// toggles in a bottom-left one, presets replace the slider, and a typed amount opens a small dialog near the top (R11).
+// Plan 26 (B4): a phone on its side keeps its height for the table. The betting buttons sit in a bottom-right dock and
+// the toggles in a bottom-left one; since BP-31 the bet panel (chips and a slider) takes the left corner once Tố is tapped.
 describe('ActionBar in the landscape frame', () => {
   const raiseLegal: LegalActions = { seat: 1, kinds: ['fold', 'call', 'raise', 'allIn'], callAmount: 200, minBet: 0, maxBet: 0, minRaiseTo: 400, maxRaiseTo: 5000 }
   const me: ClientSeat = { seat: 1, playerId: 'me', displayName: 'Me', isBot: false, stack: 5000, betThisStreet: 0, folded: false, allIn: false, cardCount: 2, holeCards: null, hasDecided: false, decision: null, lastAction: null, timedOut: false }
@@ -180,49 +161,56 @@ describe('ActionBar in the landscape frame', () => {
   const wrapVi = (ui: React.ReactElement) =>
     render(<I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>{ui}</I18nextProvider>)
 
-  it('in the landscape frame there is no slider; ✎ opens the amount dialog and confirm sets the raise amount', async () => {
+  // BP-31 §3.2–3.3: the right corner keeps one row with one "Tố" button; the panel takes the left corner, and the same
+  // button raises with the amount on it while the panel is open.
+  it("landscape: the panel replaces the left corner and the right corner's Tố becomes Tố N", async () => {
     const onAct = vi.fn()
-    wrap(<ActionBar hand={hand(raiseLegal)} room={room} onAct={onAct} lang="en" frame="landscape" />)
-    const tray = screen.getByRole('group', { name: 'Actions' })
+    wrapVi(<ActionBar hand={hand(raiseLegal)} room={room} onAct={onAct} lang="vi" frame="landscape" />)
+    const tray = screen.getByRole('group', { name: 'Hành động' })
     expect(tray).toHaveAttribute('data-frame', 'landscape')
+    expect(tray).toHaveAttribute('data-layout', 'ring')
+    expect(tray).toHaveAttribute('data-panel', 'closed')
     expect(screen.queryByRole('slider')).toBeNull()
-    expect(screen.queryByRole('spinbutton'), 'no inline amount').toBeNull()
-    // One row until the player asks to size: the raise button opens the presets instead of raising at once.
-    expect(screen.queryByRole('button', { name: 'Pot' })).toBeNull()
-    await userEvent.click(screen.getByRole('button', { name: 'Raise' }))
-    expect(onAct).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Pot' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Raise 400' })).toBeInTheDocument()
-    // The presets sit in the left corner (the toggles' place, empty on the player's own turn); "Max" stands in for All-in.
-    expect(screen.getByRole('group', { name: 'Bet size' }).parentElement?.className).toMatch(/trayLeft/)
-    expect(screen.queryByRole('button', { name: /all.?in/i })).toBeNull()
+    expect(screen.queryByRole('spinbutton'), 'no number field').toBeNull()
+    expect(screen.queryByRole('button', { name: 'Tất tay' }), 'all in is a chip of the panel here (R2)').toBeNull()
+    const right = tray.querySelector<HTMLElement>('[class*="trayRight"]')!
+    const raise = within(right).getByRole('button', { name: 'Tố' })
+    expect(raise).toHaveTextContent('Tố▴')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Enter an amount' }))
-    const dialog = screen.getByRole('dialog', { name: 'Enter an amount' })
-    expect(dialog.className).toMatch(/dialogTop/)
-    const amount = within(dialog).getByRole('spinbutton', { name: 'Bet amount' })
-    expect(amount).toHaveAttribute('min', '400')
-    expect(amount).toHaveAttribute('max', '5000')
-    expect(amount).toHaveAttribute('inputmode', 'numeric')
-    await userEvent.clear(amount)
-    await userEvent.type(amount, '2500')
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
-    expect(screen.queryByRole('dialog')).toBeNull()
-    expect(onAct).not.toHaveBeenCalled()
+    await userEvent.click(raise)
+    expect(onAct, 'the first tap opens the panel; it never raises').not.toHaveBeenCalled()
+    expect(tray).toHaveAttribute('data-panel', 'open')
+    const left = tray.querySelector<HTMLElement>('[class*="trayLeft"]')!
+    const chips = within(left).getByRole('group', { name: 'Mức cược' })
+    expect(within(left).getByRole('slider')).toHaveAttribute('aria-valuetext', '400')
+    expect(within(left).getByRole('button', { name: 'Hủy' })).toBeInTheDocument()
+    expect(within(left).queryByRole('button', { name: /^Tố( |$)/ }), "the confirm is the right corner's").toBeNull()
+    // The same button, now carrying the amount; Bỏ bài and Theo stay beside it.
+    expect(within(right).getByRole('button', { name: 'Tố 400' })).toBe(raise)
+    expect(within(right).getByRole('button', { name: 'Bỏ bài' })).toBeInTheDocument()
+    expect(within(right).getByRole('button', { name: 'Theo 200' })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /^Tố( |$)/ })).toHaveLength(1)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Raise 2,500' }))
-    expect(onAct).toHaveBeenLastCalledWith({ kind: 'raise', amount: 2500 })
+    await userEvent.click(within(chips).getByRole('button', { name: 'Pot' }))
+    expect(raise).toHaveAccessibleName('Tố 1.000')
+    await userEvent.click(raise)
+    expect(onAct).toHaveBeenLastCalledWith({ kind: 'raise', amount: 1000 })
 
-    // Enter in the dialog confirms, and an amount past the range is clamped into it.
-    await userEvent.click(screen.getByRole('button', { name: 'Enter an amount' }))
-    const again = within(screen.getByRole('dialog')).getByRole('spinbutton')
-    await userEvent.clear(again)
-    await userEvent.type(again, '99999{Enter}')
-    expect(screen.queryByRole('dialog')).toBeNull()
+    await userEvent.click(within(left).getByRole('button', { name: 'Hủy' }))
+    expect(tray).toHaveAttribute('data-panel', 'closed')
+    expect(tray.querySelector('[class*="trayLeft"]'), 'the corner is empty on my own turn').toBeNull()
+    expect(raise).toHaveAccessibleName('Tố')
     expect(onAct).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole('button', { name: 'Raise 5,000' })).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Pot' }))
-    expect(screen.getByRole('button', { name: 'Raise 1,000' })).toBeInTheDocument()
+  })
+
+  it('passes compact to the panel on the short tier', async () => {
+    const { unmount } = wrap(<ActionBar hand={hand(raiseLegal)} room={room} onAct={() => {}} lang="en" frame="landscape" tier="short" />)
+    await userEvent.click(screen.getByRole('button', { name: 'Raise' }))
+    expect(screen.getByRole('group', { name: 'Choose the bet' })).toHaveAttribute('data-compact', 'true')
+    unmount()
+    wrap(<ActionBar hand={hand(raiseLegal)} room={room} onAct={() => {}} lang="en" frame="landscape" />)
+    await userEvent.click(screen.getByRole('button', { name: 'Raise' }))
+    expect(screen.getByRole('group', { name: 'Choose the bet' })).not.toHaveAttribute('data-compact')
   })
 
   it('between hands in landscape the right part is hidden but Tự động chơi stays', async () => {
@@ -285,16 +273,288 @@ describe('ActionBar in the landscape frame', () => {
     expect(call).not.toHaveAttribute('aria-label')
   })
 
-  it('R opens the amount dialog in landscape', async () => {
+})
+
+// BP-31 §3.1–3.2: the bet panel on every frame. Two steps in the stack and in landscape (Tố ▴ opens it), one step on
+// the desktop ring (chips and slider always shown); no number field anywhere.
+describe('ActionBar sizing and the one-row tray', () => {
+  const raiseLegal: LegalActions = { seat: 1, kinds: ['fold', 'call', 'raise', 'allIn'], callAmount: 200, minBet: 0, maxBet: 0, minRaiseTo: 400, maxRaiseTo: 5000 }
+  const holdemRoom = { config: { mode: 'holdem', holdem: { smallBlind: 100, bigBlind: 200 }, blind: undefined } } as unknown as RoomView
+  const me = (extra: Partial<ClientSeat> = {}): ClientSeat => ({ seat: 1, playerId: 'me', displayName: 'Me', isBot: false, stack: 5000, betThisStreet: 0, folded: false, allIn: false, cardCount: 2, holeCards: null, hasDecided: false, decision: null, lastAction: null, timedOut: false, ...extra })
+  const vi18n = () => createI18n({ language: 'vi', storage: null })
+  const wrapVi = (ui: React.ReactElement) => render(<I18nextProvider i18n={vi18n()}>{ui}</I18nextProvider>)
+  const tray = () => screen.getByRole('group', { name: /^(Actions|Hành động)$/ })
+  const chip = (name: string) => within(screen.getByRole('group', { name: /^(Bet size|Mức cược)$/ })).getByRole('button', { name })
+  const raises = () => screen.queryAllByRole('button', { name: /^(Tố|Raise)( |$)/ })
+
+  it('stack: Tố opens the panel, Hủy closes it, and there is one Tố button throughout', async () => {
     const onAct = vi.fn()
-    wrap(<ActionBar hand={hand(raiseLegal)} room={room} onAct={onAct} lang="en" frame="landscape" />)
+    wrapVi(<ActionBar hand={hand(raiseLegal)} room={holdemRoom} onAct={onAct} lang="vi" layout="stack" />)
+    // One row: Bỏ bài · Theo 200 · Tố ▴. All in is the panel's chip (R2), not a fourth button.
+    const row = screen.getByRole('button', { name: 'Bỏ bài' }).parentElement!
+    expect(within(row).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual(['Bỏ bài', 'Theo 200', 'Tố▴'])
+    expect(screen.queryByRole('button', { name: 'Tất tay' })).toBeNull()
+    expect(screen.queryByRole('slider')).toBeNull()
+    expect(raises()).toHaveLength(1)
+    for (const b of within(row).getAllByRole('button')) expect(b, 'md buttons (44 px) in the stack').toHaveClass(p.md!)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tố' }))
+    expect(onAct).not.toHaveBeenCalled()
+    expect(tray()).toHaveAttribute('data-panel', 'open')
+    expect(screen.getByRole('slider')).toHaveAttribute('aria-valuetext', '400')
+    expect(screen.getByRole('slider')).toHaveAttribute('step', '1')
+    // The row is replaced by the panel: Bỏ bài and Theo go, Hủy ▾ and the confirm come.
+    expect(screen.queryByRole('button', { name: 'Bỏ bài' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Theo 200' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Hủy' })).toHaveTextContent('Hủy▾')
+    expect(raises().map((b) => b.textContent)).toEqual(['Tố 400'])
+
+    await userEvent.click(chip('Pot'))
+    expect(chip('Pot')).toHaveAttribute('aria-pressed', 'true')
+    expect(raises().map((b) => b.textContent)).toEqual(['Tố 1.000'])
+    await userEvent.click(chip('Tất tay'))
+    expect(raises().map((b) => b.textContent)).toEqual(['Tố 5.000'])
+
+    await userEvent.click(screen.getByRole('button', { name: 'Hủy' }))
+    expect(tray()).toHaveAttribute('data-panel', 'closed')
+    expect(screen.queryByRole('slider')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Bỏ bài' })).toBeInTheDocument()
+    expect(raises()).toHaveLength(1)
+    expect(onAct).not.toHaveBeenCalled()
+
+    // Reopened, it keeps the amount chosen this turn; the confirm sends it. Escape closes it again.
+    await userEvent.click(screen.getByRole('button', { name: 'Tố' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Tố 5.000' }))
+    expect(onAct).toHaveBeenLastCalledWith({ kind: 'raise', amount: 5000 })
+    await userEvent.keyboard('{Escape}')
+    expect(tray()).toHaveAttribute('data-panel', 'closed')
+  })
+
+  it('stack: a bet reads Cược ▴ and Cược N', async () => {
+    const onAct = vi.fn()
+    const betLegal: LegalActions = { seat: 1, kinds: ['fold', 'check', 'bet', 'allIn'], callAmount: 0, minBet: 200, maxBet: 5000, minRaiseTo: 0, maxRaiseTo: 0 }
+    wrapVi(<ActionBar hand={hand(betLegal)} room={holdemRoom} onAct={onAct} lang="vi" layout="stack" />)
+    expect(screen.getByRole('button', { name: 'Xem' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Cược' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Cược 200' }))
+    expect(onAct).toHaveBeenLastCalledWith({ kind: 'bet', amount: 200 })
+  })
+
+  it('ring desktop: chips and slider are always shown and Enter sends the clamped total', async () => {
+    const onAct = vi.fn()
+    // a pot of 20.000: ½ pot (10.000) and Pot clamp to the 5.000 the seat may raise to
+    wrap(<ActionBar hand={hand(raiseLegal, { pot: 20_000 })} room={holdemRoom} onAct={onAct} lang="en" />)
+    expect(tray()).toHaveAttribute('data-layout', 'ring')
+    const range = screen.getByRole('slider', { name: 'Amount slider' })
+    expect(range).toHaveAttribute('min', '400')
+    expect(range).toHaveAttribute('max', '5000')
+    expect(range).toHaveAttribute('aria-valuetext', '400')
+    expect(screen.queryByRole('button', { name: 'Cancel' }), 'one step: no Hủy').toBeNull()
+    // Two buttons named All-in on the ring: the chip, and the action outside the row's raise (R4).
+    expect(screen.getAllByRole('button', { name: 'All-in' })).toHaveLength(2)
+    expect(raises().map((b) => b.textContent)).toEqual(['Raise 400'])
+    for (const b of [screen.getByRole('button', { name: 'Fold' }), raises()[0]!]) expect(b, 'lg buttons on the ring').toHaveClass(p.lg!)
+
+    await userEvent.click(chip('½ pot'))
+    expect(range).toHaveAttribute('aria-valuetext', '5,000')
+    expect(chip('All-in')).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(chip('Min'))
+    range.focus()
+    await userEvent.keyboard('{ArrowRight}{ArrowRight}')
+    expect(range).toHaveAttribute('aria-valuetext', '600')
+    await userEvent.keyboard('{Enter}')
+    expect(onAct).toHaveBeenLastCalledWith({ kind: 'raise', amount: 600 })
+    await userEvent.keyboard('{End}{Enter}')
+    expect(onAct).toHaveBeenLastCalledWith({ kind: 'raise', amount: 5000 })
+
+    // R focuses the slider on the ring.
+    range.blur()
     await userEvent.keyboard('r')
-    const amount = within(screen.getByRole('dialog', { name: 'Enter an amount' })).getByRole('spinbutton')
-    expect(amount).toHaveFocus()
-    await userEvent.clear(amount)
-    await userEvent.type(amount, '700{Enter}')
-    expect(onAct, 'Enter in the dialog sets the amount; it does not raise').not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Raise 700' })).toBeInTheDocument()
+    expect(range).toHaveFocus()
+  })
+
+  it('new legal bounds re-clamp the open panel', async () => {
+    const view = wrap(<ActionBar hand={hand(raiseLegal)} room={holdemRoom} onAct={() => {}} lang="en" layout="stack" />)
+    await userEvent.click(screen.getByRole('button', { name: 'Raise' }))
+    const range = screen.getByRole('slider')
+    range.focus()
+    await userEvent.keyboard('{End}')
+    expect(range).toHaveAttribute('aria-valuetext', '5,000')
+    const again = (legal: LegalActions) =>
+      view.rerender(
+        <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+          <ActionBar hand={hand(legal)} room={holdemRoom} onAct={() => {}} lang="en" layout="stack" />
+        </I18nextProvider>,
+      )
+    // a bot acted, or a reconnect brought a smaller stack: the open panel stays open and follows
+    again({ ...raiseLegal, maxRaiseTo: 3000 })
+    expect(tray()).toHaveAttribute('data-panel', 'open')
+    expect(screen.getByRole('slider')).toHaveAttribute('max', '3000')
+    expect(screen.getByRole('slider')).toHaveAttribute('aria-valuetext', '3,000')
+    expect(raises().map((b) => b.textContent)).toEqual(['Raise 3,000'])
+    again({ ...raiseLegal, minRaiseTo: 3500, maxRaiseTo: 6000 })
+    expect(tray()).toHaveAttribute('data-panel', 'open')
+    expect(screen.getByRole('slider')).toHaveAttribute('aria-valuetext', '3,500')
+    expect(raises().map((b) => b.textContent)).toEqual(['Raise 3,500'])
+  })
+
+  it('with no sizing the row offers Tất tay and no panel', async () => {
+    const onAct = vi.fn()
+    wrapVi(
+      <ActionBar
+        hand={hand({ seat: 1, kinds: ['fold', 'call', 'allIn'], callAmount: 300, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 })}
+        room={holdemRoom}
+        onAct={onAct}
+        lang="vi"
+        layout="stack"
+      />,
+    )
+    const row = screen.getByRole('button', { name: 'Bỏ bài' }).parentElement!
+    expect(within(row).getAllByRole('button').map((b) => b.textContent)).toEqual(['Bỏ bài', 'Theo 300', 'Tất tay'])
+    expect(screen.queryByRole('slider')).toBeNull()
+    expect(raises()).toHaveLength(0)
+    expect(tray()).toHaveAttribute('data-panel', 'closed')
+    await userEvent.keyboard('{Enter}')
+    expect(onAct).not.toHaveBeenCalled()
+    expect(screen.queryByRole('slider')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Tất tay' }))
+    expect(onAct).toHaveBeenLastCalledWith({ kind: 'allIn' })
+  })
+
+  it('Blind: Tự động chơi, Bỏ bài, Chơi N in one row in stack; the ring keeps its two rows', () => {
+    const blindRoom = { config: { mode: 'blind', blind: { fixedWager: 2000, decisionMode: 'playOrFold' } } } as unknown as RoomView
+    const deciding = hand({ seat: 1, kinds: ['play', 'fold'], callAmount: 2000, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 }, { mode: 'blind', phase: 'DECISION', seats: [me()] })
+    const first = wrapVi(<ActionBar hand={deciding} room={blindRoom} onAct={() => {}} lang="vi" layout="stack" autoPlay={false} onAutoPlay={() => {}} />)
+    const toggle = screen.getByRole('button', { name: 'Tự động chơi' })
+    const row = toggle.parentElement!
+    expect(within(row).getAllByRole('button').map((b) => b.textContent)).toEqual(['Tự động chơi', 'Bỏ bài', 'Chơi 2.000'])
+    expect(screen.getAllByRole('button', { name: 'Tự động chơi' })).toHaveLength(1)
+    first.unmount()
+
+    // Between decisions: the toggle and the wait line share the row.
+    const decided = hand(null, { mode: 'blind', phase: 'DECISION', seats: [me({ hasDecided: true })] })
+    const second = wrapVi(<ActionBar hand={decided} room={blindRoom} onAct={() => {}} lang="vi" layout="stack" autoPlay onAutoPlay={() => {}} />)
+    expect(screen.getByRole('status').parentElement).toBe(screen.getByRole('button', { name: 'Tự động chơi' }).parentElement)
+    expect(screen.getByRole('status')).toHaveTextContent('Đã chọn')
+    second.unmount()
+
+    // The ring: the play row, and the toggle in a row of its own.
+    wrapVi(<ActionBar hand={deciding} room={blindRoom} onAct={() => {}} lang="vi" autoPlay={false} onAutoPlay={() => {}} />)
+    expect(screen.getAllByRole('button', { name: 'Tự động chơi' })).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Tự động chơi' }).parentElement).not.toBe(screen.getByRole('button', { name: 'Bỏ bài' }).parentElement)
+  })
+
+  it('between turns in stack the toggles replace the row, and the wait line shows only when there are none', () => {
+    const between = hand(null, { actingSeat: 0, seats: [me()] })
+    const first = wrap(<ActionBar hand={between} room={holdemRoom} onAct={() => {}} lang="en" layout="stack" preAction={null} onPreAction={() => {}} />)
+    expect(screen.getByRole('group', { name: 'Before your turn' })).toBeInTheDocument()
+    expect(screen.queryByRole('status'), 'the toggles take the row').toBeNull()
+    first.unmount()
+    // Folded: no toggles, so the line says what the seat waits for.
+    const second = wrap(<ActionBar hand={hand(null, { actingSeat: 0, seats: [me({ folded: true })] })} room={holdemRoom} onAct={() => {}} lang="en" layout="stack" preAction={null} onPreAction={() => {}} />)
+    expect(screen.queryByRole('group', { name: 'Before your turn' })).toBeNull()
+    expect(screen.getByRole('status')).toHaveTextContent('You folded')
+    second.unmount()
+    // The ring keeps the line above the toggles (P11).
+    wrap(<ActionBar hand={between} room={holdemRoom} onAct={() => {}} lang="en" preAction={null} onPreAction={() => {}} />)
+    expect(screen.getByRole('group', { name: 'Before your turn' })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Waiting for your turn')
+  })
+
+  it('no spinbutton anywhere in ActionBar', async () => {
+    for (const props of [{}, { layout: 'stack' as const }, { frame: 'landscape' as const }]) {
+      const { unmount } = wrap(<ActionBar hand={hand(raiseLegal)} room={holdemRoom} onAct={() => {}} lang="en" {...props} />)
+      expect(screen.queryByRole('spinbutton')).toBeNull()
+      const open = screen.queryByRole('button', { name: 'Raise' })
+      if (open !== null) await userEvent.click(open)
+      expect(screen.getByRole('slider')).toBeInTheDocument()
+      expect(screen.queryByRole('spinbutton')).toBeNull()
+      expect(screen.queryByRole('dialog')).toBeNull()
+      unmount()
+    }
+  })
+
+  it('Enter with the panel closed opens it in stack and never raises', async () => {
+    const onAct = vi.fn()
+    const first = wrap(<ActionBar hand={hand(raiseLegal)} room={holdemRoom} onAct={onAct} lang="en" layout="stack" />)
+    await userEvent.keyboard('{Enter}')
+    expect(onAct).not.toHaveBeenCalled()
+    expect(tray()).toHaveAttribute('data-panel', 'open')
+    expect(screen.getByRole('slider'), 'the keyboard lands on the slider').toHaveFocus()
+    await userEvent.keyboard('{ArrowRight}{Enter}')
+    expect(onAct).toHaveBeenLastCalledWith({ kind: 'raise', amount: 500 })
+    first.unmount()
+
+    // Landscape alike: the first Enter opens the corner, the second raises from the right corner's button.
+    onAct.mockClear()
+    wrap(<ActionBar hand={hand(raiseLegal)} room={holdemRoom} onAct={onAct} lang="en" frame="landscape" />)
+    await userEvent.keyboard('{Enter}')
+    expect(onAct).not.toHaveBeenCalled()
+    expect(screen.getByRole('slider')).toHaveFocus()
+    await userEvent.keyboard('{Enter}')
+    expect(onAct).toHaveBeenLastCalledWith({ kind: 'raise', amount: 400 })
+  })
+
+  it('R opens the panel in stack and landscape and focuses the slider', async () => {
+    for (const props of [{ layout: 'stack' as const }, { frame: 'landscape' as const }]) {
+      const onAct = vi.fn()
+      const { unmount } = wrap(<ActionBar hand={hand(raiseLegal)} room={holdemRoom} onAct={onAct} lang="en" {...props} />)
+      await userEvent.keyboard('r')
+      expect(tray()).toHaveAttribute('data-panel', 'open')
+      expect(screen.getByRole('slider')).toHaveFocus()
+      await userEvent.keyboard('{Escape}')
+      expect(tray()).toHaveAttribute('data-panel', 'closed')
+      expect(screen.getByRole('button', { name: 'Raise' }), 'the focus goes back to the button that opens it').toHaveFocus()
+      expect(onAct).not.toHaveBeenCalled()
+      unmount()
+    }
+  })
+
+  it('Enter on a focused button activates that button, never the raise', async () => {
+    const onAct = vi.fn()
+    const first = wrap(<ActionBar hand={hand(raiseLegal)} room={holdemRoom} onAct={onAct} lang="en" />)
+    screen.getByRole('button', { name: 'Fold' }).focus()
+    await userEvent.keyboard('{Enter}')
+    expect(onAct.mock.calls).toEqual([[{ kind: 'fold' }]])
+    onAct.mockClear()
+    chip('Pot').focus()
+    await userEvent.keyboard('{Enter}')
+    expect(onAct, 'a chip sets the amount; it does not raise').not.toHaveBeenCalled()
+    expect(screen.getByRole('slider')).toHaveAttribute('aria-valuetext', '1,000')
+    first.unmount()
+
+    // In the stack's open panel, Enter on Hủy cancels.
+    wrap(<ActionBar hand={hand(raiseLegal)} room={holdemRoom} onAct={onAct} lang="en" layout="stack" />)
+    await userEvent.click(screen.getByRole('button', { name: 'Raise' }))
+    screen.getByRole('button', { name: 'Cancel' }).focus()
+    await userEvent.keyboard('{Enter}')
+    expect(onAct).not.toHaveBeenCalled()
+    expect(tray()).toHaveAttribute('data-panel', 'closed')
+  })
+
+  it('data-layout and data-panel on the tray root', async () => {
+    const cases: { props: Record<string, string>; layout: string }[] = [
+      { props: {}, layout: 'ring' },
+      { props: { layout: 'stack' }, layout: 'stack' },
+      { props: { frame: 'landscape' }, layout: 'ring' },
+      { props: { frame: 'landscape', layout: 'stack' }, layout: 'ring' },
+    ]
+    for (const { props, layout } of cases) {
+      const { unmount } = wrap(<ActionBar hand={hand(null)} room={holdemRoom} onAct={() => {}} lang="en" {...props} />)
+      expect(tray(), JSON.stringify(props)).toHaveAttribute('data-layout', layout)
+      expect(tray()).toHaveAttribute('data-panel', 'closed')
+      unmount()
+    }
+    // The ring's inline panel is there whenever sizing is offered: open.
+    wrap(<ActionBar hand={hand(raiseLegal)} room={holdemRoom} onAct={() => {}} lang="en" />)
+    expect(tray()).toHaveAttribute('data-panel', 'open')
+  })
+
+  it('the phone width no longer hides the slider, and the number field and the dialog are gone from the CSS', () => {
+    expect(TABLE_CSS).not.toMatch(/\.slider\s*\{\s*display:\s*none/)
+    expect(TABLE_CSS).not.toMatch(/\.amount\s*\{/)
+    expect(TABLE_CSS).not.toMatch(/\.amountField\b/)
+    expect(TABLE_CSS).toMatch(/\.tray\[data-layout='stack'\]\s*\{[^}]*padding:\s*var\(--space-2\) var\(--space-3\)/)
   })
 })
 

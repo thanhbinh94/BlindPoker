@@ -173,6 +173,9 @@ describe('BetPanel', () => {
     expect(onConfirm).toHaveBeenCalledTimes(2)
     fireEvent.click(within(panel).getByRole('button', { name: 'Cancel' }))
     expect(onCancel).toHaveBeenCalledTimes(2)
+    // Escape closes from anywhere in the panel, not from the slider alone
+    expect(fireEvent.keyDown(within(panel).getByRole('button', { name: 'Min' }), { key: 'Escape' })).toBe(false)
+    expect(onCancel).toHaveBeenCalledTimes(3)
     first.unmount()
 
     // the ring's panel: chips and slider only; Enter and Escape go on to the tray
@@ -200,7 +203,7 @@ describe('BetPanel', () => {
     expect(label).toHaveTextContent('2.950')
   })
 
-  it('bet chips are 36 px even under pointer: coarse (declared after the coarse block); the pre-action toggles keep the tap height; landscape chips are 32 px', () => {
+  it('bet chips are 36 px even under pointer: coarse (declared after the coarse block); the pre-action toggles keep the tap height; landscape chips are 36 px and 32 px on the short tier', () => {
     const coarse = /@media \(pointer: coarse\)\s*\{\s*\.preset\s*\{\s*min-height:\s*var\(--tap\);?\s*\}\s*\}/.exec(TABLE_CSS)
     expect(coarse, 'the coarse block still lifts .preset (the pre-action toggles) to the tap height').not.toBeNull()
     const chipRule = /^\.betChip\s*\{[^}]*min-height:\s*36px/m.exec(TABLE_CSS)
@@ -211,7 +214,8 @@ describe('BetPanel', () => {
     expect(coarseBlocks.length).toBeGreaterThan(0)
     for (const block of coarseBlocks) expect(block, 'no coarse block lifts the chips again').not.toMatch(/\.betChip/)
     expect(TABLE_CSS).not.toMatch(/\.preToggle[^{]*\{[^}]*min-height/)
-    expect(TABLE_CSS).toMatch(/\.tray\[data-frame='landscape'\] \.betChip\s*\{[^}]*min-height:\s*32px/)
+    expect(TABLE_CSS).toMatch(/\.tray\[data-frame='landscape'\] \.betChip\s*\{[^}]*min-height:\s*36px/)
+    expect(TABLE_CSS).toMatch(/\.tray\[data-frame='landscape'\] \.betPanel\[data-compact\] \.betChip\s*\{[^}]*min-height:\s*32px/)
   })
 
   it('the slider is a 44 px row with a 28 px thumb on both engines, coloured by tokens, with no motion', () => {

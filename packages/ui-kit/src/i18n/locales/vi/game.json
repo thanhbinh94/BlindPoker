@@ -45,8 +45,6 @@
   "labels": {
     "actions": "Hành động",
     "allIn": "Tất tay",
-    "amount": "Mức cược",
-    "amountDialog": "Nhập số điểm",
     "amountSlider": "Thanh trượt mức cược",
     "autoStart": "Tự động bắt đầu",
     "balance": "Số dư",
@@ -283,8 +281,7 @@
   "presets": {
     "min": "Min",
     "half": "½ pot",
-    "pot": "Pot",
-    "max": "Max"
+    "pot": "Pot"
   },
   "avatar": {
     "turn": "Xoay",

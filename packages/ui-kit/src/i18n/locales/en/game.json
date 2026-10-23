@@ -45,8 +45,6 @@
   "labels": {
     "actions": "Actions",
     "allIn": "All-in",
-    "amount": "Bet amount",
-    "amountDialog": "Enter an amount",
     "amountSlider": "Amount slider",
     "autoStart": "Auto-start",
     "balance": "Balance",
@@ -283,8 +281,7 @@
   "presets": {
     "min": "Min",
     "half": "½ pot",
-    "pot": "Pot",
-    "max": "Max"
+    "pot": "Pot"
   },
   "avatar": {
     "turn": "Turn",

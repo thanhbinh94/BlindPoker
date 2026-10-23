@@ -11,7 +11,7 @@ import { DeckAnchorProvider } from './deck-anchor.js'
 import { DEAL_MS, DEAL_WINDOW_MS, FLIP_MS, dealOrderOf, showdownWithBoard } from './motion.js'
 import { Pot } from './Pot.js'
 import { Seat } from './Seat.js'
-import type { FrameTier, RoomFrame } from './frame.js'
+import { STACK_LAYOUT_QUERY, type FrameTier, type RoomFrame } from './frame.js'
 import { ringPositions, shortRingPositions } from './geometry.js'
 import { useMediaQuery } from './useMediaQuery.js'
 import s from './table.module.css'
@@ -70,10 +70,9 @@ export interface PokerTableProps {
   note?: ReactNode
 }
 
-/* The ring needs roughly 310 px of stage to seat everyone around it without the plates running into the board, and a
-   short window has no more to give than a narrow one — so a laptop with a 600 px-tall viewport gets the vertical
-   layout for the same reason a phone does. */
-const STACKED = '(max-width: 767px), (max-height: 620px)'
+/* The ring needs roughly 310 px of stage to seat everyone around it; a short window gets the vertical layout for the
+   same reason a phone does (`STACK_LAYOUT_QUERY`, shared with the room, which passes its answer as `layout`). */
+const STACKED = STACK_LAYOUT_QUERY
 
 /**
  * The ring's box, for `ringPositions` to space the seats evenly in its own pixels. The desktop ring pins a 2:1 box, but

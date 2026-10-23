@@ -55,7 +55,7 @@ export interface BetPanelProps {
   onChange(v: number): void
   /** With `confirmLabel`: the confirm button ("Tố 48.000"), and Enter on the slider. */
   onConfirm?(): void
-  /** "Hủy ▾", and Escape on the slider. */
+  /** "Hủy ▾", and Escape anywhere in the panel. */
   onCancel?(): void
   lang: Language
   confirmLabel?: string
@@ -147,16 +147,18 @@ export function BetPanel({
         event.preventDefault()
         onConfirm()
         return
-      case 'Escape':
-        if (onCancel === undefined) return
-        event.preventDefault()
-        onCancel()
-        return
       default:
         return
     }
     event.preventDefault()
     if (next !== value) onChange(next)
+  }
+
+  // Escape closes from anywhere in the panel — the slider, a chip, Hủy or the confirm — not from the slider alone.
+  const onPanelKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== 'Escape' || onCancel === undefined || event.defaultPrevented) return
+    event.preventDefault()
+    onCancel()
   }
 
   const pos = single ? 0 : Math.min(1, Math.max(0, (value - min) / (max - min)))
@@ -170,6 +172,7 @@ export function BetPanel({
       data-shape={shape}
       data-frame={frame}
       data-compact={compact || undefined}
+      onKeyDown={onPanelKeyDown}
     >
       <div className={s.betChips} role="group" aria-label={t('labels.betSize')}>
         {chips.map((chip) => (

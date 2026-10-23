@@ -1,14 +1,15 @@
 import type { PlayerAction, RoomView } from '@bp/core'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ChangeEvent, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { PreActionKind } from '../client/preaction.js'
 import type { ClientHand, ClientSeat } from '../client/types.js'
 import { formatPoints, type Language } from '../i18n/index.js'
 import { Button } from '../primitives/Button.js'
 import { cx } from '../primitives/cx.js'
-import { AmountDialog } from './AmountDialog.js'
-import type { RoomFrame } from './frame.js'
+import { BetPanel, betStep } from './BetPanel.js'
+import type { FrameTier, RoomFrame } from './frame.js'
+import type { TableLayout } from './PokerTable.js'
 import s from './table.module.css'
 
 export interface ActionBarProps {
@@ -28,10 +29,18 @@ export interface ActionBarProps {
   onAutoPlay?: (on: boolean) => void
   /**
    * The room's frame (`useRoomFrame`). `landscape` — a phone on its side — splits the tray into two corner docks: the
-   * toggles bottom-left, the betting buttons bottom-right, presets in place of the slider and a dialog for a typed
-   * amount (Plan 26, B4). `desktop` (the default) is the tray as it always was.
+   * toggles bottom-left, the betting buttons bottom-right, and the bet panel in the left corner once Tố is tapped
+   * (Plan 26, B4; BP-31 §3.3). `desktop` (the default) is the tray under the felt.
    */
   frame?: RoomFrame
+  /**
+   * The table's layout as the room resolved it (`RoomScreen`, BP-31 R9): `stack` — a phone held upright, or any window
+   * under 768 px wide or 620 px tall — gets the one-row tray with 44 px buttons and the two-step bet panel; `ring` (the
+   * default) the desktop tray, chips and slider always shown. The landscape frame is always `ring` here.
+   */
+  layout?: TableLayout
+  /** The landscape frame's tier (BP-28): on the `short` one the bet panel is compact (32 px chips, a 36 px slider). */
+  tier?: FrameTier
   /**
    * Landscape only: no hand is being played (the room waits, or the countdown runs with the result card closed). The
    * room's own dock holds the bottom-right corner then, so the tray gives up its right part and keeps its left one —
@@ -42,10 +51,11 @@ export interface ActionBarProps {
 
 const PRE_ACTIONS: readonly PreActionKind[] = ['checkFold', 'callAny', 'fold']
 
-const SLIDER_STEPS = 50
+/** The "open the bet panel" glyph after "Tố" / "Cược": decoration, so the button's name stays the word alone. */
+const OPEN_GLYPH = '▴'
 
-/** The landscape tray's "type an amount" button (`labels.amountDialog` is its name). */
-const EDIT_GLYPH = '✎'
+/** Controls that answer Enter themselves: the tray's Enter must leave them be (a focused Bỏ bài folds, a chip sets). */
+const OWN_ENTER = 'button, a, [role="button"], [role="menuitem"], [role="menuitemcheckbox"]'
 
 /** The lines the tray can print while the seat has no legal action: one `labels.*` key each. */
 export type TrayWaitKey =
@@ -92,17 +102,22 @@ export function trayWaitKey(hand: ClientHand, mine: ClientSeat | undefined): Tra
 /**
  * The lacquered action tray, anchored to the bottom edge at every size.
  *
- * Only the kinds the server declared legal are offered; the bet/raise control is bounded by the legal range and every
- * preset is clamped into it, so a click can never produce an illegal amount. Shortcuts: F fold, C check/call,
- * R focus the amount, Enter submit — all advertised through `aria-keyshortcuts`.
+ * Only the kinds the server declared legal are offered; a bet or a raise is chosen in the `BetPanel` (chips and a
+ * slider, no number field anywhere — BP-31 §3.2), bounded by the legal range, so a click can never produce an illegal
+ * amount. Shortcuts: F fold, C check/call, R the bet panel, Enter raise, Esc close the panel — all advertised through
+ * `aria-keyshortcuts`. Enter on a focused button is that button's own (it never raises behind it).
+ *
+ * Three shapes (BP-31 R6, R9):
+ *  - `ring` on the desktop frame — one step: the chips and the slider stand over the action row whenever sizing is
+ *    offered, the row keeps Tất tay apart (R4), and its buttons are 52 px (`lg`).
+ *  - `stack` — one row of 44 px buttons (`md`): Bỏ bài · Xem|Theo N · Tố ▴|Cược ▴ (or Tất tay when no size is legal).
+ *    Two steps: Tố ▴ (or Enter, or R) swaps the row for the panel, which carries Hủy ▾ and the confirm "Tố N"; all in is
+ *    the panel's chip (R2). Between turns the pre-action toggles take the row, and the wait line shows only without them.
+ *  - the landscape frame — two corner docks over the felt (Plan 26, B4): the right one a row of action buttons, the
+ *    left one the toggles; Tố ▴ puts the panel in the left corner and the same button becomes "Tố N".
  *
  * Between turns the tray stays put and says what the seat is waiting for (`trayWaitKey`): it is a fixture of the room,
  * not a popup, and a tray that came and went would resize the felt above it on every turn.
- *
- * On a phone held sideways (`frame="landscape"`) the felt takes the whole height, so the tray is two corner docks over
- * it instead of a strip under it (Plan 26, B4). Its right part is one row of action buttons; the bet/raise button
- * first opens the presets in the left corner ("✎" among them, for a typed amount in `AmountDialog`), and with them
- * open it raises. There is no slider (Q7) and no inline number field: the soft keyboard would cover it.
  */
 export function ActionBar({
   hand,
@@ -115,12 +130,19 @@ export function ActionBar({
   autoPlay = false,
   onAutoPlay,
   frame = 'desktop',
+  layout = 'ring',
+  tier = 'normal',
   betweenHands = false,
 }: ActionBarProps) {
   const { t } = useTranslation()
   const legal = hand.legal
   const amountRef = useRef<HTMLInputElement>(null)
+  const trayRef = useRef<HTMLDivElement>(null)
   const landscape = frame === 'landscape'
+  const stack = !landscape && layout === 'stack'
+  /** R6: the phone trays (stack and landscape) open the panel first; the desktop ring shows it at once. */
+  const twoStep = stack || landscape
+  const buttonSize = stack ? 'md' : 'lg'
 
   const kinds = useMemo(() => legal?.kinds ?? [], [legal])
   const canRaise = kinds.includes('raise')
@@ -129,20 +151,31 @@ export function ActionBar({
   const min = canRaise ? (legal?.minRaiseTo ?? 0) : (legal?.minBet ?? 0)
   const max = canRaise ? (legal?.maxRaiseTo ?? 0) : (legal?.maxBet ?? 0)
 
-  const [raw, setRaw] = useState(() => String(min))
-  // Landscape: the presets in the left corner, and the typed-amount dialog. Each turn starts with both shut.
-  const [sizerOpen, setSizerOpen] = useState(false)
-  const [dialogOpen, setDialogOpen] = useState(false)
+  // The amount chosen this turn; `null` is "the minimum", whatever the minimum is when it is read.
+  const [amount, setAmount] = useState<number | null>(null)
+  const [panelOpen, setPanelOpen] = useState(false)
+  // Where the focus goes once the panel has drawn or gone: the slider (opened from the keyboard), or back to Tố ▴.
+  const [focusNext, setFocusNext] = useState<'slider' | 'open' | null>(null)
   const yourTurn = legal !== null
+  // Each turn — and each hand — starts at the minimum with the panel shut. New bounds within the turn (a reconnect, a
+  // bot acting) keep the panel open and the amount re-clamps (P6).
   useEffect(() => {
-    setRaw(String(min))
-    setSizerOpen(false)
-    setDialogOpen(false)
-  }, [min, max, hand.handId, yourTurn])
+    setAmount(null)
+    setPanelOpen(false)
+  }, [hand.handId, yourTurn])
+  useEffect(() => {
+    setAmount((a) => (a === null ? null : Math.min(max, Math.max(min, a))))
+  }, [min, max])
 
-  const clamp = useCallback((n: number) => Math.min(max, Math.max(min, Math.round(n))), [min, max])
-  const typed = Number(raw)
-  const value = clamp(raw.trim() === '' || !Number.isFinite(typed) ? min : typed)
+  const value = Math.min(max, Math.max(min, Math.round(amount ?? min)))
+  const panelShown = sizing && legal !== null && (!twoStep || (panelOpen && !(landscape && betweenHands)))
+
+  useEffect(() => {
+    if (focusNext === null) return
+    if (focusNext === 'slider') amountRef.current?.focus()
+    else trayRef.current?.querySelector<HTMLButtonElement>('[data-bet-open]')?.focus()
+    setFocusNext(null)
+  }, [focusNext, panelShown])
 
   const emit = useCallback(
     (action: PlayerAction) => {
@@ -153,10 +186,17 @@ export function ActionBar({
   const submit = useCallback(() => {
     emit({ kind: canRaise ? 'raise' : 'bet', amount: value })
   }, [emit, canRaise, value])
+  const openPanel = useCallback((focus: boolean) => {
+    setPanelOpen(true)
+    if (focus) setFocusNext('slider')
+  }, [])
+  const closePanel = useCallback(() => {
+    setPanelOpen(false)
+    setFocusNext('open')
+  }, [])
 
   useEffect(() => {
-    // The dialog answers its own keys (Enter confirms it, Escape closes it); the tray's would fold under it.
-    if (legal === null || disabled || dialogOpen) return
+    if (legal === null || disabled) return
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return
       const target = event.target as HTMLElement | null
@@ -164,9 +204,18 @@ export function ActionBar({
       const inField = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable === true
       if (event.key === 'Enter') {
         if (!sizing) return
+        // A focused button (Bỏ bài, a chip, Hủy, the confirm) answers its own Enter: raising behind it is a money bug.
+        if (target?.closest(OWN_ENTER) != null) return
         if (inField && target !== amountRef.current) return
         event.preventDefault()
-        submit()
+        if (twoStep && !panelShown) openPanel(true)
+        else submit()
+        return
+      }
+      if (event.key === 'Escape') {
+        if (!twoStep || !panelShown) return
+        event.preventDefault()
+        closePanel()
         return
       }
       if (inField) return
@@ -174,16 +223,14 @@ export function ActionBar({
       if (key === 'f' && kinds.includes('fold')) emit({ kind: 'fold' })
       else if (key === 'c' && kinds.includes('check')) emit({ kind: 'check' })
       else if (key === 'c' && kinds.includes('call')) emit({ kind: 'call' })
-      else if (key === 'r' && sizing && landscape) {
-        setSizerOpen(true)
-        setDialogOpen(true)
-      } else if (key === 'r' && sizing) amountRef.current?.focus()
+      else if (key === 'r' && sizing && twoStep) openPanel(true)
+      else if (key === 'r' && sizing) amountRef.current?.focus()
       else return
       event.preventDefault()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [legal, disabled, dialogOpen, sizing, landscape, kinds, emit, submit])
+  }, [legal, disabled, sizing, twoStep, panelShown, kinds, emit, submit, openPanel, closePanel])
 
   // The pre-action row is offered only to a seat that can still act this hand: not folded, not all-in, cards on
   // the table. Anyone else — a spectator, a seat waiting for the next deal — gets the plain waiting line.
@@ -206,7 +253,7 @@ export function ActionBar({
     </button>
   ) : null
 
-  // The pieces every variant draws; the frame decides where they go.
+  // The pieces every variant draws; the frame and the layout decide where they go.
   const waitLine =
     legal === null ? (
       <p className={s.trayWait} role="status">
@@ -238,25 +285,22 @@ export function ActionBar({
       </div>
     )
 
-  const onAmountChange = (event: ChangeEvent<HTMLInputElement>): void => setRaw(event.target.value)
-  const preset = (n: number): void => setRaw(String(clamp(n)))
-  const step = Math.max(1, Math.round((max - min) / SLIDER_STEPS))
-
   const wager = legal !== null && legal.callAmount > 0 ? legal.callAmount : (room.config.blind?.fixedWager ?? 0)
   const callAmount = legal?.callAmount ?? 0
   /**
-   * A verb with its figure: "Theo 104.000". On the desktop it is one string, as it always was. In landscape the two are
-   * spans, so a narrow corner can stack the figure under the verb (`.btnAmount`, a container query) — the figure stays
-   * on screen, since a phone has no hover to show a tooltip — and the button's name is the whole phrase.
+   * A verb with its figure: "Theo 104.000". On the desktop and in the stack it is one string, as it always was. In
+   * landscape the two are spans, so a narrow corner can stack the figure under the verb (`.btnAmount`, a container
+   * query) — the figure stays on screen, since a phone has no hover to show a tooltip — and the button's name is the
+   * whole phrase.
    */
-  const labelled = (verb: string, amount: number | null): { children: ReactNode; label: string | undefined } => {
-    const full = amount === null ? verb : `${verb} ${formatPoints(amount, lang)}`
-    if (!landscape || amount === null) return { children: full, label: undefined }
+  const labelled = (verb: string, figure: number | null): { children: ReactNode; label: string | undefined } => {
+    const full = figure === null ? verb : `${verb} ${formatPoints(figure, lang)}`
+    if (!landscape || figure === null) return { children: full, label: undefined }
     return {
       children: (
         <>
           <span>{verb}</span>
-          <span className={s.btnAmount}>{formatPoints(amount, lang)}</span>
+          <span className={s.btnAmount}>{formatPoints(figure, lang)}</span>
         </>
       ),
       label: full,
@@ -268,55 +312,99 @@ export function ActionBar({
   const playsAllIn = legal !== null && legal.callAmount > 0 && legal.callAmount < fixedWager
   const play = labelled(t(playsAllIn ? 'actions.allIn' : 'actions.play'), wager)
   const call = labelled(t('actions.call'), callAmount > 0 ? callAmount : null)
-  const submitLabel = labelled(t(canRaise ? 'actions.raise' : 'actions.bet'), value)
+  const sizeVerb = t(canRaise ? 'actions.raise' : 'actions.bet')
+  const submitLabel = labelled(sizeVerb, value)
 
-  const presetButtons = (
-    <>
-      <button type="button" className={s.preset} disabled={disabled} onClick={() => preset(min)}>
-        {t('presets.min')}
-      </button>
-      <button type="button" className={s.preset} disabled={disabled} onClick={() => preset(hand.pot / 2)}>
-        {t('presets.half')}
-      </button>
-      <button type="button" className={s.preset} disabled={disabled} onClick={() => preset(hand.pot)}>
-        {t('presets.pot')}
-      </button>
-      <button type="button" className={s.preset} disabled={disabled} onClick={() => preset(max)}>
-        {t('presets.max')}
-      </button>
-    </>
+  const panel = panelShown ? (
+    <BetPanel
+      min={min}
+      max={max}
+      step={betStep(min, max, room.config.holdem?.smallBlind ?? 1)}
+      value={value}
+      pot={hand.pot}
+      lang={lang}
+      disabled={disabled}
+      frame={frame}
+      compact={landscape && tier === 'short'}
+      onChange={setAmount}
+      inputRef={amountRef}
+      // The stack's sheet carries the confirm; landscape's is the right corner's single button; the ring's is the row's.
+      {...(twoStep ? { onCancel: closePanel } : {})}
+      {...(stack ? { confirmLabel: `${sizeVerb} ${formatPoints(value, lang)}`, onConfirm: submit } : {})}
+    />
+  ) : null
+
+  const foldButton = (
+    <Button variant="danger" size={buttonSize} disabled={disabled} aria-keyshortcuts="F" onClick={() => emit({ kind: 'fold' })}>
+      {t('actions.fold')}
+    </Button>
   )
 
-  // Blind mode's play-or-fold decision is its own two-button row: no sizing, no call.
+  // Blind mode's play-or-fold decision: no sizing, no call. The stack puts "Tự động chơi" in the same row (P11).
   const playRow = (
     <div className={s.trayRow}>
-      <Button variant="danger" size="lg" disabled={disabled} aria-keyshortcuts="F" onClick={() => emit({ kind: 'fold' })}>
-        {t('actions.fold')}
-      </Button>
-      <Button variant="gold" size="lg" disabled={disabled} className={s.grow} aria-label={play.label} onClick={() => emit({ kind: 'play' })}>
+      {stack ? autoPlayToggle : null}
+      {foldButton}
+      <Button variant="gold" size={buttonSize} disabled={disabled} className={s.grow} aria-label={play.label} onClick={() => emit({ kind: 'play' })}>
         {play.children}
       </Button>
     </div>
   )
 
-  // Landscape keeps one row until the player asks to size: the bet/raise button opens the presets, then raises.
-  const sizerShut = landscape && !sizerOpen
+  // The bet/raise button. One step (the ring): it raises by the chosen amount. Two steps: closed, "Tố ▴" opens the
+  // panel; open, landscape's same button raises ("Tố N"), and the stack's row is gone under the panel.
+  const sizeButton = !sizing ? null : twoStep && !panelShown ? (
+    <Button
+      data-bet-open=""
+      variant="gold"
+      size={buttonSize}
+      disabled={disabled}
+      className={s.grow}
+      aria-keyshortcuts="R Enter"
+      onClick={() => openPanel(false)}
+    >
+      {sizeVerb}
+      <span aria-hidden="true">{OPEN_GLYPH}</span>
+    </Button>
+  ) : (
+    <Button
+      variant="gold"
+      size={buttonSize}
+      disabled={disabled}
+      className={s.grow}
+      aria-keyshortcuts="Enter"
+      aria-label={submitLabel.label}
+      onClick={submit}
+    >
+      {submitLabel.children}
+    </Button>
+  )
+  // All in stands apart on the ring (R4), and fills the size button's place wherever no size is legal; on the phone
+  // trays with sizing it is the panel's chip (R2).
+  const allInButton =
+    kinds.includes('allIn') && !(sizing && twoStep) ? (
+      <Button
+        variant={sizing ? 'ghost' : 'gold'}
+        size={buttonSize}
+        disabled={disabled}
+        className={cx(sizing ? s.allInGhost : s.grow)}
+        onClick={() => emit({ kind: 'allIn' })}
+      >
+        {t('actions.allIn')}
+      </Button>
+    ) : null
   const actionRow = (
     <div className={s.trayRow}>
-      {kinds.includes('fold') ? (
-        <Button variant="danger" size="lg" disabled={disabled} aria-keyshortcuts="F" onClick={() => emit({ kind: 'fold' })}>
-          {t('actions.fold')}
-        </Button>
-      ) : null}
+      {kinds.includes('fold') ? foldButton : null}
       {kinds.includes('check') ? (
-        <Button variant="primary" size="lg" disabled={disabled} aria-keyshortcuts="C" onClick={() => emit({ kind: 'check' })}>
+        <Button variant="primary" size={buttonSize} disabled={disabled} aria-keyshortcuts="C" onClick={() => emit({ kind: 'check' })}>
           {t('actions.check')}
         </Button>
       ) : null}
       {kinds.includes('call') ? (
         <Button
           variant="primary"
-          size="lg"
+          size={buttonSize}
           disabled={disabled}
           aria-keyshortcuts="C"
           aria-label={call.label}
@@ -325,47 +413,26 @@ export function ActionBar({
           {call.children}
         </Button>
       ) : null}
-      {sizing ? (
-        <Button
-          variant="gold"
-          size="lg"
-          disabled={disabled}
-          className={s.grow}
-          aria-keyshortcuts="Enter"
-          aria-label={sizerShut ? undefined : submitLabel.label}
-          onClick={sizerShut ? () => setSizerOpen(true) : submit}
-        >
-          {sizerShut ? t(canRaise ? 'actions.raise' : 'actions.bet') : submitLabel.children}
-        </Button>
-      ) : null}
-      {/* Landscape, sizing: "Max" in the left corner raises everything, and the corner has no width for a fifth label. */}
-      {kinds.includes('allIn') && !(sizing && landscape && sizerOpen) ? (
-        <Button
-          variant={sizing ? 'ghost' : 'gold'}
-          size="lg"
-          disabled={disabled}
-          className={cx(sizing ? s.allInGhost : s.grow)}
-          onClick={() => emit({ kind: 'allIn' })}
-        >
-          {t('actions.allIn')}
-        </Button>
-      ) : null}
+      {sizeButton}
+      {allInButton}
     </div>
   )
 
+  const trayProps = {
+    ref: trayRef,
+    className: s.tray,
+    'data-frame': frame,
+    'data-layout': stack ? 'stack' : 'ring',
+    'data-panel': panel === null ? 'closed' : 'open',
+    'data-surface': 'night',
+    role: 'group',
+    'aria-label': t('labels.actions'),
+  } as const
+
   if (landscape) {
-    // The presets take the left corner, which has nothing else to hold on the player's own turn (the pre-actions are
-    // for the time between turns): stacked over the buttons they made the right corner two rows tall, and that row
+    // The panel takes the left corner, which has nothing else to hold on the player's own turn (the pre-actions are
+    // for the time between turns): stacked over the buttons it would make the right corner two rows tall, and that row
     // ran into the seat beside the viewer's (Plan 26, B4).
-    const sizerRow =
-      sizing && sizerOpen && !betweenHands ? (
-        <div className={s.presets} role="group" aria-label={t('labels.betSize')}>
-          {presetButtons}
-          <button type="button" className={s.preset} disabled={disabled} aria-label={t('labels.amountDialog')} onClick={() => setDialogOpen(true)}>
-            {EDIT_GLYPH}
-          </button>
-        </div>
-      ) : null
     const toggles =
       preActionRow === null && autoPlayRow === null ? null : (
         <>
@@ -373,32 +440,41 @@ export function ActionBar({
           {autoPlayRow}
         </>
       )
-    const left = sizerRow ?? toggles
+    const left = panel ?? toggles
     const right = legal === null ? waitLine : kinds.includes('play') ? playRow : actionRow
     return (
-      <div className={s.tray} data-frame={frame} data-surface="night" role="group" aria-label={t('labels.actions')}>
+      <div {...trayProps}>
         {left === null ? null : <div className={s.trayLeft}>{left}</div>}
         {betweenHands ? null : <div className={s.trayRight}>{right}</div>}
-        {sizing ? (
-          <AmountDialog
-            open={dialogOpen}
-            value={value}
-            min={min}
-            max={max}
-            onConfirm={(amount) => {
-              setRaw(String(amount))
-              setDialogOpen(false)
-            }}
-            onClose={() => setDialogOpen(false)}
-          />
-        ) : null}
       </div>
     )
   }
 
+  if (stack) {
+    // One row, whatever the state (spec §3.1): the row of the turn, or the panel in its place; between turns the
+    // toggles, or — with none to offer — the line saying what the seat waits for. Blind keeps its line beside
+    // "Tự động chơi" (P11).
+    let row: ReactNode
+    if (legal === null) {
+      if (hand.mode === 'blind') {
+        row =
+          autoPlayToggle === null ? (
+            waitLine
+          ) : (
+            <div className={s.trayRow}>
+              {autoPlayToggle}
+              {waitLine}
+            </div>
+          )
+      } else row = preActionRow ?? waitLine
+    } else if (kinds.includes('play')) row = playRow
+    else row = panel ?? actionRow
+    return <div {...trayProps}>{row}</div>
+  }
+
   if (legal === null) {
     return (
-      <div className={s.tray} data-frame={frame} data-surface="night" role="group" aria-label={t('labels.actions')}>
+      <div {...trayProps}>
         {waitLine}
         {preActionRow}
         {autoPlayRow}
@@ -408,7 +484,7 @@ export function ActionBar({
 
   if (kinds.includes('play')) {
     return (
-      <div className={s.tray} data-frame={frame} data-surface="night" role="group" aria-label={t('labels.actions')}>
+      <div {...trayProps}>
         {playRow}
         {autoPlayRow}
       </div>
@@ -416,39 +492,8 @@ export function ActionBar({
   }
 
   return (
-    <div className={s.tray} data-frame={frame} data-surface="night" role="group" aria-label={t('labels.actions')}>
-      {sizing ? (
-        <div className={s.sizer} role="group" aria-label={t('labels.betSize')}>
-          <div className={s.presets}>{presetButtons}</div>
-          <div className={s.sizerRow}>
-            <input
-              ref={amountRef}
-              className={s.amount}
-              type="number"
-              inputMode="numeric"
-              min={min}
-              max={max}
-              step={1}
-              value={raw}
-              disabled={disabled}
-              aria-label={t('labels.amount')}
-              aria-keyshortcuts="R"
-              onChange={onAmountChange}
-            />
-            <input
-              className={s.slider}
-              type="range"
-              min={min}
-              max={max}
-              step={step}
-              value={value}
-              disabled={disabled}
-              aria-label={t('labels.amountSlider')}
-              onChange={onAmountChange}
-            />
-          </div>
-        </div>
-      ) : null}
+    <div {...trayProps}>
+      {panel}
       {actionRow}
     </div>
   )

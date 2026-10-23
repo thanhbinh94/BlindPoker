@@ -1494,17 +1494,6 @@
   flex: 1 1 auto;
 }
 
-.sizer {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.presets {
-  display: flex;
-  gap: var(--space-2);
-}
-
 .preset {
   min-width: 52px;
   min-height: 36px;
@@ -1551,40 +1540,6 @@
   .preset {
     min-height: var(--tap);
   }
-}
-
-.sizerRow {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-/* Above the phone breakpoint the presets sit beside the amount, not above it: one row less of tray is ~52 px more
-   felt, which on an 800 px-tall laptop is the difference between a comfortable table and a cramped one. */
-@media (min-width: 768px) {
-  .sizer {
-    flex-direction: row;
-    align-items: center;
-  }
-
-  .sizerRow {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-}
-
-.amount {
-  width: 8.5rem;
-  min-height: var(--tap);
-  padding: 0 var(--space-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: rgba(5, 9, 20, 0.8);
-  font-family: var(--font-display);
-  font-size: 1.0625rem;
-  color: var(--gold);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 
 /* the raise button owns the solid gold; all-in steps back to an outline when both are offered */
@@ -1753,19 +1708,10 @@
   margin-left: 0.25em;
 }
 
-/* spec §27.1: under 768 px a thumb cannot hit a 1-point step, so the range control drops out and
-   sizing is done with the presets plus the number input, which stay full-width in its place.
-   The tray also tightens up: on a 375 px screen the four action buttons at full size push the felt — and the
-   viewer's own cards with it — off the bottom of the stage. */
+/* Under 768 px the tray tightens up: on a 375 px screen the action buttons at full size push the felt — and the
+   viewer's own cards with it — off the bottom of the stage. (Since BP-31 the slider stays on every frame: it steps by
+   the small blind, so a thumb can land on a step; the number field is gone.) */
 @media (max-width: 767px) {
-  .slider {
-    display: none;
-  }
-
-  .amount {
-    width: 100%;
-  }
-
   .tray {
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3) calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
@@ -1785,13 +1731,61 @@
     padding: var(--space-1) 0;
   }
 
-  .presets {
-    justify-content: space-between;
-  }
-
   .preset {
     flex: 1 1 0;
   }
+}
+
+/* ---------------- Action tray, the stack (BP-31 §3.1, R2) ---------------- */
+/* One row of 44 px buttons (`size="md"`) and 8 / 12 px of padding, so the idle tray is 61 px with its border; keyed on
+   the tray's own `data-layout` (the room's resolved layout), so a 1366 × 600 window — the stack too (R9) — gets the
+   same tray as a phone. The bet button grows a little more than its neighbours; "Tự động chơi" keeps its own width. */
+.tray[data-layout='stack'] {
+  min-height: 0;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3) calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
+}
+
+.tray[data-layout='stack'] .trayRow,
+.tray[data-layout='stack'] .preRow {
+  flex-wrap: nowrap;
+}
+
+.tray[data-layout='stack'] .trayRow > button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 var(--space-2);
+  overflow: hidden;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.tray[data-layout='stack'] .trayRow > .grow {
+  flex-grow: 1.2;
+}
+
+.tray[data-layout='stack'] .trayRow > .preToggle {
+  flex: none;
+}
+
+/* The toggles keep `.preset`'s height: 44 px on touch (the coarse block), 36 px under a mouse in a short window. */
+.tray[data-layout='stack'] .preToggle {
+  white-space: nowrap;
+}
+
+.tray[data-layout='stack'] .preRow > .preToggle {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 var(--space-2);
+}
+
+/* Blind, between decisions: the line beside "Tự động chơi" takes what is left of the row. */
+.tray[data-layout='stack'] .trayRow > .trayWait {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0;
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
 }
 
 /* ---------------- Action tray, phone held sideways ---------------- */
@@ -1805,8 +1799,8 @@
      dock holds between hands, so the two never show together. Off the player's turn, the line saying what the seat
      waits for.
    - left (`.trayLeft`): the pre-action toggles and "Tự động chơi" as 34 px pills — or, on the player's own turn once
-     the bet/raise button has been pressed, the presets and "✎" (a typed amount opens `AmountDialog`). There is no
-     slider (Q7). It stays inside the tray's markup, so the "Hành động" group still holds it.
+     Tố ▴ has been pressed, the bet panel (chips over the slider, "Hủy ▾" beside it; BP-31 §3.3), while the right
+     corner's same button becomes "Tố N". It stays inside the tray's markup, so the "Hành động" group still holds it.
 
    The tray is `static`, so both parts hang from the room (`.room[data-frame='landscape']` is `relative`). Each part is
    a box of a fixed width that stops short of the viewer's plate: that plate and its badge line are at most 30cqw of the
@@ -1877,11 +1871,6 @@
   white-space: nowrap;
 }
 
-.trayLeft .presets {
-  flex: none;
-  gap: var(--space-1);
-}
-
 /* Pills over the felt: a night wash under each, so their gold reads over the felt or the page in either theme. */
 .trayLeft .preset {
   min-width: 44px;
@@ -1910,10 +1899,36 @@
   }
 }
 
-/* The bet panel's chips in the left corner: 32 px pills, touch or not (R12) — three classes deep, so they win over the
-   corner's `.trayLeft .preset` above wherever it is declared. */
+/* The bet panel's chips in the left corner: 36 px pills, touch or not (R12), and 32 px on the short tier (spec §3.3) —
+   three classes deep and more, so they win over the corner's `.trayLeft .preset` above wherever it is declared. */
 .tray[data-frame='landscape'] .betChip {
+  min-height: 36px;
+}
+
+.tray[data-frame='landscape'] .betPanel[data-compact] .betChip {
   min-height: 32px;
+}
+
+/* The corner's panel (BP-31 §3.3) has two rows — the chips, then the slider with "Hủy ▾" beside it — and must stay under
+   the flank seat's badge line ("Tất tay · 6.000" ended 1 px above it once the panel was 100 px tall at 915 × 412). So no
+   floating amount here: the right corner's "Tố N" carries it; and the slider row and Hủy are 36 px: 76 px in all, 72 on
+   the short tier. Hủy gets the pills' night wash, since it lies over the felt. */
+.trayLeft .betSlider {
+  padding-top: 0;
+}
+
+.trayLeft .betValue {
+  display: none;
+}
+
+.trayLeft .slider {
+  height: 36px;
+}
+
+.trayLeft .betCancel {
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
 }
 
 /* A verb and its figure ("Theo 104.000", "Tố 208.000", "Chơi 1.000"), two spans in landscape: one line while the corner
@@ -1955,21 +1970,6 @@
     padding: 0 var(--space-2);
     font-size: 0.75rem;
   }
-}
-
-/* The typed amount's field, in `AmountDialog`. */
-.amountField {
-  width: 100%;
-  min-height: var(--tap);
-  padding: 0 var(--space-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: rgba(5, 9, 20, 0.8);
-  font-family: var(--font-display);
-  font-size: 1.125rem;
-  color: var(--gold);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 
 /* ---------------- Hand result ---------------- */

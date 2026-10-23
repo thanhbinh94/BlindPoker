@@ -508,6 +508,38 @@ describe('RoomScreen', () => {
     expect(client.act).toHaveBeenCalledWith({ kind: 'fold' })
   })
 
+  // BP-31 R9 (P1): the room measures the stack once and hands the same answer to the table and to the tray.
+  it('passes the resolved layout to the table and the tray', () => {
+    const room = makeRoom({
+      players: [
+        makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'IN_HAND', stack: 19_800 }),
+        makePlayer({ playerId: 'me', displayName: 'Mai', seat: 2, status: 'IN_HAND', stack: 19_900 }),
+      ],
+    })
+    const hand = makeHand({
+      mySeat: 2,
+      actingSeat: 2,
+      legal: { seat: 2, kinds: ['fold', 'call', 'raise', 'allIn'], callAmount: 300, minBet: 0, maxBet: 0, minRaiseTo: 600, maxRaiseTo: 19_900 },
+    })
+    const client = fakeClient(makeState({ room, hand }))
+    // jsdom has no `matchMedia`: the query says no, and both are the ring.
+    const first = wrap(client)
+    expect(screen.getByRole('group', { name: 'Actions' })).toHaveAttribute('data-layout', 'ring')
+    expect(first.view.container.querySelector('[data-seats]'), 'the ring section').not.toBeNull()
+    expect(screen.getByRole('slider'), 'one step on the ring: the slider is out').toBeInTheDocument()
+    first.view.unmount()
+
+    render(
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <RoomScreen client={client} lang="en" onLeft={vi.fn()} layout="stack" />
+      </I18nextProvider>,
+    )
+    expect(screen.getByRole('group', { name: 'Actions' })).toHaveAttribute('data-layout', 'stack')
+    expect(screen.getByRole('group', { name: 'Players' }), 'the stack strip').toBeInTheDocument()
+    expect(screen.queryByRole('slider'), 'two steps in the stack: Raise opens the panel').toBeNull()
+    expect(screen.getByRole('button', { name: 'Raise' })).toBeInTheDocument()
+  })
+
   it('shows the reconnect banner while the socket is down and leaves on request', async () => {
     const client = fakeClient(makeState({ status: 'reconnecting', room: standingRoom }))
     wrap(client)
