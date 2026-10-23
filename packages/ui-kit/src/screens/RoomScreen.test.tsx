@@ -412,7 +412,7 @@ describe('RoomScreen', () => {
   })
 
   describe('a player the balance cannot seat (T4, table limit)', () => {
-    /** Play-or-fold at 5,000: a hand needs the ante and the play, 10,000; the table limit is 25,000. */
+    /** Play-or-fold at 5,000: a hand needs the ante and the play, 10,000; the table limit is 50,000. */
     const blindRoom = (me: Partial<RoomPlayerView>, decisionMode: 'none' | 'playOrFold' = 'playOrFold') =>
       makeRoom({
         mode: 'blind',
@@ -430,7 +430,7 @@ describe('RoomScreen', () => {
         },
         players: [
           makePlayer({ playerId: 'me', displayName: 'Mai', isHost: true, seat: null, status: null, stack: 0, ...me }),
-          makePlayer({ playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, seat: 3, status: 'READY', stack: 25_000, ready: true }),
+          makePlayer({ playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, seat: 3, status: 'READY', stack: 50_000, ready: true }),
         ],
       })
 
@@ -453,7 +453,7 @@ describe('RoomScreen', () => {
     })
 
     it('never says it to a seated player: their points are on the table, and a short seat is stood up', () => {
-      wrap(fakeClient(makeState({ balance: 0, room: blindRoom({ seat: 0, status: 'SEATED', stack: 25_000 }) })))
+      wrap(fakeClient(makeState({ balance: 0, room: blindRoom({ seat: 0, status: 'SEATED', stack: 50_000 }) })))
       expect(screen.queryByText(/Not enough points/)).toBeNull()
       expect(screen.getByText('Press Ready to start — a hand needs at least one real player.')).toBeInTheDocument()
     })
@@ -475,7 +475,7 @@ describe('RoomScreen', () => {
 
     it('shows the wager and the table limit in the header', () => {
       wrap(fakeClient(makeState({ balance: 50_000, room: blindRoom({}) })))
-      expect(screen.getByText(/Wager 5,000 · Limit 25,000/)).toBeInTheDocument()
+      expect(screen.getByText(/Wager 5,000 · Limit 50,000/)).toBeInTheDocument()
     })
   })
 
@@ -944,7 +944,7 @@ describe('RoomScreen', () => {
       },
       players: [
         makePlayer({ playerId: 'me', displayName: 'Mai', isHost: true, seat: 0, status: 'IN_HAND', stack: 20_000 }),
-        makePlayer({ playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, seat: 1, status: 'IN_HAND', stack: 25_000 }),
+        makePlayer({ playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, seat: 1, status: 'IN_HAND', stack: 50_000 }),
       ],
     })
     const hand = makeHand({
@@ -1177,7 +1177,7 @@ describe('RoomScreen', () => {
         },
         players: [
           makePlayer({ playerId: 'me', displayName: 'Mai', isHost: true, seat: 0, status: 'IN_HAND', stack: 20_000 }),
-          makePlayer({ playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, seat: 3, status: 'IN_HAND', stack: 25_000 }),
+          makePlayer({ playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, seat: 3, status: 'IN_HAND', stack: 50_000 }),
         ],
       })
       const seats = [makeSeat({ seat: 0, playerId: 'me', displayName: 'Mai' }), makeSeat({ seat: 3, playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true })]
@@ -1239,7 +1239,7 @@ describe('RoomScreen', () => {
           },
           players: [
             makePlayer({ playerId: 'me', displayName: 'Mai', seat: null, status: null, stack: 0 }),
-            makePlayer({ playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, isHost: true, seat: 3, status: 'READY', stack: 25_000, ready: true }),
+            makePlayer({ playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, isHost: true, seat: 3, status: 'READY', stack: 50_000, ready: true }),
           ],
         })
       const short = 'Số dư không đủ để vào bàn (cần 5.000 điểm)'

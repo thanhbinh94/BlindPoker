@@ -23,10 +23,10 @@ const WAGER = 1_000
 /** The ante plus the play: what a hand costs a player with a full stack who does not fold. */
 const PLAY_COST = WAGER * 2
 /**
- * The table limit (spec 2026-09-29): five wagers go from the balance to the table at sit-down, and the whole stack
- * comes home at stand-up. A hand moves the stack only, so the balances are read after leaving.
+ * The table limit (spec 2026-09-29; five until BP-31): ten wagers go from the balance to the table at sit-down, and
+ * the whole stack comes home at stand-up. A hand moves the stack only, so the balances are read after leaving.
  */
-const LIMIT = 5 * WAGER
+const LIMIT = 10 * WAGER
 const TOKEN_KEY = 'bp.lite.token'
 
 /** Display names must be unique for the life of the server, and this file creates several per run. */

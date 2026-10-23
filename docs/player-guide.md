@@ -179,7 +179,7 @@ Bấm "Tạo phòng" ở "Sảnh chờ". Hộp thoại "Tạo phòng mới" gồ
 | "Buy-in tối thiểu", "Buy-in tối đa" (Hold'em) | Số điểm mỗi người được mang vào bàn, tính bằng blind lớn (BB): 20 đến 500 BB, mặc định 50 và 200 BB. Dòng chữ nhỏ dưới ô cho biết con số đó bằng bao nhiêu điểm. |
 | "Số lá mỗi người" (Blind) | "2 lá" hoặc "3 lá". |
 | "Cách chơi" (Blind) | "Chơi hoặc bỏ" (mặc định) hoặc "Hoàn toàn may rủi" (mục 5). |
-| "Mức cược cố định" (Blind) | 1.000, 2.000, 5.000, 10.000, 20.000 hoặc 50.000. Dòng dưới ô cho biết hạn mức mỗi người (5× mức cược). |
+| "Mức cược cố định" (Blind) | 1.000, 2.000, 5.000, 10.000, 20.000 hoặc 50.000. Dòng dưới ô cho biết hạn mức mỗi người (10× mức cược). |
 | "Số lượng bot" (Blind) | Từ 0 đến số ghế trừ 1. Bot ngồi sẵn từ lúc tạo phòng. |
 | "Nặn bài" (Blind) | Bài của bạn được chia úp để bạn tự nặn (mục 6). |
 | "Phòng riêng tư" | Không hiện trong danh sách, chỉ vào bằng mã. Có thể đặt thêm "Mật khẩu phòng" (4–20 ký tự) hoặc để trống. |
@@ -240,7 +240,7 @@ Blind Poker lấy cảm hứng từ *ba cây*: mọi người đặt **cùng m�
 
 ### Hạn mức
 
-Khi bạn ngồi vào bàn Blind, bàn lấy từ số dư một khoản gọi là **hạn mức**, bằng 5 lần mức cược (mức cược 1.000 thì hạn mức 5.000); đầu bàn ghi cả "Mức cược" và "Hạn mức". Nếu số dư ít hơn hạn mức, bàn lấy hết số dư, miễn là đủ **một mức cược** (ở cả hai cách chơi). Không đủ thì bạn thấy "Số dư không đủ để vào bàn" kèm số điểm cần có.
+Khi bạn ngồi vào bàn Blind, bàn lấy từ số dư một khoản gọi là **hạn mức**, bằng 10 lần mức cược (mức cược 1.000 thì hạn mức 10.000); đầu bàn ghi cả "Mức cược" và "Hạn mức". Nếu số dư ít hơn hạn mức, bàn lấy hết số dư, miễn là đủ **một mức cược** (ở cả hai cách chơi). Không đủ thì bạn thấy "Số dư không đủ để vào bàn" kèm số điểm cần có.
 
 Mọi khoản cược và điểm thắng đều nằm trong stack trên bàn; thắng nhiều thì stack có thể vượt hạn mức. Blind Poker không thu phí bàn.
 

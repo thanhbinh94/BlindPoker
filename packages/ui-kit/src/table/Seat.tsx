@@ -389,7 +389,7 @@ export function Seat({
               {rankPlace === 'name' ? rankLabel : null}
             </span>
             {caption === undefined || caption === null ? null : <span className={s.seatCaption}>{caption}</span>}
-            {/* A bot's stack is virtual — a table limit (5 × the wager) that is topped back up whenever it runs low, so
+            {/* A bot's stack is virtual — a table limit (10 × the wager) that is topped back up whenever it runs low, so
                 a figure beside it would only read as a real balance to compare against. The Bot badge below says what
                 the seat is; its bets and payouts still show like anyone else's. A bot has no rank either, so it has no
                 stack line at all. */}

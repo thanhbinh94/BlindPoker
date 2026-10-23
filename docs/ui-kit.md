@@ -239,8 +239,8 @@ who has none to turn, "Chờ lật bài". The pre-action and auto-play rows unde
 auto-play is offered in a squeeze room too, where it means "turn my cards the moment they are dealt" (in a play-or-fold
 room it still answers `play`).
 
-`RoomHeader` shows the blinds for a Hold'em room and "wager · limit" for a Blind one ("Mức cược 5.000 · Hạn mức 25.000"; the
-limit is `blindTableLimit`, five wagers).
+`RoomHeader` shows the blinds for a Hold'em room and "wager · limit" for a Blind one ("Mức cược 5.000 · Hạn mức 50.000"; the
+limit is `blindTableLimit`, ten wagers since BP-31).
 
 `HandResult` reads `hand.result`. Alongside `payouts` (the same money summed per seat) it carries **`pots`** — the
 engine's layered pots straight from `SETTLEMENT.pots`, each with its `amount`, `eligibleSeats` and `winners` — and
@@ -627,7 +627,7 @@ scrolling sideways; from 342 px it is one line. The narrowest ticket is the grid
 those three windows.
 
 `HoldemFields` (blind tier plus the buy-in window in big blinds) and `BlindFields` (hole cards, decision mode, fixed
-wager — whose field carries the table-limit hint, "Table limit per player: … (5× the wager)" — bot filler and the
+wager — whose field carries the table-limit hint, "Table limit per player: … (10× the wager)" — bot filler and the
 "Nặn bài" box) are the mode-specific building blocks `CreateRoomForm` swaps between; both are fully controlled,
 and an app only reaches for them directly when it builds its own room form. The swap happens in a box that reserves
 the taller mode's height in the two-column layout (`.modeFields`: 14rem from 22rem of form width up), so the

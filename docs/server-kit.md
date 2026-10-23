@@ -249,7 +249,7 @@ room still ends `CLOSED` with one `onClosed`.
 A seat plays from a stack taken out of the balance at `SIT_DOWN` (a
 `buy_in` row, `refId` = roomId), in both modes: Hold'em brings the buy-in
 the player chose, Blind brings the table limit `blindTableLimit(rules)`
-(5 × the wager) — or the whole balance when that is less, as long as it
+(10 × the wager, 5 × before BP-31) — or the whole balance when that is less, as long as it
 covers **one** wager, in both decision modes (Plan 27 D2; below that the
 answer is `INSUFFICIENT_BALANCE`, and the client's hint quotes one wager).
 The room pushes `BALANCE` right after the buy-in. Hands move only table
