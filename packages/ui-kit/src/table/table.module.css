@@ -1439,6 +1439,19 @@
   padding-bottom: calc(var(--space-4) + var(--fan-over));
 }
 
+/* The room's line on the stack's felt (`PokerTable`'s `note`, BP-31 P4): the pre-hand hint, under the pot, while no hand
+   is dealt — the stack's footer is one row and has no place for it. Not drawn at all without a hint, so the felt keeps
+   its height then. */
+.stackFelt .note {
+  margin: 0;
+  padding-top: var(--space-2);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--ink-muted);
+  text-align: center;
+  text-wrap: balance;
+}
+
 /* The viewer's own plate never scrolls out of sight (layout audit L1, 2026-09-28): on a 375 × 812 phone with five
    opponents, a pre-hand tray and the header, the stack ran taller than `.roomMain` and the plate — stack and cards
    included — sat under the tray until the player thought to scroll the table. Sticky to the bottom of that scroll
@@ -1722,6 +1735,17 @@
   grid-column: 1 / -1;
 }
 
+/* The stack's sheet: chips, slider, Hủy ▾ + "Tố N", 4 px apart and no amount band over the slider (the confirm carries
+   the amount), so the open tray is 149 px — what a 375 × 812 phone with eight opponents leaves it (Task 4a). The
+   slider's 44 px row is mostly air around its 6 px track, so the rows still read apart. */
+.betPanel[data-shape='sheet'] {
+  gap: var(--space-1);
+}
+
+.betPanel[data-shape='sheet'] .betSlider {
+  padding-top: 0;
+}
+
 .betChips {
   display: flex;
   gap: var(--space-2);
@@ -1921,6 +1945,24 @@
   flex: 1 1 0;
   min-width: 0;
   padding: 0 var(--space-2);
+}
+
+/* Between hands the room's dock is the footer's bar (BP-31 P5): the tray draws nothing of its own and keeps only
+   "Tự động chơi", at the bar's start (R13). Empty, it takes no width: the negative margin gives back the footer's gap. */
+.tray[data-layout='stack'][data-between] {
+  position: static;
+  order: -1;
+  flex: none;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.tray[data-layout='stack'][data-between]:empty {
+  margin-inline-end: calc(-1 * var(--space-2));
 }
 
 /* Blind, between decisions: the line beside "Tự động chơi" takes what is left of the row. */

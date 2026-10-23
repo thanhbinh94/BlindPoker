@@ -438,6 +438,28 @@ describe('ActionBar sizing and the one-row tray', () => {
     expect(screen.getByRole('slider')).not.toHaveFocus()
   })
 
+  it('in the stack between hands only Tự động chơi remains in the tray', () => {
+    // R13: the room's dock holds Sẵn sàng / Bắt đầu; the tray keeps its "Hành động" group and, where offered, the toggle.
+    const blindRoom = { config: { mode: 'blind', blind: { fixedWager: 2000, decisionMode: 'playOrFold' } } } as unknown as RoomView
+    const over = hand(null, { mode: 'blind', phase: 'COMPLETE', seats: [me()] })
+    const first = wrapVi(<ActionBar hand={over} room={blindRoom} onAct={() => {}} lang="vi" layout="stack" betweenHands autoPlay onAutoPlay={() => {}} />)
+    expect(tray()).toHaveAttribute('data-between', 'true')
+    expect(within(tray()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Tự động chơi'])
+    expect(within(tray()).queryByRole('status'), 'no "hand over" line beside the dock').toBeNull()
+    first.unmount()
+
+    // Hold'em has no toggle to keep: the group stays, empty, and draws nothing (CSS on `data-between`).
+    const second = wrap(<ActionBar hand={hand(null, { phase: 'COMPLETE', seats: [me()] })} room={holdemRoom} onAct={() => {}} lang="en" layout="stack" betweenHands preAction={null} onPreAction={() => {}} />)
+    expect(tray()).toBeEmptyDOMElement()
+    second.unmount()
+
+    // A stale legal set between hands never opens a panel or offers a row.
+    wrap(<ActionBar hand={hand(raiseLegal)} room={holdemRoom} onAct={() => {}} lang="en" layout="stack" betweenHands />)
+    expect(tray()).toBeEmptyDOMElement()
+    expect(tray()).toHaveAttribute('data-panel', 'closed')
+    expect(TABLE_CSS).toMatch(/\.tray\[data-layout='stack'\]\[data-between\]\s*\{[^}]*padding:\s*0/)
+  })
+
   it('with no sizing the row offers Tất tay and no panel', async () => {
     const onAct = vi.fn()
     wrapVi(

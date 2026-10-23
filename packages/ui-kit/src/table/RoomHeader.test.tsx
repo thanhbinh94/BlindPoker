@@ -128,6 +128,22 @@ describe('RoomHeader', () => {
       expect(document.querySelector(`.${s.players!}`)).toBeNull()
     })
 
+    // BP-31 P3: the phone held upright keeps the full two-row header (stakes and limit on the meta line) and takes the
+    // same "Thêm" menu as landscape, in the first row's right cell.
+    it('the full header draws the menu just before Rời phòng when one is given', () => {
+      const { container } = render(
+        <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+          <RoomHeader room={blindRoom()} status="open" onLeave={vi.fn()} lang="vi" menu={<button type="button">menu</button>} />
+        </I18nextProvider>,
+      )
+      const header = container.querySelector('header')!
+      expect(header).not.toHaveClass(s.headerCompact!)
+      expect(within(header).getByText('Mức cược 5.000 · Hạn mức 50.000')).toBeInTheDocument()
+      const right = header.querySelector(`.${s.headRight!}`)!
+      const buttons = within(right as HTMLElement).getAllByRole('button')
+      expect(buttons.map((b) => b.textContent)).toEqual(['menu', 'Rời phòng'])
+    })
+
     it('renders the desktop header exactly as before when not compact', () => {
       const { container } = wrap(blindRoom(true))
       const header = container.querySelector('header')!

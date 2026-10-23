@@ -189,9 +189,13 @@ export function BetPanel({
         ))}
       </div>
       <div className={s.betSlider} style={{ '--pos': pos.toFixed(4) } as CSSProperties}>
-        <span className={s.betValue} aria-hidden="true">
-          {formatPoints(value, lang)}
-        </span>
+        {/* The stack's sheet draws no floating amount: its confirm reads "Tố 10.000", and the 16 px band was what a
+            375 × 812 phone with eight opponents could not spare (Task 4a). Landscape's corner hides it the same way. */}
+        {shape === 'sheet' ? null : (
+          <span className={s.betValue} aria-hidden="true">
+            {formatPoints(value, lang)}
+          </span>
+        )}
         <input
           ref={inputRef}
           className={s.slider}

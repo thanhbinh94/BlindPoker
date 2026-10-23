@@ -12,6 +12,7 @@ import PRIMITIVES_CSS from '../primitives/primitives.module.css?raw'
 import { makeHand, makePlayer, makeRoom, makeSeat, makeState } from '../test-fixtures.js'
 import s from '../table/table.module.css'
 import { declarationsOf } from '../theme/contrast.js'
+import TABLE_CSS from '../table/table.module.css?raw'
 import TOKENS_CSS from '../theme/tokens.css?raw'
 import { REVEAL_HOLD_MS } from './reveal-hold.js'
 import { RoomScreen } from './RoomScreen.js'
@@ -1420,6 +1421,206 @@ describe('RoomScreen', () => {
       const controls = screen.getByRole('group', { name: 'Table controls' })
       expect(within(controls).getByRole('button', { name: 'Stand up' })).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'More' })).toBeNull()
+    })
+  })
+
+  // BP-31 §3.1, R11, P2–P5: a phone held upright (the stack layout) has no row of buttons under the felt either. The
+  // seat's own controls go into the header's "Thêm" menu, as in landscape; what starts a hand into a one-row dock in the
+  // footer, in the tray's place, while no hand is played; the pre-hand hint onto the felt.
+  describe('the stack layout', () => {
+    const stack = (client: GameClientApi, props: { layout?: 'stack' | 'ring'; frame?: 'desktop' | 'landscape' } = { layout: 'stack' }) =>
+      render(
+        <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+          <RoomScreen client={client} lang="vi" onLeft={vi.fn()} {...props} />
+        </I18nextProvider>,
+      )
+    const notReady = makeRoom({
+      ...readyRoom,
+      players: readyRoom.players.map((p) => (p.playerId === 'me' ? { ...p, ready: false, status: 'SEATED' as const } : p)),
+    })
+    const menuNames = async (header: HTMLElement): Promise<(string | null)[]> => {
+      await userEvent.click(within(header).getByRole('button', { name: 'Thêm' }))
+      const menu = screen.getByRole('menu', { name: 'Thêm' })
+      const names = Array.from(menu.querySelectorAll('[role^="menuitem"]'), (item) => item.textContent)
+      await userEvent.keyboard('{Escape}')
+      return names
+    }
+    const hint = 'Cần ít nhất 2 người sẵn sàng để bắt đầu'
+
+    it('stack between hands shows the dock, not the tray', () => {
+      // Seated, not ready, the host, after a Hold'em hand: the room is OPEN again and the hand is still in the state.
+      const over = makeHand({
+        phase: 'COMPLETE',
+        mySeat: 1,
+        actingSeat: null,
+        seats: [makeSeat({ seat: 0, playerId: 'a', displayName: 'Ann' }), makeSeat({ seat: 1, playerId: 'me', displayName: 'Mai' })],
+        result: { payouts: [{ seat: 1, amount: 600 }], pots: [], fee: 12, showdown: null, carryOverOut: 0, uncalledReturned: null, cancelled: false, reason: null },
+      })
+      const { container } = stack(fakeClient(makeState({ room: notReady, hand: over })))
+      expect(container.firstElementChild).toHaveAttribute('data-layout', 'stack')
+      const dock = screen.getByRole('group', { name: 'Điều khiển bàn' })
+      expect(dock.closest('footer')).not.toBeNull()
+      expect(within(dock).getAllByRole('button').map((b) => b.textContent)).toEqual(['Sẵn sàng', 'Bắt đầu'])
+      expect(within(dock).getByText('1/2 sẵn sàng')).toBeInTheDocument()
+      expect(within(dock).queryByText(hint), 'the hint lies on the felt').toBeNull()
+      expect(within(dock).queryByRole('status'), 'no second live region beside the tray’s line and the banner').toBeNull()
+      // The tray keeps its group but offers nothing in the dock's place: no "hand over" line, no buttons.
+      const tray = screen.getByRole('group', { name: 'Hành động' })
+      expect(tray).toHaveAttribute('data-between', 'true')
+      expect(tray).toBeEmptyDOMElement()
+      // In flow at the footer, the tray's own height: not the landscape corner's `position: absolute`.
+      const rule = SCREENS_CSS.match(/\.room\[data-layout='stack'\] \.dock\s*\{[^}]*\}/)?.[0] ?? ''
+      expect(rule).not.toBe('')
+      expect(rule).not.toMatch(/position:\s*absolute/)
+      expect(rule).toMatch(/flex-wrap:\s*nowrap/)
+    })
+
+    it('stack in a hand shows the tray and no Điều khiển bàn row, and the header menu holds Đứng dậy, Tạm nghỉ, Quản lý bàn', async () => {
+      const playing = makeRoom({
+        ...readyRoom,
+        status: 'IN_GAME',
+        players: readyRoom.players.map((p) => ({ ...p, status: 'IN_HAND' as const })),
+      })
+      const seats = [makeSeat({ seat: 0, playerId: 'a', displayName: 'Ann' }), makeSeat({ seat: 1, playerId: 'me', displayName: 'Mai' })]
+      const live = makeHand({
+        mySeat: 1,
+        actingSeat: 1,
+        seats,
+        legal: { seat: 1, kinds: ['fold', 'call', 'raise', 'allIn'], callAmount: 300, minBet: 0, maxBet: 0, minRaiseTo: 600, maxRaiseTo: 19_900 },
+      })
+      const client = fakeClient(makeState({ room: playing, hand: live }))
+      const view = stack(client)
+      expect(screen.queryByRole('group', { name: 'Điều khiển bàn' })).toBeNull()
+      const tray = screen.getByRole('group', { name: 'Hành động' })
+      expect(tray).toHaveAttribute('data-layout', 'stack')
+      expect(within(tray).getByRole('button', { name: 'Bỏ bài' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Đứng dậy' }), 'not a button of its own').toBeNull()
+      const header = view.container.querySelector('header')!
+      // The full header (stakes on its meta line), with the menu just before Rời phòng.
+      expect(within(header).getByText('Blind 100/200')).toBeInTheDocument()
+      // Mid-hand the roster cannot change (the server's kick rule), so Quản lý bàn waits for the hand's end.
+      expect(await menuNames(header)).toEqual(['Đứng dậy', 'Tạm nghỉ'])
+      await userEvent.click(within(header).getByRole('button', { name: 'Thêm' }))
+      expect(screen.getByRole('menuitemcheckbox', { name: 'Tạm nghỉ' })).toHaveAttribute('aria-checked', 'false')
+      await userEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Tạm nghỉ' }))
+      expect(client.sitOut).toHaveBeenCalledTimes(1)
+      view.unmount()
+
+      // The hand is over and its card is up: still no row; the menu offers Quản lý bàn now.
+      const over = makeHand({
+        ...live,
+        phase: 'COMPLETE',
+        actingSeat: null,
+        legal: null,
+        result: { payouts: [{ seat: 1, amount: 600 }], pots: [], fee: 12, showdown: null, carryOverOut: 0, uncalledReturned: null, cancelled: false, reason: null },
+      })
+      const after = stack(fakeClient(makeState({ room: { ...playing, nextHandAt: 1_005_000 }, hand: over })))
+      expect(screen.queryByRole('group', { name: 'Điều khiển bàn' }), 'the card prints the countdown').toBeNull()
+      expect(screen.getByRole('group', { name: 'Hành động' })).not.toHaveAttribute('data-between')
+      expect(await menuNames(after.container.querySelector('header')!)).toEqual(['Đứng dậy', 'Tạm nghỉ', 'Quản lý bàn'])
+      await userEvent.click(within(after.container.querySelector('header')!).getByRole('button', { name: 'Thêm' }))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Quản lý bàn' }))
+      expect(within(screen.getByRole('dialog')).getAllByRole('button', { name: /^Mời ra/ })).toHaveLength(1)
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Đóng' }))
+      // Once the card is closed the countdown takes the dock, and the tray gives the dock its place.
+      fireEvent.click(screen.getByRole('button', { name: 'Đóng' }))
+      const dock = screen.getByRole('group', { name: 'Điều khiển bàn' })
+      expect(within(dock).getByText((_, el) => el?.tagName === 'P' && /5 giây/.test(el.textContent ?? ''))).toBeInTheDocument()
+      expect(screen.getByRole('group', { name: 'Hành động' })).toHaveAttribute('data-between', 'true')
+    })
+
+    it('a spectator has no footer in the stack layout', () => {
+      // Standing in a room someone else hosts: nothing to press under the felt, waiting or watching a hand.
+      const waiting = stack(fakeClient(makeState({ room: standingRoom })))
+      expect(waiting.container.querySelector('footer')).toBeNull()
+      expect(screen.queryByRole('group', { name: 'Điều khiển bàn' })).toBeNull()
+      // The menu is still there; its only seat item waits for a seat.
+      const header = waiting.container.querySelector('header')!
+      expect(within(header).getByRole('button', { name: 'Thêm' })).toBeInTheDocument()
+      waiting.unmount()
+
+      const watching = makeRoom({ ...standingRoom, status: 'IN_GAME', nextHandAt: null })
+      const view = stack(fakeClient(makeState({ room: watching, hand: makeHand({ mySeat: null, seats: [makeSeat({ seat: 0, playerId: 'a', displayName: 'Ann' })] }) })))
+      expect(view.container.querySelector('footer')).toBeNull()
+      expect(screen.queryByRole('group', { name: 'Hành động' })).toBeNull()
+    })
+
+    it('an unseated host gets the dock with Bắt đầu in the stack layout', async () => {
+      // R14: the host who has not sat down can still start a table two others are ready at.
+      const hostStanding = makeRoom({
+        status: 'OPEN',
+        hostPlayerId: 'me',
+        playerCount: 3,
+        players: [
+          makePlayer({ playerId: 'a', displayName: 'Ann', seat: 0, status: 'READY', stack: 20_000, ready: true }),
+          makePlayer({ playerId: 'b', displayName: 'Bình', seat: 2, status: 'READY', stack: 20_000, ready: true }),
+          makePlayer({ playerId: 'me', displayName: 'Mai', isHost: true }),
+        ],
+      })
+      const client = fakeClient(makeState({ room: hostStanding }))
+      stack(client)
+      const dock = screen.getByRole('group', { name: 'Điều khiển bàn' })
+      expect(within(dock).getAllByRole('button').map((b) => b.textContent)).toEqual(['Bắt đầu'])
+      expect(within(dock).getByText('2/2 sẵn sàng')).toBeInTheDocument()
+      expect(screen.queryByRole('group', { name: 'Hành động' })).toBeNull()
+      await userEvent.click(within(dock).getByRole('button', { name: 'Bắt đầu' }))
+      expect(client.startGame).toHaveBeenCalledTimes(1)
+    })
+
+    it('stack lays the pre-hand hint on the felt', () => {
+      const view = stack(fakeClient(makeState({ room: notReady })))
+      const line = within(screen.getByRole('region', { name: 'Bàn' })).getByText(hint)
+      expect(line.tagName).toBe('P')
+      expect(line.closest(`.${s.stackFelt!}`), 'inside the felt, under the board').not.toBeNull()
+      expect(within(screen.getByRole('group', { name: 'Điều khiển bàn' })).queryByText(hint)).toBeNull()
+      view.unmount()
+
+      // Once cards are out the felt holds the board and the pot: no line.
+      const playing = makeRoom({ ...notReady, status: 'IN_GAME' })
+      stack(fakeClient(makeState({ room: playing, hand: makeHand({ mySeat: 1, seats: [makeSeat({ seat: 1, playerId: 'me' })] }) })))
+      expect(document.querySelector(`.${s.stackFelt!} .${s.note!}`)).toBeNull()
+      expect(declarationsOf(TABLE_CSS, /^\.stackFelt \.note$/)).toMatchObject({ margin: '0', 'text-align': 'center', 'font-size': '0.75rem', color: 'var(--ink-muted)' })
+    })
+
+    it('the desktop ring keeps the controls row and has no header menu', () => {
+      const { container } = stack(fakeClient(makeState({ room: readyRoom })), { layout: 'ring' })
+      expect(container.firstElementChild).not.toHaveAttribute('data-layout')
+      const controls = screen.getByRole('group', { name: 'Điều khiển bàn' })
+      expect(within(controls).getByRole('button', { name: 'Đứng dậy' })).toBeInTheDocument()
+      expect(within(controls).getByRole('button', { name: 'Tạm nghỉ' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Thêm' })).toBeNull()
+    })
+
+    it('keys on the resolved layout, not the raw query: an all-true matchMedia keeps the landscape menu and dock', () => {
+      // P2: a phone held sideways answers yes to the stack query too (it is under 620 px tall), yet its layout is the ring.
+      const original = window.matchMedia
+      window.matchMedia = ((query: string) => ({
+        matches: true,
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+      })) as unknown as typeof window.matchMedia
+      try {
+        const sideways = stack(fakeClient(makeState({ room: notReady })), { frame: 'landscape' })
+        const root = sideways.container.firstElementChild as HTMLElement
+        expect(root).toHaveAttribute('data-frame', 'landscape')
+        expect(root).not.toHaveAttribute('data-layout')
+        expect(sideways.container.querySelector('header')).toHaveClass(s.headerCompact!)
+        expect(within(sideways.container.querySelector('header')!).getByRole('button', { name: 'Thêm' })).toBeInTheDocument()
+        const dock = screen.getByRole('group', { name: 'Điều khiển bàn' })
+        expect(dock).toHaveAttribute('data-surface', 'night')
+        expect(within(dock).getByRole('button', { name: 'Sẵn sàng' })).toBeInTheDocument()
+        sideways.unmount()
+
+        // The same answers on the desktop frame: the query makes it the stack.
+        const upright = stack(fakeClient(makeState({ room: notReady })), { frame: 'desktop' })
+        expect(upright.container.firstElementChild).toHaveAttribute('data-layout', 'stack')
+        expect(screen.getByRole('group', { name: 'Người chơi' })).toBeInTheDocument()
+      } finally {
+        window.matchMedia = original
+      }
     })
   })
 })

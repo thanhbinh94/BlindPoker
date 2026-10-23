@@ -42,9 +42,10 @@ export interface ActionBarProps {
   /** The landscape frame's tier (BP-28): on the `short` one the bet panel is compact (32 px chips, a 36 px slider). */
   tier?: FrameTier
   /**
-   * Landscape only: no hand is being played (the room waits, or the countdown runs with the result card closed). The
-   * room's own dock holds the bottom-right corner then, so the tray gives up its right part and keeps its left one —
-   * a player can still turn "Tự động chơi" off before the next deal.
+   * No hand is being played (the room waits, or the countdown runs with the result card closed) and the room's own dock
+   * holds the tray's place. In landscape the tray gives up its right part and keeps its left one; in the stack it gives
+   * up its row and keeps only "Tự động chơi" (BP-31 R13) — either way a player can still turn auto-play off before the
+   * next deal. The desktop ring never gets it.
    */
   betweenHands?: boolean
 }
@@ -170,7 +171,8 @@ export function ActionBar({
   }, [min, max])
 
   const value = Math.min(max, Math.max(min, Math.round(amount ?? min)))
-  const panelShown = sizing && legal !== null && (!twoStep || (panelOpen && !(landscape && betweenHands)))
+  // Between hands the room's dock holds the tray's place (landscape's right corner, the stack's whole row): no panel.
+  const panelShown = sizing && legal !== null && (!twoStep || (panelOpen && !betweenHands))
 
   useEffect(() => {
     if (focusNext === null) return
@@ -450,6 +452,17 @@ export function ActionBar({
       <div {...trayProps}>
         {left === null ? null : <div className={s.trayLeft}>{left}</div>}
         {betweenHands ? null : <div className={s.trayRight}>{right}</div>}
+      </div>
+    )
+  }
+
+  if (stack && betweenHands) {
+    // The room's dock is the footer's row now (P5): the tray keeps its "Hành động" group and, where it is offered, the
+    // "Tự động chơi" toggle beside the dock (R13), so auto-play can be turned off before the next deal. With nothing to
+    // keep it draws nothing (`data-between` takes its padding and its lacquer away).
+    return (
+      <div {...trayProps} data-between="true">
+        {autoPlayToggle === null ? null : <div className={s.trayRow}>{autoPlayToggle}</div>}
       </div>
     )
   }

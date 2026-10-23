@@ -203,6 +203,15 @@ describe('BetPanel', () => {
     expect(label).toHaveTextContent('2.950')
   })
 
+  it('the stack’s sheet draws no floating amount, and packs its rows 4 px apart; its confirm carries the amount', () => {
+    wrap(<Harness min={600} max={2_950} step={200} pot={1_000} lang="vi" confirmLabel="Tố 600" onConfirm={vi.fn()} onCancel={vi.fn()} />, 'vi')
+    expect(screen.getByRole('group', { name: 'Chọn mức cược' })).toHaveAttribute('data-shape', 'sheet')
+    expect(document.querySelector(`.${s.betValue}`)).toBeNull()
+    expect(screen.getByRole('slider')).toHaveAttribute('aria-valuetext', '600')
+    expect(TABLE_CSS).toMatch(/\.betPanel\[data-shape='sheet'\]\s*\{[^}]*gap:\s*var\(--space-1\)/)
+    expect(TABLE_CSS).toMatch(/\.betPanel\[data-shape='sheet'\] \.betSlider\s*\{[^}]*padding-top:\s*0/)
+  })
+
   it('bet chips are 36 px even under pointer: coarse (declared after the coarse block); the pre-action toggles keep the tap height; landscape chips are 36 px and 32 px on the short tier', () => {
     const coarse = /@media \(pointer: coarse\)\s*\{\s*\.preset\s*\{\s*min-height:\s*var\(--tap\);?\s*\}\s*\}/.exec(TABLE_CSS)
     expect(coarse, 'the coarse block still lifts .preset (the pre-action toggles) to the tap height').not.toBeNull()

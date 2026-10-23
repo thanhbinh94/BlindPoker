@@ -62,10 +62,11 @@ export interface PokerTableProps {
    */
   onReveal?: () => void
   /**
-   * One quiet line the room lays on the felt under the board, on the ring only: the landscape room's pre-hand hint
-   * ("Cần ít nhất 2 người sẵn sàng…"), which has no row of its own there — wrapped in the corner dock it doubled the
-   * dock's height over the seat beside the viewer's (Plan 26, B3). Nothing when not given. The short tier's felt has no
-   * bare band for it, and `RoomScreen` puts it back in the dock there (BP-28, R2).
+   * One quiet line the room lays on the felt under the board: the pre-hand hint ("Cần ít nhất 2 người sẵn sàng…"),
+   * which has no row of its own in landscape — wrapped in the corner dock it doubled the dock's height over the seat
+   * beside the viewer's (Plan 26, B3) — nor in the stack, whose footer is one row (BP-31 P4). On the ring it lies under
+   * the board; in the stack it is the felt's last line. Nothing when not given, and then it takes no height. The short
+   * tier's felt has no bare band for it, and `RoomScreen` puts it back in the dock there (BP-28, R2).
    */
   note?: ReactNode
 }
@@ -323,7 +324,10 @@ export function PokerTable({
           >
             {opponents.map(renderSeat)}
           </div>
-          <div className={s.stackFelt}>{centre}</div>
+          <div className={s.stackFelt}>
+            {centre}
+            {note === undefined || note === null ? null : <p className={s.note}>{note}</p>}
+          </div>
           {mySeat === null ? null : <div className={s.mine}>{renderSeat(mySeat)}</div>}
         </section>
       </DeckAnchorProvider>
