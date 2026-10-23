@@ -1,0 +1,110 @@
+/* BP-30 (spec K6 §3.1–§3.2): a live figure on a stage — the chibi, the cheer's sparkle ring and the transparent greet
+   button laid over it. The wrapper shrinks to the figure, so the figure needs a width of its own (`size`, or a px width
+   through `figureClassName`); the ring and the button cover exactly the figure's box. */
+.liveFigure {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+}
+
+/* The greet control (P10): a sibling laid over the figure, not a wrapper round it, so the figure keeps its own
+   `role="img"` and name. It draws nothing but its focus ring. */
+.greet {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Every stage clips (`overflow: hidden`) and bottom-aligns the figure, so the global `:focus-visible` ring
+   (theme/global.css) is drawn inside the box instead of 2 px outside it, where it would be cut. */
+.greet:focus-visible {
+  outline-offset: -3px;
+}
+
+/* The cheer's six sparkles (R7): over the figure's box, around the figure, never tied to an item card. Each mark sits at
+   a fixed spot, starts invisible and fades in and out once, in `CHIBI_LIFE.sparkleMs` (700 ms; a change there goes here
+   too). `LiveFigure` mounts the ring per cheer and takes it away when the 700 ms are up. */
+.sparkleRing {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes liveFigureSparkle {
+  0% {
+    opacity: 0;
+    scale: 0.3;
+  }
+  40% {
+    opacity: 1;
+    scale: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 0.6;
+  }
+}
+
+.sparkleRing i {
+  position: absolute;
+  width: 10%;
+  max-width: 14px;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  opacity: 0;
+  rotate: 45deg;
+  border-radius: 2px;
+  background: var(--gold);
+  box-shadow: 0 0 6px var(--gold);
+  animation: liveFigureSparkle 700ms ease-out both;
+}
+
+/* The two top marks sit about a fifth of the way down, not on the box's top edge: a stage may let the figure's box
+   reach above its own clipped top (the wardrobe does at 1920×940), and a mark there would be cut in half. */
+.sparkleRing i:nth-child(1) {
+  left: 18%;
+  top: 22%;
+}
+
+.sparkleRing i:nth-child(2) {
+  left: 82%;
+  top: 18%;
+  width: 7%;
+}
+
+.sparkleRing i:nth-child(3) {
+  left: 90%;
+  top: 46%;
+}
+
+.sparkleRing i:nth-child(4) {
+  left: 78%;
+  top: 80%;
+  width: 7%;
+}
+
+.sparkleRing i:nth-child(5) {
+  left: 14%;
+  top: 74%;
+}
+
+.sparkleRing i:nth-child(6) {
+  left: 8%;
+  top: 40%;
+  width: 7%;
+}
+
+/* `LiveFigure` never mounts the ring under reduced motion; were it there, it would stay invisible. */
+@media (prefers-reduced-motion: reduce) {
+  .sparkleRing i {
+    animation: none;
+  }
+}

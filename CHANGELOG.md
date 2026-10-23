@@ -9,6 +9,77 @@ below are the real history.
 
 ---
 
+## BP-30 — the chibi breathes, blinks, cheers, greets and turns in the wardrobe and the shop — merged `MERGE` (2026-10-23)
+
+K6 of the 2026-10-21 requests (`docs/bug-log.md` §9): "dáng đứng của nhân vật quá cố định nên cũng làm giảm hứng thú của
+người chơi". The brainstorm of 2026-10-22 chose life before poses (spec `2026-10-22-k6-chibi-idle-life-design.md`, Q1–Q3,
+R1–R8): the figure moves with CSS on the PNG layers it already has, and nothing new is drawn. Branch
+`feature/BP-30-chibi-idle-life`, merged after BP-28 and BP-29 (it relies on BP-29's `isolation: isolate` on `.chibi`).
+
+- **What a player sees.** In the Phòng thay đồ, the Cửa hàng and the Hồ sơ, the figure breathes (1.5 % taller and back
+  every 4 s, from the feet) and blinks every 3–6 s. Put an item or a colour on in the wardrobe, or try a card on or buy it in
+  the shop, and it smiles, hops once and six sparkles fade around it. Tap it and it smiles and tilts its head ("Nhân vật
+  của bạn, bấm để chào" for a screen reader). "Xoay" under the stage (in the shop on every size, at the end of the
+  phone's strip) turns it to face left in half a second, and again to face right. In the welcome dialog, the card a player
+  picks cheers once, but not on Nhận. The table, the lobby bar, the seats, every card and portrait and the GM screens look
+  exactly as before. With reduced motion on, nothing moves and the face never changes, and "Xoay" flips at once.
+- **Under it.** ui-kit: `Chibi` gains `live` (`'off' | 'still' | 'idle'`, `off` by default and byte-for-byte the old
+  markup), `react`, `facing` and `onFacesReady`. A live chibi mounts its `closed` and `happy` faces hidden beside the
+  shown one, after that face is in, and switches them by `data-face` and `opacity` (a `still` one, which never blinks,
+  mounts only `happy`). `useChibiLife` (`life.ts`, timings in `CHIBI_LIFE`) is the state machine; it starts the turn in a
+  layout effect, in the same commit as the new `data-facing`, so no mirrored frame is painted before the spin. `useOnScreen` (`on-screen.ts`) keeps watching, so breathing and blinking pause off
+  screen and in a hidden tab. `useTintedLayerState` says when a tint has settled. The keyframes `chibiBreathe`, `chibiHop`
+  (`--chibi-hop`), `chibiTilt`, `chibiSpinLeft` / `chibiSpinRight` each animate their own transform property. `LiveFigure`
+  adds the greet button, the sparkle ring and `TurnButton`, with `nextReaction` and `flipFacing`; a `react` taken back to
+  `null` takes the ring away, so a quick second welcome pick leaves the sparkles on the new card only. Two strings in both
+  languages, `avatar.turn` and `avatar.greet`. normal-web: `StagePanel` / `WardrobeScreen`, `ShopStage` / `ShopScreen`,
+  `WelcomeDialog` and `ProfileScreen` wire it. No protocol, schema, picture or dependency change.
+- **Tests.** Unit (+66 in ui-kit, 649 → 715 in 50 files; +25 in normal-web, 1071 → 1096 in 56 files): an inline snapshot of four `live="off"` chibis committed
+  before `Chibi` changed (`Chibi.test.tsx`), `life.test.tsx` (fake timers: blinks, cheer restarts, a wave ignored mid-cheer
+  or mid-turn, reduced motion, no timer after unmount), `on-screen.test.tsx`, `LiveFigure.test.tsx`, and the four screens'
+  tests (a cheer on a pick, not on a tab switch or a take-off; on a try-on and a buy; the welcome card cheers on pick and
+  not on claim). Ops: P-06 `@mobile` (the shop figure breathes, blinks within 7 s, a tap waves, Xoay spins it and leaves it
+  facing left, a try-on cheers and clears within 2 s) and P-07 (with `reducedMotion: 'reduce'`: no animation on the root,
+  no face change in 7.5 s, no greet button, no cheer or sparkles, an instant flip). Both read `data-*` and the computed
+  `animation-name`, never a class name. P-05's `wardrobeHasDrawn` ignores `img[data-face-hidden]`. P-04 now counts 18
+  requests on open (16 before: the stage's two spare faces). P-05 is unchanged: about 850 ms shown and 1.75 s drawn at
+  both sizes. The ops pack is 55 cases.
+- **Docs.** `docs/ui-kit.md` ("Live figure", "The chibi's life"), `docs/avatar-2d.md` (life without new layers),
+  `docs/known-limitations.md` (five UI entries: the mirror turn, one live figure per screen, a second cheer within
+  420 ms, the shop strip at 104 px, the wardrobe's face name 35 px left of centre), `docs/test-matrix.md` (a BP-30 section, two rows; the pinned count),
+  `docs/operation-test-plan.md` (P-06, P-07), `docs/normal-web.md` (P-04's count), bug log §9 K6, `CLAUDE.md` §3.
+- **Rulings** (the lead's, then each task's):
+  - Lead: P10, the greet control is a transparent button laid over the figure, not a wrapper, so the figure keeps its
+    `role="img"` and name. P15, Xoay is on every shop size, the phone's strip included. `main` (with BP-28 and BP-29) was
+    merged into the branch before the docs task, not at the gate.
+  - Task 3: the desktop wardrobe stage hops at −3 % (`--chibi-hop`), because its 290 px figure already touches the top.
+    A colour pick ("Tự nhiên" included) cheers like an item. Xoay is 30 px tall from 768 px and 44 px on a phone.
+  - Task 4: the shop strip's gaps went from 12 to 8 px so Xoay fits and a new player's strip stays 96 px. The shop sets no
+    hop override. In the column, Xoay sits under the stage, before the caption. A card the figure already wears does not
+    cheer (a literal same-card guard at first; the final wave widened it to the whole look, so trying on the saved
+    outfit is quiet too).
+  - Task 5: pressing the already-picked welcome card again is a no-op, with no second cheer. The welcome cards' figures
+    stay unlabelled (decorative); the card button carries the name.
+  - Task 6: P-06 asserts a blink only after the spare faces are loaded, then within 7 s, as the hook waits for them. P-07
+    proves stillness by a `MutationObserver` that must record no change to `data-face`, `data-reacting` or `data-motion`
+    over the whole case. Both use real time, no `page.clock`. `docs/normal-web.md`'s P-04 count was brought up to date.
+  - Final wave (after the whole-branch review): the turn is set in a layout effect (a test outside `act` with a clock
+    that makes React's scheduler yield proves the spin is on when the new facing lands); the CSS durations, the 1.015
+    breath, the −4° tilt and the 0.06 turn are pinned to `CHIBI_LIFE` by tests (every number already matched); the
+    shop's try-on guard compares the whole look; a welcome card whose pick is replaced loses its sparkles at once; a
+    `still` figure mounts only the `happy` face beside its own. A restarted cheer keeps `data-reacting` at "cheer", so the
+    tests prove a restart by a new sparkle ring and a cheer still running past the first one's 1.2 s, not by a count.
+- **Khác với spec / Deviations from the spec.** The greet control is an overlaid sibling button, not the spec's "bọc"
+  wrapper (P10; R6's intent kept). The welcome cards are `live="still"`, a third mode the spec's `'idle' | 'off'` did not
+  have: they react but never breathe. The sparkle ring is drawn inside the figure's box by `LiveFigure`, not around the
+  frame by each stage. `useChibiLife` returns `{ face, motion, breathing, reacting }` and `Chibi` stamps it as `data-*`,
+  not `{ expression, className, style }`. Spin comes from a `facing` change, not from `react`. The ops cases assert
+  attributes and `animation-name`, not class names (they are hashed in production).
+- **Still open.** The real-pose spike (a three-quarter or back view, sitting poses) stays open in bug log §9. One live
+  figure per screen: the cards, portraits and seats stay still by design. A turned figure is a mirror. A second cheer
+  inside 420 ms does not replay the hop. Real phones (iOS Safari, Firefox Android) are the user's to check. Lite picks the
+  kit change up at its next `pnpm build:lite` (it draws no live figure).
+
 ## BP-28 — a landscape phone that keeps its browser bars seats the table on a stadium as wide as the screen — merged `7ecea0c` (2026-10-23)
 
 The user's review round of 2026-10-22 (bug log §10, E1 and E2, photos 1–4): "lỗi chủ yếu ở ảnh 1-4 là giao diện không hợp

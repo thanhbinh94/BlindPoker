@@ -298,6 +298,20 @@ once in the ops pack. B-05 is the `mobile` project's (title tagged `@mobile`); E
 | Bug log E5: a refusal answering a dialog's own button is drawn above the dialog's backdrop — `.toasts` stands on `--z-toast`, above the backdrop's `--z-modal`; a Hold'em buy-in the balance cannot cover leaves the dialog open and "Số dư không đủ" on top of it, and charges nothing | `packages/ui-kit/src/screens/RoomScreen.test.tsx`, `apps/normal-web/e2e/ops/03-holdem.spec.ts` | keeps the buy-in dialog open on INSUFFICIENT_BALANCE and draws the refusal above its backdrop · E-13: a buy-in the balance cannot cover is refused in words, on top of the open buy-in dialog | added in BP-29 — E-13 runs outside `pnpm test` |
 | Bug log E3 (Plan 27 D1 in a browser): a Blind hand's result card prints no "Phí bàn" line | `apps/normal-web/e2e/ops/04-blind.spec.ts` | F-01 F-02 H-01: pure luck, three cards | added in BP-29 — runs outside `pnpm test` |
 
+## BP-30 — the chibi idle-life pass (spec 2026-10-22 K6)
+
+Not rows of §29.2, §29.3 or §30: the shop's figure, live and still, in a browser — the ops pack's P-06 and P-07
+(`docs/operation-test-plan.md` §5.P), which run outside `pnpm test`, as every e2e does. P-06 is the `mobile` project's
+(title tagged `@mobile`), P-07 the `desktop` project's in a context with `reducedMotion: 'reduce'`. Both read the
+figure's `data-*` life state and its computed `animation-name`, never a class name (hashed in the production build). The
+hook, `Chibi` and `LiveFigure` are pinned by their own unit tests in `packages/ui-kit/src/avatar2d/`, listed in
+`docs/ui-kit.md` → "The chibi's life".
+
+| Rule | Test file | Test name | Status |
+|---|---|---|---|
+| Spec K6 §3.1, §3.2 (the shop figure lives, on a phone): the figure is `data-live="idle"` and breathing, a CSS animation running on its root; once its spare faces are in it blinks (`data-face="closed"`) within 7 s; a tap on it waves; "Xoay" spins it and leaves it facing left, the button pressed; a try-on cheers — the smile and the hop — and the cheer and its sparkles are gone within 2 s | `apps/normal-web/e2e/ops/08-shop.spec.ts` | P-06 the shop figure lives: it breathes, a tap greets, Xoay turns it, and a try-on cheers @mobile | added in BP-30 — runs outside `pnpm test` |
+| Spec K6 R4 (reduced motion): the figure is live but still — no breath, no motion, no animation on its root, no greet button; with its spare faces in, the face stays the base one for 7.5 s; a try-on brings no cheer and no sparkles; "Xoay" faces it left at once, with no spin | `apps/normal-web/e2e/ops/08-shop.spec.ts` | P-07 with reduced motion the figure keeps still: no animation class, no face change, Xoay flips at once | added in BP-30 — runs outside `pnpm test` |
+
 ## Ruling recorded: the `reqId` cache is per connection
 
 Plan 7's first review round raised the `reqId` ring buffer as an open question, with a

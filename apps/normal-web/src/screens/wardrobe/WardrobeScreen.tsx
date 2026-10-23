@@ -1,4 +1,4 @@
-import { Button, defaultChibi, Modal, Segmented, useMediaQuery, type Expression } from '@bp/ui-kit'
+import { Button, defaultChibi, Modal, nextReaction, Segmented, useMediaQuery, type ChibiReaction, type Expression } from '@bp/ui-kit'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -156,6 +156,10 @@ export function WardrobeScreen({ api, playerId, initialItem = null }: WardrobeSc
    * visit across every tab change — never reset by `changeTab`, never stored. */
   const [showLocked, setShowLocked] = useState(false)
   const [expression, setExpression] = useState<Expression>('neutral')
+  /** The stage's cheer (BP-30, spec K6 §3.2, P13): bumped when a card or a colour puts something on the draft, and by
+   * nothing else — not a tab change, the gender switch, a removal from the wearing list, "Hoàn tác", `initialItem` or
+   * an applied saved outfit. */
+  const [stageReact, setStageReact] = useState<ChibiReaction | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<Note>(null)
   const [busy, setBusy] = useState(false)
@@ -280,12 +284,21 @@ export function WardrobeScreen({ api, playerId, initialItem = null }: WardrobeSc
     setError(null)
   }
 
+  /** Cheers the stage when `next` is a different outfit from the one on it now (BP-30, P13). */
+  const cheerIfChanged = (next: AvatarConfigDto): void => {
+    if (!sameConfig(next, config)) setStageReact((prev) => nextReaction(prev, 'cheer'))
+  }
+
   /** A card's click: wears its item, or takes it off when it is already worn — except in a slot a figure can never go
    * without, the outfit and (avatar v4) the hairstyle, where the worn card stays worn. */
   const pick = (slot: ItemSlot, itemId: string): void => {
     const equipped = config[slot] === itemId
     const required = slot === 'outfit' || slot === 'hairStyle'
-    commit(withSlot(config, slot, equipped && !required ? undefined : itemId))
+    const takeOff = equipped && !required
+    const next = withSlot(config, slot, takeOff ? undefined : itemId)
+    // A cheer when the item goes on; a take-off, or a click on the worn hairstyle or outfit, changes nothing worth one.
+    if (!takeOff) cheerIfChanged(next)
+    commit(next)
   }
 
   /** The Nữ | Nam switch (spec §6.2): the gender, its counterpart hairstyle, the outfit's cut with it — in the draft
@@ -364,6 +377,7 @@ export function WardrobeScreen({ api, playerId, initialItem = null }: WardrobeSc
       portrait={tab === 'frame'}
       compact={!desktop}
       fullSize={stageFullSize}
+      react={stageReact}
     />
   )
 
@@ -458,7 +472,12 @@ export function WardrobeScreen({ api, playerId, initialItem = null }: WardrobeSc
           hints={hints}
           draft={config}
           showLocked={showLocked}
-          onPick={(id) => commit(withSlot(config, tab, id))}
+          onPick={(id) => {
+            // Any colour change cheers, "Tự nhiên" included: the figure's look changed either way.
+            const next = withSlot(config, tab, id)
+            cheerIfChanged(next)
+            commit(next)
+          }}
           naturalColour={tab === 'skinColor' ? NATURAL_SKIN : undefined}
           panelId={panelId(tab)}
           labelledBy={subTabId(tab)}

@@ -1,5 +1,5 @@
 import { validateDisplayName, type HandCategory } from '@bp/core'
-import { Badge, Button, Chibi, Field, Panel, defaultChibi, formatPoints, handLabel, type Language } from '@bp/ui-kit'
+import { Badge, Button, Chibi, Field, LiveFigure, Panel, defaultChibi, formatPoints, handLabel, type Language } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
 import { useMemo, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -250,7 +250,8 @@ export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenPr
             spare around both). The frame ring is a `head`-only layer, so the head crop stays — as the small
             portrait beside the name, the size the table and the lobby show it at. */}
         <div className={s.identityStage} data-title={titleId ?? ''}>
-          <Chibi subject={chibi} frame="full" size={200} label={displayName} />
+          {/* BP-30 (spec K6 §3.2, P16): the page's one live figure — it breathes, blinks and waves when tapped; no Xoay. */}
+          <LiveFigure subject={chibi} frame="full" size={200} label={displayName} live="idle" greet />
         </div>
         <div className={s.identityText}>
           <div className={s.identityHead}>

@@ -27,7 +27,8 @@ import {
  * its case id. P-01 the welcome gift (spec 2026-10-21 §4 C1, C3); P-02 a purchase and the rank lock (§3 B2, B3); P-03 the
  * rank beside the name (§2 A4); P-04 and P-05 the wardrobe's loading (§6 Phần E, K5, R12): the Phòng thay đồ asks only
  * for the pictures near the screen (lazy figures and icons, a tint queue of four), and on a "fast 3G" line it has the
- * stage and the first row of cards drawn within two seconds.
+ * stage and the first row of cards drawn within two seconds. P-06 and P-07 (BP-30, spec 2026-10-22 K6): the shop's figure
+ * lives — it breathes, blinks, greets a tap, turns on "Xoay" and cheers a try-on — and with reduced motion it keeps still.
  */
 
 /** Every context here looks like the pack's own players: Vietnamese, Hà Nội time, dark. */
@@ -51,18 +52,21 @@ async function playerState(browser: Browser, stem: string): Promise<{ who: Accou
   const page = await context.newPage()
   const who = account(stem)
   await registerPatiently(page, who)
-  const welcome = await page.request.get('/api/welcome')
-  if (welcome.ok()) {
-    const status = (await welcome.json()) as { claimed?: boolean; choices?: { itemId: string; owned: boolean }[] }
-    if (status.claimed !== true) {
-      const claim = await postApi(page, '/api/welcome/claim', { itemId: status.choices?.find((c) => !c.owned)?.itemId ?? null })
-      // A refused claim would leave the gift waiting, and its dialog over the screen this player is measured on.
-      expect(claim.status, `the welcome claim: ${JSON.stringify(claim.body)}`).toBe(200)
-    }
-  }
+  await claimWelcome(page)
   const state = await context.storageState()
   await context.close()
   return { who, state }
+}
+
+/** Takes the signed-in player's welcome gift through the API (the first item not owned), so its dialog never opens. */
+async function claimWelcome(page: Page): Promise<void> {
+  const welcome = await page.request.get('/api/welcome')
+  if (!welcome.ok()) return
+  const status = (await welcome.json()) as { claimed?: boolean; choices?: { itemId: string; owned: boolean }[] }
+  if (status.claimed === true) return
+  const claim = await postApi(page, '/api/welcome/claim', { itemId: status.choices?.find((c) => !c.owned)?.itemId ?? null })
+  // A refused claim would leave the gift waiting, and its dialog over the screen this player is measured on.
+  expect(claim.status, `the welcome claim: ${JSON.stringify(claim.body)}`).toBe(200)
 }
 
 /* ── P-01 to P-03: the welcome gift, a purchase, the rank ─────────────────────────────────────────── */
@@ -368,12 +372,14 @@ test('P-04 the wardrobe asks only for the figures on screen: ≤ (visible cards 
 /**
  * In the page, whether the wardrobe has drawn as far as `need`: `'shown'` once every layer of the stage has loaded and
  * the panel's first row of cards is on screen (each card's box laid out, its picture loading or not); `'drawn'` once
- * the pictures of that row have loaded too.
+ * the pictures of that row have loaded too. The stage's figure is live (BP-30): its spare faces (`closed`, `happy`) are
+ * mounted hidden, after the shown face is in, only for a blink or a cheer — they are not part of what the player sees
+ * drawn, so `img[data-face-hidden]` is left out.
  */
 function wardrobeHasDrawn({ stage, need }: { stage: string; need: 'shown' | 'drawn' }): boolean {
   const loaded = (img: HTMLImageElement): boolean => img.complete && img.naturalWidth > 0
   const figure = document.querySelector(stage)
-  const stageImgs = figure === null ? [] : Array.from(figure.querySelectorAll('img'))
+  const stageImgs = figure === null ? [] : Array.from(figure.querySelectorAll<HTMLImageElement>('img:not([data-face-hidden])'))
   if (stageImgs.length === 0 || !stageImgs.every(loaded)) return false
   const panel = document.querySelector('[role="tabpanel"]')
   if (panel === null) return false
@@ -425,6 +431,163 @@ test('P-05 on a 3G profile the wardrobe draws the stage and the first row within
     // (Ruling 16), where @2x made the row ≈ 440 KB and 3.2 s.
     expect(drawnMs, `${name}: the first row's pictures within 2 s on fast 3G`).toBeLessThanOrEqual(2_000)
 
+    await context.close()
+  }
+})
+
+/* ── P-06 and P-07: the shop figure's life (BP-30, spec 2026-10-22 K6) ───────────────────────────────── */
+
+/**
+ * The shop's stage — the region named for the figure — and, inside it, the figure (`role="img"`, its name unchanged by
+ * BP-30, R6), the transparent greet button laid over it and "Xoay". The figure's life is read from its `data-*` state
+ * and its computed `animation-name`: class names are hashed in the production build (P17).
+ */
+function shopStage(page: Page): { region: Locator; figure: Locator; greet: Locator; turn: Locator; sparkles: Locator } {
+  const region = page.getByRole('region', { name: 'Nhân vật của bạn', exact: true })
+  const figure = region.getByRole('img', { name: 'Nhân vật của bạn', exact: true })
+  return {
+    region,
+    figure,
+    greet: region.getByRole('button', { name: 'Nhân vật của bạn, bấm để chào' }),
+    turn: region.getByRole('button', { name: 'Xoay', exact: true }),
+    // A cheer's sparkle ring: the one `aria-hidden` child of the figure's wrapper (the figure itself is labelled).
+    sparkles: figure.locator('xpath=..').locator(':scope > [aria-hidden="true"]'),
+  }
+}
+
+async function openShop(page: Page): Promise<void> {
+  await page.goto('/#/shop')
+  await expect(page.getByRole('heading', { name: 'Cửa hàng', level: 1 })).toBeVisible()
+}
+
+/** The running CSS animation on the figure's root, `'none'` when there is none. */
+const animationOf = (figure: Locator): Promise<string> => figure.evaluate((el) => getComputedStyle(el).animationName)
+
+/**
+ * Waits until the live figure's spare faces are mounted and loaded: the hook blinks and smiles only once every face it
+ * may show is in (Review Focus 1), so a check on faces before this would prove nothing.
+ */
+async function facesIn(figure: Locator): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        figure.evaluate((el) => {
+          const faces = Array.from(el.querySelectorAll<HTMLImageElement>('img[data-face-layer]'))
+          return faces.length >= 2 && faces.every((img) => img.complete && img.naturalWidth > 0)
+        }),
+      { message: 'the spare faces are mounted and loaded' },
+    )
+    .toBe(true)
+}
+
+type Watched = HTMLElement & { __life?: string[] }
+
+/** From now on, records on the figure every value its `data-face`, `data-reacting` and `data-motion` take. */
+async function watchLife(figure: Locator): Promise<void> {
+  await figure.evaluate((el: Watched) => {
+    const seen: string[] = []
+    el.__life = seen
+    new MutationObserver((records) => {
+      for (const r of records) seen.push(`${r.attributeName ?? ''}=${el.getAttribute(r.attributeName ?? '') ?? ''}`)
+    }).observe(el, { attributes: true, attributeFilter: ['data-face', 'data-reacting', 'data-motion'] })
+  })
+}
+
+const lifeSeen = (figure: Locator): Promise<string[]> => figure.evaluate((el: Watched) => [...(el.__life ?? [])])
+
+/** Puts Mũ len (a common, never owned by a fresh account) on try-on from the Thường shelf; resolves its card's box. */
+async function tryOnBeanie(page: Page): Promise<Locator> {
+  const box = (await shelf(page, 'Thường')).locator('[data-item="head_beanie01"]')
+  await box.getByRole('button', { name: /^Mũ len, / }).click()
+  await expect(box).toHaveAttribute('data-trying', 'true')
+  return box
+}
+
+test('P-06 the shop figure lives: it breathes, a tap greets, Xoay turns it, and a try-on cheers @mobile', async ({ browser }) => {
+  const player = await newPlayer(browser, 'Sống')
+  const { page } = player
+  try {
+    await claimWelcome(page)
+    await openShop(page)
+    const { figure, greet, turn, sparkles } = shopStage(page)
+
+    // Idle: alive and breathing, a CSS animation running on the root.
+    await expect(figure).toHaveAttribute('data-live', 'idle')
+    await expect(figure).toHaveAttribute('data-breathing', 'true')
+    await expect(figure).toHaveAttribute('data-facing', 'right')
+    await expect.poll(() => animationOf(figure), { message: 'the breath is a running animation' }).not.toBe('none')
+
+    // A blink: the closed face for 120 ms every 3–6 s, once the spare faces are in.
+    await facesIn(figure)
+    await watchLife(figure)
+    await expect
+      .poll(async () => (await lifeSeen(figure)).includes('data-face=closed'), { message: 'a blink within 7 s', timeout: 7_000, intervals: [100] })
+      .toBe(true)
+    await expect(figure).toHaveAttribute('data-face', 'base')
+
+    // A tap greets: a wave (a smile and a tilt), then back to idle.
+    await greet.tap()
+    await expect(figure).toHaveAttribute('data-reacting', 'wave')
+    await expect(figure, 'the wave ends').not.toHaveAttribute('data-reacting')
+
+    // Xoay turns it: a half-second spin, then it stays facing left, the button pressed.
+    await turn.tap()
+    await expect(figure).toHaveAttribute('data-facing', 'left')
+    await expect(turn).toHaveAttribute('aria-pressed', 'true')
+    expect(await lifeSeen(figure), 'the turn played as a spin').toContain('data-reacting=spin')
+    await expect(figure, 'the spin ends').not.toHaveAttribute('data-reacting')
+    await expect(figure).toHaveAttribute('data-motion', 'none')
+    await expect(figure, 'it stays turned').toHaveAttribute('data-facing', 'left')
+
+    // A try-on cheers: the smile, the hop and the sparkles, all gone within 2 s.
+    await tryOnBeanie(page)
+    await expect(figure).toHaveAttribute('data-reacting', 'cheer')
+    expect(await lifeSeen(figure), 'the cheer hopped').toContain('data-motion=hop')
+    expect(await lifeSeen(figure), 'the cheer smiled').toContain('data-face=happy')
+    await expect(figure, 'the cheer ends within 2 s').not.toHaveAttribute('data-reacting', { timeout: 2_000 })
+    await expect(sparkles, 'the sparkles are gone with it').toHaveCount(0)
+    await expect(figure).toHaveAttribute('data-face', 'base')
+  } finally {
+    await closeAll([player])
+  }
+})
+
+test('P-07 with reduced motion the figure keeps still: no animation class, no face change, Xoay flips at once', async ({ browser }) => {
+  const { state } = await playerState(browser, 'Tĩnh')
+  const context = await browser.newContext({ ...LOOK, reducedMotion: 'reduce', storageState: state })
+  const page = await context.newPage()
+  try {
+    await openShop(page)
+    const { figure, greet, turn, sparkles } = shopStage(page)
+
+    // Live, but still: no breath, no motion, no animation on the root, and no greet button (a wave would not play).
+    await expect(figure).toHaveAttribute('data-live', 'idle')
+    await expect(figure).toHaveAttribute('data-breathing', 'false')
+    await expect(figure).toHaveAttribute('data-motion', 'none')
+    expect(await animationOf(figure), 'no animation on the root').toBe('none')
+    await expect(greet, 'no greet button under reduced motion').toHaveCount(0)
+
+    // No face change: the spare faces are in, yet for 7.5 s (past the longest blink gap) the face stays the base one.
+    await facesIn(figure)
+    await watchLife(figure)
+    await page.waitForTimeout(7_500)
+    await expect(figure).toHaveAttribute('data-face', 'base')
+    expect(await lifeSeen(figure), 'no blink, no smile, no motion').toEqual([])
+
+    // A try-on changes the clothes and nothing else: no cheer, no sparkles.
+    await tryOnBeanie(page)
+    await page.waitForTimeout(500)
+    await expect(sparkles, 'no sparkle ring').toHaveCount(0)
+    await expect(figure).not.toHaveAttribute('data-reacting')
+
+    // Xoay flips at once: facing left with no spin, still no animation.
+    await turn.click()
+    await expect(figure).toHaveAttribute('data-facing', 'left')
+    await expect(turn).toHaveAttribute('aria-pressed', 'true')
+    await expect(figure).toHaveAttribute('data-motion', 'none')
+    expect(await animationOf(figure), 'the flip is not animated').toBe('none')
+    expect(await lifeSeen(figure), 'nothing reacted at any point').toEqual([])
+  } finally {
     await context.close()
   }
 })

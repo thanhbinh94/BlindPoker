@@ -1,11 +1,14 @@
-import { useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { cx } from '../primitives/cx.js'
+import { useMediaQuery } from '../table/useMediaQuery.js'
 import { assetUrl, useAvatarAssetsBase } from './AvatarAssets.js'
 import { useLoadedClip } from './clip.js'
 import { hashChibi, layersFor } from './layers.js'
 import { useInView } from './lazy.js'
-import { useTintedLayer } from './tinted.js'
-import type { ChibiFrame, ChibiSubject, Expression, LayerRef } from './types.js'
+import { useChibiLife } from './life.js'
+import { useOnScreen } from './on-screen.js'
+import { useTintedLayerState } from './tinted.js'
+import type { ChibiFacing, ChibiFrame, ChibiLive, ChibiReaction, ChibiSubject, Expression, LayerRef } from './types.js'
 import s from './avatar2d.module.css'
 
 /** D01 §5: the frame border is drawn 260×260 around the crop's centre, outside the 208×208 crop window itself —
@@ -42,6 +45,9 @@ function ChibiLayer({
   className,
   tintPriority,
   density,
+  face,
+  faceHidden = false,
+  onReady,
 }: {
   base: string
   layer: LayerRef
@@ -49,24 +55,64 @@ function ChibiLayer({
   tintPriority?: number
   /** `1` pins a small portrait to the @1x files, tinted and plain (Ruling 16); absent, the screen decides. */
   density?: 1
+  /** BP-30: on a live chibi, the expression this face layer draws (`data-face-layer`). Absent on every other layer
+   * and on every layer of a chibi that is not live, which then renders exactly as before. */
+  face?: Expression
+  /** A live chibi's face that is mounted but not the one showing: `opacity: 0` and `data-face-hidden`. */
+  faceHidden?: boolean
+  /** BP-30: told whether this layer is ready to be shown — its tint for the current colours has settled and the
+   * `<img>` now rendered has fired `load` (or `error`: the browser has then given its final word on that URL). */
+  onReady?: (file: string, ready: boolean) => void
 }) {
-  const tinted = useTintedLayer(base, layer, tintPriority, density)
+  const { url: tinted, settled } = useTintedLayerState(base, layer, tintPriority, density)
   const clip = useLoadedClip(layer.clip === undefined ? null : assetUrl(base, layer.clip, 2))
   const [failedUrl, setFailedUrl] = useState<string | null>(null)
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null)
+  const useTinted = tinted !== null && tinted !== failedUrl
+  const src = useTinted ? tinted : assetUrl(base, layer.file, 1)
+  const ready = settled && loadedSrc === src
+
+  const reportRef = useRef(onReady)
+  reportRef.current = onReady
+  const watched = onReady !== undefined
+  useEffect(() => {
+    if (!watched) return
+    const file = layer.file
+    reportRef.current?.(file, ready)
+    // Gone (or about to report again): never left counted as ready by a layer that is no longer there.
+    return () => reportRef.current?.(file, false)
+  }, [watched, layer.file, ready])
+
   const common = {
-    className: cx(s.layer, className),
+    className: cx(s.layer, faceHidden && s.faceHidden, className),
     style: clip === null ? { zIndex: layer.order } : { zIndex: layer.order, ...clipMask(clip) },
     loading: 'lazy' as const,
     decoding: 'async' as const,
     alt: '',
     draggable: false,
+    'data-face-layer': face,
+    'data-face-hidden': face !== undefined && faceHidden ? '' : undefined,
+    // Only a watched layer listens; the `src` it reports is the one this render draws.
+    onLoad: watched ? () => setLoadedSrc(src) : undefined,
   }
 
-  if (tinted !== null && tinted !== failedUrl) return <img {...common} src={tinted} onError={() => setFailedUrl(tinted)} />
+  if (useTinted)
+    return (
+      <img
+        {...common}
+        src={tinted}
+        onError={() => {
+          if (watched) setLoadedSrc(tinted)
+          setFailedUrl(tinted)
+        }}
+      />
+    )
 
-  if (density === 1) return <img {...common} src={assetUrl(base, layer.file, 1)} />
+  const onError = watched ? () => setLoadedSrc(src) : undefined
 
-  return <img {...common} src={assetUrl(base, layer.file, 1)} srcSet={`${assetUrl(base, layer.file, 1)} 1x, ${assetUrl(base, layer.file, 2)} 2x`} />
+  if (density === 1) return <img {...common} src={src} onError={onError} />
+
+  return <img {...common} src={src} srcSet={`${assetUrl(base, layer.file, 1)} 1x, ${assetUrl(base, layer.file, 2)} 2x`} onError={onError} />
 }
 
 export interface ChibiProps {
@@ -90,6 +136,18 @@ export interface ChibiProps {
    * it fills in. Its tinted layers also queue behind every eager chibi's (`LAZY_TINT_PRIORITY`). For a grid of cards
    * (the wardrobe, the shop, saved outfits); the stage and a table seat stay eager. Off by default. */
   lazy?: boolean
+  /** BP-30 (spec K6 §3.1): `off`, the default, renders exactly what a chibi always rendered. `still` and `idle` mount
+   * their faces together and switch them by opacity (`idle` the base, `closed` and `happy`; `still`, which never blinks,
+   * the base and `happy`; the extras once the base face is ready), answer `react` and `facing`, and stamp the life state
+   * on the root (`data-live`, `data-face`, `data-facing`, `data-reacting`, `data-breathing`, `data-motion`); `idle` also
+   * breathes and blinks while on screen. */
+  live?: ChibiLive
+  /** A reaction for a live chibi: a new `key` plays it (a cheer or a wave; see `useChibiLife`). Ignored when `off`. */
+  react?: ChibiReaction | null
+  /** Which way a live chibi faces; a change after mount plays the turn. Ignored when `off`. */
+  facing?: ChibiFacing
+  /** Called each time every mounted face of a live chibi has become ready to show (loaded and tinted). */
+  onFacesReady?: () => void
 }
 
 /** How far a lazy chibi's tint renders sit below an eager one's in the tint queue. `useTintedLayer` ranks a layer at
@@ -100,6 +158,23 @@ const LAZY_TINT_PRIORITY = -100
 /** The head crop's side in the @1x art (the round 208×208 avatar crop): drawn no larger on screen, @1x is enough. */
 const HEAD_CROP_PX = 208
 
+/** The face's layer order: the one layer `layersFor` varies by expression. */
+const FACE_ORDER = 50
+
+/** The faces a live chibi mounts beside its own: a blink's and a reaction's on an idle one; a still one never blinks, so
+ * it mounts only the reaction's. */
+const EXTRA_FACES = {
+  idle: ['closed', 'happy'],
+  still: ['happy'],
+} as const satisfies Record<Exclude<ChibiLive, 'off'>, readonly Expression[]>
+const NO_EXTRA_FACES: readonly Expression[] = []
+
+/** One layer to draw, and on a live chibi, the expression it is the face of. */
+interface StackEntry {
+  layer: LayerRef
+  face?: Expression
+}
+
 /**
  * One chibi: every layer `layersFor` returns for this subject, expression and frame, stacked as absolutely
  * positioned `<img>`s inside a box that is either the full 6:7 frame or the round 208×208 avatar crop.
@@ -107,13 +182,69 @@ const HEAD_CROP_PX = 208
  * Each layer ships at two densities; the browser picks. Lazy-loaded because a table can hold nine of these (up to
  * ~72 images) and only the ones on screen are worth fetching.
  */
-export function Chibi({ subject, expression = 'neutral', frame = 'full', size, label, className, bounce = false, lazy = false }: ChibiProps) {
+export function Chibi({
+  subject,
+  expression = 'neutral',
+  frame = 'full',
+  size,
+  label,
+  className,
+  bounce = false,
+  lazy = false,
+  live = 'off',
+  react = null,
+  facing = 'right',
+  onFacesReady,
+}: ChibiProps) {
   const base = useAvatarAssetsBase()
   const rootRef = useRef<HTMLDivElement>(null)
   // Called unconditionally (hook order); with `lazy` off it observes nothing and reports `true`.
   const inView = useInView(rootRef, '200px', lazy)
+  const alive = live !== 'off'
+  // BP-30: the life hooks, also unconditional. Off, the observer watches nothing and the hook returns the still state.
+  const onScreen = useOnScreen(rootRef, { enabled: live === 'idle' })
+  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+  const [readyFiles, setReadyFiles] = useState<Readonly<Record<string, boolean>>>({})
+  const [extrasWanted, setExtrasWanted] = useState(false)
+  const onLayerReady = useCallback((file: string, ready: boolean) => setReadyFiles((prev) => (prev[file] === ready ? prev : { ...prev, [file]: ready })), [])
+
   const layers = layersFor(subject, expression, frame)
   const hash = hashChibi(subject)
+
+  // A live chibi's stack: the base face where it always is, the extra faces (once wanted) right after it, at the same
+  // order, deduplicated by file (`layersFor` varies only the face by expression).
+  let stack: StackEntry[] = layers.map((layer) => ({ layer }))
+  const baseFaceIndex = alive ? layers.findIndex((l) => l.order === FACE_ORDER) : -1
+  const baseFace = baseFaceIndex === -1 ? undefined : layers[baseFaceIndex]
+  if (baseFace !== undefined) {
+    const faces: StackEntry[] = [{ layer: baseFace, face: expression }]
+    if (extrasWanted) {
+      for (const extra of live === 'off' ? NO_EXTRA_FACES : EXTRA_FACES[live]) {
+        const layer = layersFor(subject, extra, frame).find((l) => l.order === FACE_ORDER)
+        if (layer !== undefined && !faces.some((f) => f.layer.file === layer.file)) faces.push({ layer, face: extra })
+      }
+    }
+    stack = [...stack.slice(0, baseFaceIndex), ...faces, ...stack.slice(baseFaceIndex + 1)]
+  }
+  const faceEntries = stack.filter((entry) => entry.face !== undefined)
+  const baseFaceReady = baseFace !== undefined && readyFiles[baseFace.file] === true
+  const facesReady = extrasWanted && faceEntries.length > 0 && faceEntries.every((entry) => readyFiles[entry.layer.file] === true)
+
+  // P18: the extra faces wait until the base face is in, so they never compete with the first paint. Once in, they stay.
+  useEffect(() => {
+    if (baseFaceReady && !extrasWanted) setExtrasWanted(true)
+  }, [baseFaceReady, extrasWanted])
+
+  const facesReadyRef = useRef(onFacesReady)
+  facesReadyRef.current = onFacesReady
+  useEffect(() => {
+    if (facesReady) facesReadyRef.current?.()
+  }, [facesReady])
+
+  const life = useChibiLife({ live, react, facing, onScreen, facesReady, baseExpression: expression, reducedMotion })
+  // The face to show: the hook's pick, or the base one should that face not be mounted (never a blank face).
+  const wanted = life.face === 'base' ? expression : life.face
+  const shown = faceEntries.some((entry) => entry.face === wanted) ? wanted : expression
   // `full`'s 6:7 box only ever needs a width — its own `aspect-ratio` derives the height. `head` is square, so an
   // explicit height alongside the width is what a flex parent actually respects (a flex item's cross-size does
   // not fall out of `aspect-ratio` the way its own layout box does); either way this sets the root's *requested*
@@ -126,7 +257,7 @@ export function Chibi({ subject, expression = 'neutral', frame = 'full', size, l
   const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
   const cheap = frame === 'head' && size !== undefined && size * dpr <= HEAD_CROP_PX
 
-  const renderLayer = (layer: LayerRef, extraClassName?: string) => (
+  const renderLayer = ({ layer, face }: StackEntry, extraClassName?: string) => (
     <ChibiLayer
       key={layer.file}
       base={base}
@@ -134,16 +265,35 @@ export function Chibi({ subject, expression = 'neutral', frame = 'full', size, l
       className={extraClassName}
       tintPriority={lazy ? LAZY_TINT_PRIORITY - layer.order : undefined}
       density={cheap ? 1 : undefined}
+      face={face}
+      faceHidden={face !== undefined && face !== shown}
+      onReady={face === undefined ? undefined : onLayerReady}
     />
   )
 
   const rootProps = {
     ref: rootRef,
-    className: cx(s.chibi, frame === 'head' ? s.head : s.full, bounce && s.bounce, className),
+    className: cx(
+      s.chibi,
+      frame === 'head' ? s.head : s.full,
+      bounce && s.bounce,
+      alive && life.breathing && s.breathe,
+      alive && life.motion === 'hop' && s.hop,
+      alive && life.motion === 'tilt' && s.tilt,
+      alive && life.motion === 'spin' && s.spin,
+      className,
+    ),
     style,
     'data-chibi-hash': hash,
     'data-expression': expression,
     'data-frame': frame,
+    // BP-30: the life state, on a live chibi only. Class names are hashed in production; these are what tests read.
+    'data-live': alive ? live : undefined,
+    'data-face': alive ? life.face : undefined,
+    'data-facing': alive ? facing : undefined,
+    'data-reacting': alive ? (life.reacting ?? undefined) : undefined,
+    'data-breathing': alive ? String(life.breathing) : undefined,
+    'data-motion': alive ? life.motion : undefined,
     role: label === undefined ? undefined : ('img' as const),
     'aria-label': label,
     'aria-hidden': label === undefined ? true : undefined,
@@ -157,13 +307,13 @@ export function Chibi({ subject, expression = 'neutral', frame = 'full', size, l
     // meant to be empty (250 px clear). Clipping it with the rest of the layers would cut it off entirely, so it
     // draws unclipped, at the exact same `.headCrop` geometry as everything else, as a sibling of the clipped
     // stack rather than a member of it.
-    const frameBorder = layers.find((l) => l.order === FRAME_BORDER_ORDER)
-    const clipped = layers.filter((l) => l.order !== FRAME_BORDER_ORDER)
+    const frameBorder = stack.find((entry) => entry.layer.order === FRAME_BORDER_ORDER)
+    const clipped = stack.filter((entry) => entry.layer.order !== FRAME_BORDER_ORDER)
 
     return (
       <div {...rootProps}>
         <div className={s.clip}>
-          <div className={cx(s.crop, s.headCrop)}>{clipped.map((layer) => renderLayer(layer))}</div>
+          <div className={cx(s.crop, s.headCrop)}>{clipped.map((entry) => renderLayer(entry))}</div>
         </div>
         {frameBorder === undefined ? null : renderLayer(frameBorder, s.headCrop)}
       </div>
@@ -172,7 +322,7 @@ export function Chibi({ subject, expression = 'neutral', frame = 'full', size, l
 
   return (
     <div {...rootProps}>
-      <div className={s.crop}>{layers.map((layer) => renderLayer(layer))}</div>
+      <div className={s.crop}>{stack.map((entry) => renderLayer(entry))}</div>
     </div>
   )
 }

@@ -1,5 +1,5 @@
-import { hashChibi, useTintedLayer, type LayerRef } from '@bp/ui-kit'
-import { screen, waitFor, within } from '@testing-library/react'
+import { CHIBI_LIFE, hashChibi, useTintedLayer, type LayerRef } from '@bp/ui-kit'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent, { type UserEvent } from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -822,6 +822,152 @@ describe('WardrobeScreen', () => {
 
     await waitFor(() => expect(applyOutfit).toHaveBeenCalledWith(1))
     expect(await screen.findByText(viNormal.wardrobe.saved)).toBeInTheDocument()
+  })
+
+  // BP-30 (spec K6 §3.2, P13): the stage cheers when an item or a colour goes on, and at nothing else.
+  describe('the live stage', () => {
+    /** Counts each time the stage's figure starts a cheer: its `data-reacting` turning to "cheer". The figure's root is
+     * one element for the whole visit (a pick changes its layers, not the root), so one observer sees every cheer. */
+    function countCheers(root: HTMLElement): { readonly count: number; stop: () => void } {
+      let count = 0
+      const observer = new MutationObserver((records) => {
+        for (const record of records) {
+          if (record.oldValue !== 'cheer' && root.getAttribute('data-reacting') === 'cheer') count += 1
+        }
+      })
+      observer.observe(root, { attributes: true, attributeFilter: ['data-reacting'], attributeOldValue: true })
+      return {
+        get count() {
+          return count
+        },
+        stop: () => observer.disconnect(),
+      }
+    }
+
+    /** Runs `ms` of the fake clock, inside `act`. */
+    const advance = (ms: number): void => {
+      act(() => {
+        vi.advanceTimersByTime(ms)
+      })
+    }
+    /** The cheer's sparkle ring on the stage: the decorative span holding six marks (the kit's class name is hashed). */
+    const sparkleRing = (): Element | undefined =>
+      [...document.querySelectorAll('span[aria-hidden="true"]')].find((el) => el.querySelectorAll(':scope > i').length === 6)
+
+    it('picking an item cheers the stage once; switching a tab does not', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      try {
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+        renderScreen()
+        await opened()
+        const figure = stage()
+        expect(figure).toHaveAttribute('data-live', 'idle')
+        expect(figure).not.toHaveAttribute('data-reacting')
+        const cheers = countCheers(figure)
+
+        await user.click(card(viNormal.items.hair_f_ponytail01))
+        expect(stage()).toBe(figure)
+        expect(figure).toHaveAttribute('data-reacting', 'cheer')
+        expect(cheers.count).toBe(1)
+
+        // The cheer runs its 1.2 s and ends; a tab change after it starts nothing.
+        advance(CHIBI_LIFE.cheerFaceMs + 50)
+        expect(figure).not.toHaveAttribute('data-reacting')
+        await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
+        await goTo(user, 'look', viNormal.wardrobe.tabs.hairStyle)
+        expect(figure).not.toHaveAttribute('data-reacting')
+        expect(cheers.count).toBe(1)
+
+        // The next pick is the next cheer.
+        await user.click(card(viNormal.items.hair_f_hime01))
+        expect(figure).toHaveAttribute('data-reacting', 'cheer')
+        expect(cheers.count).toBe(2)
+        cheers.stop()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('a second pick inside the first one’s cheer starts the cheer and its sparkles over', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      try {
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+        renderScreen()
+        await opened()
+        const figure = stage()
+        const cheers = countCheers(figure)
+
+        await user.click(card(viNormal.items.hair_f_ponytail01))
+        expect(figure).toHaveAttribute('data-reacting', 'cheer')
+        const first = sparkleRing()
+        expect(first).toBeDefined()
+        advance(CHIBI_LIFE.cheerFaceMs / 2)
+
+        await user.click(card(viNormal.items.hair_f_hime01))
+        // A new ring, its fade from the start.
+        expect(sparkleRing()).toBeDefined()
+        expect(sparkleRing()).not.toBe(first)
+        // Past the end of the first cheer, the second is still under way…
+        advance(CHIBI_LIFE.cheerFaceMs / 2 + 50)
+        expect(figure).toHaveAttribute('data-reacting', 'cheer')
+        // …until its own 1.2 s are up. `data-reacting` never left "cheer", so the observer saw one start.
+        advance(CHIBI_LIFE.cheerFaceMs)
+        expect(figure).not.toHaveAttribute('data-reacting')
+        expect(cheers.count).toBe(1)
+        cheers.stop()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('switching the gender, and Hoàn tác, do not cheer', async () => {
+      const user = userEvent.setup()
+      renderScreen()
+      await opened()
+      const figure = stage()
+      const cheers = countCheers(figure)
+
+      await user.click(genderButton('m'))
+      expect(genderButton('m')).toHaveAttribute('aria-pressed', 'true')
+      expect(figure).not.toHaveAttribute('data-reacting')
+
+      await user.click(screen.getByRole('button', { name: viNormal.wardrobe.undo }))
+      expect(genderButton('f')).toHaveAttribute('aria-pressed', 'true')
+      expect(stage()).not.toHaveAttribute('data-reacting')
+      expect(cheers.count).toBe(0)
+      cheers.stop()
+    })
+
+    it('taking an item off does not cheer', async () => {
+      const user = userEvent.setup()
+      renderScreen()
+      await opened()
+      const cheers = countCheers(stage())
+      await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
+
+      // The worn beanie, clicked again: off it comes, and the draft is dirty — but nothing went on.
+      const beanie = within(screen.getByRole('tabpanel')).getByText(viNormal.items.head_beanie01).closest('button') as HTMLElement
+      await user.click(beanie)
+      expect(beanie).toHaveAttribute('aria-pressed', 'false')
+      expect(screen.getByText(viNormal.wardrobe.dirty)).toBeInTheDocument()
+
+      expect(stage()).not.toHaveAttribute('data-reacting')
+      expect(cheers.count).toBe(0)
+      cheers.stop()
+    })
+
+    it('a colour pick cheers', async () => {
+      const user = userEvent.setup()
+      renderScreen()
+      await opened()
+      const cheers = countCheers(stage())
+
+      await pickRedHair(user)
+
+      expect(stage()).toHaveAttribute('data-reacting', 'cheer')
+      expect(cheers.count).toBe(1)
+      cheers.stop()
+    })
   })
 
   describe('colour tabs (Plan 13)', () => {

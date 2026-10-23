@@ -268,8 +268,9 @@ describe('docs/test-matrix.md', () => {
     // and the three of its Part C (the sign-in screen), and Plan 27's five invariant rows (the shop, Blind to zero,
     // reputation, the check-in count, the newcomer calendar) and five browser rows (spec 2026-10-21), BP-29's three
     // (bug log §10 E3–E5: the chibi under the rail, the refusal over the dialog, the Blind fee in a browser) and BP-28's
-    // three (the short landscape tier: the tier and the seats, the hint and the nudge, L-06 in a browser)
-    expect(rows).toBe(43 + 10 + 4 + 7 + 5 + 8 + 3 + 5 + 5 + 3 + 3)
+    // three (the short landscape tier: the tier and the seats, the hint and the nudge, L-06 in a browser), and BP-30's
+    // two (the chibi idle-life pass, spec 2026-10-22 K6: the shop figure live in P-06, still under reduced motion in P-07)
+    expect(rows).toBe(43 + 10 + 4 + 7 + 5 + 8 + 3 + 5 + 5 + 3 + 3 + 2)
     expect(citations.length).toBeGreaterThanOrEqual(40)
   })
 

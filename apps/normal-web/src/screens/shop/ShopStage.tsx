@@ -1,5 +1,5 @@
-import { Button, Chibi, formatPoints, type ChibiConfig, type Language } from '@bp/ui-kit'
-import type { ReactNode } from 'react'
+import { Button, formatPoints, LiveFigure, TurnButton, type ChibiConfig, type ChibiFacing, type ChibiReaction, type Language } from '@bp/ui-kit'
+import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ReputationLine, type ReputationStanding } from '../ReputationLine.js'
 import s from './shop.module.css'
@@ -37,6 +37,9 @@ export interface ShopStageProps {
    * is looking, inside the pinned stage, and never sits scrolled off at the top of the page.
    */
   notice?: ReactNode
+  /** A reaction from the screen (BP-30, spec K6 §3.2): a cheer when a card goes on try-on and when a purchase goes
+   * through. Each new `key` plays once; any other render hands down the same one, so it plays nothing. */
+  react?: ChibiReaction | null
 }
 
 /**
@@ -44,14 +47,41 @@ export interface ShopStageProps {
  * the balance and the reputation line under it, and the two ways back — "Về đồ đang mặc" drops the try-on, "Mặc luôn"
  * saves it after a purchase. On a phone the column folds into one sticky strip above the shelves, so a try-on stays
  * in sight while the shelves scroll under it.
+ *
+ * BP-30 (spec K6 §3.2, P15): the figure is live — it breathes, blinks, cheers on `react`, waves when tapped — and
+ * "Xoay" turns it on every size: under the column's stage, and at the end of the phone's strip. One `LiveFigure` serves
+ * both frames, its `frame` and `size` swapped, so a frame on try-on keeps the figure's life and facing.
  */
-export function ShopStage({ subject, portrait, layout, balance, lang, standing, tryingName, onReset, onWearNow, wearBusy = false, notice = null }: ShopStageProps) {
+export function ShopStage({
+  subject,
+  portrait,
+  layout,
+  balance,
+  lang,
+  standing,
+  tryingName,
+  onReset,
+  onWearNow,
+  wearBusy = false,
+  notice = null,
+  react = null,
+}: ShopStageProps) {
   const { t } = useTranslation('normal')
-  const figure = portrait ? (
-    <Chibi subject={subject} frame="head" size={PORTRAIT_SIZE[layout]} label={t('shop.figure')} />
-  ) : (
-    <Chibi subject={subject} frame="full" size={FIGURE_SIZE[layout]} label={t('shop.figure')} />
+  // Kept here, not on the screen: which way the figure faces is a look at it, never part of a try-on (spec K6 §3.3, R5).
+  const [facing, setFacing] = useState<ChibiFacing>('right')
+  const figure = (
+    <LiveFigure
+      subject={subject}
+      frame={portrait ? 'head' : 'full'}
+      size={portrait ? PORTRAIT_SIZE[layout] : FIGURE_SIZE[layout]}
+      label={t('shop.figure')}
+      live="idle"
+      greet
+      react={react}
+      facing={facing}
+    />
   )
+  const turn = <TurnButton facing={facing} onTurn={setFacing} className={s.stageTurn} />
   const balanceLine = <p className={s.balance}>{t('shop.balance', { points: formatPoints(balance, lang) })}</p>
   const actions =
     onReset === undefined && onWearNow === undefined ? null : (
@@ -79,6 +109,7 @@ export function ShopStage({ subject, portrait, layout, balance, lang, standing, 
             {balanceLine}
             <ReputationLine standing={standing} lang={lang} />
           </div>
+          {turn}
         </div>
         {notice}
         {trying}
@@ -92,6 +123,7 @@ export function ShopStage({ subject, portrait, layout, balance, lang, standing, 
       <div className={s.stage}>
         <div className={s.stageFigure}>{figure}</div>
       </div>
+      {turn}
       {trying}
       {actions}
       {balanceLine}

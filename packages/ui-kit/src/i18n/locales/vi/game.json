@@ -284,5 +284,9 @@
     "half": "½",
     "pot": "Pot",
     "max": "Max"
+  },
+  "avatar": {
+    "turn": "Xoay",
+    "greet": "Nhân vật của bạn, bấm để chào"
   }
 }
