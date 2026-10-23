@@ -18,7 +18,8 @@ const PAGE_STEPS = 10
 /**
  * The slider's step: the small blind, or — when that would make more than `MAX_BET_STEPS` steps between `min` and
  * `max` — the smallest multiple of the small blind that keeps it to 200 (spec BP-31 §3.2, R3). A table without a small
- * blind (Blind Poker never sizes, but be safe) steps by 1.
+ * blind (Blind Poker never sizes, but be safe) counts from a unit of 1: it steps by the smallest whole number that keeps
+ * the range to 200 steps.
  */
 export function betStep(min: number, max: number, smallBlind: number): number {
   const unit = Math.max(1, Math.round(smallBlind))
@@ -75,9 +76,9 @@ export interface BetPanelProps {
  *
  * The slider is a native `<input type="range">` with `step={1}` that steps itself: its keys and a drag both move along
  * the cells `min + i·step`, and the last cell is `max` exactly, so a range that is no multiple of the step still reaches
- * all in (P7). A chip sets its target clamped into the range — exactly, not snapped to the grid — and every chip says
- * with `aria-pressed` whether it names the current amount, which also keeps the ops pack's `autopilot` (it clicks
- * `button:not([aria-pressed])`) off them. With one legal size (`min === max`) the slider is disabled and every chip sets
+ * all in (P7). A chip sets its target clamped into the range — exactly, not snapped to the grid — and every chip carries
+ * `aria-pressed`, true on the first chip that names the current amount only, which also keeps the ops pack's
+ * `autopilot` (it clicks `button:not([aria-pressed])`) off them. With one legal size (`min === max`) the slider is disabled and every chip sets
  * that size (P24). No motion: the panel appears and goes with no transition.
  */
 export function BetPanel({
@@ -110,6 +111,9 @@ export function BetPanel({
     { key: 'pot', name: t('presets.pot'), target: clamp(pot) },
     { key: 'allIn', name: t('actions.allIn'), target: max },
   ]
+  // One chip lights at a time: the first whose target is the amount. A small pot gives "Min", "½ pot" and "Pot" the
+  // same target, and three lit chips read as three choices (BP-31 final wave).
+  const lit = chips.findIndex((chip) => chip.target === value)
 
   /** `delta` cells from `value`; from an amount between two cells, the first cell is the next one that way. */
   const moved = (delta: number): number => {
@@ -175,12 +179,12 @@ export function BetPanel({
       onKeyDown={onPanelKeyDown}
     >
       <div className={s.betChips} role="group" aria-label={t('labels.betSize')}>
-        {chips.map((chip) => (
+        {chips.map((chip, i) => (
           <button
             key={chip.key}
             type="button"
             className={cx(s.preset, s.betChip)}
-            aria-pressed={value === chip.target}
+            aria-pressed={lit === i}
             disabled={disabled}
             onClick={() => onChange(chip.target)}
           >

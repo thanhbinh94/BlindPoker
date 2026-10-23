@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { useState } from 'react'
+import { createRef, useState } from 'react'
 import { I18nextProvider } from 'react-i18next'
 import { describe, expect, it, vi } from 'vitest'
 import { createI18n, type Language } from '../i18n/index.js'
@@ -80,13 +80,15 @@ describe('BetPanel', () => {
     expect(pressed()).toEqual(['false', 'false', 'false', 'false'])
   })
 
-  it('chips clamp into the legal range, and a pot past max lights Pot and All-in together', () => {
+  it('chips clamp into the legal range, and of the chips that name one amount only the first lights', () => {
     wrap(<Harness min={2_000} max={6_000} step={100} pot={20_000} />)
     fireEvent.click(chip('Pot'))
     expect(slider().value).toBe('6000')
-    expect(chip('Pot')).toHaveAttribute('aria-pressed', 'true')
-    expect(chip('All-in')).toHaveAttribute('aria-pressed', 'true')
+    // ½ pot, Pot and All-in all clamp to 6.000: three lit chips read as three choices (BP-31 final wave)
     expect(chip('½ pot')).toHaveAttribute('aria-pressed', 'true')
+    expect(chip('Pot')).toHaveAttribute('aria-pressed', 'false')
+    expect(chip('All-in')).toHaveAttribute('aria-pressed', 'false')
+    expect(chip('Min')).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('keys move one step, ten steps, home and end', () => {
@@ -120,6 +122,68 @@ describe('BetPanel', () => {
     expect(slider().value).toBe('800')
   })
 
+  it('ArrowLeft from a value off the grid goes down to the cell below it', () => {
+    wrap(<Harness min={600} max={5_000} step={200} pot={1_500} start={750} />)
+    fireEvent.keyDown(slider(), { key: 'ArrowLeft' })
+    expect(slider().value).toBe('600')
+  })
+
+  it('disabled turns off the chips, the slider, Hủy and the confirm', () => {
+    wrap(<Harness min={600} max={5_000} step={200} pot={1_500} disabled confirmLabel="Raise 600" onConfirm={vi.fn()} onCancel={vi.fn()} />)
+    expect(slider()).toBeDisabled()
+    for (const name of ['Min', '½ pot', 'Pot', 'All-in']) expect(chip(name)).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Raise 600' })).toBeDisabled()
+  })
+
+  it('data-shape is inline on the ring, sheet with a confirm, corner in landscape; compact sets data-compact', () => {
+    const panel = (): HTMLElement => screen.getByRole('group', { name: 'Choose the bet' })
+    const ring = wrap(<Harness min={600} max={5_000} step={200} pot={1_500} />)
+    expect(panel()).toHaveAttribute('data-shape', 'inline')
+    expect(panel()).toHaveAttribute('data-frame', 'desktop')
+    expect(panel()).not.toHaveAttribute('data-compact')
+    ring.unmount()
+    const sheet = wrap(<Harness min={600} max={5_000} step={200} pot={1_500} confirmLabel="Raise 600" onConfirm={vi.fn()} />)
+    expect(panel()).toHaveAttribute('data-shape', 'sheet')
+    sheet.unmount()
+    // landscape is the corner whatever else is passed, the confirm included
+    const corner = wrap(<Harness min={600} max={5_000} step={200} pot={1_500} frame="landscape" confirmLabel="Raise 600" onConfirm={vi.fn()} compact />)
+    expect(panel()).toHaveAttribute('data-shape', 'corner')
+    expect(panel()).toHaveAttribute('data-frame', 'landscape')
+    expect(panel()).toHaveAttribute('data-compact', 'true')
+    corner.unmount()
+  })
+
+  it('inputRef reaches the range input', () => {
+    const ref = createRef<HTMLInputElement>()
+    wrap(<Harness min={600} max={5_000} step={200} pot={1_500} inputRef={ref} />)
+    expect(ref.current).toBe(slider())
+  })
+
+  // BP-31 final wave: on the desktop ring the amount stands beside the slider, so the tray keeps one height on and off turn
+  it('the inline shape prints the amount beside the slider, not in a band over it', () => {
+    wrap(<Harness min={600} max={5_000} step={200} pot={1_500} lang="vi" start={2_400} />, 'vi')
+    const value = document.querySelector<HTMLElement>(`.${s.betValue}`)!
+    expect(value).toHaveTextContent('2.400')
+    expect(value.parentElement).toBe(slider().parentElement)
+    const rule = (sel: string): string => new RegExp(`${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`).exec(TABLE_CSS)?.[1] ?? ''
+    const row = rule(".betPanel[data-shape='inline'] .betSlider")
+    expect(row).toMatch(/display:\s*flex/)
+    expect(row).toMatch(/align-items:\s*center/)
+    expect(row).toMatch(/padding-top:\s*0/)
+    const figure = rule(".betPanel[data-shape='inline'] .betValue")
+    expect(figure).toMatch(/position:\s*static/)
+    expect(figure).toMatch(/transform:\s*none/)
+    expect(figure).toMatch(/min-width:\s*9ch/)
+  })
+
+  // BP-31 final wave: the four chips ran "Tất tay" about 13 px past the tray's padding on a 375 px phone
+  it('the sheet’s chips give up the preset’s floor and keep 4 px a side', () => {
+    const chips = /\.betPanel\[data-shape='sheet'\] \.betChip\s*\{([^}]*)\}/.exec(TABLE_CSS)?.[1] ?? ''
+    expect(chips).toMatch(/min-width:\s*0/)
+    expect(chips).toMatch(/padding-inline:\s*var\(--space-1\)/)
+  })
+
   it('betStep: (1_000, 500_000, 500) → 2_500; (1_000, 20_000, 500) → 500; (0, 100_000, 1_000) → 1_000', () => {
     expect(betStep(1_000, 500_000, 500)).toBe(2_500)
     expect(betStep(1_000, 20_000, 500)).toBe(500)
@@ -150,7 +214,7 @@ describe('BetPanel', () => {
     expect(slider()).toBeDisabled()
     for (const name of ['Min', '½ pot', 'Pot', 'All-in']) {
       expect(chip(name)).toBeEnabled()
-      expect(chip(name)).toHaveAttribute('aria-pressed', 'true')
+      expect(chip(name), 'only the first chip lights').toHaveAttribute('aria-pressed', name === 'Min' ? 'true' : 'false')
       fireEvent.click(chip(name))
     }
     expect(spy.mock.calls).toEqual([[5_000], [5_000], [5_000], [5_000]])

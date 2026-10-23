@@ -1,5 +1,5 @@
 import type { PlayerAction, RoomView } from '@bp/core'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { PreActionKind } from '../client/preaction.js'
@@ -161,8 +161,10 @@ export function ActionBar({
   // Each turn — each street and each hand — starts at the minimum with the panel shut: a seat can act last on one street
   // and first on the next without `yourTurn` ever going false between them, so the board's length is in the key too.
   // New bounds within the turn (a reconnect, a bot acting) keep the panel open and the amount re-clamps (P6).
+  // A layout effect, so the old turn's panel never paints for a frame; the key listener below is one too, so it is
+  // rebound before a key of the new turn can reach the old turn's amount or panel.
   const street = hand.community.length
-  useEffect(() => {
+  useLayoutEffect(() => {
     setAmount(null)
     setPanelOpen(false)
   }, [hand.handId, yourTurn, street])
@@ -199,7 +201,7 @@ export function ActionBar({
     setFocusNext('open')
   }, [])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (legal === null || disabled) return
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return

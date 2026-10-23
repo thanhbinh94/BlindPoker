@@ -167,6 +167,16 @@ test('M-06 the phone table: one-row tray, fanned cards, the bet panel and the he
     expect(top, 'the slider’s last cell is its maximum').toBe(vnd(max))
     await expect(chips.getByRole('button', { name: 'Tất tay', exact: true })).toHaveAttribute('aria-pressed', 'true')
     await expect(raiseButton(actor)).toHaveAccessibleName(`Tố ${top}`)
+    // The four chips stay inside the tray's padding at 375 px: "Tất tay" ran about 13 px past it (BP-31 final wave).
+    const fit = await actorTray.evaluate((el, chipsLabel) => {
+      const style = getComputedStyle(el)
+      const inner = el.getBoundingClientRect().right - parseFloat(style.paddingRight) - parseFloat(style.borderRightWidth)
+      const row = el.querySelector(`[role="group"][aria-label="${chipsLabel}"]`)!
+      const last = row.lastElementChild!.getBoundingClientRect().right
+      return { inner, last }
+    }, 'Mức cược')
+    test.info().annotations.push({ type: 'last chip', description: `right edge ${fit.last.toFixed(1)} px, tray content box ${fit.inner.toFixed(1)} px` })
+    expect(fit.last, 'the last chip ends inside the tray’s content box').toBeLessThanOrEqual(fit.inner + 0.5)
     // The overlap check above turned motion back on, which deals the cards from the deck again: the shot waits for them.
     await settled(myHand(actor))
     await shot(actor, 'phone-M06-panel')
@@ -223,33 +233,42 @@ test('M-06 the phone table: one-row tray, fanned cards, the bet panel and the he
     const card = resultCard(page)
     await expect(card).toBeVisible({ timeout: 30_000 })
     await expect(dock(page).getByRole('button', { name: 'Bắt đầu', exact: true }), 'bots alone deal no hand').toBeVisible({ timeout: 15_000 })
+    // An achievement the hand unlocked ("Đạt thành tựu mới: Thùng") is a slip over the dock: closed first, for the shot.
+    const slips = page.getByRole('region', { name: 'Thông báo', exact: true }).getByRole('button', { name: 'Đóng', exact: true })
+    while ((await slips.count()) > 0) await slips.first().click()
     await shot(page, 'phone-M06-blind-result')
-    // Known limitation (BP-31, docs/known-limitations.md): after the hand every opponent's chip takes its hand's name (and
-    // the winner's payout), so seven chips in three rows grow ~100 px and the stage scrolls by 75–100 px in this sat-out
-    // host state, card up or closed. The page itself does not scroll; the stage's scroll is read and recorded here, not
-    // asserted. Text is read at the top and at the stage's foot.
-    const stageScroll = async (state: string): Promise<void> => {
-      const { pageScroll, stage } = await page.evaluate(() => {
-        const root = document.documentElement
+    // After the hand a dense chip trades its badge row for its hand's name (and the winner's payout), and a sat-out host's
+    // strip drops its crown so the bet stays on the first line (BP-31 final wave): the stage fits, card up or closed.
+    // The dock's labels wrap inside their 44 px buttons rather than being cut.
+    const dockLabelsFit = async (state: string): Promise<void> => {
+      const labels = await page.locator('footer[data-dock] button').evaluateAll((els) =>
+        els.map((el) => {
+          const range = document.createRange()
+          range.selectNodeContents(el)
+          const lines = new Set(Array.from(range.getClientRects(), (r) => Math.round(r.top))).size
+          return { text: el.textContent ?? '', scroll: el.scrollWidth, client: el.clientWidth, lines }
+        }),
+      )
+      test.info().annotations.push({ type: 'dock labels', description: `${state}: ${labels.map((l) => `${l.text} ${l.scroll}/${l.client} px, ${l.lines} line(s)`).join(' · ')}` })
+      expect(labels.filter((l) => l.scroll > l.client + 1).map((l) => l.text), `${state}: no dock label is cut`).toEqual([])
+      expect(labels.filter((l) => l.lines > 2).map((l) => l.text), `${state}: no dock label runs past two lines`).toEqual([])
+    }
+    const stageAnnotate = async (state: string): Promise<void> => {
+      const stage = await page.evaluate(() => {
         const main = document.querySelector('main')!
-        return { pageScroll: root.scrollHeight - root.clientHeight, stage: main.scrollHeight - main.clientHeight }
+        return main.scrollHeight - main.clientHeight
       })
-      expect(pageScroll, `${state}: the page itself does not scroll`).toBeLessThanOrEqual(1)
-      test.info().annotations.push({ type: 'stage scroll (known limitation)', description: `${state}: ${stage} px at 375×812` })
-    }
-    const readDown = async (state: string): Promise<void> => {
-      await expectNoTextOverlapAt(page, state)
-      const stage = page.locator('main')
-      await stage.evaluate((el) => el.scrollTo(0, el.scrollHeight))
-      await expectNoTextOverlapAt(page, `${state}, the stage scrolled to its foot`)
-      await stage.evaluate((el) => el.scrollTo(0, 0))
-    }
-    await stageScroll('Blind, eight seats, sat out, the result card')
-    await readDown('phone, Blind, eight seats, the result card')
+      test.info().annotations.push({ type: 'stage scroll', description: `${state}: ${stage} px at 375×812` })    }
+    await stageAnnotate('Blind, eight seats, sat out, the result card')
+    await expectRoomFits(page, 'phone, Blind, eight seats, sat out, the result card', [PHONE_SCREEN])
+    await expectNoTextOverlapAt(page, 'phone, Blind, eight seats, the result card')
+    await dockLabelsFit('the result card')
     await card.getByRole('button', { name: 'Đóng', exact: true }).click()
     await expect(card).toHaveCount(0)
-    await stageScroll('Blind, eight seats, sat out, the card closed')
-    await readDown('phone, Blind, eight seats, the result card closed')
+    await stageAnnotate('Blind, eight seats, sat out, the card closed')
+    await expectRoomFits(page, 'phone, Blind, eight seats, sat out, the card closed', [PHONE_SCREEN])
+    await expectNoTextOverlapAt(page, 'phone, Blind, eight seats, the result card closed')
+    await dockLabelsFit('the card closed')
     await leave(page)
   } finally {
     await closeAll([them])

@@ -610,6 +610,35 @@ describe('Seat as the stack strip', () => {
     expect(rule('.meStrip .avatar')).toMatch(/--seat-disc:\s*36px/)
     expect(rule('.meStrip .plateTwoLine')).toMatch(/min-height:\s*56px/)
   })
+
+  it('the strip’s badges are 11 px and the stack is one column exactly as wide as the table', () => {
+    const badges = /\.stripLine > \.tagWho,\s*\.stripLine > \.tagState\s*\{([^}]*)\}/.exec(TABLE_CSS)?.[1] ?? ''
+    expect(badges).toMatch(/font-size:\s*0\.6875rem/)
+    expect(badges).toMatch(/padding:\s*0 5px/)
+    expect(rule('.stack')).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\)/)
+  })
+
+  // BP-31 final wave: a sat-out or all-in host's strip ran its bet onto a second line and scrolled a 375 px room
+  it('a strip with a state badge hides the host badge by CSS only: it stays in the DOM for a screen reader', () => {
+    expect(rule('.stripLine:has(> .tagState) > .tagWho')).toMatch(/display:\s*none/)
+    const host = makePlayer({ playerId: 'a', displayName: 'Ann', seat: 0, status: 'SITTING_OUT', isHost: true })
+    const allIn = makeSeat({ seat: 0, playerId: 'a', displayName: 'Ann', holeCards: parseCards('Qs Qd'), allIn: true, betThisStreet: 2_000 })
+    wrap(plain({ seat: allIn, player: host, strip: true }))
+    const line = plate().querySelector<HTMLElement>(`.${s.stripLine}`)!
+    const crown = within(line).getByText('Chủ phòng')
+    expect(crown).toHaveClass(s.tagWho!)
+    expect(line.querySelector(`:scope > .${s.tagState}`)).not.toBeNull()
+    expect(crown.parentElement).toBe(line)
+  })
+
+  // BP-31 final wave: from seven opponents a chip with a showdown line drops its badge row, the winner keeps its payout
+  it('a dense chip at showdown shows its hand instead of its badges', () => {
+    expect(rule('.othersDense .seat:has(> .seatResult) > .tags')).toMatch(/display:\s*none/)
+    // and that line stays one line: the payout whole, the hand's name cut first
+    expect(rule('.othersDense .seatResult')).toMatch(/flex-wrap:\s*nowrap/)
+    expect(rule('.othersDense .handTag')).toMatch(/text-overflow:\s*ellipsis/)
+    expect(rule('.othersDense .payout')).toMatch(/flex:\s*none/)
+  })
 })
 
 /** The rank stands on the stack line, beside the figure, and not on the name's line. */

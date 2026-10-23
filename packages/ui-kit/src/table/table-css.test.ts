@@ -26,14 +26,32 @@ const mediaBlock = (css: string, query: string): string => {
 const CAP = /width:\s*100%;[\s\S]*max-width:\s*min\(980px,\s*100%\);[\s\S]*margin-inline:\s*auto/
 
 describe('desktop table CSS (BP-31 P7, P10)', () => {
-  it('the tray and the controls row are capped at 980 px and centred', () => {
+  it('the tray is capped at 980 px and centred; the controls row is centred, not capped', () => {
     expect(ruleIn(TABLE_CSS, ".tray:not([data-frame='landscape']):not([data-between])")).toMatch(CAP)
     // between hands the stack's tray sits in the dock's row: stretched to the row's width it left the dock none
     expect(ruleIn(TABLE_CSS, ".tray[data-layout='stack'][data-between]")).toMatch(/flex:\s*none/)
     expect(ruleIn(TABLE_CSS, ".tray[data-layout='stack'][data-between]")).not.toMatch(/width/)
-    expect(ruleIn(SCREENS_CSS, '.controls')).toMatch(CAP)
+    // a 980 px cap on the controls wrapped the pre-hand hint at 1280–1536 px and pushed the stage 12 px (final wave)
+    expect(ruleIn(SCREENS_CSS, '.controls')).not.toMatch(/max-width/)
+    expect(ruleIn(SCREENS_CSS, '.controls')).toMatch(/justify-content:\s*center/)
     // the footer itself stays full width: the landscape corners are placed against the room
     expect(ruleIn(SCREENS_CSS, '.roomFoot')).not.toMatch(/max-width/)
+  })
+
+  it('the dock’s labels wrap to two lines inside their buttons instead of being cut with "…" (final wave)', () => {
+    const button = ruleIn(SCREENS_CSS, ".room[data-layout='stack'] .dock > button")
+    expect(button).not.toBe('')
+    expect(button).not.toMatch(/nowrap|ellipsis|overflow:\s*hidden/)
+    expect(button).toMatch(/white-space:\s*normal/)
+    expect(button).toMatch(/line-height:\s*1\.1/)
+    expect(button).toMatch(/text-wrap:\s*balance/)
+    expect(button).toMatch(/font-size:\s*0\.8125rem/)
+    const toggle = ruleIn(TABLE_CSS, ".tray[data-layout='stack'][data-between] .preToggle")
+    expect(toggle).toMatch(/white-space:\s*normal/)
+    expect(toggle).toMatch(/line-height:\s*1\.1/)
+    expect(toggle).toMatch(/font-size:\s*0\.8125rem/)
+    // two lines, not one 100 px line that left "Hủy sẵn sàng" three lines deep beside it
+    expect(toggle).toMatch(/max-width:\s*6em/)
   })
 
   it('the landscape tray is not capped', () => {
@@ -49,7 +67,8 @@ describe('desktop table CSS (BP-31 P7, P10)', () => {
     expect(ruleIn(desk, ".ring:not([data-frame='landscape']):is([data-seats='7'], [data-seats='8'], [data-seats='9'])")).toMatch(
       /--seat-min:\s*118px/,
     )
-    // the wider floors come after the base ring rules (94 px from 7 seats) they override, at equal specificity
+    // the wider floors come after the base ring rules (94 px from 7 seats) they override; 118 wins on specificity
+    // (0,3,0 vs 0,2,0)
     expect(TABLE_CSS.indexOf(desk)).toBeGreaterThan(TABLE_CSS.indexOf('--seat-min: 94px'))
     // the seat's width still reads the floor; the ring's points (geometry.ts) are untouched by it
     expect(ruleIn(TABLE_CSS, '.ring .seat')).toMatch(/min-width:\s*var\(--seat-min,\s*104px\)/)

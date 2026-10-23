@@ -357,15 +357,20 @@ describe('ActionBar sizing and the one-row tray', () => {
 
     await userEvent.click(chip('½ pot'))
     expect(range).toHaveAttribute('aria-valuetext', '5,000')
-    expect(chip('All-in')).toHaveAttribute('aria-pressed', 'true')
+    // ½ pot, Pot and All-in all name 5.000: only the first of them lights
+    expect(chip('½ pot')).toHaveAttribute('aria-pressed', 'true')
+    expect(chip('Pot')).toHaveAttribute('aria-pressed', 'false')
+    expect(chip('All-in')).toHaveAttribute('aria-pressed', 'false')
     await userEvent.click(chip('Min'))
     range.focus()
     await userEvent.keyboard('{ArrowRight}{ArrowRight}')
     expect(range).toHaveAttribute('aria-valuetext', '600')
     await userEvent.keyboard('{Enter}')
     expect(onAct).toHaveBeenLastCalledWith({ kind: 'raise', amount: 600 })
+    expect(onAct).toHaveBeenCalledTimes(1)
     await userEvent.keyboard('{End}{Enter}')
     expect(onAct).toHaveBeenLastCalledWith({ kind: 'raise', amount: 5000 })
+    expect(onAct).toHaveBeenCalledTimes(2)
 
     // R focuses the slider on the ring.
     range.blur()
@@ -545,6 +550,7 @@ describe('ActionBar sizing and the one-row tray', () => {
     expect(screen.getByRole('slider'), 'the keyboard lands on the slider').toHaveFocus()
     await userEvent.keyboard('{ArrowRight}{Enter}')
     expect(onAct).toHaveBeenLastCalledWith({ kind: 'raise', amount: 500 })
+    expect(onAct, 'one raise, not one from the slider and one from the tray').toHaveBeenCalledTimes(1)
     first.unmount()
 
     // Landscape alike: the first Enter opens the corner, the second raises from the right corner's button.
@@ -555,6 +561,17 @@ describe('ActionBar sizing and the one-row tray', () => {
     expect(screen.getByRole('slider')).toHaveFocus()
     await userEvent.keyboard('{Enter}')
     expect(onAct).toHaveBeenLastCalledWith({ kind: 'raise', amount: 400 })
+    expect(onAct).toHaveBeenCalledTimes(1)
+  })
+
+  it('Space on the focused Tố ▴ opens the panel and puts focus on the slider', async () => {
+    const onAct = vi.fn()
+    wrapVi(<ActionBar hand={hand(raiseLegal)} room={holdemRoom} onAct={onAct} lang="vi" layout="stack" />)
+    screen.getByRole('button', { name: 'Tố' }).focus()
+    await userEvent.keyboard(' ')
+    expect(tray()).toHaveAttribute('data-panel', 'open')
+    expect(screen.getByRole('slider')).toHaveFocus()
+    expect(onAct).not.toHaveBeenCalled()
   })
 
   it('R opens the panel in stack and landscape and focuses the slider', async () => {

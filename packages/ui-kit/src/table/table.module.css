@@ -120,9 +120,13 @@
   transform-origin: 50% 50%;
 }
 
+/* The offset rides the individual `translate` property, which applies outside a fanned card's own `rotate: ±7deg`
+   (BP-31 §3.1): inside `transform` the fan's tilt turned the path too, and the card set off a few px wide of the deck
+   (BP-31 final wave). */
 @keyframes dealSlide {
   from {
-    transform: translate(var(--deal-dx, 0px), var(--deal-dy, -40px)) rotate(-7deg) scale(var(--deal-scale, 0.6));
+    translate: var(--deal-dx, 0px) var(--deal-dy, -40px);
+    transform: rotate(-7deg) scale(var(--deal-scale, 0.6));
   }
 }
 
@@ -1391,6 +1395,33 @@
   display: none;
 }
 
+/* At showdown a dense chip says how the hand ended for it instead of what it had in front of it: the hand's name (and
+   the winner's payout, with its gold `.seatWin` plate) takes the line its badges and bet held. Two lines under eight
+   chips scrolled a 375 × 812 Blind table 75–96 px after the hand (BP-31 final wave). */
+.othersDense .seat:has(> .seatResult) > .tags {
+  display: none;
+}
+
+/* …on one line: a winner's "Một đôi +11.000" wrapped under a 115 px chip and made its row 4 px taller than a folded
+   chip's, enough to scroll the stage. The payout keeps every digit at 14 px; a long hand's name gives with "…" (the
+   result card spells it out). */
+.othersDense .seatResult {
+  flex-wrap: nowrap;
+  column-gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.othersDense .handTag {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.othersDense .payout {
+  flex: none;
+  font-size: 0.875rem;
+}
+
 .othersChip .cardSm {
   --card-w: clamp(18px, 5.2vw, 24px);
 }
@@ -1580,13 +1611,9 @@
   --seat-disc: 36px;
 }
 
-/* `Seat` asks for a 40 px ring here, centred on the disc (4 px in from the plate's padding edge), its seconds pill
-   tucked up to the plate's foot: the strip is the last thing in the room's scroll box, and a pill hanging below it
+/* `Seat` asks for a 40 px ring here, centred on the disc (the base `.timer`'s 2 px from the plate's edge), its seconds
+   pill tucked up to the plate's foot: the strip is the last thing in the room's scroll box, and a pill hanging below it
    scrolled the room by 6 px. */
-.meStrip .timer {
-  left: 2px;
-}
-
 .meStrip .timerText {
   bottom: -2px;
 }
@@ -1619,6 +1646,13 @@
   padding: 0 5px;
   font-size: 0.6875rem;
   letter-spacing: 0;
+}
+
+/* A seat that sits out or is all in says so on the strip; the host's crown is what gives way, so the bet stays on the
+   first line and the strip stays 56 px at showdown (BP-31 final wave). The badge stays in the DOM for a screen
+   reader. */
+.stripLine:has(> .tagState) > .tagWho {
+  display: none;
 }
 
 .meStrip .seatResult {
@@ -1796,6 +1830,13 @@
   color: var(--gold-ink);
 }
 
+/* Four chips share a 375 px phone's row: `.preset`'s 52 px floor and 12 px sides ran "Tất tay" about 13 px past the
+   tray's padding (BP-31 final wave), so in the sheet they give up the floor and keep 4 px a side. */
+.betPanel[data-shape='sheet'] .betChip {
+  min-width: 0;
+  padding-inline: var(--space-1);
+}
+
 /* The amount rides over the thumb in a 16 px band above the track; `--pos` (0–1) is set inline. Pinned to the thumb's
    side of the band, it never runs past either end of the panel. */
 .betSlider {
@@ -1816,6 +1857,24 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   pointer-events: none;
+}
+
+/* The desktop ring's panel sets its amount beside the slider, not in a band over it: the band made the tray 13 px
+   taller on the seat's turn than off it, and the felt above pulsed with every turn (BP-31 final wave). 9ch holds
+   "100.000.000" at its tabular width, so the track does not jump as the figure grows. */
+.betPanel[data-shape='inline'] .betSlider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-top: 0;
+}
+
+.betPanel[data-shape='inline'] .betValue {
+  position: static;
+  flex: none;
+  min-width: 9ch;
+  transform: none;
+  text-align: right;
 }
 
 /* One 44 px row: the whole height is the hit area, the thumb a 28 px disc on a 6 px track filled gold up to it. */
@@ -1991,6 +2050,18 @@
 
 .tray[data-layout='stack'][data-between]:empty {
   margin-inline-end: calc(-1 * var(--space-2));
+}
+
+/* In the dock's row "Tự động chơi" sets like the dock's own buttons, on two lines at most 6em wide: on one line it took
+   100 px of a 375 px row and left "Hủy sẵn sàng" three lines in its 44 px button (final wave). Keyed on the tray, not
+   the footer: the footer's classes belong to the room's stylesheet. */
+.tray[data-layout='stack'][data-between] .preToggle {
+  max-width: 6em;
+  padding-inline: var(--space-2);
+  font-size: 0.8125rem;
+  line-height: 1.1;
+  white-space: normal;
+  text-wrap: balance;
 }
 
 /* Blind, between decisions: the line beside "Tự động chơi" takes what is left of the row. */

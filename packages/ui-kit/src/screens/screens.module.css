@@ -204,17 +204,16 @@
   gap: var(--space-3);
 }
 
-/* The ring's row of controls stops at the felt's own ceiling, 980 px, centred under it (BP-31 P10, R4): at 1920 px it
-   spread across the whole window, its buttons far from the table they act on. The footer itself is not capped: the
-   landscape corners are placed against the room. */
+/* The ring's row of controls is centred under the felt (BP-31 P10, R4), not capped: at 1920 px its buttons had spread
+   across the whole window, far from the table they act on, but a 980 px cap wrapped the pre-hand hint onto a second
+   line at 1280–1536 px and pushed the stage 12 px past the window (final wave). Only the tray keeps the 980 px cap.
+   The footer itself is not capped either: the landscape corners are placed against the room. */
 .controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: var(--space-3);
-  width: 100%;
-  max-width: min(980px, 100%);
-  margin-inline: auto;
 }
 
 .readyCount,
@@ -577,14 +576,16 @@
   gap: var(--space-2);
 }
 
+/* A label too long for its share of the row wraps to a second line inside the 44 px button rather than losing its end
+   to "…" ("Hủy sẵn sàng" beside "Bắt đầu" and the count at 375 px, BP-31 final wave); the bar keeps its height. */
 .room[data-layout='stack'] .dock > button {
   flex: 1 1 0;
   min-width: 0;
   padding-inline: var(--space-2);
-  overflow: hidden;
-  font-size: 0.875rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 0.8125rem;
+  line-height: 1.1;
+  white-space: normal;
+  text-wrap: balance;
 }
 
 .room[data-layout='stack'] .dock .readyCount {

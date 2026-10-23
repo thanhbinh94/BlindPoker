@@ -475,9 +475,9 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
               <Button variant="ghost" disabled={request.busy || !mySeated} aria-pressed={mySeated ? sittingOut : undefined} onClick={toggleSitOut}>
                 {t(sittingOut ? 'room.sitIn' : 'room.sitOut')}
               </Button>
-  
+
               {dockLine}
-  
+
               {startButton}
               {/* The roster used to sit open in the tray, a red "Kick" per player, taking a row a phone did not
                   have; it is one quiet button now, and the list opens on demand (layout audit C5). */}
@@ -489,7 +489,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
               {hintLine}
             </div>
           )}
-  
+
           {/* The tray belongs to a seated player in a live hand — it holds its place between turns rather than
               appearing and disappearing under the felt. */}
           {tray}
