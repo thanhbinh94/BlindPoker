@@ -48,7 +48,8 @@ export interface LiveFigureProps {
  * - **Greet** (P10): a transparent `<button>` laid over the figure as its sibling — not a wrapper — so the figure keeps
  *   its `role="img"` and name (R6); a tap waves. A wave during a cheer or a turn is `Chibi`'s to ignore (`useChibiLife`).
  * - **Sparkles** (R7): six marks over the figure's box for `CHIBI_LIFE.sparkleMs` from each cheer, remounted per cheer
- *   so a second cheer starts them over; never under reduced motion, never on a figure that is not live.
+ *   so a second cheer starts them over, and taken away at once when the stage's `react` goes back to `null`; never under
+ *   reduced motion, never on a figure that is not live.
  * - **Reactions**: the stage's `react` and the taps merge into one sequence of keys owned here, so a stage's own count
  *   and the taps never collide. A changed `react` key becomes the next key of that kind; the key already there at mount
  *   counts as seen.
@@ -88,7 +89,14 @@ export function LiveFigure({
   const seenExternal = useRef(externalKey)
   useEffect(() => {
     const incoming = latest.current.react
-    if (incoming === null || incoming.key === seenExternal.current) return
+    if (incoming === null) {
+      // The stage took its reaction back (the welcome dialog picked another card): the sparkles go with it, so only the
+      // new pick's figure sparkles. The cheer's face and hop may finish.
+      clearTimeout(sparkleTimer.current)
+      setSparkle(null)
+      return
+    }
+    if (incoming.key === seenExternal.current) return
     seenExternal.current = incoming.key
     seq.current += 1
     const key = seq.current

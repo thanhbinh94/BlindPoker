@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ChibiFacing, ChibiLive, ChibiReaction, ChibiReactionKind, Expression } from './types.js'
 
 /** Every timing of a live chibi (spec K6 §3.1), in milliseconds unless named a rate. The CSS keyframes in
@@ -147,7 +147,9 @@ export function useChibiLife({ live, react, facing, onScreen, facesReady, baseEx
   }, [react?.key, schedule])
 
   const seenFacing = useRef(facing)
-  useEffect(() => {
+  // A layout effect: `data-facing` changes in the same commit, and a passive effect could let the browser paint one
+  // frame of the new facing's mirror before the spin starts from the old one.
+  useLayoutEffect(() => {
     if (facing === seenFacing.current) return
     seenFacing.current = facing
     if (!now.current.animated) return

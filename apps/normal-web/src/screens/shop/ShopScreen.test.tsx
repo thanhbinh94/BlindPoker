@@ -614,6 +614,58 @@ describe('ShopScreen', () => {
       cheers.stop()
     })
 
+    it('trying what the figure already wears does not cheer; trying something else does', async () => {
+      const user = setup()
+      const { container } = renderShop()
+      await opened()
+      const stage = figure(container)
+      const cheers = countCheers(stage)
+
+      // The saved outfit, already on the figure: the look does not change, so neither does the mood.
+      await user.click(pickButton(rarityShelf(container), viNormal.items.outfit_casual01))
+      expect(stage).not.toHaveAttribute('data-reacting')
+      expect(cheers.count).toBe(0)
+
+      await user.click(pickButton(rarityShelf(container), viNormal.items.head_beanie01))
+      expect(stage).toHaveAttribute('data-reacting', 'cheer')
+      expect(cheers.count).toBe(1)
+      cheers.stop()
+    })
+
+    it('a second try-on inside the first one’s cheer starts the cheer and its sparkles over', async () => {
+      const user = setup()
+      const { container } = renderShop()
+      await opened()
+      const stage = figure(container)
+      const cheers = countCheers(stage)
+      /** The cheer's sparkle ring on the stage: the decorative span holding six marks (the kit's class name is hashed). */
+      const sparkleRing = (): Element | undefined =>
+        [...(container.querySelector(`section[aria-label="${viNormal.shop.figure}"]`) as HTMLElement).querySelectorAll('span[aria-hidden="true"]')].find(
+          (el) => el.querySelectorAll(':scope > i').length === 6,
+        )
+
+      await user.click(pickButton(featuredShelf(container), viNormal.items.outfit_tuxedo01))
+      const first = sparkleRing()
+      expect(first).toBeDefined()
+      act(() => {
+        vi.advanceTimersByTime(CHIBI_LIFE.cheerFaceMs / 2)
+      })
+      await user.click(pickButton(featuredShelf(container), viNormal.items.outfit_dealer01))
+      // `data-reacting` never leaves "cheer", so the count stays 1; the restart shows in a new ring and a longer cheer.
+      expect(cheers.count).toBe(1)
+      expect(sparkleRing()).toBeDefined()
+      expect(sparkleRing()).not.toBe(first)
+
+      // Past the end of the first cheer, the second is still under way.
+      act(() => {
+        vi.advanceTimersByTime(CHIBI_LIFE.cheerFaceMs / 2 + 50)
+      })
+      expect(stage).toHaveAttribute('data-reacting', 'cheer')
+      cheerEnds()
+      expect(stage).not.toHaveAttribute('data-reacting')
+      cheers.stop()
+    })
+
     it('a failed buy does not cheer', async () => {
       const user = setup()
       const shopBuy = vi

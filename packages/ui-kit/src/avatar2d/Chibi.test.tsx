@@ -1,4 +1,6 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react'
+import { flushSync } from 'react-dom'
+import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AvatarAssets } from './AvatarAssets.js'
 import AVATAR2D_CSS from './avatar2d.module.css?raw'
@@ -578,6 +580,39 @@ describe('Chibi live', () => {
     expect(getComputedStyle(root).transform).not.toBe('scaleX(-1)')
   })
 
+  it('the turn starts in the task that flips the facing, so no mirrored frame is painted before the spin', async () => {
+    // Outside `act`, as a browser runs it: a passive effect would set the spin in a later task, after a paint could show
+    // the new facing's mirrored frame; a layout effect sets it before the browser gets the chance. React's scheduler
+    // runs the passive effects in the same task only while it has frame time left, so the clock is made to run out
+    // (6 ms a reading: the scheduler yields after 5 ms, and nothing here comes near a task's 5 s expiry).
+    const actEnv = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    const before = actEnv.IS_REACT_ACT_ENVIRONMENT
+    actEnv.IS_REACT_ACT_ENVIRONMENT = false
+    const host = document.body.appendChild(document.createElement('div'))
+    const reactRoot = createRoot(host)
+    try {
+      flushSync(() => reactRoot.render(<Chibi subject={SUBJECT} live="idle" facing="left" />))
+      const root = host.firstElementChild as HTMLElement
+      expect(root).toHaveAttribute('data-motion', 'none')
+      // A MutationObserver callback is a microtask: it runs right after the task that committed the new facing.
+      const motionWhenFlipped = new Promise<string | null>((resolve) => {
+        const observer = new MutationObserver(() => {
+          observer.disconnect()
+          resolve(root.getAttribute('data-motion'))
+        })
+        observer.observe(root, { attributes: true, attributeFilter: ['data-facing'] })
+      })
+      let clock = performance.now()
+      vi.spyOn(performance, 'now').mockImplementation(() => (clock += 6))
+      reactRoot.render(<Chibi subject={SUBJECT} live="idle" facing="right" />)
+      expect(await motionWhenFlipped).toBe('spin')
+    } finally {
+      reactRoot.unmount()
+      host.remove()
+      actEnv.IS_REACT_ACT_ENVIRONMENT = before
+    }
+  })
+
   it('live idle watches the screen; still mode: no observer, no breathing, reacts to react', () => {
     vi.stubGlobal('IntersectionObserver', CountingObserver)
     CountingObserver.made = 0
@@ -593,7 +628,8 @@ describe('Chibi live', () => {
     expect(root).toHaveAttribute('data-breathing', 'false')
     expect(classes(root)).not.toContain(s.breathe)
     loadFaces(container)
-    expect(faceImgs(container)).toHaveLength(3)
+    // A still figure never blinks, so it mounts no shut-eyes face: only the reaction's.
+    expect(faceImgs(container).map(faceOf)).toEqual(['neutral', 'happy'])
 
     rerender(<Chibi subject={SUBJECT} live="still" react={{ kind: 'cheer', key: 1 }} />)
     expect(root).toHaveAttribute('data-reacting', 'cheer')
@@ -633,6 +669,22 @@ describe('Chibi live', () => {
     expect(css).not.toContain('will-change')
     expect(css).toMatch(/\.faceHidden\s*\{\s*opacity:\s*0;?\s*\}/)
     expect(css).toMatch(/translate:\s*0 var\(--chibi-hop, -6%\)/)
+  })
+
+  it('the life styles use CHIBI_LIFE’s timings and the spec’s amplitudes (K6 §3.1)', () => {
+    const css = AVATAR2D_CSS.replace(/\/\*[\s\S]*?\*\//g, '')
+    const rule = (selector: string) => css.match(new RegExp(`(?:^|\\n)${selector.replace(/[.[\]']/g, '\\$&')}\\s*\\{([^}]*)\\}`))?.[1] ?? ''
+    const keyframes = (name: string) => css.match(new RegExp(`@keyframes ${name}\\s*\\{([\\s\\S]*?)\\n\\}`))?.[1] ?? ''
+    expect(rule('.breathe')).toMatch(new RegExp(`animation:\\s*chibiBreathe\\s+${CHIBI_LIFE.breatheMs}ms\\b`))
+    expect(keyframes('chibiBreathe')).toMatch(/scale:\s*1\.015\s*;/)
+    expect(rule('.hop')).toMatch(new RegExp(`animation:\\s*chibiHop\\s+${CHIBI_LIFE.hopMs}ms\\b`))
+    expect(rule('.tilt')).toMatch(new RegExp(`animation:\\s*chibiTilt\\s+${CHIBI_LIFE.tiltMs}ms\\b`))
+    expect(keyframes('chibiTilt')).toMatch(/rotate:\s*-4deg\s*;/)
+    expect(rule('.spin')).toMatch(new RegExp(`animation:\\s*chibiSpinRight\\s+${CHIBI_LIFE.spinMs}ms\\b`))
+    // The other facing swaps only the name, so it keeps the duration.
+    expect(rule(".spin[data-facing='left']")).toMatch(/^\s*animation-name:\s*chibiSpinLeft;\s*$/)
+    expect(keyframes('chibiSpinLeft')).toMatch(/transform:\s*scaleX\(0\.06\)\s*;/)
+    expect(keyframes('chibiSpinRight')).toMatch(/transform:\s*scaleX\(-0\.06\)\s*;/)
   })
 
   it('live off draws one face and no life attribute', () => {

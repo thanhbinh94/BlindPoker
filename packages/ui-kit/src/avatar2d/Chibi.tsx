@@ -136,10 +136,11 @@ export interface ChibiProps {
    * it fills in. Its tinted layers also queue behind every eager chibi's (`LAZY_TINT_PRIORITY`). For a grid of cards
    * (the wardrobe, the shop, saved outfits); the stage and a table seat stay eager. Off by default. */
   lazy?: boolean
-  /** BP-30 (spec K6 §3.1): `off`, the default, renders exactly what a chibi always rendered. `still` and `idle` mount the
-   * base, `closed` and `happy` faces together (the extra two once the base face is ready) and switch them by opacity,
-   * answer `react` and `facing`, and stamp the life state on the root (`data-live`, `data-face`, `data-facing`,
-   * `data-reacting`, `data-breathing`, `data-motion`); `idle` also breathes and blinks while on screen. */
+  /** BP-30 (spec K6 §3.1): `off`, the default, renders exactly what a chibi always rendered. `still` and `idle` mount
+   * their faces together and switch them by opacity (`idle` the base, `closed` and `happy`; `still`, which never blinks,
+   * the base and `happy`; the extras once the base face is ready), answer `react` and `facing`, and stamp the life state
+   * on the root (`data-live`, `data-face`, `data-facing`, `data-reacting`, `data-breathing`, `data-motion`); `idle` also
+   * breathes and blinks while on screen. */
   live?: ChibiLive
   /** A reaction for a live chibi: a new `key` plays it (a cheer or a wave; see `useChibiLife`). Ignored when `off`. */
   react?: ChibiReaction | null
@@ -160,8 +161,13 @@ const HEAD_CROP_PX = 208
 /** The face's layer order: the one layer `layersFor` varies by expression. */
 const FACE_ORDER = 50
 
-/** The faces a live chibi mounts beside its own: a blink's and a reaction's. */
-const EXTRA_FACES = ['closed', 'happy'] as const satisfies readonly Expression[]
+/** The faces a live chibi mounts beside its own: a blink's and a reaction's on an idle one; a still one never blinks, so
+ * it mounts only the reaction's. */
+const EXTRA_FACES = {
+  idle: ['closed', 'happy'],
+  still: ['happy'],
+} as const satisfies Record<Exclude<ChibiLive, 'off'>, readonly Expression[]>
+const NO_EXTRA_FACES: readonly Expression[] = []
 
 /** One layer to draw, and on a live chibi, the expression it is the face of. */
 interface StackEntry {
@@ -213,7 +219,7 @@ export function Chibi({
   if (baseFace !== undefined) {
     const faces: StackEntry[] = [{ layer: baseFace, face: expression }]
     if (extrasWanted) {
-      for (const extra of EXTRA_FACES) {
+      for (const extra of live === 'off' ? NO_EXTRA_FACES : EXTRA_FACES[live]) {
         const layer = layersFor(subject, extra, frame).find((l) => l.order === FACE_ORDER)
         if (layer !== undefined && !faces.some((f) => f.layer.file === layer.file)) faces.push({ layer, face: extra })
       }

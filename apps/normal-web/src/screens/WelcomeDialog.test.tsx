@@ -291,16 +291,51 @@ describe('WelcomeDialog', () => {
       for (const c of [...others, picked]) c.stop()
     })
 
-    it('Để sau closes the dialog without a cheer', async () => {
+    it('a pick the server calls stale is dropped without a cheer, and picking that card again cheers again', async () => {
+      const api = stubApi({ welcomeClaim: vi.fn().mockRejectedValue(new ApiError(409, 'NOT_A_CHOICE', 'stale')) })
       const user = setup()
-      renderDialog({ api: stubApi() })
+      renderDialog({ api })
+      const figure = figureOf('outfit_tet_red01')
       const cheers = CHOICES.map((id) => countCheers(figureOf(id)))
 
-      await user.click(within(dialog()).getByRole('button', { name: viNormal.welcome.later }))
+      await user.click(card('outfit_tet_red01'))
+      expect(cheers.map((c) => c.count)).toEqual([0, 1, 0])
+      cheerEnds()
 
-      expect(screen.queryByRole('dialog')).toBeNull()
-      expect(cheers.map((c) => c.count)).toEqual([0, 0, 0])
+      await user.click(claimButton())
+      expect(await within(dialog()).findByText(viNormal.welcome.refusal.NOT_A_CHOICE)).toBeInTheDocument()
+      await waitFor(() => expect(api.welcome).toHaveBeenCalledTimes(1))
+      // The pick is gone from every card, and its loss is no cause for a cheer.
+      for (const id of CHOICES) expect(card(id)).toHaveAttribute('aria-pressed', 'false')
+      expect(claimButton()).toBeDisabled()
+      expect(figure).not.toHaveAttribute('data-reacting')
+      expect(cheers.map((c) => c.count)).toEqual([0, 1, 0])
+
+      // The same card, picked again, is a new pick: it cheers.
+      await user.click(card('outfit_tet_red01'))
+      expect(figureOf('outfit_tet_red01')).toBe(figure)
+      expect(figure).toHaveAttribute('data-reacting', 'cheer')
+      expect(cheers.map((c) => c.count)).toEqual([0, 2, 0])
       for (const c of cheers) c.stop()
+    })
+
+    it('a second pick inside the first one’s cheer leaves the sparkles on the new pick only', async () => {
+      const user = setup()
+      renderDialog({ api: stubApi() })
+      /** The cheer's sparkle rings: the decorative span holding six marks (the class name is the kit's, hashed). */
+      const sparkleRings = (scope: HTMLElement): Element[] =>
+        [...scope.querySelectorAll('span[aria-hidden="true"]')].filter((el) => el.querySelectorAll(':scope > i').length === 6)
+
+      await user.click(card('outfit_dealer01'))
+      expect(sparkleRings(card('outfit_dealer01'))).toHaveLength(1)
+      act(() => {
+        vi.advanceTimersByTime(100)
+      })
+      await user.click(card('outfit_tet_red01'))
+
+      expect(sparkleRings(dialog())).toHaveLength(1)
+      expect(sparkleRings(card('outfit_tet_red01'))).toHaveLength(1)
+      expect(sparkleRings(card('outfit_dealer01'))).toHaveLength(0)
     })
   })
 })

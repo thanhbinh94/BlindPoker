@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createI18n } from '../i18n/index.js'
 import { defaultChibi } from './defaults.js'
 import { CHIBI_LIFE } from './life.js'
+import LIVE_FIGURE_CSS from './live-figure.module.css?raw'
 import s from './live-figure.module.css'
 import { flipFacing, LiveFigure, nextReaction, TurnButton } from './LiveFigure.js'
 import type { ChibiFacing, ChibiReaction } from './types.js'
@@ -172,10 +173,33 @@ describe('LiveFigure', () => {
     expect(figureRoot(reduced.container)).not.toHaveAttribute('data-reacting')
   })
 
+  it('the sparkle fade lasts CHIBI_LIFE.sparkleMs, as long as the ring is mounted', () => {
+    const css = LIVE_FIGURE_CSS.replace(/\/\*[\s\S]*?\*\//g, '')
+    const marks = css.match(/(?:^|\n)\.sparkleRing i\s*\{([^}]*)\}/)?.[1] ?? ''
+    expect(marks).toMatch(new RegExp(`animation:\\s*liveFigureSparkle\\s+${CHIBI_LIFE.sparkleMs}ms\\b`))
+  })
+
   it('a figure that is not live never sparkles', () => {
     const { container, rerender } = renderVi(<LiveFigure subject={SUBJECT} live="off" react={null} />)
     rerender(<LiveFigure subject={SUBJECT} live="off" react={cheer(1)} />)
     expect(sparkleRing(container)).toBeNull()
+  })
+
+  it('a react taken back to null mid-sparkle takes the ring away and leaves no sparkle timer', () => {
+    vi.useFakeTimers()
+    const { container, rerender } = renderVi(<LiveFigure subject={SUBJECT} live="still" react={null} />)
+    rerender(<LiveFigure subject={SUBJECT} live="still" react={cheer(1)} />)
+    expect(sparkleRing(container)).not.toBeNull()
+    const cheerTimers = vi.getTimerCount()
+    advance(100)
+    // The welcome dialog picked another card: this one's react goes back to null.
+    rerender(<LiveFigure subject={SUBJECT} live="still" react={null} />)
+    expect(sparkleRing(container)).toBeNull()
+    // Only the sparkle timer went; the cheer's own face and hop may finish.
+    expect(vi.getTimerCount()).toBe(cheerTimers - 1)
+    advance(CHIBI_LIFE.cheerFaceMs)
+    expect(sparkleRing(container)).toBeNull()
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('unmounting mid-sparkle clears the sparkle timer', () => {

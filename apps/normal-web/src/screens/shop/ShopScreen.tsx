@@ -210,8 +210,8 @@ export function ShopScreen({ api, lang, balance, playerId }: ShopScreenProps) {
   const cheer = (): void => setStageReact((prev) => nextReaction(prev, 'cheer'))
 
   const tryItem = (item: ItemDto): void => {
-    // A card already on try-on, pressed again, changes nothing worth a cheer.
-    if (tryOn[item.slot] !== item.id) cheer()
+    // A card the figure already wears — on try-on, or in the saved look — changes nothing worth a cheer.
+    if (config[item.slot] !== item.id) cheer()
     setTryOn((current) => ({ ...current, [item.slot]: item.id }))
     setLastTried(item)
     setJustBought(null)
