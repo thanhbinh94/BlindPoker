@@ -50,6 +50,7 @@
     "amountSlider": "Amount slider",
     "autoStart": "Auto-start",
     "balance": "Balance",
+    "betPanel": "Choose the bet",
     "betSize": "Bet size",
     "blinds": "Blinds",
     "bot": "Bot",
@@ -281,7 +282,7 @@
   },
   "presets": {
     "min": "Min",
-    "half": "½",
+    "half": "½ pot",
     "pot": "Pot",
     "max": "Max"
   },

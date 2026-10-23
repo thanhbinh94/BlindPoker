@@ -1593,12 +1593,164 @@
   border-color: var(--gold);
 }
 
-.slider {
-  flex: 1 1 auto;
+/* ---------------- Bet panel (`BetPanel`, BP-31 §3.2) ---------------- */
+/* Chips over a slider, and in the two-step trays a row with "Hủy ▾" and the confirm. `data-shape` is where it sits:
+   `inline` — the desktop ring, always shown, chips beside the slider from 768 px; `sheet` — the phone's stack tray, one
+   column with the confirm row last; `corner` — landscape's left corner, the chips over the slider with "Hủy ▾" beside it
+   (the confirm is the right corner's single "Tố N"). No transition anywhere: the panel is there or it is not. */
+.betPanel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
   min-width: 0;
-  min-height: var(--tap);
-  accent-color: var(--gold);
+}
+
+@media (min-width: 768px) {
+  .betPanel[data-shape='inline'] {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--space-3);
+  }
+}
+
+.betPanel[data-shape='corner'] {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-2);
+  width: 100%;
+}
+
+.betPanel[data-shape='corner'] .betChips {
+  grid-column: 1 / -1;
+}
+
+.betChips {
+  display: flex;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* R12: the chips are jumps, not the targets — the thumb and the confirm are — so they stay 36 px on touch too. This
+   rule must come after the `@media (pointer: coarse)` block that lifts every `.preset` (the pre-action toggles keep
+   that 44 px); a raw-CSS test pins the order. */
+.betChip {
+  min-height: 36px;
+  white-space: nowrap;
+  transition: none;
+}
+
+.betChip[aria-pressed='true'],
+.betChip[aria-pressed='true']:hover:not(:disabled) {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--gold-ink);
+}
+
+/* The amount rides over the thumb in a 16 px band above the track; `--pos` (0–1) is set inline. Pinned to the thumb's
+   side of the band, it never runs past either end of the panel. */
+.betSlider {
+  position: relative;
+  min-width: 0;
+  padding-top: 16px;
+}
+
+.betValue {
+  position: absolute;
+  top: 0;
+  left: calc(var(--pos, 0) * 100%);
+  transform: translateX(calc(var(--pos, 0) * -100%));
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 16px;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* One 44 px row: the whole height is the hit area, the thumb a 28 px disc on a 6 px track filled gold up to it. */
+.slider {
+  display: block;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  margin: 0;
   background: transparent;
+  cursor: pointer;
+  appearance: none;
+}
+
+.slider:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-pill);
+}
+
+.slider:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--gold) calc(var(--pos, 0) * 100%), var(--line) calc(var(--pos, 0) * 100%));
+}
+
+.slider::-webkit-slider-thumb {
+  width: 28px;
+  height: 28px;
+  margin-top: -11px;
+  border: 2px solid var(--bg-elev);
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: var(--shadow-1);
+  appearance: none;
+}
+
+.slider::-moz-range-track {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--line);
+}
+
+.slider::-moz-range-progress {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--gold);
+}
+
+.slider::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--bg-elev);
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: var(--shadow-1);
+}
+
+/* A short stage: 32 px chips and a 36 px slider row (spec §3.3, the BP-28 short tier). */
+.betPanel[data-compact] .betChip {
+  min-height: 32px;
+}
+
+.betPanel[data-compact] .slider {
+  height: 36px;
+}
+
+.betConfirm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.betCancel {
+  flex: none;
+  min-width: 72px;
+}
+
+.betCancel > span {
+  margin-left: 0.25em;
 }
 
 /* spec §27.1: under 768 px a thumb cannot hit a 1-point step, so the range control drops out and
@@ -1756,6 +1908,12 @@
   .trayLeft .preset {
     min-height: var(--tap);
   }
+}
+
+/* The bet panel's chips in the left corner: 32 px pills, touch or not (R12) — three classes deep, so they win over the
+   corner's `.trayLeft .preset` above wherever it is declared. */
+.tray[data-frame='landscape'] .betChip {
+  min-height: 32px;
 }
 
 /* A verb and its figure ("Theo 104.000", "Tố 208.000", "Chơi 1.000"), two spans in landscape: one line while the corner

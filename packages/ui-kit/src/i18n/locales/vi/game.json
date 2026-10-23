@@ -50,6 +50,7 @@
     "amountSlider": "Thanh trượt mức cược",
     "autoStart": "Tự động bắt đầu",
     "balance": "Số dư",
+    "betPanel": "Chọn mức cược",
     "betSize": "Mức cược",
     "blinds": "Blind",
     "bot": "Bot",
@@ -281,7 +282,7 @@
   },
   "presets": {
     "min": "Min",
-    "half": "½",
+    "half": "½ pot",
     "pot": "Pot",
     "max": "Max"
   },

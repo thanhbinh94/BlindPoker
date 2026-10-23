@@ -74,7 +74,7 @@ describe('ActionBar', () => {
     await userEvent.type(amount, '99999')
     await userEvent.click(screen.getByRole('button', { name: /^raise/i }))
     expect(onAct).toHaveBeenLastCalledWith({ kind: 'raise', amount: 5000 })
-    await userEvent.click(screen.getByRole('button', { name: /pot/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^pot$/i }))
     expect(amount).toHaveValue(1000)
     await userEvent.click(screen.getByRole('button', { name: /max/i }))
     expect(amount).toHaveValue(5000)
