@@ -24,7 +24,7 @@ Một tài khoản dùng được trên mọi thiết bị. Không có email xá
 
 **Ngôn ngữ và giao diện.** Chọn "Tiếng Việt" hoặc "English" ở thanh điều hướng hay trong "Cài đặt", lúc nào cũng được, kể cả khi đang ngồi bàn. Lần đầu, trò chơi theo ngôn ngữ của trình duyệt. Giao diện "Tối" là mặc định, đổi sang "Sáng" trong "Cài đặt".
 
-**Máy tính hay điện thoại.** Trên máy tính, bàn hình bầu dục và ghế của bạn ở giữa phía dưới. Trên điện thoại dọc, đối thủ xếp thành hàng ở trên, bài chung và pot ở giữa, bài và hàng nút của bạn ghim ở đáy màn hình; xoay ngang thì bàn là một hình bầu dục lấp đầy màn hình, ghế của bạn ở giữa phía dưới. Các nút hành động (Bỏ bài, Theo, Tố…) ở góc dưới bên phải, các nút chọn sẵn trước lượt và "Tự động chơi" ở góc dưới bên trái; "Đứng dậy", "Tạm nghỉ" và "Quản lý bàn" (nếu bạn là chủ phòng) nằm dưới nút ⋯ ("Thêm") ở thanh trên, và trên Android có thêm "Toàn màn hình" ở đó.
+**Máy tính hay điện thoại.** Trên máy tính, bàn hình bầu dục và ghế của bạn ở giữa phía dưới. Trên điện thoại dọc, đối thủ xếp thành hàng ở trên, bài chung và pot ở giữa; bài của bạn to, xòe quạt đè lên mép dưới bàn, ngay trên một dải tên một dòng (ảnh, tên, số điểm, cược vòng này), và dưới cùng là **một hàng nút**: Bỏ bài · Xem hoặc Theo · Tố ▴ (Hold'em), hoặc Tự động chơi · Bỏ bài · Chơi (Blind Poker). Giữa hai ván, hàng ấy nhường chỗ cho "Sẵn sàng" và "Bắt đầu". Xoay ngang thì bàn là một hình bầu dục lấp đầy màn hình, ghế của bạn ở giữa phía dưới; các nút hành động (Bỏ bài, Theo, Tố…) ở góc dưới bên phải, các nút chọn sẵn trước lượt và "Tự động chơi" ở góc dưới bên trái. Trên điện thoại, dọc hay ngang, "Đứng dậy", "Tạm nghỉ" và "Quản lý bàn" (nếu bạn là chủ phòng) nằm dưới nút ⋯ ("Thêm") ở thanh trên, và trên Android có thêm "Toàn màn hình" ở đó.
 
 ## 2. Điểm và tài khoản
 
@@ -220,7 +220,7 @@ Ghế đến lượt có viền sáng và vòng đếm giờ. Hàng nút chỉ h
 | "Tố" | Đã có cược: nâng lên. Mức nâng tối thiểu bằng lần nâng lớn nhất trước đó trong vòng. |
 | "Tất tay" | Đặt toàn bộ stack. |
 
-Chọn mức cho "Cược" hoặc "Tố" bằng ô số, thanh trượt, hoặc các nút nhanh "Min", "½" (nửa pot), "Pot" (bằng pot), "Max". Mức luôn được giữ trong khoảng hợp lệ, nên bạn không thể cược sai. Trên máy tính có phím tắt: **F** bỏ bài, **C** xem hoặc theo, **R** nhảy vào ô mức cược, **Enter** để cược hoặc tố.
+Chọn mức cho "Cược" hoặc "Tố" bằng **thanh trượt** (mỗi nấc bằng một blind nhỏ; kéo tới cuối là tất tay) hoặc các nút nhanh "Min", "½ pot" (nửa pot), "Pot" (bằng pot), "Tất tay". Không có ô nhập số. Mức luôn được giữ trong khoảng hợp lệ, nên bạn không thể cược sai. Trên máy tính thanh trượt và các nút nhanh hiện sẵn phía trên hàng nút, nút "Tố" ghi luôn số điểm. Trên điện thoại bạn chạm hai lần: chạm "Tố ▴" (hoặc "Cược ▴") để mở bảng chọn mức, kéo thanh trượt, rồi chạm nút "Tố" kèm số điểm; "Hủy ▾" đóng bảng mà không cược. Phím tắt: **F** bỏ bài, **C** xem hoặc theo, **R** nhảy vào thanh trượt (trên điện thoại thì mở bảng chọn mức), mũi tên ←/→ một nấc, Page Up/Page Down mười nấc, Home/End mức thấp nhất/tất tay, **Enter** để cược hoặc tố, **Esc** đóng bảng.
 
 **Chọn sẵn trước lượt.** Khi chưa đến lượt, hàng nút có ba nút bật sẵn: "Xem/Bỏ" (đến lượt thì xem nếu được, không thì bỏ bài), "Theo mọi mức" (theo dù mức nào; không ai cược thì xem) và "Bỏ bài" (bỏ bài, nhưng nếu được xem miễn phí thì trò chơi xem cho bạn). Mỗi lựa chọn chỉ dùng một lần và tự bỏ khi sang vòng cược mới. Nếu đến lượt mà lựa chọn đó không làm được nữa (ví dụ phải tất tay mới theo được), trò chơi bỏ chọn và để bạn tự quyết.
 
@@ -330,7 +330,7 @@ Không muốn nặn thì bấm nút nhỏ "Lật" dưới bài để mở hết 
 
 Ở kiểu "Hoàn toàn may rủi" không có lượt nào để bỏ, nên khi bạn đứng dậy hay rời phòng giữa ván, bài của bạn vẫn được tính tới cuối ván. Nếu máy chủ bị tắt đột ngột (ví dụ đóng cửa sổ máy chủ Lite hay tắt máy), số dư vẫn còn nguyên nhưng điểm đang nằm trên bàn và pot cộng dồn có thể mất.
 
-**"Tự động chơi"** có ở bàn Blind Poker kiểu "Chơi hoặc bỏ" và ở bàn nặn bài, ngay trên hàng nút (Hold'em không có). Bật lên thì mỗi ván trò chơi chọn "Chơi" cho bạn, nghĩa là mỗi ván bạn luôn đặt thêm một mức cược; ở bàn nặn thì bài còn được mở ngay khi chia. Nút giữ nguyên tới khi bạn tắt, đứng dậy, tạm nghỉ hoặc rời phòng. Nút chạy trên máy của bạn: khi bạn mất kết nối, nó không chơi thay, và hết giờ vẫn tính là "Bỏ bài", cũng là một lượt hết giờ. Ván nào nút đã chọn "Chơi" cho bạn thì ván đó không tính là hết giờ.
+**"Tự động chơi"** có ở bàn Blind Poker kiểu "Chơi hoặc bỏ" và ở bàn nặn bài, ngay trên hàng nút (trên điện thoại dọc thì nằm đầu hàng nút, trước "Bỏ bài"; Hold'em không có). Bật lên thì mỗi ván trò chơi chọn "Chơi" cho bạn, nghĩa là mỗi ván bạn luôn đặt thêm một mức cược; ở bàn nặn thì bài còn được mở ngay khi chia. Nút giữ nguyên tới khi bạn tắt, đứng dậy, tạm nghỉ hoặc rời phòng. Nút chạy trên máy của bạn: khi bạn mất kết nối, nó không chơi thay, và hết giờ vẫn tính là "Bỏ bài", cũng là một lượt hết giờ. Ván nào nút đã chọn "Chơi" cho bạn thì ván đó không tính là hết giờ.
 
 ### Chơi trên hai thiết bị
 
