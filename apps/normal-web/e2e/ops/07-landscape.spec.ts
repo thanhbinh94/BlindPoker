@@ -11,9 +11,12 @@ import {
   joinByCode,
   LANDSCAPE_SCREEN,
   newPlayer,
+  openBetPanel,
   openRoomMenu,
+  raiseButton,
   ready,
   resultCard,
+  setBet,
   settled,
   SHORT_LANDSCAPE,
   start,
@@ -26,9 +29,9 @@ import {
 /**
  * Plan 26 (B8): the room on a phone held sideways — the `landscape` project, 915 × 412 with a touch screen, which the room
  * draws in its landscape frame (B1–B5): a one-line header with the seat's controls in its "Thêm" menu, Sẵn sàng and Bắt đầu
- * in a bottom-right dock, the hand's tray split into two corner docks with presets in place of the slider, and a compact
- * result card. Every case ends with the room fitting the screen (neither the page nor the stage scrolls) and no text over
- * text.
+ * in a bottom-right dock, the hand's tray split into two corner docks — the left one turning into the bet panel (chips and
+ * a slider, BP-31) once "Tố" is tapped — and a compact result card. Every case ends with the room fitting the screen
+ * (neither the page nor the stage scrolls) and no text over text.
  */
 
 test.describe.configure({ mode: 'serial' })
@@ -320,7 +323,7 @@ test('L-03 @landscape the result card at 915×412 and 844×390: no text overlap,
   await leave(page)
 })
 
-test('L-04 @landscape my turn in Hold’em: presets, no slider, ✎ opens the amount dialog, the dialog stays usable at 915×260, and a typed raise of 600 goes through', async () => {
+test('L-04 @landscape the bet panel: chips and a slider in the left corner, Tố N on the right, no number field', async () => {
   test.setTimeout(240_000)
   const code = await createHoldemRoom(a.page, { name: unique('Bàn L04 '), tier: '100/200', timer: '60 giây' })
   await joinByCode(b.page, code)
@@ -337,38 +340,41 @@ test('L-04 @landscape my turn in Hold’em: presets, no slider, ✎ opens the am
   const [me, them] = (await raise(a.page).count()) === 1 ? [a, b] : [b, a]
   const page = me.page
 
-  // One row until asked: the first tap on "Tố" opens the presets in the left corner; there is no slider.
+  // One row until asked (BP-31, R6): the tray is shut, and the right corner's single "Tố" (its ▴ is decoration) opens the
+  // bet panel in the left corner — four chips over a slider, with Hủy — while the same button turns into "Tố N".
+  const panelTray = tray(page)
+  await expect(panelTray).toHaveAttribute('data-panel', 'closed')
   await expect(raise(page)).toHaveAccessibleName('Tố')
+  await expect(page.getByRole('slider'), 'no slider before the panel opens').toHaveCount(0)
   await raise(page).click()
-  const presets = tray(page).getByRole('group', { name: 'Mức cược' })
-  for (const name of ['Min', '½', 'Pot', 'Max']) await expect(presets.getByRole('button', { name, exact: true })).toBeVisible()
-  await expect(page.locator('input[type="range"]'), 'no slider in landscape').toHaveCount(0)
-  await expect(page.getByRole('slider')).toHaveCount(0)
-  await shot(page, 'landscape-L04-presets')
-  await expectRoomFits(page, 'landscape, Hold’em, my turn, presets open', [LANDSCAPE_SCREEN])
-  await expectNoTextOverlapAt(page, 'landscape, Hold’em, my turn, presets open')
-
-  // ✎ opens the typed-amount dialog; on a phone whose keyboard leaves 260 px its field and its confirm stay on screen.
-  await presets.getByRole('button', { name: 'Nhập số điểm', exact: true }).click()
-  const dialog = page.getByRole('dialog', { name: 'Nhập số điểm' })
-  await expect(dialog).toBeVisible()
-  const field = dialog.getByRole('spinbutton')
-  const confirm = dialog.getByRole('button', { name: 'Xác nhận', exact: true })
-  await page.setViewportSize({ width: 915, height: 260 })
-  try {
-    await expect(field, 'the amount field is whole on a 260 px screen').toBeInViewport({ ratio: 1 })
-    await expect(confirm, 'Xác nhận is whole on a 260 px screen').toBeInViewport({ ratio: 1 })
-    await shot(page, 'landscape-L04-dialog-260')
-    // The lowest tier is 100/200, so the smallest raise preflop is to 400: 300 itself is no legal raise. 600 is typed
-    // instead — a raise to 600, which leaves the big blind 400 to call.
-    await field.fill('600')
-    await confirm.click()
-    await expect(dialog).toHaveCount(0)
-  } finally {
-    await page.setViewportSize(LANDSCAPE_SCREEN)
+  await expect(panelTray).toHaveAttribute('data-panel', 'open')
+  const left = panelTray.locator('[class*="_trayLeft_"]')
+  const panel = left.getByRole('group', { name: 'Chọn mức cược' })
+  await expect(panel, 'the panel takes the left corner').toBeVisible()
+  const chips = panel.getByRole('group', { name: 'Mức cược' })
+  for (const name of ['Min', '½ pot', 'Pot', 'Tất tay']) {
+    // Every chip says whether it names the amount (and `autopilot`, which presses `button:not([aria-pressed])`, never takes one).
+    await expect(chips.getByRole('button', { name, exact: true })).toHaveAttribute('aria-pressed', /^(true|false)$/)
   }
+  await expect(chips.getByRole('button', { name: 'Min', exact: true }), 'the panel opens at the minimum').toHaveAttribute('aria-pressed', 'true')
+  const slider = panel.getByRole('slider', { name: 'Thanh trượt mức cược' })
+  await expect(slider).toBeVisible()
+  await expect(page.locator('input[type="range"]'), 'one slider, in the panel').toHaveCount(1)
+  await expect(page.getByRole('spinbutton'), 'no number field').toHaveCount(0)
+  await expect(panel.getByRole('button', { name: 'Hủy', exact: true })).toBeVisible()
+  // Still one raise button, on the right, and it now names the minimum raise: 400 at the 100/200 tier preflop.
+  await expect(raise(page)).toHaveCount(1)
+  await expect(raise(page)).toHaveAccessibleName('Tố 400')
+  await expect(panelTray.locator('[class*="_trayRight_"]').getByRole('button', { name: /^Tố( |$)/ })).toHaveCount(1)
+  await shot(page, 'landscape-L04-panel')
+  await expectRoomFits(page, 'landscape, Hold’em, my turn, the bet panel open', [LANDSCAPE_SCREEN])
+  await expectNoTextOverlapAt(page, 'landscape, Hold’em, my turn, the bet panel open')
 
-  // The second tap raises, by the amount it now names.
+  // The slider by the keyboard (P8): Home is the minimum raise to 400, and two steps of the small blind make it 600 — a
+  // raise that leaves the big blind 400 to call.
+  expect(await setBet(page, 2)).toBe('600')
+
+  // The right corner's button raises, by the amount it now names.
   await expect(raise(page)).toHaveAccessibleName('Tố 600')
   await raise(page).click()
   const call = tray(them.page).getByRole('button', { name: /^Theo [\d.]+$/ })
@@ -530,11 +536,37 @@ test('L-06 @landscape a short landscape phone (855×319): after every bot has ch
       .toBeGreaterThanOrEqual(3)
     await expect(table).toHaveAttribute('data-tier', 'short')
     await settled(board(page))
-    await settled(page.locator('[data-me="true"]'))
+    // My cards, not my whole seat: when the flop's first turn is mine, the seat's clock ring animates through it.
+    await settled(page.locator('[data-me="true"] [class*="_seatCards_"]'))
     await expectTableClear(page, 'Hold’em, eight seats, the flop')
     await shot(page, 'landscape-L06-holdem-flop')
     await expectRoomFits(page, 'landscape 855×319, Hold’em, the flop', [PHONE_WITH_BARS])
     await expectNoTextOverlapAt(page, 'landscape 855×319, Hold’em, the flop')
+
+    // BP-31 §3.3: whoever is to act opens the bet panel on this short stage. The compact panel (32 px chips, a 36 px slider
+    // row) fills the left corner and stays clear of every seat, the board and the actor's own cards.
+    await expect.poll(async () => (await raiseButton(page).count()) + (await raiseButton(b.page).count()), { message: 'someone is to act' }).toBe(1)
+    const actor = (await raiseButton(page).count()) === 1 ? page : b.page
+    await openBetPanel(actor)
+    const panel = tray(actor).locator('[class*="_trayLeft_"]').getByRole('group', { name: 'Chọn mức cược' })
+    await expect(panel).toHaveAttribute('data-compact', 'true')
+    const panelBox = (await panel.boundingBox())!
+    expect(panelBox.height, `the compact panel is short (${Math.round(panelBox.height)} px)`).toBeLessThanOrEqual(80)
+    await expect(raiseButton(actor), 'one raise button, naming the amount').toHaveAccessibleName(/^(Tố|Cược) [\d.]+$/)
+    // The cards, not the whole seat: on the actor's turn the seat's clock ring animates for as long as the turn lasts.
+    await settled(actor.locator('[data-me="true"] [class*="_seatCards_"]'))
+    await expectTableClear(actor, 'Hold’em, eight seats, the flop, the bet panel open')
+    const panelBoxes = await boxesOf(panel, 'the bet panel')
+    expectLaidOut('the bet panel vs my cards, the board and the dock', PHONE_WITH_BARS, panelBoxes, [
+      ...(await boxesOf(actor.locator('[data-me="true"] [class*="_seatCards_"]'), 'my cards')),
+      ...(await boxesOf(board(actor), 'the board')),
+      ...(await boxesOf(dock(actor), 'the dock')),
+    ])
+    await shot(actor, 'landscape-L06-holdem-panel')
+    await expectRoomFits(actor, 'landscape 855×319, Hold’em, the bet panel open', [PHONE_WITH_BARS])
+    await expectNoTextOverlapAt(actor, 'landscape 855×319, Hold’em, the bet panel open')
+    await tray(actor).getByRole('button', { name: 'Hủy', exact: true }).click()
+    await expect(tray(actor)).toHaveAttribute('data-panel', 'closed')
     await leave(b.page)
     await leave(page)
   } finally {

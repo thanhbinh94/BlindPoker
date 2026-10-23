@@ -48,8 +48,8 @@ test('S-04 S-05 D-05: a Blind room with three bots, a hand played to the end', a
   const code = await createBlind(host.page, { name, bots: 3 })
   expect(code, 'S-04: a six-character code').toMatch(/^[A-Z0-9]{6}$/)
   const header = host.page.locator('header').first()
-  // D-05: the header repeats the configuration — the wager, and (spec 2026-09-29) the table limit of five wagers.
-  for (const text of ['Blind Poker', '2 lá', 'Chơi hoặc bỏ', 'Mức cược 1.000 · Hạn mức 5.000', '4/6 người chơi']) await expect(header.getByText(text)).toBeVisible()
+  // D-05: the header repeats the configuration — the wager, and (spec 2026-09-29) the table limit of ten wagers.
+  for (const text of ['Blind Poker', '2 lá', 'Chơi hoặc bỏ', 'Mức cược 1.000 · Hạn mức 10.000', '4/6 người chơi']) await expect(header.getByText(text)).toBeVisible()
   await expect(host.page.getByText('Bot', { exact: true })).toHaveCount(3)
 
   // S-05: sit, ready, start, play; the hand ends. A Blind seat brings the table limit and plays from it, so the
@@ -62,9 +62,9 @@ test('S-04 S-05 D-05: a Blind room with three bots, a hand played to the end', a
   await autopilot(host.page, ['play'], handOver(host.page))
   await host.page.getByRole('button', { name: 'Tạm nghỉ' }).click()
   await leave(host.page)
-  await balanceWhen(host.page, (n) => n !== before - 5_000)
+  await balanceWhen(host.page, (n) => n !== before - 10_000)
   const fresh = await ledgerSince(host.page, rowsBefore)
-  expect(fresh.filter((row) => row.reason === 'buy_in').map((row) => row.amount), 'S-05: the seat took the 5.000 limit').toEqual([-5_000])
+  expect(fresh.filter((row) => row.reason === 'buy_in').map((row) => row.amount), 'S-05: the seat took the 10.000 limit').toEqual([-10_000])
   expect(fresh.filter((row) => row.reason === 'cash_out'), 'and leaving took the stack home').toHaveLength(1)
   expect((await balanceOf(host.page)) - before, 'the balance moved by exactly the new rows').toBe(sumOf(fresh))
 })

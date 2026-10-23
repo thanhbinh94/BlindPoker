@@ -23,10 +23,10 @@ const WAGER = 1_000
 /** The ante plus the play: what a hand costs a player with a full stack who does not fold. */
 const PLAY_COST = WAGER * 2
 /**
- * The table limit (spec 2026-09-29): five wagers go from the balance to the table at sit-down, and the whole stack
- * comes home at stand-up. A hand moves the stack only, so the balances are read after leaving.
+ * The table limit (spec 2026-09-29; five until BP-31): ten wagers go from the balance to the table at sit-down, and
+ * the whole stack comes home at stand-up. A hand moves the stack only, so the balances are read after leaving.
  */
-const LIMIT = 5 * WAGER
+const LIMIT = 10 * WAGER
 const TOKEN_KEY = 'bp.lite.token'
 
 /** Display names must be unique for the life of the server, and this file creates several per run. */
@@ -110,10 +110,24 @@ async function createBlindRoom(page: Page, roomName: string, bots: number, squee
   return code
 }
 
-/** Takes the given seat; the seat index is explicit so two players never race for the same one. */
-async function sit(page: Page, seat: number): Promise<void> {
+/**
+ * Takes the given seat; the seat index is explicit so two players never race for the same one. On the upright phone
+ * (BP-31, `via: 'menu'`) "Đứng dậy" is an item of the header's "Thêm" menu: it is opened, read and closed again.
+ */
+async function sit(page: Page, seat: number, opts?: { via?: 'menu' }): Promise<void> {
   await page.locator(`[data-seat="${seat}"]`).getByRole('button', { name: 'Ngồi vào bàn' }).click()
-  await expect(page.getByRole('button', { name: 'Đứng dậy', exact: true })).toBeVisible()
+  if (opts?.via !== 'menu') {
+    await expect(page.getByRole('button', { name: 'Đứng dậy', exact: true })).toBeVisible()
+    return
+  }
+  await page.getByRole('button', { name: 'Thêm', exact: true }).click()
+  const menu = page.getByRole('menu', { name: 'Thêm' })
+  try {
+    await expect(menu.getByRole('menuitem', { name: 'Đứng dậy', exact: true })).toBeVisible()
+  } finally {
+    await page.keyboard.press('Escape')
+    await expect(menu).toHaveCount(0)
+  }
 }
 
 async function readBalance(page: Page, token: string): Promise<number> {
@@ -367,8 +381,9 @@ test.describe('Blind Luck Poker Lite', () => {
     expect(await readBalance(page, token)).toBeGreaterThan(0)
 
     await createBlindRoom(page, unique('Bàn '), 1)
-    await sit(page, 0)
-    await expect(page.getByRole('button', { name: 'Sẵn sàng', exact: true })).toBeVisible()
+    await sit(page, 0, { via: 'menu' })
+    // Between hands the phone's dock (BP-31) holds Sẵn sàng, under the same name as the desktop's row.
+    await expect(page.getByRole('group', { name: 'Điều khiển bàn' }).getByRole('button', { name: 'Sẵn sàng', exact: true })).toBeVisible()
     await shot(page, 'room-mobile')
 
     await page.getByRole('button', { name: 'Rời phòng' }).click()

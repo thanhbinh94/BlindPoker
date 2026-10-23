@@ -83,15 +83,15 @@ test('F-01 F-02 H-01: pure luck, three cards — the ante goes in, nobody decide
   await leave(a.page)
 
   // H-01 (spec 2026-09-29): a Blind seat plays from the table limit it brought, so the ledger sees the sit-down
-  // (`buy_in` −5.000) and the leave (`cash_out`, the stack) and never the hand itself; those rows, plus any achievement
+  // (`buy_in` −10.000) and the leave (`cash_out`, the stack) and never the hand itself; those rows, plus any achievement
   // the hand unlocked (a three-card board makes "Thùng" and friends likely), are the whole move of the balance.
-  const after = await balanceWhen(a.page, (n) => n !== before - 5_000)
+  const after = await balanceWhen(a.page, (n) => n !== before - 10_000)
   await a.page.waitForTimeout(1_000)
   const ledger = await ledgerOf(a.page)
   const fresh = ledger.slice(0, ledger.length - rowsBefore)
   const buyIn = fresh.filter((row) => row.reason === 'buy_in')
   const cashOut = fresh.filter((row) => row.reason === 'cash_out')
-  expect(buyIn.map((row) => row.amount)).toEqual([-5_000])
+  expect(buyIn.map((row) => row.amount)).toEqual([-10_000])
   expect(cashOut).toHaveLength(1)
   expect(fresh.every((row) => ['buy_in', 'cash_out', 'achievement'].includes(row.reason)), 'nothing else moved').toBe(true)
   expect((await balanceOf(a.page)) - before, 'the new rows are the whole move').toBe(fresh.reduce((sum, row) => sum + row.amount, 0))
@@ -173,11 +173,11 @@ test('F-06: one plays, one folds — the one who played takes the pot without a 
   await leave(b.page)
   // Spec §8.3: Đào's play went uncalled, so it comes straight back before the pot is figured. The pot is the two
   // antes, 2.000, and she takes all of it: Blind has no table fee (plan 27). Her balance was read after the buy-in, so
-  // what comes home when she leaves is the stack: the 5.000 she brought, less her 1.000 ante, plus the 2.000. (Plus
+  // what comes home when she leaves is the stack: the 10.000 she brought, less her 1.000 ante, plus the 2.000. (Plus
   // any achievement the win completed, e.g. a third win in a row.)
   await balanceWhen(a.page, (n) => n !== aBefore)
   const fresh = await ledgerSince(a.page, aRows)
-  expect(sumOf(fresh, 'cash_out'), `result card: ${cardText}`).toBe(5_000 - 1_000 + 2_000)
+  expect(sumOf(fresh, 'cash_out'), `result card: ${cardText}`).toBe(10_000 - 1_000 + 2_000)
   expect((await balanceOf(a.page)) - aBefore, 'the cash-out and any rewards are the whole move').toBe(sumOf(fresh))
 })
 
@@ -222,7 +222,7 @@ test('F-10: a Blind seat plays down to zero and is stood up with the Cứu trợ
   test.setTimeout(360_000)
   // Plan 27 D2: one wager seats a player, a short seat is dealt and goes all in for what it has ("Tất tay N"), and a
   // seat is stood up only at 0 — with a notice that points at Cứu trợ. A GM first brings Em's balance down to 2.500,
-  // so the seat brings all of it: below the 5.000 limit, above the one wager it needs.
+  // so the seat brings all of it: below the 10.000 limit, above the one wager it needs.
   //
   // Em plays this one, not Đào: F-09 left Đào's auto-play table mid-hand, and her stack comes home only when that hand
   // ends — a cash-out that could land inside this case's money checks. Em's last table (F-06) was left between hands.
@@ -244,7 +244,7 @@ test('F-10: a Blind seat plays down to zero and is stood up with the Cứu trợ
   }
   const rowsBefore = (await ledgerOf(page)).length
   await createBlind(page, { name: unique('Bàn F10 '), bots: 1, mode: 'Chơi hoặc bỏ', wager: '1.000' })
-  await expect(page.locator('header').first().getByText(/Hạn mức 5\.000/)).toBeVisible()
+  await expect(page.locator('header').first().getByText(/Hạn mức 10\.000/)).toBeVisible()
   await takeSeat(page, 0)
   expect(await balanceWhen(page, (n) => n === 0), 'the seat took the whole 2.500').toBe(0)
   await ready(page)
@@ -333,7 +333,7 @@ test('H-02 F-07: below 5.000 the relief tops up to 5.000 once; a stake the balan
     const stake = STAKES.find((w) => 2 * w <= balanceNow)!
     await createBlind(page, { name: unique('Bàn H02 '), bots: 1, mode: 'Chơi hoặc bỏ', wager: stake.toLocaleString('vi-VN') })
     await takeSeat(page, 0)
-    // The seat brought min(balance, 5 × stake) — read off the ledger, which an achievement landing mid-round cannot
+    // The seat brought min(balance, 10 × stake) — read off the ledger, which an achievement landing mid-round cannot
     // skew — and the fold below costs one stake.
     const brought = -(await ledgerOf(page)).find((row) => row.reason === 'buy_in')!.amount
     await ready(page)
@@ -457,7 +457,8 @@ async function squeezeFitsPhone({ id, mode, what, shot }: { id: string; mode: 'H
 
   await createBlind(page, { name: unique(`Bàn ${id} `), bots: 1, mode, squeeze: true })
   await expect(page.locator('header').getByText('Nặn bài', { exact: true })).toBeVisible()
-  await takeSeat(page, 0)
+  // BP-31 (R11): the upright phone keeps "Đứng dậy" in the header's "Thêm" menu.
+  await takeSeat(page, 0, undefined, { via: 'menu' })
   await ready(page)
   const t0 = Date.now()
   await start(page)

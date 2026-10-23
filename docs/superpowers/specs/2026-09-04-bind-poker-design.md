@@ -213,7 +213,7 @@ Royal flush (là straight flush cao nhất), Straight flush, Four of a kind, Ful
 | `holeCards` | 2 hoặc 3 |
 | `decisionMode` | `none` (kiểu A — thuần may rủi) hoặc `playOrFold` (kiểu B) |
 | `fixedWager` (W) | 1.000 / 2.000 / 5.000 / 10.000 / 20.000 / 50.000 |
-| Hạn mức (L) | 5 × `fixedWager` — cố định, không chọn khi tạo phòng (sửa đổi 2026-09-29) |
+| Hạn mức (L) | 10 × `fixedWager` — cố định, không chọn khi tạo phòng (sửa đổi 2026-09-29; BP-31 nâng từ 5 × lên 10 ×) |
 | `maxPlayers` | 2–8 |
 | `botCount` | 0 … maxPlayers − 1 |
 | `turnTimer` | 10/15/30 giây, mặc định 15 (chỉ dùng cho pha DECISION; bàn nặn bài: xem `squeeze`) |
@@ -262,6 +262,7 @@ Như mục 7.7.
 - 3 timeout liên tiếp → đứng dậy sau ván (như Normal).
 
 ### 8.8 Hạn mức bàn (sửa đổi 2026-09-29)
+- *(BP-31, spec `2026-10-23-phone-table-bet-slider-design.md` §3.6: L = 10 × `fixedWager`, trước đó 5 ×; bot cũng nhận stack bằng L. Luật chơi tới 0, `min(số dư, L)` và phí 0 không đổi.)*
 - **Vào bàn**: server lấy `min(số dư, L)` từ số dư lên bàn, ghi `buy_in` (từ chối `INSUFFICIENT_BALANCE` nếu số dư < mức cần cho một ván). Không có hộp thoại chọn số.
 - **Trong ván**: ante, tiền Chơi và tiền thắng chỉ đổi chồng trên bàn (có thể vượt L); sổ điểm mỗi ván chỉ ghi dòng sink phí bàn, không còn dòng `settlement` cho người chơi.
 - *(Plan 27 thay hai gạch đầu dòng "Hết hạn mức" và "Pot cộng dồn khi hết hạn mức" dưới đây bằng luật chơi tới 0, xem sửa đổi ở §12.3.)*
@@ -378,7 +379,7 @@ Server kiểm tra từng giá trị thuộc tập cho phép; sai → `ERROR INVA
 | `tableFeeCapHoldemBB` | 1 |
 | `reliefThreshold` / `reliefTarget` / `reliefCooldownHours` | 5.000 / 5.000 / 24 |
 | `blindWagerTiers` | 1k, 2k, 5k, 10k, 20k, 50k |
-| `blindTableLimitMultiplier` | 5 |
+| `blindTableLimitMultiplier` | 10 (5 trước BP-31) |
 | `holdemBlindTiers` | 100/200, 250/500, 500/1k, 1k/2k, 2.5k/5k |
 
 ### 12.3 Phí bàn
@@ -958,10 +959,23 @@ Biện pháp: delta events thay vì gửi lại snapshot; PlayerView tính một
 ### 27.1 Breakpoint và bố cục bàn
 - `≥ 1024`: elip đầy đủ, ghế của mình ở đáy giữa, ActionBar dưới ghế mình.
 - `768–1023`: elip hẹp, chữ nhỏ hơn, ActionBar nổi.
-- `< 768` dọc: lưới đối thủ 2 hàng trên cùng; community + pot giữa; bài mình + ActionBar ghim đáy (`position: sticky`), nút ≥ 44 px; slider cược thay bằng nút preset + input.
+- `< 768` dọc hoặc cửa sổ cao ≤ 620 (bố cục "stack", BP-31): lưới đối thủ trên cùng (chip từ 4 đối thủ, chữ ≥ 11 px); nỉ với bài
+  chung `clamp(40px, 11vw, 48px)` và pot; **tay bài của mình xòe quạt** `clamp(52px, 15vw, 60px)` đè mép dưới nỉ 30 px (bài nặn
+  không xoay); dải tên của mình 44 px (avatar với đồng hồ, tên, stack, cược, Chủ phòng, hạng); **khay một hàng 44 px**: Bỏ bài ·
+  Xem/Theo · Cược ▴/Tố ▴ (Hold'em), Tự động chơi · Bỏ bài · Chơi N (Blind); chạm Tố/Cược mở **bảng tố** (chip Min · ½ pot · Pot ·
+  Tất tay 36 px, **thanh kéo** bước blind nhỏ, Hủy ▾ + Tố N); không có ô nhập số ở bất kỳ khung nào. Giữa ván, một dock một hàng
+  (Sẵn sàng / Hủy sẵn sàng, Bắt đầu, "N/M sẵn sàng", đồng hồ). Header gọn có ⋯ (Đứng dậy, Tạm nghỉ / Chơi tiếp, Quản lý bàn, Toàn
+  màn hình). Nút ≥ 44 px trừ chip mốc 36 px.
 - Hàng đối thủ luôn hiển thị đủ mọi ghế (tối thiểu 2 hàng, không cuộn ẩn): lưới tự xuống dòng, và khi cần nhiều hàng hơn thì thu nhỏ plate (avatar + tên + stack + cược + trạng thái) trước, tuyệt đối không cuộn bên trong hàng đối thủ.
-- Điện thoại xoay ngang (Plan 26; `(orientation: landscape) and (max-height: 500px) and (min-width: 700px)`, nghĩa là cao tối đa 500 và rộng tối thiểu 700; cửa sổ ngắn mà hẹp hơn 700 giữ bố cục dọc): bàn là một elip lấp đầy màn hình với plate thu gọn xếp theo chu vi đo được. Header chỉ còn một dòng 32 px (mã phòng, huy hiệu, "Rời phòng") và nút ⋯ ("Thêm") chứa "Đứng dậy", "Tạm nghỉ / Chơi tiếp", "Quản lý bàn" và "Toàn màn hình" (khi trình duyệt cho phép). "Sẵn sàng / Hủy sẵn sàng", "Bắt đầu" và đồng hồ giữa các ván nằm trong một dock ở góc dưới bên phải. Trong ván, khay hành động tách hai góc: bên trái là các nút chọn sẵn và "Tự động chơi", và sau lần chạm đầu vào "Tố" / "Cược", các mức Min · ½ · Pot · Max · ✎ của Hold'em hiện ra thay cho các công tắc; bên phải là "Bỏ bài", "Xem / Theo", "Cược / Tố", "Tất tay", số điểm nằm ở dòng thứ hai; không có slider, "Tố" cần hai lần chạm, ✎ mở hộp thoại "Nhập số điểm". Thẻ kết quả là một khối gọn với nút "Đóng" cao 44 px. Trang và sân khấu của phòng không cuộn ở 915×412, 915×355 và 844×390.
-- Lá bài: `clamp(36px, 8vw, 72px)` chiều rộng.
+- Điện thoại xoay ngang (Plan 26; `(orientation: landscape) and (max-height: 500px) and (min-width: 700px)`, nghĩa là cao tối đa 500 và rộng tối thiểu 700; cửa sổ ngắn mà hẹp hơn 700 giữ bố cục dọc): bàn là một elip lấp đầy màn hình với plate thu gọn xếp theo chu vi đo được. Header chỉ còn một dòng 32 px (mã phòng, huy hiệu, "Rời phòng") và nút ⋯ ("Thêm") chứa "Đứng dậy", "Tạm nghỉ / Chơi tiếp", "Quản lý bàn" và "Toàn màn hình" (khi trình duyệt cho phép). "Sẵn sàng / Hủy sẵn sàng", "Bắt đầu" và đồng hồ giữa các ván nằm trong một dock ở góc dưới bên phải. Thẻ kết quả là một khối gọn với nút "Đóng" cao 44 px. Trang và sân khấu của phòng không cuộn ở 915×412, 915×355 và 844×390.
+- Điện thoại xoay ngang (Plan 26, BP-28): như trước, trừ khay: góc phải Bỏ bài · Xem/Theo · Tố ▴ (→ Tố N khi bảng mở), góc trái các
+  công tắc chọn sẵn / Tự động chơi và, sau khi chạm Tố/Cược, **bảng tố** (chip + thanh kéo + Hủy ▾) thay cho Min · ½ · Pot · Max · ✎;
+  không còn hộp "Nhập số điểm". Tất tay là chip của bảng tố.
+- Desktop ≥ 1024 và tablet: khay rộng tối đa 980 px, căn giữa; hàng điều khiển căn giữa, không giới hạn bề rộng (BP-31, đợt sửa
+  cuối: giới hạn 980 px làm dòng gợi ý xuống hai dòng ở 1280–1536 px); chip + thanh kéo luôn hiện khi được chọn mức (một bước),
+  số điểm đứng cạnh thanh kéo; Tất tay ngoài hàng.
+- Lá bài: đối thủ `clamp(26px, 6.4vw, 34px)`, mình ở ring `clamp(32px, 8vw, 46px)`, ở stack `clamp(52px, 15vw, 60px)`, bài chung
+  `clamp(40px, 10.4vw, 62px)` (stack `clamp(40px, 11vw, 48px)`), landscape 60 px, tầng short 48 px.
 
 ### 27.2 Màn hình
 Cột cuối ghi nơi màn hình của **bản Normal** thực sự nằm sau Plan 6 (`apps/normal-web`); màn nào đến

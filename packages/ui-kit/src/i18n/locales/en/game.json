@@ -45,11 +45,10 @@
   "labels": {
     "actions": "Actions",
     "allIn": "All-in",
-    "amount": "Bet amount",
-    "amountDialog": "Enter an amount",
     "amountSlider": "Amount slider",
     "autoStart": "Auto-start",
     "balance": "Balance",
+    "betPanel": "Choose the bet",
     "betSize": "Bet size",
     "blinds": "Blinds",
     "bot": "Bot",
@@ -228,7 +227,7 @@
       "botCount": "There must be fewer bots than seats."
     },
     "buyInHint": "{{bb}} BB = {{points}}",
-    "tableLimitHint": "Table limit per player: {{points}} (5× the wager)"
+    "tableLimitHint": "Table limit per player: {{points}} ({{times}}× the wager)"
   },
   "room": {
     "title": "Room",
@@ -281,9 +280,8 @@
   },
   "presets": {
     "min": "Min",
-    "half": "½",
-    "pot": "Pot",
-    "max": "Max"
+    "half": "½ pot",
+    "pot": "Pot"
   },
   "avatar": {
     "turn": "Turn",

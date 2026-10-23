@@ -20,7 +20,10 @@ export interface RoomHeaderProps {
    * `menu` and the way out. The head-count and the mode badges are left to the lobby's card.
    */
   compact?: boolean
-  /** The compact line's menu (`MenuButton`), drawn just before "Leave room". */
+  /**
+   * The seat's menu (`MenuButton`), drawn just before "Leave room" — on the compact line (a phone on its side) and in
+   * the full header's right cell (a phone held upright, BP-31 P3). Nothing when not given (the desktop ring).
+   */
   menu?: ReactNode
 }
 
@@ -111,6 +114,7 @@ export function RoomHeader({ room, status, onLeave, lang, right, compact = false
       <div className={s.headRight}>
         {conn}
         {right}
+        {menu}
         {leave}
       </div>
     </header>

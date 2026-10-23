@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { seededRng } from '../cards/rng.js'
+import { blindTableLimit } from './blind.js'
 import { applyCommand, createHand, legalActions, nextButton } from './engine.js'
 import { randomPolicy, simulateHand, type Policy } from './simulate.js'
 import { EngineError, type BlindRules, type GameEvent, type HoldemRules } from './types.js'
@@ -149,8 +150,8 @@ describe('simulation invariants', () => {
     for (let i = 0; i < 300; i++) {
       const n = 2 + rng.int(7)
       const rules: BlindRules = { ...BLIND_B, holeCards: rng.int(2) === 0 ? 2 : 3, decisionMode: rng.int(2) === 0 ? 'none' : 'playOrFold' }
-      // Short stacks mixed in (plan 27 D1): anything from 1 point to five wagers is dealt, and an ante may empty a seat.
-      const stacks = Array.from({ length: n }, () => 1 + rng.int(5 * rules.fixedWager))
+      // Short stacks mixed in (plan 27 D1): anything from 1 point to the table limit is dealt, and an ante may empty a seat.
+      const stacks = Array.from({ length: n }, () => 1 + rng.int(blindTableLimit(rules)))
       // simulateHand throws if Σ stacks + fee + carry-over ever differs from what went in.
       const { state } = simulateHand({ handId: `b${i}`, rules, seats: seats(stacks), button: rng.int(n), carryOverIn: rng.int(3) === 0 ? 1500 : 0 }, randomPolicy, rng)
       expect(state.phase).toBe('COMPLETE')

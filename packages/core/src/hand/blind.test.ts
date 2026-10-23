@@ -40,11 +40,11 @@ class Table {
 }
 
 describe('setup', () => {
-  it('sets the table limit at five wagers for every tier (spec 2026-09-29)', () => {
+  it('sets the table limit at ten wagers for every tier (spec 2026-09-29, BP-31)', () => {
     expect([1_000, 2_000, 5_000, 10_000, 20_000, 50_000].map((fixedWager) => blindTableLimit({ fixedWager }))).toEqual([
-      5_000, 10_000, 25_000, 50_000, 100_000, 250_000,
+      10_000, 20_000, 50_000, 100_000, 200_000, 500_000,
     ])
-    expect(blindTableLimit(rules({ decisionMode: 'playOrFold' }))).toBe(5_000) // the mode does not change it
+    expect(blindTableLimit(rules({ decisionMode: 'playOrFold' }))).toBe(10_000) // the mode does not change it
   })
   it('antes every seat, deals the configured hole cards, adds carry-over', () => {
     const t = new Table(rules({ holeCards: 3 }), [5000, 5000, 5000], 700)

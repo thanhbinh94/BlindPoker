@@ -11,10 +11,11 @@ import { Modal } from '../primitives/Modal.js'
 import { cx } from '../primitives/cx.js'
 import { ActionBar } from '../table/ActionBar.js'
 import { HandResult } from '../table/HandResult.js'
-import { useRoomFrame, useStageTier, type RoomFrame } from '../table/frame.js'
+import { STACK_LAYOUT_QUERY, useRoomFrame, useStageTier, type RoomFrame } from '../table/frame.js'
 import { PokerTable, type TableLayout } from '../table/PokerTable.js'
 import { RankLabel } from '../table/RankLabel.js'
 import { RoomHeader } from '../table/RoomHeader.js'
+import { useMediaQuery } from '../table/useMediaQuery.js'
 import { useFullscreenNudge } from './fullscreen-nudge.js'
 import { useRevealHold } from './reveal-hold.js'
 import { useSeatClearance } from './seat-clearance.js'
@@ -165,6 +166,8 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
   // is in the tree.
   const tier = useStageTier(stageRef, frame, room !== null)
   const [nudgeDone, dismissNudge] = useFullscreenNudge()
+  // The stacked table (BP-31 R9), measured once here so the table and the tray agree; a hook, so above the early return.
+  const stackMatch = useMediaQuery(STACK_LAYOUT_QUERY)
 
   if (room === null) return null
 
@@ -296,8 +299,18 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
    * toggles, "Tự động chơi" among them — stays, so auto-play can be turned off during the countdown (B4).
    */
   const landscape = frame === 'landscape'
+  /** The table's layout, one answer for the table and the tray: an override, else the ring in landscape, else the query. */
+  const tableLayout: TableLayout = layout ?? (frame === 'landscape' ? 'ring' : stackMatch ? 'stack' : 'ring')
+  /**
+   * A phone held upright (BP-31 §3.1, R11) — or any window the stack query catches (R9) — keyed on the resolved layout,
+   * never on the raw query, which a phone on its side also answers (P2). It takes landscape's two pieces: the seat's
+   * controls in the header's "Thêm" menu and a dock for what starts a hand; there the dock is a row in the footer, in
+   * the tray's place, shown to whoever can press something in it — a seated player, or the host, seated or not (R14).
+   * A spectator who does not host gets no footer at all.
+   */
+  const stack = !landscape && tableLayout === 'stack'
   const short = landscape && tier === 'short'
-  const dockShown = landscape && (waiting || countdownHere)
+  const dockShown = (landscape && (waiting || countdownHere)) || (stack && (waiting || countdownHere) && (mySeated || isHost))
   // R3: only where the browser offers it (iOS Safari on a phone does not).
   const fullscreenOffered = typeof document !== 'undefined' && document.fullscreenEnabled === true
   /**
@@ -311,7 +324,8 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
     toggleFullscreen()
   }
   const menuItems: MenuItem[] = []
-  if (landscape) {
+  const menuShown = landscape || stack
+  if (menuShown) {
     if (mySeated) menuItems.push({ id: 'standUp', label: t('actions.standUp'), disabled: request.busy, onSelect: standUp })
     menuItems.push({
       id: 'sitOut',
@@ -326,17 +340,40 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
     }
   }
   const leave = (): void => void request.run(() => client.leaveRoom())
+  const tray =
+    hand === null || hand.mySeat === null ? null : (
+      <ActionBar
+        hand={hand}
+        room={room}
+        onAct={act}
+        disabled={request.busy || state.status !== 'open'}
+        lang={lang}
+        preAction={state.preAction?.kind ?? null}
+        onPreAction={client.setPreAction}
+        autoPlay={state.autoPlay}
+        onAutoPlay={client.setAutoPlay}
+        frame={frame}
+        layout={tableLayout}
+        tier={tier}
+        betweenHands={dockShown}
+      />
+    )
+  /** The dock's content, both frames: what starts a hand, then the count or the countdown. */
+  const dockLine = readyLine ?? countdownLine
+  /** The stack's footer holds the dock or the tray, or nothing: a spectator has no footer (spec §3.1). */
+  const footerShown = !stack || dockShown || tray !== null || nudgeShown
 
   return (
-    <div className={s.room} data-frame={frame} data-tier={landscape ? tier : undefined}>
+    <div className={s.room} data-frame={frame} data-tier={landscape ? tier : undefined} data-layout={stack ? 'stack' : undefined}>
       {header}
       <RoomHeader
         room={room}
         status={state.status}
         onLeave={leave}
         lang={lang}
+        // The stack keeps the full header — its meta line carries the stakes and the limit — and adds the menu (P3).
         compact={landscape}
-        menu={landscape ? <MenuButton label={t('room.more')} items={menuItems} /> : undefined}
+        menu={menuShown ? <MenuButton label={t('room.more')} items={menuItems} /> : undefined}
       />
 
       {state.status === 'open' ? null : (
@@ -357,7 +394,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
           lang={lang}
           canSit={canSit}
           onSeatClick={onSeatClick}
-          layout={layout}
+          layout={tableLayout}
           frame={frame}
           tier={tier}
           chibiFor={chibiFor}
@@ -366,8 +403,9 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
           rankFor={rankFor}
           resultPending={held}
           onReveal={reveal}
-          // The short tier's felt has no free band under the board for it (BP-28, R2): the dock carries it there.
-          note={landscape && waiting && !short ? hint : null}
+          // The short tier's felt has no free band under the board for it (BP-28, R2): the dock carries it there. The
+          // stack's one-row footer has no room for it either, so it is the felt's last line there (BP-31 P4).
+          note={(stack || (landscape && !short)) && waiting ? hint : null}
         />
 
         {/* The result card is dealt onto the felt, so it keeps the felt's night palette in either theme. The countdown
@@ -388,74 +426,75 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
         )}
       </main>
 
-      <footer className={s.roomFoot}>
-        {nudgeShown ? (
-          <div className={s.nudge} data-surface="night">
-            <button type="button" className={s.nudgeUse} onClick={takeFullscreen}>
-              {t('room.fullscreenNudge')}
-            </button>
-            <button type="button" className={s.nudgeClose} aria-label={t('room.fullscreenNudgeDismiss')} onClick={dismissNudge}>
-              <span aria-hidden="true">{NUDGE_CLOSE_GLYPH}</span>
-            </button>
-          </div>
-        ) : null}
-        {landscape ? (
-          dockShown ? (
-            <div className={s.dock} role="group" aria-label={t('room.controls')} data-surface="night">
-              {readyButton}
-              {startButton}
-              {readyLine}
-              {countdownLine}
-              {/* BP-28, R2: in the short tier the hint is the dock's second line, under the ready count. */}
-              {short ? hintLine : null}
+      {footerShown ? (
+        // The stack's dock row is the footer itself: one night bar, the tray's height, holding the dock and — between
+        // hands — whatever the tray keeps beside it ("Tự động chơi", R13). In a hand the tray is the bar, as on every frame.
+        <footer className={s.roomFoot} {...(stack && dockShown ? { 'data-dock': 'true', 'data-surface': 'night' } : {})}>
+          {nudgeShown ? (
+            <div className={s.nudge} data-surface="night">
+              <button type="button" className={s.nudgeUse} onClick={takeFullscreen}>
+                {t('room.fullscreenNudge')}
+              </button>
+              <button type="button" className={s.nudgeClose} aria-label={t('room.fullscreenNudgeDismiss')} onClick={dismissNudge}>
+                <span aria-hidden="true">{NUDGE_CLOSE_GLYPH}</span>
+              </button>
             </div>
-          ) : null
-        ) : (
-          <div className={s.controls} role="group" aria-label={t('room.controls')}>
-            {readyButton}
-            {mySeated ? (
-              <Button variant="ghost" disabled={request.busy} onClick={standUp}>
-                {t('actions.standUp')}
+          ) : null}
+          {landscape ? (
+            dockShown ? (
+              <div className={s.dock} role="group" aria-label={t('room.controls')} data-surface="night">
+                {readyButton}
+                {startButton}
+                {readyLine}
+                {countdownLine}
+                {/* BP-28, R2: in the short tier the hint is the dock's second line, under the ready count. */}
+                {short ? hintLine : null}
+              </div>
+            ) : null
+          ) : stack ? (
+            // No row of controls in the stack (P5): the seat's own are in the header's menu, and the dock keeps what
+            // starts a hand under the same group name, in one row. No live region of its own: the tray's line and the
+            // reconnect banner are the room's, and a third would make "the status" ambiguous.
+            dockShown ? (
+              <div className={s.dock} role="group" aria-label={t('room.controls')}>
+                {readyButton}
+                {startButton}
+                {dockLine}
+              </div>
+            ) : null
+          ) : (
+            <div className={s.controls} role="group" aria-label={t('room.controls')}>
+              {readyButton}
+              {mySeated ? (
+                <Button variant="ghost" disabled={request.busy} onClick={standUp}>
+                  {t('actions.standUp')}
+                </Button>
+              ) : null}
+              {/* Keep the seat, skip the hands. It stays put (disabled) while standing so the tray does not
+                  reshuffle under the player the moment they take a seat. */}
+              <Button variant="ghost" disabled={request.busy || !mySeated} aria-pressed={mySeated ? sittingOut : undefined} onClick={toggleSitOut}>
+                {t(sittingOut ? 'room.sitIn' : 'room.sitOut')}
               </Button>
-            ) : null}
-            {/* Keep the seat, skip the hands. It stays put (disabled) while standing so the tray does not
-                reshuffle under the player the moment they take a seat. */}
-            <Button variant="ghost" disabled={request.busy || !mySeated} aria-pressed={mySeated ? sittingOut : undefined} onClick={toggleSitOut}>
-              {t(sittingOut ? 'room.sitIn' : 'room.sitOut')}
-            </Button>
 
-            {readyLine ?? countdownLine}
+              {dockLine}
 
-            {startButton}
-            {/* The roster used to sit open in the tray, a red "Kick" per player, taking a row a phone did not
-                have; it is one quiet button now, and the list opens on demand (layout audit C5). */}
-            {canManage ? (
-              <Button variant="ghost" onClick={openManage}>
-                {t('room.manage')}
-              </Button>
-            ) : null}
-            {hintLine}
-          </div>
-        )}
+              {startButton}
+              {/* The roster used to sit open in the tray, a red "Kick" per player, taking a row a phone did not
+                  have; it is one quiet button now, and the list opens on demand (layout audit C5). */}
+              {canManage ? (
+                <Button variant="ghost" onClick={openManage}>
+                  {t('room.manage')}
+                </Button>
+              ) : null}
+              {hintLine}
+            </div>
+          )}
 
-        {/* The tray belongs to a seated player in a live hand — it holds its place between turns rather than
-            appearing and disappearing under the felt. */}
-        {hand === null || hand.mySeat === null ? null : (
-          <ActionBar
-            hand={hand}
-            room={room}
-            onAct={act}
-            disabled={request.busy || state.status !== 'open'}
-            lang={lang}
-            preAction={state.preAction?.kind ?? null}
-            onPreAction={client.setPreAction}
-            autoPlay={state.autoPlay}
-            onAutoPlay={client.setAutoPlay}
-            frame={frame}
-            betweenHands={dockShown}
-          />
-        )}
-      </footer>
+          {/* The tray belongs to a seated player in a live hand — it holds its place between turns rather than
+              appearing and disappearing under the felt. */}
+          {tray}
+        </footer>
+      ) : null}
 
       <Modal
         open={buyInSeat !== null}

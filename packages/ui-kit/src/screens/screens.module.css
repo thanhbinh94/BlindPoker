@@ -204,10 +204,15 @@
   gap: var(--space-3);
 }
 
+/* The ring's row of controls is centred under the felt (BP-31 P10, R4), not capped: at 1920 px its buttons had spread
+   across the whole window, far from the table they act on, but a 980 px cap wrapped the pre-hand hint onto a second
+   line at 1280–1536 px and pushed the stage 12 px past the window (final wave). Only the tray keeps the 980 px cap.
+   The footer itself is not capped either: the landscape corners are placed against the room. */
 .controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: var(--space-3);
 }
 
@@ -536,4 +541,63 @@
   inset: 0 0 60px 0;
   padding: var(--space-2);
   align-items: center;
+}
+
+/* ── room, phone held upright (the stack) ─────────────────────────────────── */
+
+/* BP-31 §3.1, P5. The stack has no row of controls: the seat's own are in the header's "Thêm" menu, and between hands
+   the footer is one night bar in the tray's place, with the tray's 8 / 12 px padding and its gold edge, so it is the idle
+   tray's 61 px and the felt above keeps its height from the hand to the pause and back. Keyed on the room's resolved
+   `data-layout` (never the raw query, P2) and on the footer's `data-dock`, which `RoomScreen` sets only while the dock
+   shows. The bar holds the dock and, at its start, what the tray keeps between hands ("Tự động chơi", R13; the tray
+   draws nothing of its own then, `.tray[data-between]`). In flow — not landscape's absolute corner pill. No motion. */
+.room[data-layout='stack'] .roomFoot[data-dock] {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3) calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid color-mix(in srgb, var(--gold) 34%, transparent);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: linear-gradient(180deg, var(--bg-elev), var(--bg));
+  box-shadow: var(--shadow-2);
+}
+
+/* One row of 44 px buttons: Sẵn sàng / Hủy sẵn sàng, Bắt đầu, then the count ("5/6 sẵn sàng") or the countdown. The
+   buttons share the row and cut their label before the row wraps; the count keeps its width. Holding only the
+   countdown (a seated player who does not host, after the result card is closed) the row is one line of text and the
+   bar 38 px: a 44 px floor there pushed a 375 × 812 table with eight opponents and the 66 px showdown strip 4 px past
+   its stage (Task 4a). */
+.room[data-layout='stack'] .dock {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* A label too long for its share of the row wraps to a second line inside the 44 px button rather than losing its end
+   to "…" ("Hủy sẵn sàng" beside "Bắt đầu" and the count at 375 px, BP-31 final wave); the bar keeps its height. */
+.room[data-layout='stack'] .dock > button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-inline: var(--space-2);
+  font-size: 0.8125rem;
+  line-height: 1.1;
+  white-space: normal;
+  text-wrap: balance;
+}
+
+.room[data-layout='stack'] .dock .readyCount {
+  flex: none;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.room[data-layout='stack'] .dock .countdown {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.875rem;
+  text-align: center;
+  white-space: nowrap;
 }

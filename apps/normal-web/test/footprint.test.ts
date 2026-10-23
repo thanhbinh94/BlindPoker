@@ -45,8 +45,12 @@ const INDEX = join(DIST, 'index.html')
  * 2026-10-22 (Plan 27, Ruling 13): raised from 130 KB to 140 KB. Plan 27: shop/welcome/rank/GM strings live in the main
  * bundle; splitting locale namespaces per lazy screen is a recorded residual. The vi and en `normal.json` are imported
  * by the entry, so every screen's words ship with the first paint even when the screen itself is a lazy chunk.
+ * 2026-10-23 (BP-31, lead ruling at the gate): raised from 140 KB to 150 KB. The bet panel (chips + slider), the
+ * one-row phone tray with its dock and menu branches, and the fan/strip markup took the entry to 140.3 KB gzip, 0.3 KB
+ * over the 4 KB of headroom Plan 27 had left; the SRS's own budget (§24) is 500 KB. The locale-namespace split stays the
+ * recorded way to win the headroom back.
  */
-const MAX_ENTRY_GZIP = 140 * 1024
+const MAX_ENTRY_GZIP = 150 * 1024
 const MAX_TOTAL_GZIP = 900 * 1024
 const MAX_CSS_GZIP = 60 * 1024
 

@@ -123,6 +123,13 @@ export interface SeatProps {
   rank?: number | null
   /** The room's frame, as `PokerTable` has it: `landscape` always shortens the rank to its numeral. */
   frame?: RoomFrame
+  /**
+   * The viewer's own seat in the stack layout (BP-31 §3.1, R1, R10): the cards fan out (`data-fan` on the cards box, `none`
+   * for a hand to peel) and the plate is a one-line strip carrying the stack, the rank's numeral, the host and state badges
+   * and the street bet, with the hand's name and payout as its second line at showdown. No "you" badge and no caption:
+   * the strip is always the viewer. `PokerTable` passes it for `mode === 'stack' && isMe` only. Defaults to `false`.
+   */
+  strip?: boolean
   /** The hand the cards belong to: each hand's cards are new cards, dealt afresh even when the count is the same. */
   handId: string | null
   /**
@@ -200,6 +207,7 @@ export function Seat({
   caption,
   rank = null,
   frame = 'desktop',
+  strip = false,
   handId,
   dealt,
   dealIndex,
@@ -296,11 +304,40 @@ export function Seat({
   const shownRank = seat.isBot || rank === null || rank < 2 ? null : rank
   const plateTextRef = useRef<HTMLSpanElement>(null)
   const nameTextRef = useRef<HTMLSpanElement>(null)
-  const rankPlace = useRankPlace(plateTextRef, nameTextRef, shownRank, frame === 'landscape', name)
+  // The strip is one line: its rank is the numeral's badge, as in the landscape frame, and nothing is measured.
+  const rankPlace = useRankPlace(plateTextRef, nameTextRef, shownRank, frame === 'landscape' || strip, name)
   const rankLabel = shownRank === null ? null : <RankLabel rank={shownRank} lang={lang} compact={rankPlace === 'stackPill'} />
   useLayoutEffect(() => {
     if (!toTurn && pillRef.current !== null && document.activeElement === pillRef.current) seatRef.current?.focus({ preventScroll: true })
   }, [toTurn])
+
+  // What a seat says about itself, under its plate — or, for the viewer's strip, on it (BP-31 R10).
+  // Gold, not red — red is for the risky acts (fold, leave, kick); a crown tells it apart from "you" when both sit on the
+  // same plate (layout audit C4). The short landscape tier (BP-28) keeps an opponent's line to its bet: who the seat is
+  // (host, bot) goes, and its state shrinks to a dot of the state's colour, the words kept for a screen reader. The
+  // classes are those rules' handles.
+  const hostBadge =
+    player?.isHost === true ? (
+      <Badge tone="gold" className={s.tagWho}>
+        <span aria-hidden="true">{CROWN_GLYPH}</span>
+        {t('labels.host')}
+      </Badge>
+    ) : null
+  const stateBadge =
+    pill === null ? null : (
+      <Badge tone={pill.tone} className={s.tagState}>
+        {pill.text}
+      </Badge>
+    )
+  const betChip = seat.betThisStreet > 0 ? <span className={s.bet}>{formatPoints(seat.betThisStreet, lang)}</span> : null
+  const result =
+    showdownLabel === null && winnerPayout === null ? null : (
+      <span className={s.seatResult}>
+        {showdownLabel === null ? null : <span className={s.handTag}>{showdownLabel}</span>}
+        {winnerPayout === null ? null : <span className={s.payout}>{payoutText}</span>}
+      </span>
+    )
+  const stackFigure = <span className={s.seatStack}>{formatPoints(seat.stack, lang)}</span>
 
   return (
     <div
@@ -308,6 +345,7 @@ export function Seat({
       className={cx(
         s.seat,
         isMe && s.seatMe,
+        strip && s.meStrip,
         isActing && s.seatActing,
         winnerPayout !== null && s.seatWin,
         seat.folded && s.seatFolded,
@@ -331,7 +369,9 @@ export function Seat({
           tier (BP-28) lays the viewer's cards beside the plate as one row, the line under it centred below. */}
       <div className={s.seatTop}>
         {faces.length > 0 ? (
-          <div className={s.seatCards}>
+          // The strip's fan (BP-31 R1): two or three cards splay from their feet; a hand to peel lies flat (`none`), since
+          // the peel measures the drag across the card's own box.
+          <div className={s.seatCards} data-fan={strip ? (peeling ? 'none' : String(faces.length)) : undefined}>
             {faces.map((card, i) =>
               peeling && card !== null ? (
                 <PeelCard
@@ -375,32 +415,52 @@ export function Seat({
           </div>
         ) : null}
 
-        <div className={s.plate} data-plate="">
+        <div className={cx(s.plate, strip && result !== null && s.plateTwoLine)} data-plate="">
           {/* Every seat gets the same framed disc: a bot's chibi chosen by its id, the app's chibi for a human, and
               the initial when the app has none. The frame is what makes a table of six read as six faces. */}
           <span className={s.avatar} data-face={seat.isBot ? 'bot' : chibi === null ? 'default' : 'app'} aria-hidden="true">
             {chibi === null ? initial : <Chibi subject={chibi} expression={expression} frame="head" bounce={bounce} />}
           </span>
-          <span ref={plateTextRef} className={s.plateText}>
-            <span className={s.seatName}>
-              <span ref={nameTextRef} className={s.seatNameText}>
-                {name}
+          {strip ? (
+            // The strip (BP-31 R10): one line — the name, cut with "…" before anything else gives; the stack; the rank's
+            // numeral; the host and state badges; the street bet — and, at showdown, the hand's name and payout under it.
+            <span ref={plateTextRef} className={s.plateText}>
+              <span className={s.stripLine}>
+                <span className={s.seatName}>
+                  <span ref={nameTextRef} className={s.seatNameText}>
+                    {name}
+                  </span>
+                </span>
+                {seat.isBot ? null : stackFigure}
+                {rankLabel}
+                {hostBadge}
+                {stateBadge}
+                {betChip}
               </span>
-              {rankPlace === 'name' ? rankLabel : null}
+              {result}
             </span>
-            {caption === undefined || caption === null ? null : <span className={s.seatCaption}>{caption}</span>}
-            {/* A bot's stack is virtual — a table limit (5 × the wager) that is topped back up whenever it runs low, so
-                a figure beside it would only read as a real balance to compare against. The Bot badge below says what
-                the seat is; its bets and payouts still show like anyone else's. A bot has no rank either, so it has no
-                stack line at all. */}
-            {seat.isBot ? null : (
-              <span className={s.stackLine}>
-                <span className={s.seatStack}>{formatPoints(seat.stack, lang)}</span>
-                {rankPlace === 'name' ? null : rankLabel}
+          ) : (
+            <span ref={plateTextRef} className={s.plateText}>
+              <span className={s.seatName}>
+                <span ref={nameTextRef} className={s.seatNameText}>
+                  {name}
+                </span>
+                {rankPlace === 'name' ? rankLabel : null}
               </span>
-            )}
-          </span>
-          {ring ? <TurnTimer deadlineAt={deadlineAt} serverNow={serverNow} totalMs={turnTimerMs} size={38} /> : null}
+              {caption === undefined || caption === null ? null : <span className={s.seatCaption}>{caption}</span>}
+              {/* A bot's stack is virtual — a table limit (10 × the wager) that is topped back up whenever it runs low, so
+                  a figure beside it would only read as a real balance to compare against. The Bot badge below says what
+                  the seat is; its bets and payouts still show like anyone else's. A bot has no rank either, so it has no
+                  stack line at all. */}
+              {seat.isBot ? null : (
+                <span className={s.stackLine}>
+                  {stackFigure}
+                  {rankPlace === 'name' ? null : rankLabel}
+                </span>
+              )}
+            </span>
+          )}
+          {ring ? <TurnTimer deadlineAt={deadlineAt} serverNow={serverNow} totalMs={turnTimerMs} size={strip ? 40 : 38} /> : null}
           {isButton ? (
             <span className={s.dealer} role="img" aria-label={t('labels.dealer')}>
               {DEALER_GLYPH}
@@ -411,46 +471,30 @@ export function Seat({
 
       {/* Two lines under the plate at most (review 2026-09-29, No2): who the seat is and what it has in front of
           it — the badges and the bet — then how the hand ended for it — the hand's name and the payout. One badge,
-          one chip and one tag a line each ran the viewer's own block six lines deep, past the foot of the stage. */}
-      <div className={s.tags}>
-        {isMe ? <Badge tone="gold">{t('labels.you')}</Badge> : null}
-        {/* Gold, not red — red is for the risky acts (fold, leave, kick); a crown tells it apart from "you"
-            when both sit on the same plate (layout audit C4). */}
-        {/* The short landscape tier (BP-28) keeps an opponent's line to its bet: who the seat is (host, bot) goes, and
-            its state shrinks to a dot of the state's colour, the words kept for a screen reader. The classes are those
-            rules' handles. */}
-        {player?.isHost === true ? (
-          <Badge tone="gold" className={s.tagWho}>
-            <span aria-hidden="true">{CROWN_GLYPH}</span>
-            {t('labels.host')}
-          </Badge>
-        ) : null}
-        {seat.isBot ? (
-          <Badge tone="muted" className={s.tagWho}>
-            {t('labels.bot')}
-          </Badge>
-        ) : null}
-        {pill === null ? null : (
-          <Badge tone={pill.tone} className={s.tagState}>
-            {pill.text}
-          </Badge>
-        )}
-        {/* Squeeze mode (§4.2.6): who has turned, for the others to see whom the round still waits on. A seat that has
-            decided has turned with it (§4.2.4): its "Đã chọn" says both, and keeps the line under the plate to one. */}
-        {!isMe && squeezeRound && seat.revealed === true && !seat.hasDecided ? (
-          <Badge tone="teal" className={s.tagState}>
-            {t('labels.revealed')}
-          </Badge>
-        ) : null}
-        {seat.betThisStreet > 0 ? <span className={s.bet}>{formatPoints(seat.betThisStreet, lang)}</span> : null}
-      </div>
-
-      {showdownLabel === null && winnerPayout === null ? null : (
-        <div className={s.seatResult}>
-          {showdownLabel === null ? null : <span className={s.handTag}>{showdownLabel}</span>}
-          {winnerPayout === null ? null : <span className={s.payout}>{payoutText}</span>}
+          one chip and one tag a line each ran the viewer's own block six lines deep, past the foot of the stage.
+          The strip carries all of it on its plate instead, and has no line under it. */}
+      {strip ? null : (
+        <div className={s.tags}>
+          {isMe ? <Badge tone="gold">{t('labels.you')}</Badge> : null}
+          {hostBadge}
+          {seat.isBot ? (
+            <Badge tone="muted" className={s.tagWho}>
+              {t('labels.bot')}
+            </Badge>
+          ) : null}
+          {stateBadge}
+          {/* Squeeze mode (§4.2.6): who has turned, for the others to see whom the round still waits on. A seat that has
+              decided has turned with it (§4.2.4): its "Đã chọn" says both, and keeps the line under the plate to one. */}
+          {!isMe && squeezeRound && seat.revealed === true && !seat.hasDecided ? (
+            <Badge tone="teal" className={s.tagState}>
+              {t('labels.revealed')}
+            </Badge>
+          ) : null}
+          {betChip}
         </div>
       )}
+
+      {strip ? null : result}
     </div>
   )
 }

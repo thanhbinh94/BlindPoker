@@ -147,7 +147,10 @@ export function BlindFields({
       </Field>
       <Field
         label={t('create.wager')}
-        hint={t('create.tableLimitHint', { points: `${formatPoints(blindTableLimit({ fixedWager }), lang)} ${t('common:units.pointsShort')}` })}
+        hint={t('create.tableLimitHint', {
+          points: `${formatPoints(blindTableLimit({ fixedWager }), lang)} ${t('common:units.pointsShort')}`,
+          times: ECONOMY.blindTableLimitMultiplier,
+        })}
       >
         <Select value={fixedWager} options={wagers} disabled={disabled} onChange={onFixedWager} />
       </Field>

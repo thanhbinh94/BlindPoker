@@ -4,6 +4,11 @@ Ngày: 2026-09-29. Trạng thái: người dùng duyệt thiết kế (luật + 
 cùng ngày và yêu cầu "viết spec đi sau đó lập plan và triển khai luôn" (bỏ bước duyệt lại bản spec viết). Sửa đổi spec gốc
 `docs/superpowers/specs/2026-09-04-bind-poker-design.md` §8, §12, §21 (ghi rõ trong mục 9 bên dưới).
 
+> **Sửa đổi (BP-31, 2026-10-23 — `docs/superpowers/specs/2026-10-23-phone-table-bet-slider-design.md` §3.6, R5):** hạn mức
+> nay là **10 lần** mức cược (`ECONOMY.blindTableLimitMultiplier = 10`; phòng cược 5.000 thì hạn mức 50.000), không còn 5
+> lần như các mục dưới đây ghi. Bot cũng nhận stack bằng hạn mức mới. Cách ngồi `min(số dư, L)`, luật chơi tới 0 (Plan 27)
+> và phí bàn 0 không đổi; không có di trú dữ liệu.
+
 ## 1. Mục tiêu
 
 Người dùng: *"bổ sung vào chế độ blind poker phần hạn mức dựa theo số tiền cược (ví dụ: phòng cược 5.000 thì hạn mức mỗi

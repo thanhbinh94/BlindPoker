@@ -9,6 +9,130 @@ below are the real history.
 
 ---
 
+## BP-31 — the phone table gets a fanned hand and a one-row tray, a raise is a slider on every frame, and a Blind table takes ten wagers — merged `MERGE` (2026-10-23)
+
+The user, 2026-10-23: "khi xoay ngang màn hình hoặc xoay dọc ở lúc vào bàn, thiết kế các nút quá to, khá khó nhìn bài",
+"trên điện thoại ở cả 2 mode". The brainstorm the same day chose layout B with a fanned hand (Q1), a slider instead of a
+typed amount (Q2), on the desktop too (Q3), a Blind limit of ten wagers (Q4), and four rows of the 2026-10-22 UI review
+that sit on the table: P1, P7, P10, P13 (Q5) — spec `2026-10-23-phone-table-bet-slider-design.md`, rulings R1–R12. Branch
+`feature/BP-31-phone-table-bet-slider` from `main` after BP-30; Task 1 ran on its own branch and was merged in (`14d4b9d`).
+
+- **What a player sees.** On a phone held upright (or any window under 768 px wide or 620 px tall) my two or three cards
+  are big — 56 px wide at 375 px, 60 px from 400 px — and fan out over the felt's foot, above a one-line strip with my
+  face (the turn ring and the D on it), name, stack, bet, Chủ phòng and rank. The tray is one row of 44 px buttons:
+  Bỏ bài · Xem or Theo · Tố ▴ in Hold'em, Tự động chơi · Bỏ bài · Chơi in Blind. "Tố ▴" opens a panel in place of the row —
+  Min · ½ pot · Pot · Tất tay over a slider, "Hủy ▾" and "Tố 48.000" — and "Hủy ▾" or Esc folds it back. Đứng dậy, Tạm nghỉ
+  / Chơi tiếp, Quản lý bàn and Toàn màn hình move into the header's ⋯ ("Thêm"), as on a landscape phone, and between hands
+  a one-row dock holds Sẵn sàng / Hủy sẵn sàng, Bắt đầu and the ready count; the pre-hand hint lies on the felt. On a
+  landscape phone the left corner becomes the same panel after the first tap on Tố, and the right corner's button turns
+  into "Tố N"; the "✎" and its "Nhập số điểm" dialog are gone. On the desktop the chips and the slider stand over the
+  buttons whenever a size is legal, the amount stands beside the slider, the number field is gone, and the tray stops at
+  980 px under the felt instead of running 1 880 px across a 1920 screen (the controls row above it is centred). Desktop seats are at least 132 px wide (118 px from seven seats), so a name fits
+  on one line, and from seven seats other players' titles step aside. The smallest table text on a phone is 11 px (the
+  chips' bets 12 px). A Blind table takes ten wagers from the balance at sit-down (wager 1.000 → limit 10.000), and the
+  create-room hint says "(10× mức cược)"; bots sit with the same.
+- **Under it.** core: `ECONOMY.blindTableLimitMultiplier` 5 → 10 (`blindTableLimit`); no engine, protocol, schema or
+  migration change, and the amount sent is still a street total clamped into `[min, max]`. ui-kit: `BetPanel` (new:
+  chips with `aria-pressed`, a native range with `step="1"` that steps itself along `min + i·step` — `betStep` is the small
+  blind, at most 200 steps — and whose last cell is `max` exactly, `sliderLast` / `sliderValue` / `sliderIndex`);
+  `ActionBar` takes `layout` (`'stack' | 'ring'`) and `tier`, is two-step in the stack and in landscape and one-step on the
+  ring, stamps `data-layout` and `data-panel`, resets the amount and shuts the panel per hand, turn and street, re-clamps
+  on new bounds, and never raises from a focused button's Enter; `AmountDialog`, `labels.amount`, `labels.amountDialog`,
+  `presets.max` and `SLIDER_STEPS` are gone, `presets.half` reads "½ pot" and `labels.betPanel` is new. `STACK_LAYOUT_QUERY`
+  in `frame.ts`; `RoomScreen` resolves the layout once and hands it to `PokerTable` and `ActionBar`, draws the header menu
+  and the dock in the stack (`footer[data-dock]`, `data-layout="stack"` on the room), and `RoomHeader` draws a menu in its
+  full form too. `Seat strip` gives the viewer's stack seat its strip (still `.plate[data-plate]`) and a fan
+  (`[data-fan="2|3|none"]`); `PokerTable` stamps `data-mine-cards`. CSS: the fan (`--fan-card`, `--fan-drop`, `--fan-over`,
+  the `rotate` property), the stack felt's padding, the 11 / 12 px floor, the 980 px cap, the wider ring seats, the panel's
+  three shapes (`inline`, `sheet`, `corner`, compact on the short tier).
+- **Tests.** Unit: core 197, server-kit 182 (every 5× number doubled), ui-kit 715 → 766 (BetPanel's 14, the ActionBar
+  rewrite, the stack seat and table, the stack room, raw-CSS pins for the fan, the strip, the chips, the 11 / 12 px floor,
+  the 980 px cap and the seat widths). e2e: `normal.spec.ts`'s `@mobile` test sits through the header menu, sits out
+  through its checkbox (and reads "Chơi tiếp" checked), and measures the tray (≤ 64 px) and my cards (≥ 52 px,
+  `offsetWidth`) in the hand; Lite's `@mobile` test sits through the menu and finds Sẵn sàng in the dock. Ops: L-04
+  rewritten (the panel in the left corner, `aria-pressed` chips, one slider, no number field, "Tố 400" → 600 by keyboard →
+  the big blind has 400 to call), L-06 opens the compact panel at 855 × 319 and holds it clear of the seats, the board, my
+  cards and the dock, F-12 / F-12b sit through the menu, and M-06 is new (`09-phone.spec.ts`, `@mobile`: the header menu
+  and the dock, the one-row tray, the fan ≥ 52 px clear of the pot, the panel — End reaches the slider's maximum and the
+  confirm names it — Hủy, a raise of 600; a full Blind table of seven bots fits in the hand). New helpers in
+  `ops-helpers.ts`: `raiseButton`, `betSlider`, `openBetPanel`, `setBet` (keyboard). The ops pack is 56 cases.
+- **Docs.** SRS §27.1 (the stack, the landscape tray, the desktop, the card sizes), §8.8 and the constants (ten wagers),
+  `docs/ui-kit.md` ("The bet panel and the one-row tray", "The stack layout", the landscape panel, the props), the
+  player guide (the phone table, the slider and its keys, ten wagers), `docs/operation-test-plan.md` (L-04, L-06, M-06; S-05,
+  F-10, H-02), `docs/test-matrix.md` (a BP-31 section, four rows; the B4 row), `docs/acceptance-checklist.md` (P26.2),
+  `docs/known-limitations.md` (four UI entries), `docs/copy-review-2026-10-10.md` (the chips, the panel's names),
+  `docs/ui-review-2026-10-22.md` (P1, P7, P10, P11, P13), the deployment guides and the Lite README (ten wagers), `CLAUDE.md` §3.
+- **Rulings** (the spec's, then each task's):
+  - Lead, at the gate: `MAX_ENTRY_GZIP` rises from 140 to 150 KB. The bet panel, the phone tray's branches and the fan/strip
+    markup took the entry chunk to 140.3 KB gzip, 0.3 KB over the headroom Plan 27 left (its Ruling 13 had raised the
+    budget 130 → 140); the SRS's own §24 limit is 500 KB, and the locale-namespace split stays the recorded way back.
+    Costs if wrong: a step change under 10 KB could now pass unnoticed.
+  - Spec: R1 Hold'em and plain Blind hands fan, a peel hand does not turn. R2 all in on a phone is the panel's chip, not a
+    row button or a menu item. R3 the slider steps by the small blind, at most 200 steps. R4 the desktop ring keeps its
+    controls row and its Tất tay button, with no ⋯. R5 bots take the new limit. R6 two steps in the stack and landscape,
+    one on the ring. R7 P13 is a check, not a fix, unless it measures wrong. R8 wider desktop seats, one-line names,
+    others' titles hidden from seven seats. R9 the tray's "phone" is the stack layout, resolved in `RoomScreen`. R10 my
+    strip keeps the disc, the ring, the D and the bet, and drops "Bạn" and the caption. R11 the ⋯ in the stack's header,
+    a one-row dock between hands. R12 the chips are 36 px even under touch. Pre-flight: R13 the stack keeps Tự động chơi
+    beside the dock between hands; R14 a host who is not seated still gets the dock with Bắt đầu.
+  - Task 1: the shutdown cases of `room-hands.test.ts` are doubled, not seeded (the all-fold run-down keeps its story on
+    seeded 5.000 balances); the cosmetic bot stacks and `engine.test.ts` were brought along (`blindTableLimit`); the
+    `04-blind:336` comment was reworded.
+  - Task 2a: chips set their target exactly, not snapped to the grid; a 16 px band above the slider for the floating
+    amount; `data-shape` `inline` / `sheet` / `corner`; `compact` means the short tier; `presets.max` stayed for 2b to
+    drop; a table without a small blind steps by 1.
+  - Task 2b: a `tier` prop; the landscape corner panel is 76 px with no floating amount; `data-panel` on the ring tray too;
+    Hủy keeps the amount; the focus goes to the slider on open and back to Tố on close; no Tất tay action in landscape
+    while sizing is legal; the stack's toggles keep the `.preset` height; the amount re-clamps on new bounds; a throwaway
+    Playwright config for the shots. Fix round: the reset keys on the board's length too (a new street with the same
+    seat to act starts at the minimum with the panel shut), and opening the stack's panel by keyboard lands on the slider.
+  - Task 3: the rank pill is always on the strip; an overfull strip wraps; ring cards stay 40 px; `--plate-h` stays 54 px;
+    the fan pivots at its foot; the stack grid's column is `minmax(0, 1fr)`.
+  - Task 4a: the footer is the dock bar; the empty tray stays in the DOM (`data-between`); no footer when it would be
+    empty; a 38 px countdown dock; the stack's sheet drops the floating amount; Quản lý bàn only between hands; the felt
+    note's padding.
+  - Task 4b: the 980 px cap skips the empty between-hands tray (`[data-between]`), a regression it found; the caption rule
+    needs no media query; the nine-seat Hold'em shots come from an engine snapshot.
+  - Task 5: the new ops case is **M-06**, not M-01 — `docs/operation-test-plan.md` §M already owns M-01…M-05 (manual,
+    cited by the copy review and the test runs), and the phone case belongs in that section. The Blind part seats seven
+    bots at `maxPlayers: 8` (Blind's cap), not eight at nine. After-hand states of the full Blind table are read for text
+    overlap but their stage scroll is recorded, not asserted (the final wave asserts it). `setBet` drives the keyboard (P8), never `fill`.
+    P11 of the UI review is marked done too (its number field is gone).
+  - Final fix wave (after the whole-branch review): the desktop controls row is centred, not capped (the cap wrapped the
+    pre-hand hint at 1280–1536 px and failed `normal.spec.ts`'s desktop Blind test by 12 px); from seven opponents a chip
+    with a showdown line hides its badge row (`.othersDense .seat:has(> .seatResult) > .tags`) and keeps that line to one
+    line (payout 14 px, a long hand name cut with "…"), and a strip with a state badge hides Chủ phòng
+    (`.stripLine:has(> .tagState) > .tagWho`), so a 375 × 812 Blind table of eight fits after the hand, card up or closed
+    (M-06 now asserts it: 0 px over seven runs, against 75–96 px before); the dock's labels wrap to two lines instead of an
+    ellipsis, and "Tự động chơi" beside them is at most 6em wide (one line of it left "Hủy sẵn sàng" three lines deep);
+    the desktop panel prints its amount beside the slider (the tray is 132 px on and off the turn, 145 before on it); a
+    dealt card's offset rides the `translate` property, outside a fanned card's `rotate`; one chip lights at a time (the
+    first that names the amount); the sheet's chips drop `.preset`'s 52 px floor (the last chip ended 13 px past the
+    tray's padding, now at its edge); the table-limit hint reads its multiplier from `ECONOMY`; `ActionBar`'s reset and
+    key listener are layout effects (no frame of the old panel, no key reaching the old turn); and the cheap tests the
+    reviews asked for. ui-kit 766 → 777.
+- **Khác với spec / Deviations from the spec.** The stack's sheet has no floating amount over the thumb (its confirm
+  reads "Tố N"), and the landscape corner panel is 76 px without it. The countdown dock is 38 px, not 44. My strip runs to
+  66 px when the host badge, the rank and a bet wrap (spec: 44 / 56); with a state badge it hides Chủ phòng instead. The
+  caption rule (others' titles hidden from seven seats) has no media query, so it also hides the titles in landscape and
+  at 768–1023 px. The desktop controls row is centred, not capped: a 980 px cap wrapped the pre-hand hint at 1280–1536
+  and pushed the stage 12 px (spec §3.3 / P10 capped both). The dock's labels wrap to two lines inside their 44 px
+  buttons. Hủy keeps the amount chosen this turn (the panel reopens on it). After a hand at a table of seven opponents
+  and more, a chip shows its hand's line in place of its badges and bet. The dock has no `role="status"` (it would
+  compete with the tray's wait line and the reconnect banner). The stack keeps the two-row header (so "Mức cược … · Hạn
+  mức …" stays). The chips are 36 px (spec R12, recorded in SRS §27.1). The nine-seat fallback of R8 (13 % / 94 px) was
+  not needed. The ops case is M-06, not M-01. M-06's Blind part has seven opponents, not eight.
+- **Still open.** UI review P3 (the lobby's void), P5 (the GM overview), P8 (tracked labels), P9 (emoji), P15 ("Lưu
+  tên"), P16 (the shop), P22 (the light theme) — the next round. Bug E6 (pre-existing since 2026-09-04, found by the
+  BP-31 review): after a sit-out empties the table of humans and the room returns to waiting, the client still shows
+  "Hủy sẵn sàng" and "8/8 sẵn sàng", and "Chơi tiếp" then "Bắt đầu" is refused ("Chưa đủ người chơi": `toOpen()` clears
+  the ready flags without a `PLAYER_READY`) — logged in `docs/bug-log.md` §10 with options, (a)
+  recommended, for a bugfix branch after BP-31. Small corners in `docs/known-limitations.md`: "Tố ▴" may break to two
+  lines on landscape corners narrower than ~70 px; between hands on the upright phone an empty "Hành động" group stays
+  in the DOM; the upright phone's dealer button sits on the strip's right corner. A finger on the slider (iOS Safari,
+  Chrome on Android, both orientations) and VoiceOver / TalkBack on it are the user's to try. Lite picks the kit up at
+  its next `pnpm build:lite`.
+
 ## BP-30 — the chibi breathes, blinks, cheers, greets and turns in the wardrobe and the shop — merged `30d7661` (2026-10-23)
 
 K6 of the 2026-10-21 requests (`docs/bug-log.md` §9): "dáng đứng của nhân vật quá cố định nên cũng làm giảm hứng thú của

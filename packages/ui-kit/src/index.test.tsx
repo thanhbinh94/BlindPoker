@@ -19,4 +19,12 @@ describe('ui-kit test setup', () => {
     expect(kit.flipFacing('right')).toBe('left')
     expect(kit.nextReaction(null, 'cheer')).toEqual({ kind: 'cheer', key: 1 })
   })
+
+  it('exports the bet panel and its step helpers (BP-31)', () => {
+    expect(typeof kit.BetPanel).toBe('function')
+    expect(kit.betStep(1_000, 20_000, 500)).toBe(500)
+    expect(kit.sliderValue(kit.sliderLast(600, 2_950, 200), 600, 2_950, 200)).toBe(2_950)
+    expect(kit.sliderIndex(2_950, 600, 2_950, 200)).toBe(12)
+    expect(kit.MAX_BET_STEPS).toBe(200)
+  })
 })

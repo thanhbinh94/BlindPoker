@@ -192,7 +192,7 @@ dù còn dở.
 
 Dừng **cứng** = tiến trình biến mất ngay. Số dư đã ghi trong SQLite vẫn nguyên (mọi bút toán đều
 nằm trong transaction), nhưng **mọi chồng đang trên bàn — buy-in Hold'em và hạn mức bàn Blind, tới
-250.000 mỗi ghế — cùng pot cộng dồn của Blind B thì mất**: chồng chỉ tồn tại trong bộ nhớ cho tới
+500.000 mỗi ghế — cùng pot cộng dồn của Blind B thì mất**: chồng chỉ tồn tại trong bộ nhớ cho tới
 lúc người chơi rời ghế, pot cho tới lúc được chia, hoặc cho tới khi server drain.
 
 ### 6.2 `--stop` và `--status`

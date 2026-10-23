@@ -38,7 +38,7 @@ là tốt. Với server **đang chạy**, dùng `.\bind-poker-lite.exe --status`
 Đọc mục này trước khi tắt máy, cập nhật hay khởi động lại. **Tắt êm** nghĩa là server huỷ các ván
 đang chơi, **hoàn lại toàn bộ điểm cược và mọi chồng trên bàn** (Hold'em và Blind) về số dư, rồi mới
 thoát. **Tắt cứng** là giết tiến trình ngay lập tức: **mọi chồng đang trên bàn — buy-in Hold'em và hạn
-mức bàn Blind, tới 250.000 mỗi ghế — cùng pot cộng dồn của Blind B sẽ mất**.
+mức bàn Blind, tới 500.000 mỗi ghế — cùng pot cộng dồn của Blind B sẽ mất**.
 Số dư đã ghi vào database thì luôn an toàn — chỉ phần điểm đang "nằm trên bàn" là mất.
 
 | Cách | Kết quả |
@@ -219,7 +219,7 @@ database. There is nothing to install.
   `Ctrl`+`Break` in the server's own console, and a service wrapper that sends Ctrl+C (NSSM with
   `AppStopMethodConsole`) stop gracefully — cancelling live hands and **refunding every wagered
   point and every table stack**. Closing the console window, `taskkill`, `schtasks /End` and `sc stop`
-  are hard kills: every table stack (Hold'em buy-ins and Blind table limits, up to 250.000 a seat)
+  are hard kills: every table stack (Hold'em buy-ins and Blind table limits, up to 500.000 a seat)
   and Blind carry-over pots are lost. Recorded balances are
   safe either way. `--stop` reads `bind-poker.run.json` (written next to the data file at startup,
   holding the pid, port and a 32-byte token), posts the shutdown over the loopback — the endpoint

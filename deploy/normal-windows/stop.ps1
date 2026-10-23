@@ -8,7 +8,7 @@
     gracefully on SIGTERM under Docker, and Windows has no way to send one to a detached process.
 
     So this script does the only thing left: `Stop-Process`. **Every stack sitting on a table — Hold'em
-    buy-ins and Blind table limits alike, up to 250.000 per Blind seat — and Blind B's carry-over pot are
+    buy-ins and Blind table limits alike, up to 500.000 per Blind seat — and Blind B's carry-over pot are
     lost.** Recorded balances in Postgres are safe either way. Close the rooms first (`/health` must say
     `rooms:0`) — see README.md section 7.
 

@@ -309,7 +309,8 @@ export const SHORT_LANDSCAPE = { width: 915, height: 355 }
 export const IPHONE_LANDSCAPE = { width: 844, height: 390 }
 
 /**
- * The room's "Thêm" (⋯) menu in the landscape frame (Plan 26, B2): opens it and returns the menu. The seat's own controls
+ * The room's "Thêm" (⋯) menu in the landscape frame (Plan 26, B2) and the upright phone's header (BP-31, R11): opens it
+ * and returns the menu. The seat's own controls
  * live there — "Đứng dậy" (`menuitem`), "Tạm nghỉ" / "Chơi tiếp" (`menuitemcheckbox`), "Quản lý bàn" — each only when the
  * desktop row would show it. Close it with `closeRoomMenu` once read.
  */
@@ -327,8 +328,9 @@ export async function closeRoomMenu(page: Page): Promise<void> {
 }
 
 /**
- * The seat is taken. On the desktop and the upright phone "Đứng dậy" is a button under the felt; in the landscape frame
- * (`via: 'menu'`) it is an item of the "Thêm" menu, which is opened, read and closed again.
+ * The seat is taken. On the desktop "Đứng dậy" is a button under the felt; in the landscape frame and, since BP-31, on
+ * the upright phone (the stack layout, `via: 'menu'`) it is an item of the header's "Thêm" menu, which is opened, read
+ * and closed again.
  */
 export async function expectSeated(page: Page, opts?: { via?: 'menu' }): Promise<void> {
   if (opts?.via !== 'menu') {
@@ -665,8 +667,8 @@ export async function expectScrimLeavesNoEdge(page: Page, overlay: Locator, labe
 }
 
 /**
- * Takes the given seat; the index is explicit so nothing ever races the bot for one. In the landscape frame pass
- * `{ via: 'menu' }`: "Đứng dậy" is then an item of the header's "Thêm" menu (`expectSeated`).
+ * Takes the given seat; the index is explicit so nothing ever races the bot for one. In the landscape frame and on the
+ * upright phone (BP-31) pass `{ via: 'menu' }`: "Đứng dậy" is then an item of the header's "Thêm" menu (`expectSeated`).
  */
 export async function sit(page: Page, seat: number, opts?: { via?: 'menu' }): Promise<void> {
   await page.locator(`[data-seat="${seat}"]`).getByRole('button', { name: 'Ngồi vào bàn' }).click()

@@ -269,8 +269,10 @@ describe('docs/test-matrix.md', () => {
     // reputation, the check-in count, the newcomer calendar) and five browser rows (spec 2026-10-21), BP-29's three
     // (bug log §10 E3–E5: the chibi under the rail, the refusal over the dialog, the Blind fee in a browser) and BP-28's
     // three (the short landscape tier: the tier and the seats, the hint and the nudge, L-06 in a browser), and BP-30's
-    // two (the chibi idle-life pass, spec 2026-10-22 K6: the shop figure live in P-06, still under reduced motion in P-07)
-    expect(rows).toBe(43 + 10 + 4 + 7 + 5 + 8 + 3 + 5 + 5 + 3 + 3 + 2)
+    // two (the chibi idle-life pass, spec 2026-10-22 K6: the shop figure live in P-06, still under reduced motion in P-07),
+    // and BP-31's four (spec 2026-10-23: the bet slider's reach, the landscape bet panel in L-04, the Blind limit at ten
+    // wagers, the phone table in M-06)
+    expect(rows).toBe(43 + 10 + 4 + 7 + 5 + 8 + 3 + 5 + 5 + 3 + 3 + 2 + 4)
     expect(citations.length).toBeGreaterThanOrEqual(40)
   })
 

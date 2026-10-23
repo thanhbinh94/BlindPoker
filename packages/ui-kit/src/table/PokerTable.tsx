@@ -11,7 +11,7 @@ import { DeckAnchorProvider } from './deck-anchor.js'
 import { DEAL_MS, DEAL_WINDOW_MS, FLIP_MS, dealOrderOf, showdownWithBoard } from './motion.js'
 import { Pot } from './Pot.js'
 import { Seat } from './Seat.js'
-import type { FrameTier, RoomFrame } from './frame.js'
+import { STACK_LAYOUT_QUERY, type FrameTier, type RoomFrame } from './frame.js'
 import { ringPositions, shortRingPositions } from './geometry.js'
 import { useMediaQuery } from './useMediaQuery.js'
 import s from './table.module.css'
@@ -62,18 +62,18 @@ export interface PokerTableProps {
    */
   onReveal?: () => void
   /**
-   * One quiet line the room lays on the felt under the board, on the ring only: the landscape room's pre-hand hint
-   * ("Cần ít nhất 2 người sẵn sàng…"), which has no row of its own there — wrapped in the corner dock it doubled the
-   * dock's height over the seat beside the viewer's (Plan 26, B3). Nothing when not given. The short tier's felt has no
-   * bare band for it, and `RoomScreen` puts it back in the dock there (BP-28, R2).
+   * One quiet line the room lays on the felt under the board: the pre-hand hint ("Cần ít nhất 2 người sẵn sàng…"),
+   * which has no row of its own in landscape — wrapped in the corner dock it doubled the dock's height over the seat
+   * beside the viewer's (Plan 26, B3) — nor in the stack, whose footer is one row (BP-31 P4). On the ring it lies under
+   * the board; in the stack it is the felt's last line. Nothing when not given, and then it takes no height. The short
+   * tier's felt has no bare band for it, and `RoomScreen` puts it back in the dock there (BP-28, R2).
    */
   note?: ReactNode
 }
 
-/* The ring needs roughly 310 px of stage to seat everyone around it without the plates running into the board, and a
-   short window has no more to give than a narrow one — so a laptop with a 600 px-tall viewport gets the vertical
-   layout for the same reason a phone does. */
-const STACKED = '(max-width: 767px), (max-height: 620px)'
+/* The ring needs roughly 310 px of stage to seat everyone around it; a short window gets the vertical layout for the
+   same reason a phone does (`STACK_LAYOUT_QUERY`, shared with the room, which passes its answer as `layout`). */
+const STACKED = STACK_LAYOUT_QUERY
 
 /**
  * The ring's box, for `ringPositions` to space the seats evenly in its own pixels. The desktop ring pins a 2:1 box, but
@@ -244,12 +244,14 @@ export function PokerTable({
     // The turn bounce (spec 08 §3.4): only the seat whose turn it is *and* only when that seat is the viewer's
     // own — an opponent's chibi does not bounce for the viewer, since it is not their decision to make.
     const bounce = hand !== null && hand.actingSeat === index && index === hand.mySeat
+    const isMe = myPlayerId !== null && player.playerId === myPlayerId
     return (
       <Seat
         key={index}
         seat={clientSeat}
         player={player}
-        isMe={myPlayerId !== null && player.playerId === myPlayerId}
+        isMe={isMe}
+        strip={mode === 'stack' && isMe}
         isActing={acting}
         isButton={hand !== null && hand.button === index}
         winnerPayout={payouts.get(index) ?? null}
@@ -303,9 +305,18 @@ export function PokerTable({
     // (layout audit L1, 2026-09-28 — at six seats the full plates pushed the felt off a 375 × 812 screen once
     // cards were out); seven or more and the plates also give up the app's caption so the third row fits.
     const opponents = order.filter((i) => i !== mySeat)
+    // BP-31 §3.1 (R1): while the viewer holds cards they fan out over the felt's foot, and the felt pads its own foot by
+    // as much, so the pot stays clear of them; between hands the board keeps its height.
+    const myHandSeat = mySeat === null || seated.get(mySeat)?.playerId !== myPlayerId ? undefined : handSeats.get(mySeat)
+    const myCards = myHandSeat === undefined ? 0 : (myHandSeat.holeCards?.length ?? myHandSeat.cardCount)
     return (
       <DeckAnchorProvider value={deckRef}>
-        <section className={cx(s.table, s.stack)} data-surface="night" aria-label={t('labels.table')}>
+        <section
+          className={cx(s.table, s.stack)}
+          data-surface="night"
+          data-mine-cards={myCards > 0 ? 'true' : undefined}
+          aria-label={t('labels.table')}
+        >
           <div
             className={cx(s.others, opponents.length > 3 && s.othersTwoRow, opponents.length > 3 && s.othersChip, opponents.length > 6 && s.othersDense)}
             role="group"
@@ -313,7 +324,10 @@ export function PokerTable({
           >
             {opponents.map(renderSeat)}
           </div>
-          <div className={s.stackFelt}>{centre}</div>
+          <div className={s.stackFelt}>
+            {centre}
+            {note === undefined || note === null ? null : <p className={s.note}>{note}</p>}
+          </div>
           {mySeat === null ? null : <div className={s.mine}>{renderSeat(mySeat)}</div>}
         </section>
       </DeckAnchorProvider>

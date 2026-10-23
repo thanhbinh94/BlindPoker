@@ -63,9 +63,9 @@ describe('CreateRoomForm', () => {
     const user = userEvent.setup()
     wrap(<CreateRoomForm onSubmit={vi.fn()} lang="en" />)
     await user.click(screen.getByRole('button', { name: 'Blind Poker' }))
-    expect(screen.getByText('Table limit per player: 5,000 pts (5× the wager)')).toBeInTheDocument()
+    expect(screen.getByText('Table limit per player: 10,000 pts (10× the wager)')).toBeInTheDocument()
     await user.selectOptions(screen.getByLabelText('Fixed wager'), '5000')
-    expect(screen.getByText('Table limit per player: 25,000 pts (5× the wager)')).toBeInTheDocument()
+    expect(screen.getByText('Table limit per player: 50,000 pts (10× the wager)')).toBeInTheDocument()
   })
   it('shows a localized validation error instead of submitting when the name is cleared', async () => {
     const onSubmit = vi.fn()

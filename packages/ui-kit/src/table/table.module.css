@@ -120,9 +120,13 @@
   transform-origin: 50% 50%;
 }
 
+/* The offset rides the individual `translate` property, which applies outside a fanned card's own `rotate: ±7deg`
+   (BP-31 §3.1): inside `transform` the fan's tilt turned the path too, and the card set off a few px wide of the deck
+   (BP-31 final wave). */
 @keyframes dealSlide {
   from {
-    transform: translate(var(--deal-dx, 0px), var(--deal-dy, -40px)) rotate(-7deg) scale(var(--deal-scale, 0.6));
+    translate: var(--deal-dx, 0px) var(--deal-dy, -40px);
+    transform: rotate(-7deg) scale(var(--deal-scale, 0.6));
   }
 }
 
@@ -951,6 +955,25 @@
   --seat-plate-max: 22cqw;
 }
 
+/* A desktop window (BP-31 P7, R8): the ring has room for wider plates, so a name of a dozen letters prints whole instead
+   of "Nguyễn…" — at least 132 px a seat, 118 px from seven seats (the percentages above still win on a big felt). The
+   points the seats stand on (`geometry.ts`) do not move; only the plates widen around them. A full table has no room
+   for a second line under the opponents' names, so their titles step aside from seven seats; the viewer's own stays.
+   Not on a phone held sideways, which sets its own floor on the seats. */
+@media (min-width: 1024px) {
+  .ring:not([data-frame='landscape']) {
+    --seat-min: 132px;
+  }
+
+  .ring:not([data-frame='landscape']):is([data-seats='7'], [data-seats='8'], [data-seats='9']) {
+    --seat-min: 118px;
+  }
+}
+
+.ring:is([data-seats='7'], [data-seats='8'], [data-seats='9']) .seat:not(.seatMe) .seatCaption {
+  display: none;
+}
+
 /* A ring squeezed into a short stage — a laptop window, or an app with a bar of its own above the room. The plates
    keep their size because they carry the names; the cards and the gaps give, so a hand never lands on the board and
    the viewer's own block — cards, plate, two lines — stays inside the stage above the tray. 400 px of felt is where
@@ -1062,7 +1085,7 @@
 }
 
 .ring[data-frame='landscape'] .potLabel {
-  font-size: 0.625rem;
+  font-size: 0.6875rem;
 }
 
 /* Set on the seats, as the short-ring block above does: they are the ring's container children. The badge line may
@@ -1292,6 +1315,9 @@
 .stack {
   display: grid;
   grid-template-rows: minmax(min-content, auto) minmax(min-content, 1fr) auto;
+  /* One column exactly as wide as the table: an `auto` track grows to its widest item's min-content, and the viewer's
+     one-line strip (BP-31) would widen the whole table past the phone's edge instead of cutting the name. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
   align-self: stretch;
   /* inside `.roomMain`, which centres its child: without this the strip would only be as wide as its plates */
@@ -1299,6 +1325,12 @@
   min-height: 0;
   /* one opponent block in the strip = plate + its cards + its badge row; the two-row floor is measured in these */
   --plate-h: 104px;
+  /* The viewer's fan (BP-31 §3.1, R1): a card 56 × 78 at 375 px, 60 × 84 from 400 px; each overlaps the one before by
+     14 px, and the fan's foot hangs 30 px below the felt's, so the felt pads its foot by the rest of the card. */
+  --fan-card: clamp(52px, 15vw, 60px);
+  --fan-overlap: 14px;
+  --fan-drop: 30px;
+  --fan-over: calc(var(--fan-card) * 1.4 - var(--fan-drop));
 }
 
 /* `auto-fill`, not `auto-fit`: an empty trailing track keeps three columns at 360 px instead of stretching two
@@ -1363,6 +1395,33 @@
   display: none;
 }
 
+/* At showdown a dense chip says how the hand ended for it instead of what it had in front of it: the hand's name (and
+   the winner's payout, with its gold `.seatWin` plate) takes the line its badges and bet held. Two lines under eight
+   chips scrolled a 375 × 812 Blind table 75–96 px after the hand (BP-31 final wave). */
+.othersDense .seat:has(> .seatResult) > .tags {
+  display: none;
+}
+
+/* …on one line: a winner's "Một đôi +11.000" wrapped under a 115 px chip and made its row 4 px taller than a folded
+   chip's, enough to scroll the stage. The payout keeps every digit at 14 px; a long hand's name gives with "…" (the
+   result card spells it out). */
+.othersDense .seatResult {
+  flex-wrap: nowrap;
+  column-gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.othersDense .handTag {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.othersDense .payout {
+  flex: none;
+  font-size: 0.875rem;
+}
+
 .othersChip .cardSm {
   --card-w: clamp(18px, 5.2vw, 24px);
 }
@@ -1388,15 +1447,16 @@
   gap: 2px;
 }
 
+/* 11 px is the floor of the table's text on a phone, and the bet a size above it (BP-31 §3.4, P1). */
 .othersChip .tags > * {
   padding: 0 5px;
-  font-size: 0.625rem;
+  font-size: 0.6875rem;
   letter-spacing: 0;
 }
 
 .othersChip .bet {
   padding: 0 6px;
-  font-size: 0.625rem;
+  font-size: 0.75rem;
 }
 
 .othersChip .bet::before {
@@ -1419,6 +1479,27 @@
     inset 0 0 0 2px rgba(217, 164, 65, 0.4),
     inset 0 0 0 6px rgba(8, 18, 20, 0.9),
     0 14px 34px rgba(3, 6, 16, 0.5);
+  /* the board a size up on a phone (BP-31 §3.1) */
+  --card-lg: clamp(40px, 11vw, 48px);
+}
+
+/* While the viewer holds cards, they lie over the felt's foot (`.mine`, below): the felt pads its foot by as much as the
+   cards rise over it, so the pot keeps clear of them. */
+.stack[data-mine-cards] .stackFelt {
+  padding-bottom: calc(var(--space-4) + var(--fan-over));
+}
+
+/* The room's line on the stack's felt (`PokerTable`'s `note`, BP-31 P4): the pre-hand hint, under the pot, while no hand
+   is dealt — the stack's footer is one row and has no place for it. Not drawn at all without a hint, so the felt keeps
+   its height then. */
+.stackFelt .note {
+  margin: 0;
+  padding-top: var(--space-2);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--ink-muted);
+  text-align: center;
+  text-wrap: balance;
 }
 
 /* The viewer's own plate never scrolls out of sight (layout audit L1, 2026-09-28): on a 375 × 812 phone with five
@@ -1451,6 +1532,135 @@
   width: min(100%, 340px);
 }
 
+/* BP-31 §3.1 (R1): the viewer's cards fan out over the felt's foot, their own foot 30 px below the felt's. The block is
+   pulled up by the part of the card that lies over the felt (and the grid's gap): its auto track shrinks by as much, and
+   the cards overflow up into the felt's row, painted over it by the block's `z-index`. Over the felt there is nothing to
+   hide, so the block drops its night ground and the fade above it; the strip's plate keeps its own. */
+.stack[data-mine-cards] .mine {
+  margin-top: calc(-1 * (var(--fan-over) + var(--space-3)));
+  padding-top: 0;
+  background: transparent;
+}
+
+.stack[data-mine-cards] .mine::before {
+  content: none;
+}
+
+/* Card and PeelCard both size by `.cardMd`: a peel hand is as wide as a fan. */
+.mine .cardMd {
+  --card-w: var(--fan-card);
+}
+
+.mine [data-fan='2'],
+.mine [data-fan='3'] {
+  gap: 0;
+}
+
+.mine [data-fan='2'] > * + *,
+.mine [data-fan='3'] > * + * {
+  margin-left: calc(-1 * var(--fan-overlap));
+}
+
+/* Each card turns on its own foot, with the individual `rotate` property: `.cardDealt`'s slide animates `transform`,
+   which composes after it, and this pivot outranks the slide's. A hand to peel (`data-fan='none'`) lies flat — the
+   peel measures the drag across the card's box. No motion: the fan simply is. */
+.mine [data-fan='2'] > .card,
+.mine [data-fan='3'] > .card {
+  transform-origin: 50% 100%;
+}
+
+.mine [data-fan='2'] > .card:nth-child(1) {
+  rotate: -7deg;
+}
+
+.mine [data-fan='2'] > .card:nth-child(2) {
+  rotate: 7deg;
+}
+
+.mine [data-fan='3'] > .card:nth-child(1) {
+  rotate: -9deg;
+}
+
+.mine [data-fan='3'] > .card:nth-child(2) {
+  rotate: 0deg;
+}
+
+.mine [data-fan='3'] > .card:nth-child(3) {
+  rotate: 9deg;
+}
+
+/* The viewer's strip (BP-31 R10): one row 44 px tall — the 36 px disc with its turn ring and dealer button, the name,
+   the stack, the rank's numeral, the host and state badges, the street bet — and 56 px with the hand's name and payout
+   under the name at showdown. The name is what gives when the row runs short. */
+/* the whole width of the phone: every pixel of the row the name can keep */
+.mine .meStrip {
+  width: 100%;
+}
+
+.meStrip .plate {
+  min-height: 44px;
+  gap: var(--space-2);
+  padding: 3px 12px 3px 4px;
+}
+
+.meStrip .plateTwoLine {
+  min-height: 56px;
+}
+
+.meStrip .avatar {
+  --seat-disc: 36px;
+}
+
+/* `Seat` asks for a 40 px ring here, centred on the disc (the base `.timer`'s 2 px from the plate's edge), its seconds
+   pill tucked up to the plate's foot: the strip is the last thing in the room's scroll box, and a pill hanging below it
+   scrolled the room by 6 px. */
+.meStrip .timerText {
+  bottom: -2px;
+}
+
+/* The name keeps 4.5em at the least and grows to its own width; the rest keep theirs. Only a row that cannot hold
+   them all — the host badge, all-in, a bet and a rank on a 375 px phone — wraps its last items under the name rather
+   than cutting the name to nothing. */
+.stripLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--space-1);
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.stripLine > .seatName {
+  flex: 1 1 4.5em;
+  min-width: 4.5em;
+  max-width: max-content;
+}
+
+.stripLine > :not(.seatName) {
+  flex: none;
+}
+
+/* the badges at the table's 11 px floor (P1), their spare padding and tracking given to the name */
+.stripLine > .tagWho,
+.stripLine > .tagState {
+  padding: 0 5px;
+  font-size: 0.6875rem;
+  letter-spacing: 0;
+}
+
+/* A seat that sits out or is all in says so on the strip; the host's crown is what gives way, so the bet stays on the
+   first line and the strip stays 56 px at showdown (BP-31 final wave). The badge stays in the DOM for a screen
+   reader. */
+.stripLine:has(> .tagState) > .tagWho {
+  display: none;
+}
+
+.meStrip .seatResult {
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  white-space: nowrap;
+}
+
 /* ---------------- Action tray ---------------- */
 .tray {
   position: sticky;
@@ -1464,6 +1674,15 @@
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   background: linear-gradient(180deg, rgba(22, 30, 56, 0.95), rgba(7, 11, 24, 0.98));
   box-shadow: 0 -14px 40px rgba(3, 6, 16, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* The tray stops where the felt does, 980 px, centred under it (BP-31 P10, R4): at 1920 px it was 1,880 px wide under a
+   921 px table. Not on a phone held sideways, where the tray is two corner docks (below), and not between hands in the
+   stack, where the tray sits in the dock's row beside it: a full width there left the dock none (Task 4b, real build). */
+.tray:not([data-frame='landscape']):not([data-between]) {
+  width: 100%;
+  max-width: min(980px, 100%);
+  margin-inline: auto;
 }
 
 .trayRow {
@@ -1492,17 +1711,6 @@
 
 .grow {
   flex: 1 1 auto;
-}
-
-.sizer {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.presets {
-  display: flex;
-  gap: var(--space-2);
 }
 
 .preset {
@@ -1553,67 +1761,212 @@
   }
 }
 
-.sizerRow {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-/* Above the phone breakpoint the presets sit beside the amount, not above it: one row less of tray is ~52 px more
-   felt, which on an 800 px-tall laptop is the difference between a comfortable table and a cramped one. */
-@media (min-width: 768px) {
-  .sizer {
-    flex-direction: row;
-    align-items: center;
-  }
-
-  .sizerRow {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-}
-
-.amount {
-  width: 8.5rem;
-  min-height: var(--tap);
-  padding: 0 var(--space-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: rgba(5, 9, 20, 0.8);
-  font-family: var(--font-display);
-  font-size: 1.0625rem;
-  color: var(--gold);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
 /* the raise button owns the solid gold; all-in steps back to an outline when both are offered */
 .allInGhost {
   color: var(--gold);
   border-color: var(--gold);
 }
 
-.slider {
-  flex: 1 1 auto;
+/* ---------------- Bet panel (`BetPanel`, BP-31 §3.2) ---------------- */
+/* Chips over a slider, and in the two-step trays a row with "Hủy ▾" and the confirm. `data-shape` is where it sits:
+   `inline` — the desktop ring, always shown, chips beside the slider from 768 px; `sheet` — the phone's stack tray, one
+   column with the confirm row last; `corner` — landscape's left corner, the chips over the slider with "Hủy ▾" beside it
+   (the confirm is the right corner's single "Tố N"). No transition anywhere: the panel is there or it is not. */
+.betPanel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
   min-width: 0;
-  min-height: var(--tap);
-  accent-color: var(--gold);
-  background: transparent;
 }
 
-/* spec §27.1: under 768 px a thumb cannot hit a 1-point step, so the range control drops out and
-   sizing is done with the presets plus the number input, which stay full-width in its place.
-   The tray also tightens up: on a 375 px screen the four action buttons at full size push the felt — and the
-   viewer's own cards with it — off the bottom of the stage. */
+@media (min-width: 768px) {
+  .betPanel[data-shape='inline'] {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--space-3);
+  }
+}
+
+.betPanel[data-shape='corner'] {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-2);
+  width: 100%;
+}
+
+.betPanel[data-shape='corner'] .betChips {
+  grid-column: 1 / -1;
+}
+
+/* The stack's sheet: chips, slider, Hủy ▾ + "Tố N", 4 px apart and no amount band over the slider (the confirm carries
+   the amount), so the open tray is 149 px — what a 375 × 812 phone with eight opponents leaves it (Task 4a). The
+   slider's 44 px row is mostly air around its 6 px track, so the rows still read apart. */
+.betPanel[data-shape='sheet'] {
+  gap: var(--space-1);
+}
+
+.betPanel[data-shape='sheet'] .betSlider {
+  padding-top: 0;
+}
+
+.betChips {
+  display: flex;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* R12: the chips are jumps, not the targets — the thumb and the confirm are — so they stay 36 px on touch too. This
+   rule must come after the `@media (pointer: coarse)` block that lifts every `.preset` (the pre-action toggles keep
+   that 44 px); a raw-CSS test pins the order. */
+.betChip {
+  min-height: 36px;
+  white-space: nowrap;
+  transition: none;
+}
+
+.betChip[aria-pressed='true'],
+.betChip[aria-pressed='true']:hover:not(:disabled) {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--gold-ink);
+}
+
+/* Four chips share a 375 px phone's row: `.preset`'s 52 px floor and 12 px sides ran "Tất tay" about 13 px past the
+   tray's padding (BP-31 final wave), so in the sheet they give up the floor and keep 4 px a side. */
+.betPanel[data-shape='sheet'] .betChip {
+  min-width: 0;
+  padding-inline: var(--space-1);
+}
+
+/* The amount rides over the thumb in a 16 px band above the track; `--pos` (0–1) is set inline. Pinned to the thumb's
+   side of the band, it never runs past either end of the panel. */
+.betSlider {
+  position: relative;
+  min-width: 0;
+  padding-top: 16px;
+}
+
+.betValue {
+  position: absolute;
+  top: 0;
+  left: calc(var(--pos, 0) * 100%);
+  transform: translateX(calc(var(--pos, 0) * -100%));
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 16px;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* The desktop ring's panel sets its amount beside the slider, not in a band over it: the band made the tray 13 px
+   taller on the seat's turn than off it, and the felt above pulsed with every turn (BP-31 final wave). 9ch holds
+   "100.000.000" at its tabular width, so the track does not jump as the figure grows. */
+.betPanel[data-shape='inline'] .betSlider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-top: 0;
+}
+
+.betPanel[data-shape='inline'] .betValue {
+  position: static;
+  flex: none;
+  min-width: 9ch;
+  transform: none;
+  text-align: right;
+}
+
+/* One 44 px row: the whole height is the hit area, the thumb a 28 px disc on a 6 px track filled gold up to it. */
+.slider {
+  display: block;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  appearance: none;
+}
+
+.slider:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-pill);
+}
+
+.slider:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--gold) calc(var(--pos, 0) * 100%), var(--line) calc(var(--pos, 0) * 100%));
+}
+
+.slider::-webkit-slider-thumb {
+  width: 28px;
+  height: 28px;
+  margin-top: -11px;
+  border: 2px solid var(--bg-elev);
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: var(--shadow-1);
+  appearance: none;
+}
+
+.slider::-moz-range-track {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--line);
+}
+
+.slider::-moz-range-progress {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--gold);
+}
+
+.slider::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--bg-elev);
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: var(--shadow-1);
+}
+
+/* A short stage: 32 px chips and a 36 px slider row (spec §3.3, the BP-28 short tier). */
+.betPanel[data-compact] .betChip {
+  min-height: 32px;
+}
+
+.betPanel[data-compact] .slider {
+  height: 36px;
+}
+
+.betConfirm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.betCancel {
+  flex: none;
+  min-width: 72px;
+}
+
+.betCancel > span {
+  margin-left: 0.25em;
+}
+
+/* Under 768 px the tray tightens up: on a 375 px screen the action buttons at full size push the felt — and the
+   viewer's own cards with it — off the bottom of the stage. (Since BP-31 the slider stays on every frame: it steps by
+   the small blind, so a thumb can land on a step; the number field is gone.) */
 @media (max-width: 767px) {
-  .slider {
-    display: none;
-  }
-
-  .amount {
-    width: 100%;
-  }
-
   .tray {
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3) calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
@@ -1633,13 +1986,91 @@
     padding: var(--space-1) 0;
   }
 
-  .presets {
-    justify-content: space-between;
-  }
-
   .preset {
     flex: 1 1 0;
   }
+}
+
+/* ---------------- Action tray, the stack (BP-31 §3.1, R2) ---------------- */
+/* One row of 44 px buttons (`size="md"`) and 8 / 12 px of padding, so the idle tray is 61 px with its border; keyed on
+   the tray's own `data-layout` (the room's resolved layout), so a 1366 × 600 window — the stack too (R9) — gets the
+   same tray as a phone. The bet button grows a little more than its neighbours; "Tự động chơi" keeps its own width. */
+.tray[data-layout='stack'] {
+  min-height: 0;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3) calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
+}
+
+.tray[data-layout='stack'] .trayRow,
+.tray[data-layout='stack'] .preRow {
+  flex-wrap: nowrap;
+}
+
+.tray[data-layout='stack'] .trayRow > button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 var(--space-2);
+  overflow: hidden;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.tray[data-layout='stack'] .trayRow > .grow {
+  flex-grow: 1.2;
+}
+
+.tray[data-layout='stack'] .trayRow > .preToggle {
+  flex: none;
+}
+
+/* The toggles keep `.preset`'s height: 44 px on touch (the coarse block), 36 px under a mouse in a short window. */
+.tray[data-layout='stack'] .preToggle {
+  white-space: nowrap;
+}
+
+.tray[data-layout='stack'] .preRow > .preToggle {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 var(--space-2);
+}
+
+/* Between hands the room's dock is the footer's bar (BP-31 P5): the tray draws nothing of its own and keeps only
+   "Tự động chơi", at the bar's start (R13). Empty, it takes no width: the negative margin gives back the footer's gap. */
+.tray[data-layout='stack'][data-between] {
+  position: static;
+  order: -1;
+  flex: none;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.tray[data-layout='stack'][data-between]:empty {
+  margin-inline-end: calc(-1 * var(--space-2));
+}
+
+/* In the dock's row "Tự động chơi" sets like the dock's own buttons, on two lines at most 6em wide: on one line it took
+   100 px of a 375 px row and left "Hủy sẵn sàng" three lines in its 44 px button (final wave). Keyed on the tray, not
+   the footer: the footer's classes belong to the room's stylesheet. */
+.tray[data-layout='stack'][data-between] .preToggle {
+  max-width: 6em;
+  padding-inline: var(--space-2);
+  font-size: 0.8125rem;
+  line-height: 1.1;
+  white-space: normal;
+  text-wrap: balance;
+}
+
+/* Blind, between decisions: the line beside "Tự động chơi" takes what is left of the row. */
+.tray[data-layout='stack'] .trayRow > .trayWait {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0;
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
 }
 
 /* ---------------- Action tray, phone held sideways ---------------- */
@@ -1653,8 +2084,8 @@
      dock holds between hands, so the two never show together. Off the player's turn, the line saying what the seat
      waits for.
    - left (`.trayLeft`): the pre-action toggles and "Tự động chơi" as 34 px pills — or, on the player's own turn once
-     the bet/raise button has been pressed, the presets and "✎" (a typed amount opens `AmountDialog`). There is no
-     slider (Q7). It stays inside the tray's markup, so the "Hành động" group still holds it.
+     Tố ▴ has been pressed, the bet panel (chips over the slider, "Hủy ▾" beside it; BP-31 §3.3), while the right
+     corner's same button becomes "Tố N". It stays inside the tray's markup, so the "Hành động" group still holds it.
 
    The tray is `static`, so both parts hang from the room (`.room[data-frame='landscape']` is `relative`). Each part is
    a box of a fixed width that stops short of the viewer's plate: that plate and its badge line are at most 30cqw of the
@@ -1725,11 +2156,6 @@
   white-space: nowrap;
 }
 
-.trayLeft .presets {
-  flex: none;
-  gap: var(--space-1);
-}
-
 /* Pills over the felt: a night wash under each, so their gold reads over the felt or the page in either theme. */
 .trayLeft .preset {
   min-width: 44px;
@@ -1756,6 +2182,38 @@
   .trayLeft .preset {
     min-height: var(--tap);
   }
+}
+
+/* The bet panel's chips in the left corner: 36 px pills, touch or not (R12), and 32 px on the short tier (spec §3.3) —
+   three classes deep and more, so they win over the corner's `.trayLeft .preset` above wherever it is declared. */
+.tray[data-frame='landscape'] .betChip {
+  min-height: 36px;
+}
+
+.tray[data-frame='landscape'] .betPanel[data-compact] .betChip {
+  min-height: 32px;
+}
+
+/* The corner's panel (BP-31 §3.3) has two rows — the chips, then the slider with "Hủy ▾" beside it — and must stay under
+   the flank seat's badge line ("Tất tay · 6.000" ended 1 px above it once the panel was 100 px tall at 915 × 412). So no
+   floating amount here: the right corner's "Tố N" carries it; and the slider row and Hủy are 36 px: 76 px in all, 72 on
+   the short tier. Hủy gets the pills' night wash, since it lies over the felt. */
+.trayLeft .betSlider {
+  padding-top: 0;
+}
+
+.trayLeft .betValue {
+  display: none;
+}
+
+.trayLeft .slider {
+  height: 36px;
+}
+
+.trayLeft .betCancel {
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
 }
 
 /* A verb and its figure ("Theo 104.000", "Tố 208.000", "Chơi 1.000"), two spans in landscape: one line while the corner
@@ -1797,21 +2255,6 @@
     padding: 0 var(--space-2);
     font-size: 0.75rem;
   }
-}
-
-/* The typed amount's field, in `AmountDialog`. */
-.amountField {
-  width: 100%;
-  min-height: var(--tap);
-  padding: 0 var(--space-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: rgba(5, 9, 20, 0.8);
-  font-family: var(--font-display);
-  font-size: 1.125rem;
-  color: var(--gold);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 
 /* ---------------- Hand result ---------------- */

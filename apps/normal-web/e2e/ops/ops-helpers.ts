@@ -401,6 +401,52 @@ export async function autopilot(page: Page, prefer: Move[], until: () => Promise
   return moves
 }
 
+/* ── the bet panel (BP-31) ───────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The tray's bet or raise button: "Tố" / "Cược" while the panel is shut (the ▴ is `aria-hidden`), "Tố 600" once it names
+ * an amount. Exactly one is on screen at any time — on the upright phone the open panel's confirm, in landscape the right
+ * corner's same button. Not `\b`: a JS word boundary knows no Vietnamese letters (`ố` is no `\w`).
+ */
+export const raiseButton = (page: Page): Locator => page.getByRole('group', { name: 'Hành động' }).getByRole('button', { name: /^(Tố|Cược)( |$)/ })
+
+/** The bet panel's slider ("Thanh trượt mức cược"): a native range whose `aria-valuetext` is the amount as printed. */
+export const betSlider = (page: Page): Locator => page.getByRole('slider', { name: 'Thanh trượt mức cược' })
+
+/**
+ * Opens the bet panel on this player's turn and returns its slider. On the upright phone and in landscape the panel is a
+ * second step behind "Tố ▴" / "Cược ▴" (the tray says so with `data-panel`); on the desktop ring it is always open, and
+ * nothing is pressed.
+ */
+export async function openBetPanel(page: Page): Promise<Locator> {
+  const tray = page.getByRole('group', { name: 'Hành động' })
+  if ((await tray.getAttribute('data-panel')) !== 'open') {
+    await tray.getByRole('button', { name: /^(Tố|Cược)$/ }).click()
+    await expect(tray).toHaveAttribute('data-panel', 'open')
+  }
+  const slider = betSlider(page)
+  await expect(slider).toBeVisible()
+  return slider
+}
+
+/**
+ * Sets the bet by the keyboard, the way the amendment P8 asks (a `fill` can be swallowed by React's value tracker, and an
+ * amount off the slider's grid throws): focus the slider, Home (the minimum), then `steps` presses of → — or End, the
+ * whole stack, for `'max'`. At the 100/200 tier preflop Home is 400 and two steps are 600. Resolves the amount as printed
+ * (`aria-valuetext`). The panel must be open (`openBetPanel`).
+ */
+export async function setBet(page: Page, steps: number | 'max'): Promise<string> {
+  const slider = betSlider(page)
+  await slider.focus()
+  if (steps === 'max') {
+    await slider.press('End')
+  } else {
+    await slider.press('Home')
+    for (let k = 0; k < steps; k++) await slider.press('ArrowRight')
+  }
+  return (await slider.getAttribute('aria-valuetext')) ?? ''
+}
+
 /** Resolves once a result card is on screen. */
 export const handOver = (page: Page) => async (): Promise<boolean> => (await resultCard(page).count()) > 0
 

@@ -45,11 +45,10 @@
   "labels": {
     "actions": "Hành động",
     "allIn": "Tất tay",
-    "amount": "Mức cược",
-    "amountDialog": "Nhập số điểm",
     "amountSlider": "Thanh trượt mức cược",
     "autoStart": "Tự động bắt đầu",
     "balance": "Số dư",
+    "betPanel": "Chọn mức cược",
     "betSize": "Mức cược",
     "blinds": "Blind",
     "bot": "Bot",
@@ -228,7 +227,7 @@
       "botCount": "Số bot phải ít hơn số ghế."
     },
     "buyInHint": "{{bb}} BB = {{points}}",
-    "tableLimitHint": "Hạn mức mỗi người: {{points}} (5× mức cược)"
+    "tableLimitHint": "Hạn mức mỗi người: {{points}} ({{times}}× mức cược)"
   },
   "room": {
     "title": "Phòng chơi",
@@ -281,9 +280,8 @@
   },
   "presets": {
     "min": "Min",
-    "half": "½",
-    "pot": "Pot",
-    "max": "Max"
+    "half": "½ pot",
+    "pot": "Pot"
   },
   "avatar": {
     "turn": "Xoay",

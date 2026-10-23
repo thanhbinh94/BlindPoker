@@ -213,19 +213,22 @@ dropping the oldest, so a chatty server cannot stack slips off the top of the sc
 | Component | Props |
 | --- | --- |
 | `PokerTable` | `room`, `hand`, `myPlayerId`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `canSit`, `layout?`, `chibiFor?`, `expressionFor?`, `captionFor?`, `rankFor?`, `onSeatClick?`, `resultPending?`, `onReveal?` |
-| `Seat` | `seat`, `player`, `isMe`, `isActing`, `isButton`, `winnerPayout`, `showdownLabel`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `position`, `chibi`, `expression`, `bounce`, `caption?`, `rank?`, `frame?`, and for the motion and the squeeze (`PokerTable` fills them): `handId`, `dealt`, `dealIndex`, `dealCount`, `reveal`, `liftAfter`, `squeezeRoom`, `squeezeRound`, `squeezeDecides`, `restored?`, `onReveal?` |
+| `Seat` | `seat`, `player`, `isMe`, `isActing`, `isButton`, `winnerPayout`, `showdownLabel`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `position`, `chibi`, `expression`, `bounce`, `caption?`, `rank?`, `frame?`, `strip?` (the viewer's one-line strip and fanned hand in the stack layout, BP-31), and for the motion and the squeeze (`PokerTable` fills them): `handId`, `dealt`, `dealIndex`, `dealCount`, `reveal`, `liftAfter`, `squeezeRoom`, `squeezeRound`, `squeezeDecides`, `restored?`, `onReveal?` |
 | `Card` | `card?`, `faceDown?`, `size?` (`sm`/`md`/`lg`), `delayMs?`, `highlighted?`, `className?`, `dealt?`, `reveal?` (`'flip'`/`'lift'`), `turnDelayMs?` |
 | `Deck` | none (`forwardRef` to its `div`) — the pile every card is dealt from; `DeckAnchorProvider` / `useDeckAnchor` (`deck-anchor.ts`) hand its ref to the cards |
 | `PeelCard` | `card`, `size?`, `open`, `onRevealed`, `dealt?`, `delayMs?`, `className?` — the viewer's own card in a squeeze room, turned by dragging it |
 | `CommunityCards` | `cards`, `highlight?`, `dealt?`, `handId?` |
 | `Pot` | `pot`, `carryOver`, `pulse`, `lang` |
 | `TurnTimer` | `deadlineAt`, `serverNow`, `totalMs`, `size?` |
-| `ActionBar` | `hand`, `room`, `onAct`, `disabled?`, `lang` |
+| `ActionBar` | `hand`, `room`, `onAct`, `disabled?`, `lang`, `preAction?`, `onPreAction?`, `autoPlay?`, `onAutoPlay?`, `frame?`, `layout?` (`'stack'`/`'ring'`, BP-31), `tier?`, `betweenHands?` |
+| `BetPanel` | `min`, `max`, `step`, `value`, `pot`, `onChange`, `lang`, `onConfirm?`, `confirmLabel?`, `onCancel?`, `compact?`, `frame?`, `label?`, `disabled?`, `inputRef?` — the chips and the slider of a bet or a raise (BP-31); `betStep`, `sliderLast`, `sliderValue`, `sliderIndex` beside it |
 | `HandResult` | `hand`, `room`, `myPlayerId`, `lang`, `onDismiss?` |
 | `RoomHeader` | `room`, `status`, `onLeave`, `lang`, `right?` |
 
-`ActionBar` offers only the kinds the server declared legal and clamps every preset into the legal range, so a click
-can never produce an illegal amount. Keyboard: `F` fold, `C` check/call, `R` focus the amount, `Enter` submit — all
+`ActionBar` offers only the kinds the server declared legal and clamps every chip and every slider cell into the legal
+range, so a click can never produce an illegal amount (the bet panel: below, "The bet panel and the one-row tray").
+Keyboard: `F` fold, `C` check/call, `R` focus the slider (on the phone's two-step trays, open the panel and focus it),
+`Enter` submit (two-step and shut: open the panel; a focused button answers its own Enter), `Esc` close the panel — all
 advertised through `aria-keyshortcuts`. With no legal action it stays in place rather than collapsing, and its one
 `role="status"` line says what the seat is waiting for (review round 2, R2-3) — so a change of line is announced once.
 `trayWaitKey(hand, mine)` picks it, first match wins: "Ván đã kết thúc" once the hand is complete (the result card may
@@ -239,8 +242,8 @@ who has none to turn, "Chờ lật bài". The pre-action and auto-play rows unde
 auto-play is offered in a squeeze room too, where it means "turn my cards the moment they are dealt" (in a play-or-fold
 room it still answers `play`).
 
-`RoomHeader` shows the blinds for a Hold'em room and "wager · limit" for a Blind one ("Mức cược 5.000 · Hạn mức 25.000"; the
-limit is `blindTableLimit`, five wagers).
+`RoomHeader` shows the blinds for a Hold'em room and "wager · limit" for a Blind one ("Mức cược 5.000 · Hạn mức 50.000"; the
+limit is `blindTableLimit`, ten wagers since BP-31).
 
 `HandResult` reads `hand.result`. Alongside `payouts` (the same money summed per seat) it carries **`pots`** — the
 engine's layered pots straight from `SETTLEMENT.pots`, each with its `amount`, `eligibleSeats` and `winners` — and
@@ -398,7 +401,8 @@ never import each other, which is why the context is a module of its own. The *c
 (or a `PeelCard`) mounted `dealt` reads the deck's box and its own in a layout effect — through `useDealFrom(ref,
 dealt)`, with its entrance keyframe switched off for the read, because the wrapper's fade starts turned and raised and
 would skew the box — and sets `--deal-dx`, `--deal-dy`, `--deal-scale`. The measure is the card's arrival and is never
-repeated. With no deck under it (the result card, the playground's lone cards, a test) a card has nothing to come
+repeated. `dealSlide` moves the card by the individual `translate` property, which applies outside a fanned card's own
+`rotate` (BP-31), so the fan's tilt never turns the path off the deck. With no deck under it (the result card, the playground's lone cards, a test) a card has nothing to come
 from and keeps its plain fade-in.
 
 **Which cards are "dealt".** A card slides out of the deck only if it *arrived just now*, and a card reads that once, when
@@ -627,7 +631,8 @@ scrolling sideways; from 342 px it is one line. The narrowest ticket is the grid
 those three windows.
 
 `HoldemFields` (blind tier plus the buy-in window in big blinds) and `BlindFields` (hole cards, decision mode, fixed
-wager — whose field carries the table-limit hint, "Table limit per player: … (5× the wager)" — bot filler and the
+wager — whose field carries the table-limit hint, "Table limit per player: … (10× the wager)", the multiplier read from
+`ECONOMY.blindTableLimitMultiplier` — bot filler and the
 "Nặn bài" box) are the mode-specific building blocks `CreateRoomForm` swaps between; both are fully controlled,
 and an app only reaches for them directly when it builds its own room form. The swap happens in a box that reserves
 the taller mode's height in the two-column layout (`.modeFields`: 14rem from 22rem of form width up), so the
@@ -790,10 +795,99 @@ Breakpoints 480 / 768 / 1024, per spec §27.1. No horizontal page scroll at any 
   own seat; on a 375 × 812 phone it still covers it, closable (see `HandResult` above).
 - **Under 768 px wide *or* 620 px tall** the table switches to the vertical stack: opponents on top (that strip is
   the part that scrolls), board in the middle, the viewer's own seat pinned above the tray. A short window has no
-  more to give than a narrow one, so both take the same layout. `layout="ring" | "stack"` overrides the choice.
-- Under 768 px the bet slider drops out (a thumb cannot hit a one-point step); the presets and the number input
-  take its place full-width, and the room header and tray tighten so the viewer's own cards stay on screen.
-- Touch targets are ≥ 44 px (`--tap`) wherever the pointer is coarse.
+  more to give than a narrow one, so both take the same layout. `layout="ring" | "stack"` overrides the choice. The
+  query is one constant, `STACK_LAYOUT_QUERY = '(max-width: 767px), (max-height: 620px)'` (`table/frame.ts`), and since
+  BP-31 the room resolves it once and hands the answer to the table and the tray: "The stack layout" below.
+- The bet is a slider with four chips on every frame (BP-31); there is no number field anywhere on the table. On the
+  desktop ring chips and slider sit over the button row whenever a size is legal; on the phone they are a second step.
+- Touch targets are ≥ 44 px (`--tap`) wherever the pointer is coarse — except the bet chips, 36 px (R12).
+- **The tray stops at the felt's width** (BP-31, P10): the desktop tray is capped at `min(980px, 100%)` and centred, the
+  ring's own cap, so at 1920 px the tray is about 980 px under a 921 px felt rather than 1 880 px. The cap skips the
+  stack's empty between-hands tray (`[data-between]`). The room's controls row above it is centred (`justify-content:
+  center`) but not capped: a 980 px cap wrapped the pre-hand hint onto a second line at 1280–1536 px and pushed the stage
+  12 px past the window (final wave). From 1024 px a desktop ring seat
+  is at least 132 px wide (118 px from seven seats), so a name has room on one line, and other seats' captions hide from
+  seven seats (P7, R8).
+
+### The bet panel and the one-row tray (BP-31, spec 2026-10-23 §3.2)
+
+`BetPanel` (`table/BetPanel.tsx`) is the only way to choose a bet or a raise, on every frame; it replaced the number
+field, the `SLIDER_STEPS` slider and the landscape `AmountDialog` ("Nhập số điểm"), which are gone.
+
+- **The slider** is one native `<input type="range">` named `labels.amountSlider` ("Thanh trượt mức cược") with
+  `min`/`max` the legal street totals (`minRaiseTo…maxRaiseTo` or `minBet…maxBet`) and `step="1"`, and it steps itself:
+  its keys and its drag move along the cells `min + i·step`, where `step = betStep(min, max, smallBlind)` — the small
+  blind, or the smallest multiple of it that keeps the range to 200 steps (R3). The last cell is `max` exactly
+  (`sliderLast`, `sliderValue`, `sliderIndex`): a native stepped range stops short of a `max` that is no multiple of the
+  step, and all in must always be reachable (P7). `aria-valuetext` is the amount as printed (`formatPoints`). Keys: ←/↓
+  and →/↑ one cell, PageDown/PageUp ten, Home/End the minimum and all in. With one legal size (`min === max`) it is
+  disabled and every chip sets that size.
+- **The chips** (`group` `labels.betSize`, "Mức cược"): Min · ½ pot · Pot · Tất tay (`presets.min`, `presets.half`,
+  `presets.pot`, `actions.allIn`), each setting its target clamped into the range, exactly (not snapped to the grid), and
+  each with `aria-pressed` — true on the first chip whose target is the amount only (a small pot gives Min, ½ pot and Pot
+  one target, and three lit chips read as three choices) — which also keeps the ops pack's `autopilot`
+  (`button:not([aria-pressed])`) off them. 36 px tall even under a coarse pointer, 32 px on the landscape short tier; in
+  the upright phone's sheet they drop `.preset`'s 52 px floor and keep 4 px a side, so "Tất tay" ends inside the tray.
+- **One step or two** (R6). `ActionBar` is two-step when `layout === 'stack'` or `frame === 'landscape'`, one-step on the
+  desktop ring. One step: chips and slider sit over the button row (the panel's `data-shape="inline"`) and the row's gold
+  button reads "Tố 48.000". Two steps: the row offers "Tố ▴" / "Cược ▴" (the ▴ is `aria-hidden`, so the name is the word);
+  a tap (or R, or Enter) opens the panel, and "Hủy ▾" (`actions.cancel`) or Esc closes it, keeping the amount. On the
+  upright phone the panel — a `group` named `labels.betPanel`, "Chọn mức cược", `data-shape="sheet"` — replaces the row and
+  carries the confirm "Tố N"; in landscape it fills the left corner (`data-shape="corner"`, inside `.trayLeft`) and the
+  right corner's same button becomes "Tố N". Exactly one button matches `/^Tố( |$)/` at any time. Neither phone shape
+  draws the amount by the slider: the confirm carries it. The desktop's inline shape prints it beside the slider, at its
+  left in a 9ch box, so the tray keeps one height on and off the turn. Each street and each hand start at the minimum
+  with the panel shut (a layout effect keyed on the hand, the turn and the board's length, so the old panel never paints
+  a frame, and the key listener, also a layout effect, is rebound before a key of the new turn arrives); new bounds
+  within a turn keep the panel open and re-clamp the amount (P6). The tray root carries `data-layout="stack|ring"` and `data-panel="open|closed"`.
+- **The one-row tray** (stack, spec §3.1): buttons are `size="md"` (44 px) and the tray at rest is at most 64 px with its
+  8 / 12 px padding. Hold'em on the turn: Bỏ bài · Xem or Theo N · Cược ▴ or Tố ▴, or Tất tay in the third place when no
+  size is legal (and no panel). Between turns: the pre-action toggles, or the wait line (`role="status"`) only when there
+  are none. Blind: Tự động chơi · Bỏ bài · Chơi N (or Tất tay N), and between decisions Tự động chơi beside the wait line
+  (P11). The desktop ring keeps its rows and its Tất tay button apart (R4). All in on a phone with sizing is the panel's
+  chip (R2).
+- **What sends.** Always `{ kind: 'raise' | 'bet', amount }`, a street total clamped into `[min, max]`; the Tất tay chip
+  sets `max` and the confirm sends it as a raise or a bet, which the engine takes as all in. A focused button answers its
+  own Enter (a focused Bỏ bài folds, never raises behind it).
+- **What pins it.** `BetPanel.test.tsx` (the reach to `max`, the chips, the keys, `betStep`, the single size, the raw-CSS
+  sizes) and `ActionBar.test.tsx` (stack, landscape, ring, re-clamping, the Blind row, no spinbutton, the keys); in a
+  browser L-04 (landscape) and M-06 (the upright phone).
+
+### The stack layout (BP-31, spec 2026-10-23 §3.1)
+
+The upright phone (and any window under 768 px wide or 620 px tall) is the stack. `RoomScreen` measures
+`STACK_LAYOUT_QUERY` with `useMediaQuery` above its early return and resolves `tableLayout` — the `layout` override, else
+`ring` in the landscape frame, else the query's answer — and passes it to `PokerTable` and `ActionBar` (R9; every stack
+branch keys on `tableLayout === 'stack'`, never on the raw query). The room root carries `data-layout="stack"`.
+
+- **My hand fans out.** While I hold cards, the stack section carries `data-mine-cards="true"` and my cards (`Seat strip`,
+  `.seatCards[data-fan="2|3"]`) are `--fan-card: clamp(52px, 15vw, 60px)` wide, rotated ±7° (two cards) or −9° / 0° / +9°
+  (three) with the individual `rotate` property about their foot, overlapping 14 px, centred, and hanging `--fan-drop:
+  30px` below the felt's foot; the felt pads its foot by the rest of the card (`--fan-over`), so the pot stays clear. A
+  squeeze hand (`data-fan="none"`) is as wide but never rotated: the peel measures the card's own coordinates (R1). The
+  board is `clamp(40px, 11vw, 48px)`. No motion of its own.
+- **My strip** (R10) replaces the two-row seat block: one row, 44 px (56 px with the result line at a showdown, up to
+  66 px when the host badge, the rank and a bet wrap), still `.plate[data-plate]` inside the seat group "Ghế N" with
+  `data-me="true"`: the 36 px disc with the turn ring and the D, the name on one line, the stack, the street bet, Chủ
+  phòng, the rank and the state badge. No "Bạn" chip and no caption. A state badge (Tạm nghỉ, Tất tay) hides Chủ phòng
+  by CSS (`.stripLine:has(> .tagState) > .tagWho`; the badge stays in the DOM), so the bet keeps the first line.
+- **After a hand at a full table** (seven opponents and up, `.othersDense`), a chip with a showdown line shows that line
+  instead of its badges and bet (`.othersDense .seat:has(> .seatResult) > .tags`), on one line: the payout whole at 14 px,
+  a long hand's name cut with "…". With the strip rule above, a 375 × 812 Blind table of eight fits after the hand, card
+  up or closed (M-06).
+- **Text floor.** Opponents' chip tags and the landscape pot label are 11 px, the chip's bet 12 px (P1).
+- **The header menu and the dock** (R11). The stack has no `.controls` row: the header (still two rows, so "Mức cược …
+  · Hạn mức …" stays) carries the same `MenuButton` "Thêm" as landscape — Đứng dậy, Tạm nghỉ / Chơi tiếp, Quản lý bàn
+  (the host's, between hands), Toàn màn hình — and between hands a one-row dock, `group` "Điều khiển bàn" inside
+  `footer[data-dock]`, holds Sẵn sàng / Hủy sẵn sàng, Bắt đầu and "N/M sẵn sàng" or the countdown (38 px tall when it is
+  the countdown alone), with no `role="status"`. A label too long for its share of the row wraps to two lines inside
+  its 44 px button (13 px, `line-height: 1.1`, balanced), never cut with "…". Between hands the tray stays mounted at zero
+  size (`data-between`) holding only Tự động chơi when offered (R13), set the same way and at most 6em wide; a host who is not seated still gets the dock (R14); a spectator who is
+  not the host has no footer. The pre-hand hint lies on the felt (`PokerTable` `note`).
+- **What pins it.** `Seat.test.tsx` (the fan, the strip, the raw-CSS sizes), `PokerTable.test.tsx` (`data-mine-cards`,
+  `strip`), `RoomScreen.test.tsx` (the dock, the menu, the spectator, the ring unchanged); in a browser `normal.spec.ts`'s
+  `@mobile` test (the tray ≤ 64 px, my cards ≥ 52 px) and the ops pack's M-06. Known gaps: `docs/known-limitations.md`
+  (BP-31 entries).
 
 ### The landscape frame (Plan 26, Part B)
 
@@ -821,21 +915,21 @@ of it. So the room has two **frames**, `RoomFrame = 'desktop' | 'landscape'` (`t
   `--z-modal` − 1), so a dropped socket moves no seat (spec B2; L-01 cuts the socket and compares the seat boxes).
 - **The corner docks.** Bottom right, `.dock` in the room holds what starts a hand: Sẵn sàng / Hủy sẵn sàng, Bắt đầu,
   the ready count and the between-hands countdown. During a hand the action tray takes the same corner and splits in two
-  (`.trayLeft`: the pre-action toggles and Tự động chơi, which the Hold'em presets Min · ½ · Pot · Max · ✎ replace after the first tap on Cược/Tố; `.trayRight`: Bỏ bài ·
-  Xem/Theo · Cược/Tố · Tất tay), so the two never share it: between hands the tray gives up its right part and keeps its
-  left one. The waiting hint ("Cần ít nhất 2 người…") moves onto the felt (`PokerTable`'s `note`), which is what
-  keeps the dock one row. Amounts sit on a second line under their verb, and the raise takes two taps (the first opens
-  the presets in the left corner, in place of the toggles; the second sends; Enter is still one step). The slider is
-  gone, and Tất tay leaves the right row while the presets are open ("Max" does its job there).
+  (`.trayLeft`: the pre-action toggles and Tự động chơi, which the bet panel replaces after the first tap on Cược/Tố;
+  `.trayRight`: Bỏ bài · Xem/Theo · Cược ▴/Tố ▴), so the two never share it: between hands the tray gives up its right part
+  and keeps its left one. The waiting hint ("Cần ít nhất 2 người…") moves onto the felt (`PokerTable`'s `note`), which is
+  what keeps the dock one row. Amounts sit on a second line under their verb, and the raise takes two taps (since BP-31:
+  the first opens the bet panel — chips, slider, Hủy — in the left corner and turns the right corner's button into "Tố N";
+  the second sends). There is no Tất tay action in the right row while sizing is legal: the panel's Tất tay chip does it.
 - **The ring.** Sized by the *measured* box (read once in the layout effect with `getBoundingClientRect`, so the first
   paint already has it, then followed by `ResizeObserver`; 2:1 without it): `ringPositions(seatOrder, anchor, box)`
   spaces seats by equal arc length for that ratio, so a 2.5 : 1 felt gets different angles than a 2 : 1 one and equal
   pixel gaps between neighbours. Plates are compact (94 px min, 30 px avatar), the seats at the flanks carry `data-edge`
   so their badge lines can run onto the felt, and the viewer's block stands on the rim between the docks with a 56 px row
   left free at the bottom. An occupied seat is no click target; the only one is the empty seat's `.sitBtn`, kept ≥ 44 px.
-- **The dialog.** "✎" (or the R key) opens `AmountDialog`, a `Modal anchor="top"` ("Nhập số điểm"): the soft keyboard
-  covers the bottom half of a page that does not scroll, so the dialog hangs from the top, with `max-height: calc(100dvh -
-  2 * var(--space-4))` and tight padding. Enter confirms the amount; it never raises by itself.
+- **The panel** (BP-31) is the corner shape of `BetPanel` (above): 76 px tall with no floating amount, and on the short
+  tier compact — 32 px chips and a 36 px slider row — so at 855 × 319 it stays clear of every seat and the viewer's cards
+  (L-06). The `AmountDialog` it replaced is gone, and with it the table's only text field.
 - **The result card** (`HandResult frame="landscape"`) is one compact block over the felt: title and a 44 px Đóng in one
   head, one-line winners, the fee and the countdown in a one-line foot, leaving the dock row free. Its live region clips
   (`overflow: hidden`), and the head and foot do not shrink; both are root fixes for every frame, not only this one
@@ -1067,10 +1161,14 @@ full-viewport, for measuring a layout against a screen size.
   `docs/known-limitations.md`.
 - **The landscape frame is driven in Chromium only, at 915 × 412, 915 × 355, 855 × 319 and 844 × 390** (740 × 360 fits,
   with thin margins), never on a real phone. The query is a viewport test, so a portrait phone with its soft keyboard up can read as
-  landscape; the only text field on the table is the top-anchored "Nhập số điểm" dialog. The result card is opaque and
+  landscape; since BP-31 the table has no text field (the bet is a slider). The result card is opaque and
   covers the side seats, and at 844 × 390 the top of the viewer's plate. A Hold'em table with nine occupied plates in
   landscape (a room seats nine) has no browser test, only the playground's `#worst/…/9/…/short`; on a stage narrower than
   about 800 px its top line passes over the end seats (BP-28). All in `docs/known-limitations.md`.
+- **The bet slider has been driven by keyboard only, in Chromium** (BP-31): no touch drag on a real phone, and a screen
+  reader's "increase" swipe can seem stuck (it moves the native range by 1 point, which rounds back to the same cell).
+  After a hand at a table of seven opponents and more a chip's hand name is cut with "…" when it is long, and the dock's
+  labels wrap to two lines. All in `docs/known-limitations.md`.
 - **The badge test measures the grounds a badge sits on today** (see Theming → Badge text). A badge on a ground it
   does not list is not measured, and one place is tight: teal under a dark `.panel.ink`'s highlight. The test holds
   that highlight at 2 %, above anywhere a badge is (Lite's "claimed" badge: 0.8–1.4 %, none on a phone; titled panels put

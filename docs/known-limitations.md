@@ -664,13 +664,48 @@ B1–B4).** The room draws its landscape frame when the viewport matches `(orien
 and (min-width: 700px)`. Nothing asks the phone to stay sideways: iOS Safari has no orientation lock at all, and Chrome
 grants one only to a page in fullscreen. The menu offers "Toàn màn hình" instead (only where `document.fullscreenEnabled`
 is true, so not on iOS Safari on a phone). `(orientation)` is a *viewport* test: a portrait phone with the soft keyboard
-up has a short, wide viewport on some browsers and reads as landscape. The room has one text field on the table, the "✎"
-amount dialog, and it hangs from the top of the screen exactly because the keyboard covers the bottom half; the
+up has a short, wide viewport on some browsers and reads as landscape. Since BP-31 the table has no text field at all
+(the bet is a slider on every frame; the "✎" amount dialog is gone), so nothing on the table opens the keyboard; the
 sign-in and lobby screens have no frame.
 *Why it stays:* a lock is not something a web page can ask for on the platform that needs it most; a keyboard-proof test
 would need a device to see which browsers resize the layout viewport.
 *Tracked:* `packages/ui-kit/src/table/frame.ts` (`LANDSCAPE_PHONE`); `docs/ui-kit.md` (The landscape frame). By hand: on a
-real phone, rotate, open "✎" and watch the keyboard; then rotate back with the keyboard open in the lobby.
+real phone, rotate with the keyboard open in the lobby and come back.
+
+**The bet slider has only been driven by keyboard in Chromium; a finger on it is untested (BP-31, R3).** The bet panel's
+slider is a native `<input type="range">` with `step="1"` that steps itself along the cells `min + i·step` (P7), so a drag
+snaps to the nearest cell by its own rounding, and the last cell is `max` exactly. The ops pack sets amounts with the
+keyboard (Home, →, End: L-04, M-06), never with a touch drag, and no Firefox or WebKit build drives it. A screen reader's
+"increase" swipe moves a native range by its `step` of 1 point, which the slider then rounds back to the same cell, so the
+swipe can seem to do nothing; the arrow keys, the chips and a drag all move it.
+*Why it stays:* a device is needed for the drag, and a custom ARIA slider was not worth giving up the native control's
+touch handling for (spec BP-31 §5).
+*Tracked:* `packages/ui-kit/src/table/BetPanel.tsx`; `docs/ui-kit.md` (The bet panel). By hand: on a real phone (iOS Safari,
+Chrome on Android), both orientations, drag the slider to the end and back, then raise with it; try VoiceOver / TalkBack.
+
+**Small corners of the phone table (BP-31).** The bet chips (Min · ½ pot · Pot · Tất tay) are 36 px tall even under a
+touch pointer, under the 44 px tap rule (R12: they are jumps, the slider's 44 px row and the confirm are the targets), and
+32 px on the landscape short tier, whose slider row is 36 px. The landscape corner panel is 76 px tall with no floating
+amount over the thumb: the right corner's "Tố N" carries the amount instead (the upright phone's sheet does the same, its
+confirm reads "Tố N"). Between hands the upright phone's countdown dock is 38 px tall (a status line, no button). My strip
+is 44 px and 56 px at a showdown; a state badge (Tạm nghỉ, Tất tay) hides the host's crown on it (the badge stays for a
+screen reader) so the bet keeps the first line, and the strip can still reach 66 px when the host badge, the rank and a
+bet wrap onto it. After a hand at a table of seven opponents and more, an opponent's chip shows its hand's name and payout
+in place of its badges and bet, on one line: a long hand's name ("Thùng phá sảnh") is cut with "…" there, and the result
+card spells it out. The dock's labels ("Hủy sẵn sàng", "Tự động chơi") wrap to two lines inside their 44 px buttons.
+*Why it stays:* each was a ruling of BP-31's tasks, to keep a 375 × 812 phone from scrolling with eight seats, during the
+hand and after it (M-06 asserts both).
+*Tracked:* `CHANGELOG.md` (BP-31, "Khác với spec / Deviations from the spec"); `docs/ui-kit.md` (The stack layout);
+`apps/normal-web/e2e/ops/09-phone.spec.ts` → M-06.
+
+**The phone table's last rough edges (BP-31 final wave).** In landscape, on corners narrower than ~70 px, "Tố ▴" /
+"Cược ▴" may break to two lines inside its 48 px button; the name stays "Tố". Between hands on the upright phone, with no
+Tự động chơi to keep, the tray remains as an empty "Hành động" group; screen readers may announce it. On the upright phone
+the dealer button sits on the strip's right corner, not on the avatar disc.
+*Why it stays:* found by the BP-31 reviews and judged too small to hold the merge: the corner's width is set by the
+landscape frame's geometry, the empty group keeps the tray's place stable between hands, and the strip's corner is where
+the ring's plates already carry the button.
+*Tracked:* `CHANGELOG.md` (BP-31, "Still open"); `docs/ui-kit.md` (The stack layout, The landscape frame).
 
 **On a landscape phone the opaque result card covers the side seats, and at 844 × 390 the top of the viewer's plate
 (Plan 26, B5).** The card needs the felt's width to keep the winners on one line each, so it lies over the seats at the
@@ -785,7 +820,8 @@ from "Điểm danh" as before.
 **Every locale namespace ships in the entry chunk, so the first paint carries the shop's and the GM's strings (Plan
 27).** `normal.json` (vi and en) is one resource loaded at boot; the lazy screens' strings are not split out. Plan 27's
 strings took the entry chunk to about 136 KB gzip of a 140 KB budget (under 4 KB of headroom), and the budget `MAX_ENTRY_GZIP` was raised from 130 to 140 KB
-(Ruling 13).
+(Ruling 13). BP-31's bet panel and phone tray took it to 140.3 KB, and the budget rose again to 150 KB (the SRS's own
+limit in §24 is 500 KB).
 *Why it stays:* splitting namespaces per lazy screen is a change to the i18n bootstrap for about 10 KB.
 *Tracked:* `apps/normal-web/test/footprint.test.ts`.
 

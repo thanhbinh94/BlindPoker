@@ -220,6 +220,10 @@ describe('Card', () => {
     expect(slide).toMatch(/^\s*from\s*\{/)
     expect(slide).not.toMatch(/\bto\b/)
     expect(slide, 'the card grows from the pile’s size as it travels').toMatch(/scale\(var\(--deal-scale/)
+    // BP-31 final wave: the offset is the `translate` property, outside a fanned card's `rotate`, so the path is not tilted
+    expect(slide).toMatch(/translate:\s*var\(--deal-dx, 0px\) var\(--deal-dy, -40px\);/)
+    expect(slide).toMatch(/transform:\s*rotate\(-7deg\) scale\(var\(--deal-scale, 0\.6\)\);/)
+    expect(slide, 'no translate() left inside the transform').not.toMatch(/translate\(/)
     expect(/--dur-deal:\s*(\d+)ms;/.exec(TOKENS_CSS)?.[1]).toBe(String(DEAL_MS))
     expect(/--dur-lift:\s*(\d+)ms;/.exec(TOKENS_CSS)?.[1]).toBe(String(LIFT_MS))
   })
