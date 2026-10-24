@@ -78,7 +78,8 @@ server refuses an item whose flags disagree with its layer's entry in the manife
 **A hat that covers the crown clips the hair (2026-10-06).** With every hat over the hair, whatever hair stands above
 the head rose through the hats that cover it: the ponytail's tie above the nón lá, the beanie and the beret, the spiky
 cut's spikes, the tousled cut's tuft, the bob's ahoge, the wavy cut's volume above the brim. So the hats in `HAIR_CLIP`
-(`masks.mjs`: `beanie01`, `beret_red01`, `conical_hat01`, and so every colour of them) carry a **hair clip**,
+(`masks.mjs`: `beanie01`, `beret_red01`, `conical_hat01`, and so every colour of them — and since BP-33 `cap_navy01`,
+`bucket_khaki01` and `fedora01`, whose clip is cut when their real picture is ingested) carry a **hair clip**,
 `<hat>_hairclipmask` (`masks.hairClip`, §4.4): opaque where hair may still show, clear where the hat covers it — above the
 hat's lower edge in every column the hat reaches, and beside the hat above the edge of its nearest side, because hair
 that comes out from under a hat comes out below its edge. A column's edge (`hatEdges`) is the bottom of its **longest**
@@ -88,7 +89,8 @@ straps are about 8 px thick and diagonal, survive the opening, and so cut the si
 fails any clip that hides hair the hat leaves uncovered below its edge.) The kit draws both hair layers through it as a
 CSS mask (§7) — once the clip has loaded, so the hair is never hidden by a clip still on its way or one that failed. The
 top hat, the visor, the crown and the party cone sit on the hair rather than over it, and a high ponytail rising
-behind the small top hat reads as one; clipped, its tail was cut flat, so they carry none.
+behind the small top hat reads as one; clipped, its tail was cut flat, so they carry none. BP-33's red headband, cat-ear
+headband and lotus hairpin leave the crown showing and carry none either.
 
 **The face layer gives up the torso column**: below y 236 it holds nothing in x ∈ [150, 234] (`TORSO_COLUMN`), because
 layer 50 sits above the outfit and the body's tank-top straps there would show over every collar (`keepOnlyFace`, §4.6).
@@ -151,9 +153,10 @@ its gender.
   (`{ gender, code }`), `item`, `bot` or `botFace`. The v4 readings are checked before the item reading a hair name
   would otherwise fall into. The flat bases' `base_<id>_L20|30|60` and `base_<id>_face_<expr>_L50` are not legal names
   any more (D1).
-- `stageOneFiles` is the stage-1 set the `placeholder` command draws and `check` walks: **118 names** — the 32 items
-  (8 hats, 4 face items, 6 outfits, 8 auras, 6 frames), 8 bots × (body + six faces), 2 bodies × (body + six faces) and
-  8 hairstyles × 2 layers. The manifest holds 120 entries, because the two male outfit cuts (§3.1) are not on the list.
+- `stageOneFiles` is the stage-1 set the `placeholder` command draws and `check` walks: **136 names** — the 50 items
+  (14 hats, 8 face items, 14 outfits, 8 auras, 6 frames), 8 bots × (body + six faces), 2 bodies × (body + six faces) and
+  8 hairstyles × 2 layers. The manifest holds 138 entries, because the two male outfit cuts (§3.1) are not on the list.
+  (118 names and 120 entries until BP-33 added six hats, four face items and eight outfits, spec 2026-10-24.)
 - A hair layer has no inventory icon: a hairstyle's wardrobe card is a portrait of the head wearing it.
 - The manifest's `bodies` key holds `{ [gender]: { transform, anchor? } }` — where each body was placed on the frame
   and what every face, hairstyle, item and bot cut on it is placed with — and a hair L60's entry carries `split` (§4.5).
@@ -211,7 +214,7 @@ length in the script's own header comment: read that first for every flag; this 
 
 ```bash
 pnpm --filter @bp/normal-web avatar:placeholder
-# Draws the whole stage-1 set (the 118 names of §3: bodies, their faces, hairstyles, items and bots) as labelled
+# Draws the whole stage-1 set (the 136 names of §3: bodies, their faces, hairstyles, items and bots) as labelled
 # stand-ins (a shape plus the file's own name, so a wrong ingest is obvious at a glance) and writes both copies of
 # the manifest. Idempotent: an entry the manifest already marks real (see §6 below) is left exactly alone, so
 # re-running this after some real art has landed only re-draws what is still a stand-in. Every item's icon (§4.2) is
@@ -267,7 +270,7 @@ pnpm --filter @bp/normal-web avatar:sheet -- --hairs f_bob01,m_tousled01 --outfi
 #      shared `recolour` under the body's and the face's skin masks at the body's skin meanL (and, as the kit
 #      does, `shade` on the skin lines and `ratio` on the skin a hair or outfit redrew, §4.4.1). A tone whose
 #      item is not in items.json yet is drawn natural, and its caption says so in amber (48 cards);
-#   2. every outfit on both genders, on the gender's default hairstyle (the bob, the tousled cut) (12);
+#   2. every outfit on both genders, on the gender's default hairstyle (the bob, the tousled cut) (28 since BP-33);
 #   3. every aura, then every frame, on body f with the bob, in casual01 (8 + 6);
 #   4. the six expressions per gender (12), the eight bots, and the portrait at 192, 40 and 32 px.
 # A body wears its gender's cut of an outfit where the manifest has one (§3.1: dealer01_m, tet_red01_m),
@@ -275,8 +278,8 @@ pnpm --filter @bp/normal-web avatar:sheet -- --hairs f_bob01,m_tousled01 --outfi
 # the v4 grid and nothing else — what the style gate shows the user; an empty list (`--hairs ""`) is refused, exit 1,
 # rather than drawing an empty grid. --out moves the review sheet.
 # The fit sheet (--fit-out moves it) is every hat in STAGE_ONE_ITEMS.head and every face item × the eight
-# hairstyles, on the hairstyle's gender, in casual01, cut to the portrait at @1x — one row per item, 96
-# cards. A hat's hide rules drop the hair layer they name (§2: front → the hairstyle's L60, back → its L20),
+# hairstyles, on the hairstyle's gender, in casual01, cut to the portrait at @1x — one row per item, 176
+# cards since BP-33 (96 before). A hat's hide rules drop the hair layer they name (§2: front → the hairstyle's L60, back → its L20),
 # and the caption says which ("hides front", "hides front+back", "hides none").
 
 pnpm --filter @bp/normal-web exec node scripts/avatar-pipeline.mjs hides item_head_beanie01_L80 --front off
@@ -1118,8 +1121,10 @@ each body, body face and hair layer (§3) together with the masks real art will 
 `apps/normal-web/public/avatar/` ships whatever mix of the two the repository is currently at. Nothing
 downstream — the server's catalogue, the kit's `Chibi`, any test — treats the two differently; a
 placeholder is exactly as valid a layer as a real one, just not the picture the design wants for good. After Plan 19's
-art batches the mix is 119 real manifest entries and one stand-in, `item_head_hood_black01_L80`, the hood the catalogue
-no longer offers (§2); `avatar:placeholder` redraws only that one.
+art batches the mix was 119 real manifest entries and one stand-in, `item_head_hood_black01_L80`, the hood the catalogue
+no longer offers (§2). BP-33 (spec 2026-10-24) added eighteen wardrobe items to `STAGE_ONE_ITEMS` and to the catalogue
+before their pictures existed, so until its art batch lands the mix is 119 real entries and 19 stand-ins — the hood and
+the eighteen, each on sale or won exactly as its real picture will be; `avatar:placeholder` redraws only those.
 
 ## 7. How the kit composes a chibi
 
@@ -1391,7 +1396,11 @@ The rules:
   other outfits describe today's pictures (`item_outfit_<code>_icon@2x.png`) so the redraw keeps their design.
   `next` alone would hand out all eight hairstyles before casual01 (`PRIORITY`), so the gate names its assets with
   `next --only`. C3 and C5 add more the same way (`v4/item_outfit_<code>_m`, `v4/item_head_<code>`,
-  `v4/item_face_<code>`).
+  `v4/item_face_<code>`). BP-33 (spec 2026-10-24) seeds eighteen brand-new items the same way, all `todo`, in its
+  tables' order: eight `v4/item_outfit_<code>` (reference `@body_f`, `ingest` `item:outfit:<code>`, `base` f) and six
+  `v4/item_head_<code>` and four `v4/item_face_<code>` (reference `@item_hair_f_bob01`, `base` f, `flags`
+  `["--hair", "f_bob01"]`). A new item has no Plan 12 history to keep apart from, but it takes the `v4/` prefix and the
+  `v4_` file anyway, so every picture drawn on a v4 body reads as one.
 - **Fix lines.** After a failure the next prompt is the prompt plus one line per *distinct* reason the earlier
   attempts failed for: `redrawn` → "same image size, same hair, same clothing", `tears` → "No tears",
   `hair_colour` → "same hair colour", `background` → "transparent background, no checkerboard", `cropped` →

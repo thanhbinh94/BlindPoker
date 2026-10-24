@@ -14,14 +14,14 @@
  *   cut where it exists) × three tones: `skin_porcelain01`'s colour, natural and `skin_deep01`'s colour, read from
  *   `items.json`. A tone whose item is missing is drawn natural and its caption says so. 48 cards; `--hairs` and
  *   `--outfits` narrow this block and nothing else (the style gate uses them);
- * - **every outfit** on both genders (the male cut where one exists), on the gender's default hairstyle — 12;
+ * - **every outfit** on both genders (the male cut where one exists), on the gender's default hairstyle — 28 since BP-33;
  * - **every aura and every frame** on body f with the bob, in `casual01` — 14;
  * - **the six expressions** per gender — 12; **the eight bots**; **the portrait** at the three sizes D01 §5 and
  *   spec §3 call for.
  *
  * The fit sheet tries every hat and every face item on each of the eight hairstyles, on the hairstyle's gender, in
- * `casual01` — 96 cards, one row per item, each cut to the portrait crop at @1x so a brim that misses the head
- * shows. A hat's hide rules drop the hair layer they name (R2, R12), and a covering hat's hair clip (2026-10-06)
+ * `casual01` — 176 cards since BP-33 (22 items), one row per item, each cut to the portrait crop at @1x so a brim
+ * that misses the head shows. A hat's hide rules drop the hair layer they name (R2, R12), and a covering hat's hair clip (2026-10-06)
  * cuts both hair layers to where hair can still show under it.
  *
  * Both compose through the same layer order and hide rules the renderer uses, and paint a tone with the shared

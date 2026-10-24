@@ -118,9 +118,9 @@ function fixtureWith(...defs: ItemDef[]): string {
 describe('the shipped catalogue', () => {
   const catalog = loadItemCatalog()
 
-  it('has eighty-nine items spread across all eleven slots', () => {
+  it('has a hundred and seven items spread across all eleven slots', () => {
     const all = catalog.all()
-    expect(all.length).toBe(89)
+    expect(all.length).toBe(107)
     expect(SLOTS).toHaveLength(11)
     for (const slot of SLOTS) expect(all.some((d) => d.slot === slot), slot).toBe(true)
     // The v2 slots are gone: a wardrobe piece is one PNG layer now, not a body part it dresses.
@@ -251,7 +251,11 @@ describe('the shipped catalogue', () => {
     // Plan 19 C5: a v4 hairstyle's L60 is the whole crown and fringe, not the old bases' one strand, so hiding it
     // left a bald head under every hat. The fit check chose to keep the hair under all of them; the hat sits over it.
     const hidesFront = (id: string): boolean => catalog.get(id)?.asset?.hidesHairFront === true
-    for (const id of ['head_tophat01', 'head_beret_red01', 'head_crown_gold01', 'head_conical_hat01', 'head_beanie01', 'head_party_cone01', 'head_beret_blue01', 'head_beanie_grey01', 'head_party_cone_green01', 'head_dealer_visor01']) {
+    // BP-33's six hats sit over the hair the same way.
+    for (const id of [
+      'head_tophat01', 'head_beret_red01', 'head_crown_gold01', 'head_conical_hat01', 'head_beanie01', 'head_party_cone01', 'head_beret_blue01', 'head_beanie_grey01', 'head_party_cone_green01', 'head_dealer_visor01',
+      'head_cap_navy01', 'head_bucket_khaki01', 'head_headband_red01', 'head_cat_ears01', 'head_lotus_pin01', 'head_fedora01',
+    ]) {
       expect(hidesFront(id), id).toBe(false)
     }
   })
@@ -259,6 +263,8 @@ describe('the shipped catalogue', () => {
   it('clips the hair under the hats that cover the crown, colour variants included, and under no other (2026-10-06)', () => {
     // The beret, the beanie and the nón lá: a ponytail's tie, the spiky cut's spikes and the tousled cut's tuft
     // rose through them. Read off the manifest's `masks.hairClip` of the hat's layer, which its colours share.
+    // BP-33's cap, bucket hat and fedora are in the pipeline's HAIR_CLIP, but their stand-in layers carry no clip:
+    // they join this list in the commit that ingests their real pictures (ingest cuts the clip).
     const clipping = catalog.all().filter((def) => def.asset?.clipsHair === true).map((def) => def.id).sort()
     expect(clipping).toEqual([
       'head_beanie01',

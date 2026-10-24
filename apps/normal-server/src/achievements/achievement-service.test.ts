@@ -125,7 +125,7 @@ const find = (playerId: string, id: string) => achievements.list(playerId).then(
 
 describe('loadAchievements', () => {
   it('reads the shipped catalogue, whose every metric is a counter and every item reward a real item', () => {
-    expect(defs.length).toBe(34)
+    expect(defs.length).toBe(39)
     expect(new Set(defs.map((d) => d.id)).size).toBe(defs.length)
     for (const id of [
       'login_days_7', 'login_streak_7', 'holdem_hands_10', 'win_streak_3', 'lose_streak_10', 'hand_royal',
@@ -137,6 +137,12 @@ describe('loadAchievements', () => {
     expect(defs.find((d) => d.id === 'games_500')).toMatchObject({ metric: 'gamesCompleted', threshold: 500, reward: { itemId: 'badge_veteran' } })
     expect(defs.find((d) => d.id === 'login_days_365')).toMatchObject({ metric: 'totalLoginDays', threshold: 365, reward: { itemId: 'frame_founder' } })
     expect(defs.find((d) => d.id === 'games_1000')).toMatchObject({ metric: 'gamesCompleted', threshold: 1000, reward: { itemId: 'frame_veteran' } })
+    // BP-33 (spec 2026-10-24 §3.3): five more, each giving one piece of the wardrobe batch on an existing counter.
+    expect(defs.find((d) => d.id === 'bot_hands_200')).toMatchObject({ category: 'social', metric: 'botHands', threshold: 200, reward: { itemId: 'outfit_denim01' } })
+    expect(defs.find((d) => d.id === 'holdem_hands_500')).toMatchObject({ category: 'holdem', metric: 'handsPlayedHoldem', threshold: 500, reward: { itemId: 'outfit_trench01' } })
+    expect(defs.find((d) => d.id === 'blind_wins_250')).toMatchObject({ category: 'blind', metric: 'handsWonBlind', threshold: 250, reward: { itemId: 'outfit_brocade_red01' } })
+    expect(defs.find((d) => d.id === 'big_win_250k')).toMatchObject({ category: 'holdem', metric: 'biggestWin', threshold: 250_000, reward: { itemId: 'head_fedora01' } })
+    expect(defs.find((d) => d.id === 'login_days_60')).toMatchObject({ category: 'login', metric: 'totalLoginDays', threshold: 60, reward: { itemId: 'face_monocle_gold01' } })
   })
 
   it('maps §14.1’s special-hand thresholds onto the category ranks', () => {
@@ -309,7 +315,8 @@ describe('reputation', () => {
 
     await bus.publish({ type: 'STATS_UPDATED', playerId, changedMetrics: ['totalLoginDays'] })
 
-    // login_days_7 (5,000 points → small), login_days_30 (20,000 → big), login_days_100 (an item → item).
+    // login_days_7 (5,000 points → small), login_days_30 (20,000 → big), login_days_60 and login_days_100 (an item each
+    // → item; BP-33 put the monocle at 60 days).
     const events = await db
       .select({ delta: reputationEvents.delta, reason: reputationEvents.reason, refId: reputationEvents.refId })
       .from(reputationEvents)
@@ -317,22 +324,24 @@ describe('reputation', () => {
     expect(events).toEqual([
       { delta: 50, reason: 'achievement', refId: `ach:${playerId}:login_days_7` },
       { delta: 150, reason: 'achievement', refId: `ach:${playerId}:login_days_30` },
+      { delta: 500, reason: 'achievement', refId: `ach:${playerId}:login_days_60` },
       { delta: 500, reason: 'achievement', refId: `ach:${playerId}:login_days_100` },
     ])
     const [row] = await db.select({ reputation: players.reputation, rank: players.rank }).from(players).where(eq(players.id, playerId))
-    expect(row).toEqual({ reputation: 700, rank: 3 })
+    expect(row).toEqual({ reputation: 1_200, rank: 3 })
     // Each rank reached is announced after its unlock committed, right after the unlock's own notice.
     expect(notified.map((n) => n.msg)).toEqual([
       { t: 'NOTIFICATION', kind: 'ACHIEVEMENT_UNLOCKED', payload: { id: 'login_days_7', reward: { points: 5_000 } } },
       { t: 'NOTIFICATION', kind: 'ACHIEVEMENT_UNLOCKED', payload: { id: 'login_days_30', reward: { points: 20_000 } } },
       { t: 'NOTIFICATION', kind: 'RANK_UP', payload: { rank: 2 } },
-      { t: 'NOTIFICATION', kind: 'ACHIEVEMENT_UNLOCKED', payload: { id: 'login_days_100', reward: { itemId: 'head_crown_gold01' } } },
+      { t: 'NOTIFICATION', kind: 'ACHIEVEMENT_UNLOCKED', payload: { id: 'login_days_60', reward: { itemId: 'face_monocle_gold01' } } },
       { t: 'NOTIFICATION', kind: 'RANK_UP', payload: { rank: 3 } },
+      { t: 'NOTIFICATION', kind: 'ACHIEVEMENT_UNLOCKED', payload: { id: 'login_days_100', reward: { itemId: 'head_crown_gold01' } } },
     ])
 
     // Replayed: nothing unlocks, so nothing is added.
     await bus.publish({ type: 'STATS_UPDATED', playerId, changedMetrics: ['totalLoginDays'] })
-    expect((await db.select().from(reputationEvents).where(eq(reputationEvents.playerId, playerId))).length).toBe(3)
+    expect((await db.select().from(reputationEvents).where(eq(reputationEvents.playerId, playerId))).length).toBe(4)
   })
 })
 

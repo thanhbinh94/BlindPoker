@@ -838,6 +838,20 @@
       "bytes2x": 153175,
       "real": true
     },
+    "item_face_aviators01_L70": {
+      "layer": 70,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 7665,
+      "placeholder": true
+    },
+    "item_face_bandaid01_L70": {
+      "layer": 70,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 7461,
+      "placeholder": true
+    },
     "item_face_eyepatch01_L70": {
       "layer": 70,
       "w": 384,
@@ -852,12 +866,26 @@
       "bytes2x": 287198,
       "real": true
     },
+    "item_face_glasses_square01_L70": {
+      "layer": 70,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 7917,
+      "placeholder": true
+    },
     "item_face_masquerade01_L70": {
       "layer": 70,
       "w": 384,
       "h": 448,
       "bytes2x": 32721,
       "real": true
+    },
+    "item_face_monocle_gold01_L70": {
+      "layer": 70,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 7814,
+      "placeholder": true
     },
     "item_face_sunglasses01_L70": {
       "layer": 70,
@@ -1231,6 +1259,27 @@
         }
       }
     },
+    "item_head_bucket_khaki01_L80": {
+      "layer": 80,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 8439,
+      "placeholder": true
+    },
+    "item_head_cap_navy01_L80": {
+      "layer": 80,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 8017,
+      "placeholder": true
+    },
+    "item_head_cat_ears01_L80": {
+      "layer": 80,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 7818,
+      "placeholder": true
+    },
     "item_head_conical_hat01_L80": {
       "layer": 80,
       "w": 384,
@@ -1258,6 +1307,20 @@
       "bytes2x": 62630,
       "real": true
     },
+    "item_head_fedora01_L80": {
+      "layer": 80,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 7487,
+      "placeholder": true
+    },
+    "item_head_headband_red01_L80": {
+      "layer": 80,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 8736,
+      "placeholder": true
+    },
     "item_head_hood_black01_L80": {
       "layer": 80,
       "w": 384,
@@ -1265,6 +1328,13 @@
       "bytes2x": 8238,
       "hidesHairFront": true,
       "hidesHairBack": true,
+      "placeholder": true
+    },
+    "item_head_lotus_pin01_L80": {
+      "layer": 80,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 7589,
       "placeholder": true
     },
     "item_head_party_cone01_L80": {
@@ -1291,6 +1361,34 @@
       "h": 448,
       "bytes2x": 297382,
       "real": true
+    },
+    "item_outfit_ao_ba_ba01_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9816,
+      "placeholder": true
+    },
+    "item_outfit_ao_dai_jade01_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 10198,
+      "placeholder": true
+    },
+    "item_outfit_bomber_neon01_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 10349,
+      "placeholder": true
+    },
+    "item_outfit_brocade_red01_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 10152,
+      "placeholder": true
     },
     "item_outfit_casual01_L40": {
       "layer": 40,
@@ -1378,6 +1476,20 @@
         }
       }
     },
+    "item_outfit_denim01_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 8924,
+      "placeholder": true
+    },
+    "item_outfit_hoodie_navy01_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 10365,
+      "placeholder": true
+    },
     "item_outfit_royal_robe01_L40": {
       "layer": 40,
       "w": 384,
@@ -1433,6 +1545,20 @@
           "meanL": 0.838
         }
       }
+    },
+    "item_outfit_tracksuit_red01_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9829,
+      "placeholder": true
+    },
+    "item_outfit_trench01_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9021,
+      "placeholder": true
     },
     "item_outfit_tuxedo01_L40": {
       "layer": 40,
@@ -1519,6 +1645,22 @@
       "bytes2x": 44413,
       "real": true
     },
+    "item_face_aviators01_icon": {
+      "kind": "icon",
+      "of": "item_face_aviators01_L70",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 6064,
+      "placeholder": true
+    },
+    "item_face_bandaid01_icon": {
+      "kind": "icon",
+      "of": "item_face_bandaid01_L70",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5983,
+      "placeholder": true
+    },
     "item_face_eyepatch01_icon": {
       "kind": "icon",
       "of": "item_face_eyepatch01_L70",
@@ -1535,6 +1677,14 @@
       "bytes2x": 11809,
       "real": true
     },
+    "item_face_glasses_square01_icon": {
+      "kind": "icon",
+      "of": "item_face_glasses_square01_L70",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5925,
+      "placeholder": true
+    },
     "item_face_masquerade01_icon": {
       "kind": "icon",
       "of": "item_face_masquerade01_L70",
@@ -1542,6 +1692,14 @@
       "h": 96,
       "bytes2x": 20853,
       "real": true
+    },
+    "item_face_monocle_gold01_icon": {
+      "kind": "icon",
+      "of": "item_face_monocle_gold01_L70",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 6252,
+      "placeholder": true
     },
     "item_face_sunglasses01_icon": {
       "kind": "icon",
@@ -1617,6 +1775,30 @@
       "real": true,
       "tintMask": true
     },
+    "item_head_bucket_khaki01_icon": {
+      "kind": "icon",
+      "of": "item_head_bucket_khaki01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 6016,
+      "placeholder": true
+    },
+    "item_head_cap_navy01_icon": {
+      "kind": "icon",
+      "of": "item_head_cap_navy01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5233,
+      "placeholder": true
+    },
+    "item_head_cat_ears01_icon": {
+      "kind": "icon",
+      "of": "item_head_cat_ears01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5029,
+      "placeholder": true
+    },
     "item_head_conical_hat01_icon": {
       "kind": "icon",
       "of": "item_head_conical_hat01_L80",
@@ -1641,12 +1823,36 @@
       "bytes2x": 21055,
       "real": true
     },
+    "item_head_fedora01_icon": {
+      "kind": "icon",
+      "of": "item_head_fedora01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 4669,
+      "placeholder": true
+    },
+    "item_head_headband_red01_icon": {
+      "kind": "icon",
+      "of": "item_head_headband_red01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 6221,
+      "placeholder": true
+    },
     "item_head_hood_black01_icon": {
       "kind": "icon",
       "of": "item_head_hood_black01_L80",
       "w": 96,
       "h": 96,
       "bytes2x": 5494,
+      "placeholder": true
+    },
+    "item_head_lotus_pin01_icon": {
+      "kind": "icon",
+      "of": "item_head_lotus_pin01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5111,
       "placeholder": true
     },
     "item_head_party_cone01_icon": {
@@ -1665,6 +1871,38 @@
       "h": 96,
       "bytes2x": 26018,
       "real": true
+    },
+    "item_outfit_ao_ba_ba01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_ao_ba_ba01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5216,
+      "placeholder": true
+    },
+    "item_outfit_ao_dai_jade01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_ao_dai_jade01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5599,
+      "placeholder": true
+    },
+    "item_outfit_bomber_neon01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_bomber_neon01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5846,
+      "placeholder": true
+    },
+    "item_outfit_brocade_red01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_brocade_red01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5587,
+      "placeholder": true
     },
     "item_outfit_casual01_icon": {
       "kind": "icon",
@@ -1699,6 +1937,22 @@
       "bytes2x": 23839,
       "real": true
     },
+    "item_outfit_denim01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_denim01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 4787,
+      "placeholder": true
+    },
+    "item_outfit_hoodie_navy01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_hoodie_navy01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5637,
+      "placeholder": true
+    },
     "item_outfit_royal_robe01_icon": {
       "kind": "icon",
       "of": "item_outfit_royal_robe01_L40",
@@ -1722,6 +1976,22 @@
       "h": 96,
       "bytes2x": 27440,
       "real": true
+    },
+    "item_outfit_tracksuit_red01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_tracksuit_red01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5293,
+      "placeholder": true
+    },
+    "item_outfit_trench01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_trench01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 4827,
+      "placeholder": true
     },
     "item_outfit_tuxedo01_icon": {
       "kind": "icon",
