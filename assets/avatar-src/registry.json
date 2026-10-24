@@ -7033,6 +7033,432 @@
         }
       ],
       "ingested": true
+    },
+    {
+      "id": "v4/item_outfit_hoodie_navy01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_hoodie_navy01",
+      "look": {
+        "description": "a plain navy zip-up hoodie with the hood down behind the neck, grey jogger trousers and white sneakers"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_hoodie_navy01.png",
+      "ingest": {
+        "as": "item:outfit:hoodie_navy01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_outfit_tracksuit_red01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_tracksuit_red01",
+      "look": {
+        "description": "a red zip-up track jacket with one white stripe down each sleeve, matching red track trousers with one white stripe down each leg, and white sneakers"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_tracksuit_red01.png",
+      "ingest": {
+        "as": "item:outfit:tracksuit_red01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_outfit_ao_ba_ba01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_ao_ba_ba01",
+      "look": {
+        "description": "a loose brown Vietnamese áo bà ba shirt with long sleeves and small round buttons, loose black wide trousers, and simple brown sandals"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_ao_ba_ba01.png",
+      "ingest": {
+        "as": "item:outfit:ao_ba_ba01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_outfit_denim01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_denim01",
+      "look": {
+        "description": "a light-blue denim jacket over a plain white T-shirt, dark blue jeans and brown boots"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_denim01.png",
+      "ingest": {
+        "as": "item:outfit:denim01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_outfit_bomber_neon01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_bomber_neon01",
+      "look": {
+        "description": "a black bomber jacket with thin glowing pink-and-cyan neon trim at the collar, cuffs and hem, black trousers and black sneakers with white soles"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_bomber_neon01.png",
+      "ingest": {
+        "as": "item:outfit:bomber_neon01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_outfit_ao_dai_jade01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_ao_dai_jade01",
+      "look": {
+        "description": "a jade-green Vietnamese áo dài with long sleeves, a high collar and side slits, over loose white silk trousers, and white flat shoes"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_ao_dai_jade01.png",
+      "ingest": {
+        "as": "item:outfit:ao_dai_jade01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_outfit_trench01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_trench01",
+      "look": {
+        "description": "a beige knee-length trench coat with a belt tied at the waist and wide lapels, dark brown trousers and brown shoes"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_trench01.png",
+      "ingest": {
+        "as": "item:outfit:trench01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_outfit_brocade_red01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_brocade_red01",
+      "look": {
+        "description": "a deep-red silk mandarin-collar jacket with gold trim along the edges and gold knot buttons, black trousers and black cloth shoes"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_brocade_red01.png",
+      "ingest": {
+        "as": "item:outfit:brocade_red01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_head_cap_navy01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_cap_navy01",
+      "look": {
+        "description": "a plain navy baseball cap with a curved brim facing forward"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": null,
+      "file": "v4_item_head_cap_navy01.png",
+      "ingest": {
+        "as": "item:head:cap_navy01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_head_bucket_khaki01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_bucket_khaki01",
+      "look": {
+        "description": "a soft khaki bucket hat with a short downward brim all around"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": null,
+      "file": "v4_item_head_bucket_khaki01.png",
+      "ingest": {
+        "as": "item:head:bucket_khaki01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_head_headband_red01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_headband_red01",
+      "look": {
+        "description": "a red fabric sports headband across the forehead above the eyebrows, the hair above and behind it unchanged"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": null,
+      "file": "v4_item_head_headband_red01.png",
+      "ingest": {
+        "as": "item:head:headband_red01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_head_cat_ears01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_cat_ears01",
+      "look": {
+        "description": "a thin black headband with two small black cat ears with pink insides"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": null,
+      "file": "v4_item_head_cat_ears01.png",
+      "ingest": {
+        "as": "item:head:cat_ears01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_head_lotus_pin01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_lotus_pin01",
+      "look": {
+        "description": "one small pink lotus flower hairpin on the right side of the hair, above the ear"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": null,
+      "file": "v4_item_head_lotus_pin01.png",
+      "ingest": {
+        "as": "item:head:lotus_pin01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_head_fedora01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_fedora01",
+      "look": {
+        "description": "a black felt fedora hat with a dark grey band, tilted slightly"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": null,
+      "file": "v4_item_head_fedora01.png",
+      "ingest": {
+        "as": "item:head:fedora01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_face_glasses_square01",
+      "kind": "item",
+      "slot": "face",
+      "wear": null,
+      "catalog": "face_glasses_square01",
+      "look": {
+        "description": "black square-framed glasses with clear lenses, the eyes fully visible through them"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": null,
+      "file": "v4_item_face_glasses_square01.png",
+      "ingest": {
+        "as": "item:face:glasses_square01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_face_bandaid01",
+      "kind": "item",
+      "slot": "face",
+      "wear": null,
+      "catalog": "face_bandaid01",
+      "look": {
+        "description": "one small beige adhesive plaster stuck diagonally on the left cheek, the eyes and mouth unchanged"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": null,
+      "file": "v4_item_face_bandaid01.png",
+      "ingest": {
+        "as": "item:face:bandaid01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_face_aviators01",
+      "kind": "item",
+      "slot": "face",
+      "wear": null,
+      "catalog": "face_aviators01",
+      "look": {
+        "description": "gold-framed aviator sunglasses with dark green lenses over the eyes, eyes faintly visible"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": null,
+      "file": "v4_item_face_aviators01.png",
+      "ingest": {
+        "as": "item:face:aviators01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_face_monocle_gold01",
+      "kind": "item",
+      "slot": "face",
+      "wear": null,
+      "catalog": "face_monocle_gold01",
+      "look": {
+        "description": "a single round gold-rimmed monocle over the right eye with a thin gold chain hanging down to the cheek, the other eye unchanged"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": null,
+      "file": "v4_item_face_monocle_gold01.png",
+      "ingest": {
+        "as": "item:face:monocle_gold01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
     }
   ]
 }
