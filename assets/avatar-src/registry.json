@@ -7270,7 +7270,7 @@
         "description": "a red fabric sports headband across the forehead above the eyebrows, the hair above and behind it unchanged"
       },
       "reference": "@item_hair_f_bob01",
-      "prompt": null,
+      "prompt": "Keep this exact image: the same character, the same pose, the same size and position in the frame, the same neutral face with open eyes, the same hair and hair colour, the same tank top and shorts, the same transparent background. Add only this: a red fabric sports headband worn across the forehead, lying over the fringe just above the eyebrows and wrapping around the head; the hair above and behind it stays exactly as it is. The headband is no wider than the head. No hat, no glasses. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
       "file": "v4_item_head_headband_red01.png",
       "ingest": {
         "as": "item:head:headband_red01",
@@ -7295,7 +7295,7 @@
         "description": "a thin black headband with two small black cat ears with pink insides"
       },
       "reference": "@item_hair_f_bob01",
-      "prompt": null,
+      "prompt": "Keep this exact image: the same character, the same pose, the same size and position in the frame, the same neutral face with open eyes, the same hair and hair colour, the same tank top and shorts, the same transparent background. Add only this: a thin black headband sitting on top of the hair, with two small black cat ears with pink insides standing up from it; all of the hair, the fringe included, stays exactly as it is. No hat, no glasses. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
       "file": "v4_item_head_cat_ears01.png",
       "ingest": {
         "as": "item:head:cat_ears01",
@@ -7317,10 +7317,10 @@
       "wear": null,
       "catalog": "head_lotus_pin01",
       "look": {
-        "description": "one small pink lotus flower hairpin on the right side of the hair, above the ear"
+        "description": "one small pink lotus flower hairpin in the hair on the character's right side (the left side of the picture), just above the ear"
       },
       "reference": "@item_hair_f_bob01",
-      "prompt": null,
+      "prompt": "Keep this exact image: the same character, the same pose, the same size and position in the frame, the same neutral face with open eyes, the same hair and hair colour, the same tank top and shorts, the same transparent background. Add only this: one small pink lotus flower hairpin in the hair on the character's right side (the left side of the picture), just above the ear; all the rest of the hair stays exactly as it is. No hat, no glasses. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
       "file": "v4_item_head_lotus_pin01.png",
       "ingest": {
         "as": "item:head:lotus_pin01",
@@ -7392,7 +7392,7 @@
       "wear": null,
       "catalog": "face_bandaid01",
       "look": {
-        "description": "one small beige adhesive plaster stuck diagonally on the left cheek, the eyes and mouth unchanged"
+        "description": "one small beige adhesive plaster stuck diagonally on the character's left cheek (the right side of the picture), the eyes and mouth unchanged"
       },
       "reference": "@item_hair_f_bob01",
       "prompt": null,
@@ -7442,7 +7442,7 @@
       "wear": null,
       "catalog": "face_monocle_gold01",
       "look": {
-        "description": "a single round gold-rimmed monocle over the right eye with a thin gold chain hanging down to the cheek, the other eye unchanged"
+        "description": "a single round gold-rimmed monocle over the character's right eye (the left side of the picture) with a thin gold chain hanging down to the cheek, the other eye unchanged"
       },
       "reference": "@item_hair_f_bob01",
       "prompt": null,

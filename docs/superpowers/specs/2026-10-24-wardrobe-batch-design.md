@@ -58,7 +58,7 @@ Năm thành tựu mới, mỗi cái thưởng đúng một món, dùng các ch�
 
 | id | Nhóm | Chỉ số | Ngưỡng | Thưởng | Tên (vi) / (en) |
 |---|---|---|---|---|---|
-| `bot_hands_200` | social | `botHands` | 200 | `outfit_denim01` | Bạn của bot / Bot buddy |
+| `bot_hands_200` | social | `botHands` | 200 | `outfit_denim01` | Tri kỷ của bot / One of the machines |
 | `holdem_hands_500` | holdem | `handsPlayedHoldem` | 500 | `outfit_trench01` | Thám tử bàn bài / Table detective |
 | `blind_wins_250` | blind | `handsWonBlind` | 250 | `outfit_brocade_red01` | Phúc lộc đầy nhà / Fortune's favourite |
 | `big_win_250k` | holdem | `biggestWin` | 250 000 | `head_fedora01` | Tay chơi lớn / High roller |
