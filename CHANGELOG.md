@@ -84,7 +84,9 @@ ChatGPT in the user's Chrome and ingested them; Task C moved the pins and wrote 
   `build:lite` up to the exe step, which needs Node 22 (this machine has 24); `avatar:check` 138 files, 1,794 checks, 0
   failures; e2e Normal 24/24 on the second run (the first lost "một tài khoản chơi trọn một ván Blind với bot" to a
   next-hand race, below); e2e Lite 4/4; ops 56/56.
-- **Deployed.** Not yet.
+- **Deployed.** On the VPS since 2026-10-25, shipped by git bundle ahead of the push (`6487c36..96571c3`; backup
+  `bp-2026-10-25-1027`, no migration, the shop seeded 18 price rows, health ok; the user's own test room was closed by
+  the restart, on their word). The LAN host was not touched. Lite rebuilt locally up to the exe step, not shipped.
 - **Still open.** A few light specks of the wavy fringe under the cap's brim and at the fedora's brim ends, over a dark
   hairstyle. No male cut was drawn: all eight outfits render on body m from the f cut, the áo dài included. The new
   achievements are not granted back: a player already past a threshold gets it the next time its counter moves. The
