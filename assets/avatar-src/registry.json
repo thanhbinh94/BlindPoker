@@ -8543,6 +8543,482 @@
         }
       ],
       "ingested": true
+    },
+    {
+      "id": "v4/item_outfit_skeleton01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_skeleton01",
+      "look": {
+        "description": "a black long-sleeved jumpsuit with a simple pale grey skeleton drawn on it (ribs, arm bones and leg bones), and black sneakers"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_skeleton01.png",
+      "ingest": {
+        "as": "item:outfit:skeleton01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_outfit_witch01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_witch01",
+      "look": {
+        "description": "a long black witch dress reaching the ankles with a purple sash at the waist, a short black cape over the shoulders, and black pointed boots"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_witch01.png",
+      "ingest": {
+        "as": "item:outfit:witch01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_outfit_vampire01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_vampire01",
+      "look": {
+        "description": "a black tailcoat suit with a dark red waistcoat and a red cravat, a long black cape lined in deep red falling to the calves, its collar standing up behind the neck below the ears, and black shoes"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_vampire01.png",
+      "ingest": {
+        "as": "item:outfit:vampire01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_outfit_sweater_xmas01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_sweater_xmas01",
+      "look": {
+        "description": "a red knitted Christmas jumper with one broad white zigzag band across the chest, dark green trousers and brown boots"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_sweater_xmas01.png",
+      "ingest": {
+        "as": "item:outfit:sweater_xmas01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_outfit_puffer01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_puffer01",
+      "look": {
+        "description": "a puffy sky-blue padded winter jacket zipped up to the chin, dark grey trousers and black snow boots"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_puffer01.png",
+      "ingest": {
+        "as": "item:outfit:puffer01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_outfit_santa01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_santa01",
+      "look": {
+        "description": "a red velvet coat with thick snow-white fluffy trim down the front, at the cuffs and at the hem, a wide black belt with a gold buckle, red trousers and black boots"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_santa01.png",
+      "ingest": {
+        "as": "item:outfit:santa01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_outfit_hawaii01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_hawaii01",
+      "look": {
+        "description": "a turquoise short-sleeved Hawaiian shirt with a few large orange hibiscus flowers, navy knee-length shorts and brown sandals"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_hawaii01.png",
+      "ingest": {
+        "as": "item:outfit:hawaii01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_outfit_sailor01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_sailor01",
+      "look": {
+        "description": "a white sailor top with a wide navy collar edged with one white stripe, a red neckerchief tied at the chest, navy trousers and black shoes"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_sailor01.png",
+      "ingest": {
+        "as": "item:outfit:sailor01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_head_witch_hat01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_witch_hat01",
+      "look": {
+        "description": "a tall pointed black witch hat with a wide brim and a purple band, its tip bent slightly backwards; the hat fully covers the top of the head"
+      },
+      "reference": "@item_hair_f_wavy01",
+      "prompt": null,
+      "file": "v4_item_head_witch_hat01.png",
+      "ingest": {
+        "as": "item:head:witch_hat01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_wavy01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_head_pumpkin01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_pumpkin01",
+      "look": {
+        "description": "a small orange carved jack-o'-lantern pumpkin worn as a hat, its friendly carved face glowing a soft yellow, a short green stem on top; it fully covers the top of the head"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": null,
+      "file": "v4_item_head_pumpkin01.png",
+      "ingest": {
+        "as": "item:head:pumpkin01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_head_devil_horns01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_devil_horns01",
+      "look": {
+        "description": "two small shiny red devil horns on a thin red headband, standing up from the top of the hair, the hair around them unchanged"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": "Keep this exact image: the same character, the same pose, the same size and position in the frame, the same neutral face with open eyes, the same hair and hair colour, the same tank top and shorts, the same transparent background. Add only this: a thin red headband sitting on top of the hair, with two small shiny red devil horns standing up from it, fully inside the image; all of the hair, the fringe included, stays exactly as it is. No hat, no glasses. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
+      "file": "v4_item_head_devil_horns01.png",
+      "ingest": {
+        "as": "item:head:devil_horns01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_face_bat_mask01",
+      "kind": "item",
+      "slot": "face",
+      "wear": null,
+      "catalog": "face_bat_mask01",
+      "look": {
+        "description": "a black eye mask shaped like a bat with its wings spread across both eyes, the eyes visible through two openings"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": null,
+      "file": "v4_item_face_bat_mask01.png",
+      "ingest": {
+        "as": "item:face:bat_mask01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_head_santa_hat01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_santa_hat01",
+      "look": {
+        "description": "a red Santa hat with a thick snow-white fluffy band and a white pompom at the tip, the tip flopping down to the character's left side (the right side of the picture); the hat fully covers the top of the head"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": null,
+      "file": "v4_item_head_santa_hat01.png",
+      "ingest": {
+        "as": "item:head:santa_hat01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_head_earmuffs01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_earmuffs01",
+      "look": {
+        "description": "sky-blue fluffy earmuffs over both ears joined by a thin sky-blue band over the top of the hair, the hair around them unchanged"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": "Keep this exact image: the same character, the same pose, the same size and position in the frame, the same neutral face with open eyes, the same hair and hair colour, the same tank top and shorts, the same transparent background. Add only this: sky-blue fluffy earmuffs, one over each ear at the sides of the head, joined by a thin sky-blue band that runs over the top of the hair; all of the hair, the fringe included, stays exactly as it is. The earmuffs are no wider than the hair. No hat, no glasses. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
+      "file": "v4_item_head_earmuffs01.png",
+      "ingest": {
+        "as": "item:head:earmuffs01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_head_reindeer01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_reindeer01",
+      "look": {
+        "description": "a thin brown headband with two small brown reindeer antlers and one tiny gold bell, standing up from the top of the hair, the hair around them unchanged"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": "Keep this exact image: the same character, the same pose, the same size and position in the frame, the same neutral face with open eyes, the same hair and hair colour, the same tank top and shorts, the same transparent background. Add only this: a thin brown headband sitting on top of the hair, with two small brown reindeer antlers standing up from it and one tiny gold bell on the band, fully inside the image; all of the hair, the fringe included, stays exactly as it is. No hat, no glasses. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
+      "file": "v4_item_head_reindeer01.png",
+      "ingest": {
+        "as": "item:head:reindeer01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_face_red_nose01",
+      "kind": "item",
+      "slot": "face",
+      "wear": null,
+      "catalog": "face_red_nose01",
+      "look": {
+        "description": "one small round shiny bright-red nose over the character's own nose, the eyes and mouth unchanged"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": null,
+      "file": "v4_item_face_red_nose01.png",
+      "ingest": {
+        "as": "item:face:red_nose01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_head_straw_hat01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_straw_hat01",
+      "look": {
+        "description": "a wide-brimmed golden straw sun hat with a red ribbon band, sitting level and straight; the hat fully covers the top of the head"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": null,
+      "file": "v4_item_head_straw_hat01.png",
+      "ingest": {
+        "as": "item:head:straw_hat01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_head_flower_crown01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_flower_crown01",
+      "look": {
+        "description": "a ring of pink and yellow plumeria flowers resting around the top of the head like a crown, the hair around and between them unchanged"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": "Keep this exact image: the same character, the same pose, the same size and position in the frame, the same neutral face with open eyes, the same hair and hair colour, the same tank top and shorts, the same transparent background. Add only this: a ring of pink and yellow plumeria flowers resting around the top of the head like a crown; all of the hair, the fringe included, stays exactly as it is and shows around and between the flowers. The crown is no wider than the hair. No hat, no glasses. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
+      "file": "v4_item_head_flower_crown01.png",
+      "ingest": {
+        "as": "item:head:flower_crown01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_face_heart_glasses01",
+      "kind": "item",
+      "slot": "face",
+      "wear": null,
+      "catalog": "face_heart_glasses01",
+      "look": {
+        "description": "pink heart-shaped sunglasses with dark pink lenses over both eyes, eyes faintly visible"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": null,
+      "file": "v4_item_face_heart_glasses01.png",
+      "ingest": {
+        "as": "item:face:heart_glasses01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
+    },
+    {
+      "id": "v4/item_head_crab01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_crab01",
+      "look": {
+        "description": "one small cute red crab sitting on top of the hair with its claws raised, the hair around it unchanged"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": "Keep this exact image: the same character, the same pose, the same size and position in the frame, the same neutral face with open eyes, the same hair and hair colour, the same tank top and shorts, the same transparent background. Add only this: one small cute red crab sitting on top of the hair with its claws raised, fully inside the image; all of the hair, the fringe included, stays exactly as it is. No hat, no glasses. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
+      "file": "v4_item_head_crab01.png",
+      "ingest": {
+        "as": "item:head:crab01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "todo",
+      "attempts": [],
+      "ingested": false
     }
   ]
 }
