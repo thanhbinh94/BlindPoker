@@ -7052,9 +7052,53 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": [],
-      "ingested": false
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-24T14:58:42.738Z",
+          "chat": "https://chatgpt.com/c/6adcc69a-cec8-83ec-ab5a-31437f499927",
+          "file": "v4_item_outfit_hoodie_navy01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.995,
+            "widthRatio": 0.997,
+            "drift": {
+              "left": 0,
+              "top": 0,
+              "right": 1,
+              "bottom": 6
+            },
+            "registered": {
+              "scale": 0.99,
+              "dx": 0,
+              "dy": -7,
+              "iou": 0.805
+            },
+            "heads": 2.436,
+            "hairDelta": 9.731,
+            "checks": {
+              "item_outfit_hoodie_navy01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 0.99 about the feet, then 0, -7 px (IoU 0.805) — drift is judged there, not on the edges as drawn"
+          ]
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_outfit_tracksuit_red01",
@@ -7074,9 +7118,53 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": [],
-      "ingested": false
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-25T00:31:03.884Z",
+          "chat": "https://chatgpt.com/c/6adccb0e-5660-83ec-bbd5-9eb3dea96617",
+          "file": "v4_item_outfit_tracksuit_red01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.994,
+            "widthRatio": 1.002,
+            "drift": {
+              "left": -2,
+              "top": 1,
+              "right": 2,
+              "bottom": 8
+            },
+            "registered": {
+              "scale": 0.985,
+              "dx": 0,
+              "dy": -11,
+              "iou": 0.792
+            },
+            "heads": 2.428,
+            "hairDelta": 3.002,
+            "checks": {
+              "item_outfit_tracksuit_red01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 0.985 about the feet, then 0, -11 px (IoU 0.792) — drift is judged there, not on the edges as drawn"
+          ]
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_outfit_ao_ba_ba01",
@@ -7096,9 +7184,53 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": [],
-      "ingested": false
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-24T15:08:13.558Z",
+          "chat": "https://chatgpt.com/c/6adcc857-087c-83ec-a3ee-88d60988f7e6",
+          "file": "v4_item_outfit_ao_ba_ba01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.994,
+            "widthRatio": 0.996,
+            "drift": {
+              "left": 0,
+              "top": 1,
+              "right": 1,
+              "bottom": 9
+            },
+            "registered": {
+              "scale": 0.985,
+              "dx": 0,
+              "dy": -11,
+              "iou": 0.722
+            },
+            "heads": 2.399,
+            "hairDelta": 1.528,
+            "checks": {
+              "item_outfit_ao_ba_ba01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 0.985 about the feet, then 0, -11 px (IoU 0.722) — drift is judged there, not on the edges as drawn"
+          ]
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_outfit_denim01",
@@ -7118,9 +7250,82 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": [],
-      "ingested": false
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-24T15:09:42.538Z",
+          "chat": "https://chatgpt.com/c/6adcc857-29ac-83ec-b024-bce9f99403d6",
+          "file": "v4_item_outfit_denim01.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1.056,
+            "widthRatio": 0.929,
+            "drift": {
+              "left": 32,
+              "top": -3,
+              "right": -29,
+              "bottom": -68
+            }
+          },
+          "reason": "redrawn",
+          "by": "verify"
+        },
+        {
+          "n": 2,
+          "at": "2026-10-25T00:33:57.940Z",
+          "chat": "https://chatgpt.com/c/6adcc857-29ac-83ec-b024-bce9f99403d6",
+          "file": "v4_item_outfit_denim01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.965,
+            "widthRatio": 0.973,
+            "drift": {
+              "left": -1,
+              "top": -4,
+              "right": 3,
+              "bottom": 40
+            },
+            "registered": {
+              "scale": 0.995,
+              "dx": 0,
+              "dy": -2,
+              "iou": 0.729
+            },
+            "heads": 2.226,
+            "hairDelta": 5.288,
+            "checks": {
+              "item_outfit_denim01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 0.995 about the feet, then 0, -2 px (IoU 0.729) — drift is judged there, not on the edges as drawn"
+          ]
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_outfit_bomber_neon01",
@@ -7140,9 +7345,53 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": [],
-      "ingested": false
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-25T00:32:49.774Z",
+          "chat": "https://chatgpt.com/c/6adccb0f-96b0-83ec-b062-3b2c79fea6c3",
+          "file": "v4_item_outfit_bomber_neon01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.996,
+            "widthRatio": 1,
+            "drift": {
+              "left": -1,
+              "top": 1,
+              "right": 1,
+              "bottom": 6
+            },
+            "registered": {
+              "scale": 0.99,
+              "dx": 0,
+              "dy": -6,
+              "iou": 0.751
+            },
+            "heads": 2.408,
+            "hairDelta": 2.093,
+            "checks": {
+              "item_outfit_bomber_neon01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 0.99 about the feet, then 0, -6 px (IoU 0.751) — drift is judged there, not on the edges as drawn"
+          ]
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_outfit_ao_dai_jade01",
@@ -7151,7 +7400,7 @@
       "wear": null,
       "catalog": "outfit_ao_dai_jade01",
       "look": {
-        "description": "a jade-green Vietnamese áo dài with long sleeves, a high collar and side slits, over loose white silk trousers, and white flat shoes"
+        "description": "a jade-green Vietnamese áo dài with long sleeves, a high collar and side slits, over loose white silk trousers, and black closed flat shoes that fully cover the feet"
       },
       "reference": "@body_f",
       "prompt": null,
@@ -7162,9 +7411,97 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": [],
-      "ingested": false
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-25T00:33:10.306Z",
+          "chat": "https://chatgpt.com/c/6adccb0f-18bc-83ec-83db-3ad5a206799a",
+          "file": "v4_item_outfit_ao_dai_jade01.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.994,
+            "widthRatio": 0.996,
+            "drift": {
+              "left": 0,
+              "top": 0,
+              "right": 1,
+              "bottom": 7
+            },
+            "registered": {
+              "scale": 0.995,
+              "dx": 0,
+              "dy": -5,
+              "iou": 0.712
+            },
+            "heads": 2.405,
+            "hairDelta": 3.463,
+            "checks": {
+              "item_outfit_ao_dai_jade01_L40": []
+            }
+          },
+          "reason": "style",
+          "by": "user",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 0.995 about the feet, then 0, -5 px (IoU 0.712) — drift is judged there, not on the edges as drawn"
+          ],
+          "judgedAt": "2026-10-25T01:05:52.267Z"
+        },
+        {
+          "n": 2,
+          "at": "2026-10-25T01:14:06.573Z",
+          "chat": "https://chatgpt.com/c/6add5655-47f8-83ec-b92c-38be1b266fbe",
+          "file": "v4_item_outfit_ao_dai_jade01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.994,
+            "widthRatio": 0.994,
+            "drift": {
+              "left": 1,
+              "top": 0,
+              "right": 1,
+              "bottom": 7
+            },
+            "registered": {
+              "scale": 0.995,
+              "dx": 0,
+              "dy": -7,
+              "iou": 0.718
+            },
+            "heads": 2.398,
+            "hairDelta": 1.233,
+            "checks": {
+              "item_outfit_ao_dai_jade01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 0.995 about the feet, then 0, -7 px (IoU 0.718) — drift is judged there, not on the edges as drawn"
+          ]
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_outfit_trench01",
@@ -7173,7 +7510,7 @@
       "wear": null,
       "catalog": "outfit_trench01",
       "look": {
-        "description": "a beige knee-length trench coat with a belt tied at the waist and wide lapels, dark brown trousers and brown shoes"
+        "description": "a medium camel-brown knee-length trench coat (clearly darker and browner than the skin) with a belt tied at the waist and wide lapels, dark brown trousers and brown shoes"
       },
       "reference": "@body_f",
       "prompt": null,
@@ -7184,9 +7521,97 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": [],
-      "ingested": false
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-25T00:37:38.018Z",
+          "chat": "https://chatgpt.com/c/6add4ecf-d8a0-83ec-977b-92d9442345bd",
+          "file": "v4_item_outfit_trench01.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.998,
+            "widthRatio": 1.004,
+            "drift": {
+              "left": -1,
+              "top": 0,
+              "right": 2,
+              "bottom": 2
+            },
+            "registered": {
+              "scale": 0.99,
+              "dx": 0,
+              "dy": -5,
+              "iou": 0.787
+            },
+            "heads": 2.4,
+            "hairDelta": 2.432,
+            "checks": {
+              "item_outfit_trench01_L40": []
+            }
+          },
+          "reason": "style",
+          "by": "user",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 0.99 about the feet, then 0, -5 px (IoU 0.787) — drift is judged there, not on the edges as drawn"
+          ],
+          "judgedAt": "2026-10-25T01:03:03.880Z"
+        },
+        {
+          "n": 2,
+          "at": "2026-10-25T01:06:25.391Z",
+          "chat": "https://chatgpt.com/c/6add559c-6b24-83ec-a2ab-7040624335f8",
+          "file": "v4_item_outfit_trench01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.994,
+            "widthRatio": 0.996,
+            "drift": {
+              "left": 0,
+              "top": 1,
+              "right": 1,
+              "bottom": 9
+            },
+            "registered": {
+              "scale": 0.99,
+              "dx": 0,
+              "dy": -9,
+              "iou": 0.75
+            },
+            "heads": 2.421,
+            "hairDelta": 1.966,
+            "checks": {
+              "item_outfit_trench01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 0.99 about the feet, then 0, -9 px (IoU 0.75) — drift is judged there, not on the edges as drawn"
+          ]
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_outfit_brocade_red01",
@@ -7206,9 +7631,53 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": [],
-      "ingested": false
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-25T00:39:22.166Z",
+          "chat": "https://chatgpt.com/c/6add4ed0-0db0-83ec-99cb-73182aff7057",
+          "file": "v4_item_outfit_brocade_red01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.997,
+            "widthRatio": 1.001,
+            "drift": {
+              "left": -1,
+              "top": -1,
+              "right": 1,
+              "bottom": 3
+            },
+            "registered": {
+              "scale": 0.995,
+              "dx": 0,
+              "dy": -4,
+              "iou": 0.85
+            },
+            "heads": 2.397,
+            "hairDelta": 3.117,
+            "checks": {
+              "item_outfit_brocade_red01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 0.995 about the feet, then 0, -4 px (IoU 0.85) — drift is judged there, not on the edges as drawn"
+          ]
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_head_cap_navy01",
@@ -7217,7 +7686,7 @@
       "wear": null,
       "catalog": "head_cap_navy01",
       "look": {
-        "description": "a plain navy baseball cap with a curved brim facing forward"
+        "description": "a plain navy baseball cap with a curved brim facing forward; the cap fully hides the upright strand of hair on top of the head, and no hair shows above or through the cap"
       },
       "reference": "@item_hair_f_bob01",
       "prompt": null,
@@ -7231,9 +7700,139 @@
           "f_bob01"
         ]
       },
-      "status": "todo",
-      "attempts": [],
-      "ingested": false
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-25T00:41:16.335Z",
+          "chat": "https://chatgpt.com/c/6add4fa3-8018-83ec-8a9f-13dd4de50b2f",
+          "file": "v4_item_head_cap_navy01.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.004,
+            "drift": {
+              "left": -2,
+              "top": null,
+              "right": 0,
+              "bottom": 4
+            },
+            "scope": 0.008,
+            "checks": {
+              "item_head_cap_navy01_L80": []
+            }
+          },
+          "reason": "style",
+          "by": "user",
+          "judgedAt": "2026-10-25T01:03:03.880Z"
+        },
+        {
+          "n": 2,
+          "at": "2026-10-25T01:08:05.113Z",
+          "chat": "https://chatgpt.com/c/6add55b4-a0c8-83ec-8665-cdc2ece66999",
+          "file": "v4_item_head_cap_navy01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.006,
+            "drift": {
+              "left": -1,
+              "top": null,
+              "right": 2,
+              "bottom": 2
+            },
+            "scope": 0.006,
+            "checks": {
+              "item_head_cap_navy01_L80": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true,
+      "superseded": "v4/item_head_cap_navy01_w",
+      "note": "BP-33: drawn over f_bob01, whose dark purple hair is within the cut's colour tolerance of a navy hat, so the crown came out with holes; superseded by v4/item_head_cap_navy01_w."
+    },
+    {
+      "id": "v4/item_head_cap_navy01_w",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_cap_navy01",
+      "look": {
+        "description": "a plain navy baseball cap with a curved brim facing forward; the cap fully covers the top of the head"
+      },
+      "reference": "@item_hair_f_wavy01",
+      "prompt": null,
+      "file": "v4_item_head_cap_navy01_w.png",
+      "ingest": {
+        "as": "item:head:cap_navy01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_wavy01"
+        ]
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-25T01:16:32.817Z",
+          "chat": "https://chatgpt.com/c/6add57a9-3400-83ec-9955-535cd88df87f",
+          "file": "v4_item_head_cap_navy01_w.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.006,
+            "drift": {
+              "left": -1,
+              "top": null,
+              "right": 2,
+              "bottom": 2
+            },
+            "scope": 0.006,
+            "checks": {
+              "item_head_cap_navy01_L80": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true,
+      "note": "BP-33: redrawn over the light f_wavy01 hairstyle; on the dark f_bob01 the ingest dropped every hat pixel close to the hair colour, leaving holes in the crown."
     },
     {
       "id": "v4/item_head_bucket_khaki01",
@@ -7256,9 +7855,43 @@
           "f_bob01"
         ]
       },
-      "status": "todo",
-      "attempts": [],
-      "ingested": false
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-25T00:40:32.258Z",
+          "chat": "https://chatgpt.com/c/6add4f9b-8054-83ec-b0eb-84b566957257",
+          "file": "v4_item_head_bucket_khaki01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.01,
+            "drift": {
+              "left": -2,
+              "top": null,
+              "right": 3,
+              "bottom": 3
+            },
+            "scope": 0.007,
+            "checks": {
+              "item_head_bucket_khaki01_L80": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_head_headband_red01",
@@ -7281,9 +7914,43 @@
           "f_bob01"
         ]
       },
-      "status": "todo",
-      "attempts": [],
-      "ingested": false
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-25T00:42:11.408Z",
+          "chat": "https://chatgpt.com/c/6add4fba-adbc-83ec-988d-cd1c85c4d607",
+          "file": "v4_item_head_headband_red01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.01,
+            "drift": {
+              "left": -3,
+              "top": null,
+              "right": 2,
+              "bottom": 3
+            },
+            "scope": 0.008,
+            "checks": {
+              "item_head_headband_red01_L80": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_head_cat_ears01",
@@ -7306,9 +7973,43 @@
           "f_bob01"
         ]
       },
-      "status": "todo",
-      "attempts": [],
-      "ingested": false
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-25T00:42:50.514Z",
+          "chat": "https://chatgpt.com/c/6add502b-3468-83ec-834c-2a3be64d7f61",
+          "file": "v4_item_head_cat_ears01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.012,
+            "drift": {
+              "left": -3,
+              "top": null,
+              "right": 3,
+              "bottom": 3
+            },
+            "scope": 0.008,
+            "checks": {
+              "item_head_cat_ears01_L80": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_head_lotus_pin01",
@@ -7331,9 +8032,43 @@
           "f_bob01"
         ]
       },
-      "status": "todo",
-      "attempts": [],
-      "ingested": false
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-25T00:43:32.036Z",
+          "chat": "https://chatgpt.com/c/6add5050-ddd8-83ec-bbb2-e2d6760f12b6",
+          "file": "v4_item_head_lotus_pin01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.008,
+            "drift": {
+              "left": -2,
+              "top": null,
+              "right": 2,
+              "bottom": 3
+            },
+            "scope": 0.006,
+            "checks": {
+              "item_head_lotus_pin01_L80": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_head_fedora01",
@@ -7342,7 +8077,7 @@
       "wear": null,
       "catalog": "head_fedora01",
       "look": {
-        "description": "a black felt fedora hat with a dark grey band, tilted slightly"
+        "description": "an opaque black felt fedora hat with a dark grey band, sitting level and straight, its brim even all around; the hat fully hides the upright strand of hair on top of the head, and no hair shows above or through the hat"
       },
       "reference": "@item_hair_f_bob01",
       "prompt": null,
@@ -7356,9 +8091,182 @@
           "f_bob01"
         ]
       },
-      "status": "todo",
-      "attempts": [],
-      "ingested": false
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-25T00:44:17.495Z",
+          "chat": "https://chatgpt.com/c/6add5078-8a60-83ec-aee8-47e6b62cab50",
+          "file": "v4_item_head_fedora01.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 0.996,
+            "drift": {
+              "left": -1,
+              "top": null,
+              "right": -3,
+              "bottom": 2
+            },
+            "scope": 0.038,
+            "checks": {
+              "item_head_fedora01_L80": [
+                "C11"
+              ]
+            }
+          },
+          "reason": "check:C11",
+          "by": "verify",
+          "notes": [
+            "scope 0.038 outside the head — advisory for a head item",
+            "item_head_fedora01_L80 C11: hair clip hides 58 pixels the hat leaves uncovered below its edge"
+          ]
+        },
+        {
+          "n": 2,
+          "at": "2026-10-25T00:55:37.990Z",
+          "chat": "https://chatgpt.com/c/6add51c8-f550-83ec-8544-70e9c9b10ea7",
+          "file": "v4_item_head_fedora01.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 0.996,
+            "drift": {
+              "left": -5,
+              "top": null,
+              "right": -7,
+              "bottom": 25
+            },
+            "scope": 0.296,
+            "checks": {
+              "item_head_fedora01_L80": []
+            }
+          },
+          "reason": "style",
+          "by": "user",
+          "notes": [
+            "body box drift (width ratio 0.996, edges {\"left\":-5,\"top\":null,\"right\":-7,\"bottom\":25}) — advisory for a head item",
+            "scope 0.296 outside the head — advisory for a head item"
+          ],
+          "judgedAt": "2026-10-25T01:03:03.880Z"
+        },
+        {
+          "n": 3,
+          "at": "2026-10-25T01:08:18.557Z",
+          "chat": "https://chatgpt.com/c/6add55b5-5220-83ec-bcef-cb9724b88179",
+          "file": "v4_item_head_fedora01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.008,
+            "drift": {
+              "left": -1,
+              "top": null,
+              "right": 3,
+              "bottom": 2
+            },
+            "scope": 0.006,
+            "checks": {
+              "item_head_fedora01_L80": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true,
+      "superseded": "v4/item_head_fedora01_w",
+      "note": "BP-33: drawn over f_bob01, whose dark purple hair is within the cut's colour tolerance of a black hat, so the crown came out with holes; superseded by v4/item_head_fedora01_w."
+    },
+    {
+      "id": "v4/item_head_fedora01_w",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_fedora01",
+      "look": {
+        "description": "an opaque black felt fedora hat with a dark grey band, sitting level and straight, its brim even all around; the hat fully covers the top of the head"
+      },
+      "reference": "@item_hair_f_wavy01",
+      "prompt": null,
+      "file": "v4_item_head_fedora01_w.png",
+      "ingest": {
+        "as": "item:head:fedora01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_wavy01"
+        ]
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-25T01:17:54.082Z",
+          "chat": "https://chatgpt.com/c/6add57cb-15c8-83ec-8a59-d6be0b553db0",
+          "file": "v4_item_head_fedora01_w.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.01,
+            "drift": {
+              "left": -2,
+              "top": null,
+              "right": 3,
+              "bottom": 3
+            },
+            "scope": 0.007,
+            "checks": {
+              "item_head_fedora01_L80": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true,
+      "note": "BP-33: redrawn over the light f_wavy01 hairstyle; on the dark f_bob01 the ingest dropped every hat pixel close to the hair colour, leaving holes in the crown."
     },
     {
       "id": "v4/item_face_glasses_square01",
@@ -7381,9 +8289,45 @@
           "f_bob01"
         ]
       },
-      "status": "todo",
-      "attempts": [],
-      "ingested": false
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-25T00:45:38.704Z",
+          "chat": "https://chatgpt.com/c/6add50a1-c41c-83ec-8095-a3b4c32bd0a4",
+          "file": "v4_item_face_glasses_square01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.998,
+            "widthRatio": 1.014,
+            "drift": {
+              "left": -4,
+              "top": -1,
+              "right": 5,
+              "bottom": 1
+            },
+            "heads": 2.197,
+            "hairDelta": 3.725,
+            "scope": 0.008,
+            "checks": {
+              "item_face_glasses_square01_L70": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_face_bandaid01",
@@ -7406,9 +8350,77 @@
           "f_bob01"
         ]
       },
-      "status": "todo",
-      "attempts": [],
-      "ingested": false
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-25T00:48:31.693Z",
+          "chat": "https://chatgpt.com/c/6add50cc-668c-83ec-b27a-6a5ac5bfa05e",
+          "file": "v4_item_face_bandaid01.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.998,
+            "widthRatio": 0.993,
+            "drift": {
+              "left": -1,
+              "top": -1,
+              "right": -4,
+              "bottom": 2
+            },
+            "heads": 2.194,
+            "hairDelta": 1.012,
+            "scope": 0.037
+          },
+          "reason": "scope",
+          "by": "verify"
+        },
+        {
+          "n": 2,
+          "at": "2026-10-25T00:55:26.479Z",
+          "chat": "https://chatgpt.com/c/6add5279-9fac-83ec-9471-6a14d87c4d78",
+          "file": "v4_item_face_bandaid01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.998,
+            "widthRatio": 1.005,
+            "drift": {
+              "left": -1,
+              "top": -1,
+              "right": 3,
+              "bottom": 2
+            },
+            "heads": 2.192,
+            "hairDelta": 3.751,
+            "scope": 0.008,
+            "checks": {
+              "item_face_bandaid01_L70": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_face_aviators01",
@@ -7431,9 +8443,45 @@
           "f_bob01"
         ]
       },
-      "status": "todo",
-      "attempts": [],
-      "ingested": false
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-25T00:51:07.766Z",
+          "chat": "https://chatgpt.com/c/6add50f7-da30-83ec-a54f-dc7fb85b98a7",
+          "file": "v4_item_face_aviators01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.021,
+            "drift": {
+              "left": -5,
+              "top": 2,
+              "right": 7,
+              "bottom": 2
+            },
+            "heads": 2.203,
+            "hairDelta": 6.257,
+            "scope": 0.007,
+            "checks": {
+              "item_face_aviators01_L70": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_face_monocle_gold01",
@@ -7456,9 +8504,45 @@
           "f_bob01"
         ]
       },
-      "status": "todo",
-      "attempts": [],
-      "ingested": false
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-25T00:55:06.399Z",
+          "chat": "https://chatgpt.com/c/6add52af-d9a0-83ec-9191-5891392f245b",
+          "file": "v4_item_face_monocle_gold01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1,
+            "drift": {
+              "left": 1,
+              "top": 1,
+              "right": 1,
+              "bottom": 1
+            },
+            "heads": 2.199,
+            "hairDelta": 4.372,
+            "scope": 0.006,
+            "checks": {
+              "item_face_monocle_gold01_L70": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     }
   ]
 }
