@@ -62,7 +62,9 @@ pictures in ChatGPT in the user's Chrome and ingested them; Task C moved the pin
 - **Gate** (on the branch after `main` with BP-34 was merged in, the merge tree): typecheck and lint clean; unit 3,467
   passed, 18 skipped; `build:normal` ok; `build:lite` up to the exe step, which needs Node 22 (this machine has 24);
   `avatar:check` 158 files, 2,054 checks, 0 failures; e2e Normal 24/24; e2e Lite 4/4; ops 56/56 — all on the first run.
-- **Deployed.** Not yet.
+- **Deployed.** On the VPS since 2026-10-25, shipped by git bundle ahead of the push (`96571c3..6d86d7b`, which also
+  carried BP-34; backup `bp-2026-10-25-1233`, no migration, the shop seeded 20 price rows, health ok, rooms 0). The LAN
+  host was not touched. Lite rebuilt locally up to the exe step, not shipped.
 - **Still open.** The witch hat is not the classic tall cone; a taller one waits on a way to keep the figure from
   shrinking. `verify` only notes a head item's width ratio, so a shrunken figure under a hat passes it; a hard limit
   (about 0.985–1.015, measured on the head so an arms-out party hat still passes) is recommended in
