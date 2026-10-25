@@ -9,7 +9,7 @@ below are the real history.
 
 ---
 
-## BP-33 — eight outfits, ten accessories and five achievements, drawn in ChatGPT — merged `MERGE` (2026-10-25)
+## BP-33 — eight outfits, ten accessories and five achievements, drawn in ChatGPT — merged `799d307` (2026-10-25)
 
 The user, 2026-10-24: "chạy quy trình liên kết với ChatGPT (trên Chrome) để sinh thêm ít nhất 8 bộ trang phục và 10 phụ
 kiện mới (từ cấp độ thường đến hiếm, tự phân loại có mua được không hay mở theo thành tựu)", then "tự chọn chủ đề đi, chạy
@@ -54,13 +54,24 @@ ChatGPT in the user's Chrome and ingested them; Task C moved the pins and wrote 
   area to the skin cut). The áo dài wears black closed shoes, not white flat ones (one white shoe was cut as skin). The cap
   and the fedora were drawn over `f_wavy01`, not the default `f_bob01` (§1: "đội kiểu tóc mặc định"), under new registry
   ids with a `_w` suffix. `bot_hands_200` is "Tri kỷ của bot / One of the machines", not the spec's first "Bạn của bot /
-  Bot buddy", so it outranks the 50-hand "Bạn thân của bot" (the spec's table was amended).
+  Bot buddy", so it outranks the 50-hand "Bạn thân của bot" (the spec's table was amended). The English names and texts
+  of the eighteen pieces and five achievements were written by the session, not asked for by the user.
+- **Gate** (branch tree = the merge tree; the machine was under heavy load from another program): typecheck and lint
+  clean; unit 3,463 passed, 18 skipped, 4 timed out at 5 s (two in `AuthScreen.test.tsx`, two in `ShopTab.test.tsx`; all
+  four, and the GM-console route and `GiftsTab` that timed out in a normal-web re-run, pass alone); `build:normal` ok;
+  `build:lite` up to the exe step, which needs Node 22 (this machine has 24); `avatar:check` 138 files, 1,794 checks, 0
+  failures; e2e Normal 24/24 on the second run (the first lost "một tài khoản chơi trọn một ván Blind với bot" to a
+  next-hand race, below); e2e Lite 4/4; ops 56/56.
 - **Deployed.** Not yet.
 - **Still open.** A few light specks of the wavy fringe under the cap's brim and at the fedora's brim ends, over a dark
   hairstyle. No male cut was drawn: all eight outfits render on body m from the f cut, the áo dài included. The new
   achievements are not granted back: a player already past a threshold gets it the next time its counter moves. The
   pieces on a real phone and the sheets (`docs/avatar-2d-sheet.png`, `docs/avatar-2d-fit-sheet.png`) are the user's to
   look at; "<id> ng" sends a piece back to the queue. Lite draws none of them (it ships only the default outfit and hairs).
+  The Blind e2e "một tài khoản chơi trọn một ván Blind với bot" can lose one ante under CPU load: the result card shows
+  late, the server's five-second timer (started at settlement) deals the next hand before the test leaves, and the
+  balance comes out 1,000 short (seen in the trace as "Ván tiếp theo sau 0 giây" before the "Rời phòng" click). No game
+  code changed here; hardening the test is a separate task.
 
 ## BP-31 — the phone table gets a fanned hand and a one-row tray, a raise is a slider on every frame, and a Blind table takes ten wagers — merged `e35ea39` (2026-10-23)
 

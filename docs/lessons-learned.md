@@ -1178,7 +1178,7 @@ Brainstormed, specified, planned, built, gated, merged and deployed in one day f
 - **One day is enough for a four-task plan when reviews run beside implementers** (read-only reviewers never blocked a
   writer) and when a second worktree takes the one task that touches different files (Task 1 ran beside Task 2a).
 
-## BP-33 — a wardrobe batch drawn in ChatGPT: eight outfits, ten accessories, five achievements (merged `MERGE`, 2026-10-25)
+## BP-33 — a wardrobe batch drawn in ChatGPT: eight outfits, ten accessories, five achievements (merged `799d307`, 2026-10-25)
 
 Spec `docs/superpowers/specs/2026-10-24-wardrobe-batch-design.md` (the session's own choices, which the user delegated:
 "tự chọn chủ đề đi, chạy luôn"). Task A put the eighteen items, the five achievements and their names in the catalogue on
@@ -1224,6 +1224,15 @@ migration change.
   Costs if wrong: about 5 s more per run.
 - Task C, Ruling 4: the contact sheets are committed as `avatar-pipeline.mjs sheet` draws them from the final layers
   (the run is byte-for-byte repeatable), not as handed over, which differed. Costs if wrong: none; same layouts.
+- Lead, Ruling 6: the clipping hats on `m_spiky01` show hair only below the brim, as the beanie already does; the short
+  sides are the clip's existing behaviour, not a fault of the new hats. Costs if wrong: a spiky player in a cap looks
+  shaved at the temples — a clip redrawn wider.
+- Lead, Ruling 7: the gate's unit step failed on four 5 s timeouts in files BP-33 does not touch, while another program
+  held most of the CPU; each failing file passed alone, and the gate went on from `build_normal` instead of adding
+  timeouts across unrelated tests. Costs if wrong: a real slowdown hides behind "load".
+- Lead, Ruling 8: the Blind e2e's 1,000-short balance is a next-hand race (the trace shows the countdown at 0 before the
+  leave), not BP-33; e2e Normal was re-run whole (24/24) and the test's hardening split off as its own task. Costs if
+  wrong: none to the money path, which BP-33 does not touch.
 
 ### Lessons
 
@@ -1243,6 +1252,9 @@ migration change.
   click on a button injected into the ChatGPT tab (its COOP is `same-origin-allow-popups`, so the opener survives); the
   ChatGPT tab `postMessage`s the image's `ArrayBuffer` to the popup, and the popup POSTs it to its own origin.
 - **Do the transfer from the front tab.** A background tab reports `innerWidth` 0 and cannot take the trusted click.
+- **An e2e that races a server timer fails first on a loaded machine.** The Blind tour reads the card, takes a screenshot
+  and only then leaves; under load the card appears late and the five-second next-hand timer wins. Read the trace's
+  screencast frame before the failing click before blaming the change.
 
 ## 5. Open items
 
