@@ -9,6 +9,28 @@ below are the real history.
 
 ---
 
+## BP-34 — the Blind e2e tour sits out before it plays, so a slow reveal can no longer cost it a second ante — merged `MERGE` (2026-10-25)
+
+The user, 2026-10-25: harden "một tài khoản chơi trọn một ván Blind với bot", which lost one ante under CPU load during
+BP-33's gate (BP-33 "Still open"; `docs/bug-log.md` §11). Branch `bugfix/BP-34-blind-e2e-second-hand`. Test only.
+
+- **What a player gets.** Nothing changes for a player: no game code, no copy, and the five-second next-hand timer stays.
+- **Under it.** The test played its hand seated and left after reading the result card and taking a screenshot. The
+  server's timer runs from the settlement, not from the card. Under load the card appeared about 8.6 s after "Chơi", the
+  footer read "Ván tiếp theo sau 0 giây" before the "Rời phòng" click, a second hand was dealt, and the leave folded it
+  and lost its ante (balance off by 1,000). The test now presses "Tạm nghỉ" while the hand is on and then "Chơi" (the
+  existing `sitOutAndPlay`, as step 6 and ops `04-blind` already do). With only the bot left in, no next hand is dealt, so
+  the card's numbers are final however late the leave comes. The ledger could not have caught the extra ante: a hand
+  moves only the table stack, and a Blind seat writes only its buy-in and cash-out rows.
+- **Tests.** `apps/normal-web/e2e/normal.spec.ts` → "một tài khoản chơi trọn một ván Blind với bot" (name unchanged, still
+  one sign-up). `--repeat-each 5` with every core but one busy-looping: 5/5. One run with a temporary 7 s pause before
+  "Rời phòng" (longer than the timer, so a second hand was certain without the fix) passed. The pause was taken out
+  before the commit.
+- **Docs.** `docs/bug-log.md` §11; BP-33's open item points here.
+- **Khác với spec / Deviations from the spec.** None.
+- **Still open.** Nothing from this item. `docs/bug-log.md` E6 (the room drops "ready" on its way back to open without
+  telling the client) is untouched: the test leaves the room before it could matter.
+
 ## BP-33 — eight outfits, ten accessories and five achievements, drawn in ChatGPT — merged `799d307` (2026-10-25)
 
 The user, 2026-10-24: "chạy quy trình liên kết với ChatGPT (trên Chrome) để sinh thêm ít nhất 8 bộ trang phục và 10 phụ
@@ -71,7 +93,7 @@ ChatGPT in the user's Chrome and ingested them; Task C moved the pins and wrote 
   The Blind e2e "một tài khoản chơi trọn một ván Blind với bot" can lose one ante under CPU load: the result card shows
   late, the server's five-second timer (started at settlement) deals the next hand before the test leaves, and the
   balance comes out 1,000 short (seen in the trace as "Ván tiếp theo sau 0 giây" before the "Rời phòng" click). No game
-  code changed here; hardening the test is a separate task.
+  code changed here; hardening the test is a separate task (done in BP-34: the test sits out before it plays).
 
 ## BP-31 — the phone table gets a fanned hand and a one-row tray, a raise is a slider on every frame, and a Blind table takes ten wagers — merged `e35ea39` (2026-10-23)
 
