@@ -9,7 +9,7 @@ below are the real history.
 
 ---
 
-## BP-35 — eight outfits and twelve accessories for Halloween, winter and the beach, three of them epic, and five achievements — merged `MERGE` (2026-10-25)
+## BP-35 — eight outfits and twelve accessories for Halloween, winter and the beach, three of them epic, and five achievements — merged `2375317c` (2026-10-25)
 
 The user, 2026-10-25: "thêm 8 bộ trang phục, 12 phụ kiện (thuộc ít nhất 3 chủ đề tự chọn trong đó có halloween, có siêu
 hiếm), chạy luôn". Spec `2026-10-25-wardrobe-halloween-design.md` (themes Đêm Halloween, Đông & Noel, Hè biển; §6 records
@@ -59,7 +59,9 @@ pictures in ChatGPT in the user's Chrome and ingested them; Task C moved the pin
   behind the body, never wider than the arms, not "falling to the calves" in a sweep (its first picture flared past the
   hands). The earmuffs' prompt gained a line about the transparent background. The English names and texts of the twenty
   pieces and five achievements were written by the session, not asked for by the user.
-- **Gate.** Not run yet.
+- **Gate** (on the branch after `main` with BP-34 was merged in, the merge tree): typecheck and lint clean; unit 3,467
+  passed, 18 skipped; `build:normal` ok; `build:lite` up to the exe step, which needs Node 22 (this machine has 24);
+  `avatar:check` 158 files, 2,054 checks, 0 failures; e2e Normal 24/24; e2e Lite 4/4; ops 56/56 — all on the first run.
 - **Deployed.** Not yet.
 - **Still open.** The witch hat is not the classic tall cone; a taller one waits on a way to keep the figure from
   shrinking. `verify` only notes a head item's width ratio, so a shrunken figure under a hat passes it; a hard limit

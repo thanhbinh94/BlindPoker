@@ -1281,7 +1281,7 @@ The fix for BP-33's Ruling 8: "một tài khoản chơi trọn một ván Blind 
   once in a gate. One run with a 7 s pause before the leave (longer than the timer) would fail every time without the fix,
   and it passed.
 
-## BP-35 — a second wardrobe batch: Halloween, winter, the beach, three epics (merged `MERGE`, 2026-10-25)
+## BP-35 — a second wardrobe batch: Halloween, winter, the beach, three epics (merged `2375317c`, 2026-10-25)
 
 Spec `docs/superpowers/specs/2026-10-25-wardrobe-halloween-design.md` (the session's own choices, which the user delegated:
 "thêm 8 bộ trang phục, 12 phụ kiện … có halloween, có siêu hiếm, chạy luôn"). Task A put the twenty items, the five
