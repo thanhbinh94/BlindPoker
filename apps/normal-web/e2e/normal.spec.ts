@@ -385,7 +385,10 @@ test.describe('Blind Luck Poker Normal', () => {
     await expect(play).toBeVisible()
     // Cards are out: the tray only offers play/fold once `CARDS_DEALT` and `DECISION_PHASE` have landed.
     await expect(page.getByRole('group', { name: 'Hành động' })).toBeVisible()
-    await play.click()
+    // Sat out before the hand ends, so it is the only one: the bot alone deals no next hand. The five-second timer
+    // runs from the settlement, not from the card, and under load the reveal can eat all of it — a leave that lands
+    // in a second hand folds it and costs its ante, which the card below never mentions (2026-10-25: off by 1.000).
+    await sitOutAndPlay(page)
 
     // --- 4. the result, and the money ----------------------------------------------------------------
     const result = resultCard(page)
@@ -398,8 +401,8 @@ test.describe('Blind Luck Poker Normal', () => {
     const payout = payoutOf(rows, who.displayName)
     await shot(page, 'hand-result-desktop')
 
-    // Out before the five-second timer deals the next hand: the numbers above must stay the final word. Leaving
-    // is also what brings the stack home — until then the balance is the start less the table limit.
+    // Sat out, so no next hand is coming and the numbers above stay the final word, however long that took. Leaving
+    // is what brings the stack home — until then the balance is the start less the table limit.
     await page.getByRole('button', { name: 'Rời phòng' }).click()
     await expect(page).toHaveURL(/#\/lobby$/)
     let end = await balanceWhen(page, (n) => n !== start - LIMIT)

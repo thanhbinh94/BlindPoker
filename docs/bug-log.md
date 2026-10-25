@@ -744,3 +744,22 @@ người chụp ảnh không thấy — cần kiểm lại). Không mất điể
 **Đề xuất:** (a), trên nhánh `bugfix/BP-32-ready-after-open` sau khi BP-31 merge.
 
 **Phân loại:** lỗi thật, hiển thị lệch với server; ngoài phạm vi BP-31.
+
+## 11. Test e2e Blind đỏ ngẫu nhiên khi máy bận (2026-10-25)
+
+| # | Nguồn | Mức | Mô tả | Nguyên nhân | Trạng thái |
+|---|---|---|---|---|---|
+| T1 | gate BP-33, người dùng 25/10 | P3 (chỉ test) | `normal.spec.ts` → "một tài khoản chơi trọn một ván Blind với bot" đỏ khi CPU bận: "the balance is the stake, less the payout and anything returned" lệch đúng 1.000 (một mức cược), Expected 2000 / Received 1000 và Expected -2000 / Received -3000. | Test ngồi chơi, đọc thẻ kết quả, chụp ảnh rồi mới bấm "Rời phòng". Bộ đếm 5 giây của server chạy từ lúc tính tiền, không từ lúc thẻ hiện. Trong trace, thẻ hiện khoảng 8,6 giây sau khi bấm "Chơi" và chân thẻ đã là "Ván tiếp theo sau 0 giây" trước cú bấm "Rời phòng", nên ván thứ hai được chia, và rời bàn giữa ván làm mất mức cược của ván đó. Mã game không sai. | đã sửa, merge `d85cde5` (25/10); chỉ sửa test, không cần deploy |
+
+**Lựa chọn:**
+- (a) **Tạm nghỉ trước khi chơi** (`sitOutAndPlay`, như bước 6 của cùng test và ops `04-blind`): bàn chỉ còn bot thì không
+  chia ván kế, nên con số trên thẻ là cuối cùng dù rời bàn muộn bao lâu. Không thêm lượt đăng ký, không đổi mã game.
+- (b) Rời bàn ngay sau khi đọc thẻ, trước khi chụp ảnh. Rút ngắn khoảng hở nhưng vẫn đua với bộ đếm: thẻ hiện muộn
+  8,6 giây là đã thua trước khi đọc.
+- (c) Đọc sổ cái để trừ mức cược của ván thứ hai. Không làm được: ván chỉ chuyển điểm trong chồng trên bàn, ghế Blind chỉ
+  ghi hai dòng mua vào và mang về.
+
+**Đề xuất:** (a). Đã làm: 5/5 lần chạy khi máy bận, và qua một lần chạy có chờ thêm 7 giây trước "Rời phòng" (chờ tạm
+để thử, đã bỏ trước khi commit).
+
+**Phân loại:** Bounded fix, chỉ sửa test.
