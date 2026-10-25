@@ -9,6 +9,30 @@ below are the real history.
 
 ---
 
+## BP-36 — the two dresses get a men's cut: a warlock's tunic and a men's áo dài — merged `MERGE` (2026-10-25)
+
+The user, 2026-10-25: "làm bản cắt dáng nam cho các bộ váy", after the wardrobe review found body m wearing the women's
+cut of every BP-33 and BP-35 outfit. Branch `feature/BP-36-male-dress-cuts`.
+
+- **What a player gets.** A male chibi in the **Váy phù thủy** now wears a black warlock's tunic to mid-thigh with the
+  same purple sash and short cape, over black trousers and pointed boots; in the **Áo dài xanh ngọc** a straight men's
+  áo dài to just above the knee, over white trousers — the same pairing `tet_red01` / `tet_red01_m` already had. A
+  female chibi, the items, prices and achievements are unchanged; one item still draws one layer per body.
+- **Under it.** Two registry entries `v4/item_outfit_witch01_m` and `v4/item_outfit_ao_dai_jade01_m` (body m, `--base m
+  --variant m`), drawn in ChatGPT on body m and ingested: `item_outfit_<code>_m_L40` with its skin and skin-line masks
+  at @1x and @2x, both manifests (`variantOf`, `wear: m`), and `asset.variants.m` on both rows of `items.json` (written
+  by the ingest). Both contact sheets regenerated. No engine, protocol, schema, migration or price change.
+- **Tests.** The real-outfit and skin-line counts go from 24 to 26 (`apps/normal-web/test/avatar-pipeline.test.ts`,
+  `apps/normal-server/src/inventory/bodies.test.ts`). `avatar:check`: 160 files, 2,080 checks, 0 failures.
+- **Docs.** `docs/known-limitations.md` (the BP-33 and BP-35 male-cut entries now name what BP-36 drew and why the
+  rest stay unisex), `docs/avatar-2d.md` (the sheet's per-wear list), `docs/lessons-learned.md` (a BP-36 section).
+- **Khác với spec / Deviations from the spec.** No spec (a bounded change). The men's áo dài is a slightly greener jade
+  (29,124,94 against the women's 33,122,114): the closer-coloured draft measured 2.53 heads, over verify's 2.5.
+- **Gate.** Not run yet.
+- **Deployed.** Not yet.
+- **Still open.** The royal robe, Santa's coat and the other unisex outfits keep one layer by design. The two new
+  layers wait on the user's look like the rest of BP-33 and BP-35.
+
 ## BP-35 — eight outfits and twelve accessories for Halloween, winter and the beach, three of them epic, and five achievements — merged `2375317c` (2026-10-25)
 
 The user, 2026-10-25: "thêm 8 bộ trang phục, 12 phụ kiện (thuộc ít nhất 3 chủ đề tự chọn trong đó có halloween, có siêu

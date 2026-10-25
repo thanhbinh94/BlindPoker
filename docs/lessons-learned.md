@@ -1347,6 +1347,32 @@ real art and wrote the docs. No engine, protocol, schema or migration change.
 - **BP-33's colour rules held.** No outfit in BP-35 lost cloth to the skin cut: fabric colours were chosen clear of the
   skin from the spec onward, and the white stayed on large areas of the torso, never at the feet.
 
+## BP-36 — the two dresses get a men's cut (merged `MERGE`, 2026-10-25)
+
+The user asked for men's cuts of "các bộ váy". Two registry entries on body m, drawn and ingested like `tet_red01_m`;
+`items.json`'s `asset.variants.m` written by the ingest. No spec (bounded).
+
+### Rulings
+
+- Ruling 1: "the dresses" are `witch01` (an ankle-length dress) and `ao_dai_jade01` (a women's áo dài). The royal robe
+  is a king's robe, unisex by design, and the other outfits are trousers or unisex coats. Costs if wrong: one more male
+  cut, one registry entry each.
+- Ruling 2: the warlock keeps the dress's identity — the same black, purple sash and short cape — over a tunic and
+  trousers, so the item reads as the same piece on either body. Costs if wrong: a redraw.
+- Ruling 3: of two áo dài drafts, the one closer to the women's teal (61,142,117) measured 2.53 heads and failed verify
+  (attempt 1); the greener one (29,124,94, 2.45 heads) passed as attempt 2. Costs if wrong: a pair whose greens differ
+  a little; a redraw with "the same teal jade as …" is one attempt.
+- Ruling 4: the warlock was collected only after a draft measured inside 2.0–2.5 heads offline (drafts at 2.507 and
+  2.596 were not collected), with `measure` from `extract.mjs` — the outfit counterpart of BP-35's offline width check.
+
+### Lessons
+
+- **For an outfit, measure `heads` before `collect`.** Body m's reference is 2.41 heads; ChatGPT's redraws land
+  2.45–2.60, so roughly half fail the 2.5 ceiling. `measure(removeChroma(picture)).heads` from
+  `apps/normal-web/scripts/avatar-pipeline/extract.mjs` gives verify's number without spending an attempt.
+- **A men's cut is cheap when the pattern exists.** Copying `tet_red01_m`'s registry shape (`wear: 'm'`, `@body_m`,
+  `--base m --variant m`) needed no code: the ingest wrote the manifest's `variantOf` and `items.json`'s
+  `variants.m`, and two count pins moved.
 
 ## 5. Open items
 

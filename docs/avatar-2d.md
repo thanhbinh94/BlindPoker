@@ -276,7 +276,8 @@ pnpm --filter @bp/normal-web avatar:sheet -- --hairs f_bob01,m_tousled01 --outfi
 #   2. every outfit on both genders, on the gender's default hairstyle (the bob, the tousled cut) (28 since BP-33, 44 since BP-35);
 #   3. every aura, then every frame, on body f with the bob, in casual01 (8 + 6);
 #   4. the six expressions per gender (12), the eight bots, and the portrait at 192, 40 and 32 px.
-# A body wears its gender's cut of an outfit where the manifest has one (§3.1: dealer01_m, tet_red01_m),
+# A body wears its gender's cut of an outfit where the manifest has one (§3.1: dealer01_m, tet_red01_m, and since
+# BP-36 witch01_m and ao_dai_jade01_m),
 # and the caption names it. --hairs and --outfits (comma lists; `hair_`/`outfit_` prefixes optional) narrow
 # the v4 grid and nothing else — what the style gate shows the user; an empty list (`--hairs ""`) is refused, exit 1,
 # rather than drawing an empty grid. --out moves the review sheet.
