@@ -1256,6 +1256,31 @@ migration change.
   and only then leaves; under load the card appears late and the five-second next-hand timer wins. Read the trace's
   screencast frame before the failing click before blaming the change.
 
+## BP-34 — the Blind e2e tour sits out before it plays (merged `d85cde5`, 2026-10-25)
+
+The fix for BP-33's Ruling 8: "một tài khoản chơi trọn một ván Blind với bot" presses "Tạm nghỉ" while its hand is on
+(`sitOutAndPlay`), so the bot alone deals no next hand and the leave can come as late as the machine makes it. Test only.
+
+### Rulings
+
+- Ruling 1: sit out rather than leave earlier or read the ledger. Leaving before the screenshot only narrows the race (the
+  card came 8.6 s after "Chơi", already past the timer), and the ledger cannot show the extra ante: a hand moves only the
+  table stack, and a Blind seat writes only its buy-in and cash-out. Costs if wrong: none to the money path; the test
+  stops covering a leave made while seated, which ops `04-blind` covers.
+- Ruling 2: `main` gained one CHANGELOG-only commit (`98c745e`, BP-33's deploy note) after the gate ran; it was merged into
+  the branch and only the doc-citation step re-run (42 passed). No code, test or config file differed from the gated
+  tree. Costs if wrong: none; CHANGELOG.md is read only by `tooling/arch`.
+- Ruling 3: `build:lite` stopped at the exe step (Node 22 needed, v24.13.1 here), as in BP-33; the server bundle the Lite
+  e2e runs was built, and the exe was not. Costs if wrong: none, since BP-34 touches no Lite code.
+
+### Lessons
+
+- **Take a timer out of an e2e's way instead of racing it.** The suite already had the move (`sitOutAndPlay`) for the
+  result-card checks of step 6; the money step had kept the race only because it was written first.
+- **Prove a race fix with a pause, not only with repeats.** Five green runs under load say little about a race that lost
+  once in a gate. One run with a 7 s pause before the leave (longer than the timer) would fail every time without the fix,
+  and it passed.
+
 ## 5. Open items
 
 The single list is `docs/known-limitations.md`. As of this writing, the items a next session is most likely to meet:

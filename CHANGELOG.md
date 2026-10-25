@@ -9,7 +9,7 @@ below are the real history.
 
 ---
 
-## BP-34 — the Blind e2e tour sits out before it plays, so a slow reveal can no longer cost it a second ante — merged `MERGE` (2026-10-25)
+## BP-34 — the Blind e2e tour sits out before it plays, so a slow reveal can no longer cost it a second ante — merged `d85cde5` (2026-10-25)
 
 The user, 2026-10-25: harden "một tài khoản chơi trọn một ván Blind với bot", which lost one ante under CPU load during
 BP-33's gate (BP-33 "Still open"; `docs/bug-log.md` §11). Branch `bugfix/BP-34-blind-e2e-second-hand`. Test only.
@@ -26,8 +26,13 @@ BP-33's gate (BP-33 "Still open"; `docs/bug-log.md` §11). Branch `bugfix/BP-34-
   one sign-up). `--repeat-each 5` with every core but one busy-looping: 5/5. One run with a temporary 7 s pause before
   "Rời phòng" (longer than the timer, so a second hand was certain without the fix) passed. The pause was taken out
   before the commit.
-- **Docs.** `docs/bug-log.md` §11; BP-33's open item points here.
+- **Docs.** `docs/bug-log.md` §11; BP-33's open item points here; `docs/lessons-learned.md` (three rulings, two lessons).
 - **Khác với spec / Deviations from the spec.** None.
+- **Gate** (branch tree after merging `main` at `96571c3`; `main` then gained only `98c745e`, a CHANGELOG line, which was
+  merged in and the doc citations re-run, 42 passed): typecheck and lint clean; unit 3,471 passed, 14 skipped, no
+  timeouts; `build:normal` ok; `build:lite` up to the exe step, which needs Node 22 (this machine has 24);
+  `avatar:check` 138 files, 1,794 checks, 0 failures; e2e Normal 24/24; e2e Lite 4/4; ops 56/56.
+- **Deployed.** Nothing to deploy: the change is a test and its docs.
 - **Still open.** Nothing from this item. `docs/bug-log.md` E6 (the room drops "ready" on its way back to open without
   telling the client) is untouched: the test leaves the room before it could matter.
 

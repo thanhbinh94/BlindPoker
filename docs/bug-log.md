@@ -749,7 +749,7 @@ người chụp ảnh không thấy — cần kiểm lại). Không mất điể
 
 | # | Nguồn | Mức | Mô tả | Nguyên nhân | Trạng thái |
 |---|---|---|---|---|---|
-| T1 | gate BP-33, người dùng 25/10 | P3 (chỉ test) | `normal.spec.ts` → "một tài khoản chơi trọn một ván Blind với bot" đỏ khi CPU bận: "the balance is the stake, less the payout and anything returned" lệch đúng 1.000 (một mức cược), Expected 2000 / Received 1000 và Expected -2000 / Received -3000. | Test ngồi chơi, đọc thẻ kết quả, chụp ảnh rồi mới bấm "Rời phòng". Bộ đếm 5 giây của server chạy từ lúc tính tiền, không từ lúc thẻ hiện. Trong trace, thẻ hiện khoảng 8,6 giây sau khi bấm "Chơi" và chân thẻ đã là "Ván tiếp theo sau 0 giây" trước cú bấm "Rời phòng", nên ván thứ hai được chia, và rời bàn giữa ván làm mất mức cược của ván đó. Mã game không sai. | đã sửa trên `bugfix/BP-34-blind-e2e-second-hand` |
+| T1 | gate BP-33, người dùng 25/10 | P3 (chỉ test) | `normal.spec.ts` → "một tài khoản chơi trọn một ván Blind với bot" đỏ khi CPU bận: "the balance is the stake, less the payout and anything returned" lệch đúng 1.000 (một mức cược), Expected 2000 / Received 1000 và Expected -2000 / Received -3000. | Test ngồi chơi, đọc thẻ kết quả, chụp ảnh rồi mới bấm "Rời phòng". Bộ đếm 5 giây của server chạy từ lúc tính tiền, không từ lúc thẻ hiện. Trong trace, thẻ hiện khoảng 8,6 giây sau khi bấm "Chơi" và chân thẻ đã là "Ván tiếp theo sau 0 giây" trước cú bấm "Rời phòng", nên ván thứ hai được chia, và rời bàn giữa ván làm mất mức cược của ván đó. Mã game không sai. | đã sửa, merge `d85cde5` (25/10); chỉ sửa test, không cần deploy |
 
 **Lựa chọn:**
 - (a) **Tạm nghỉ trước khi chơi** (`sitOutAndPlay`, như bước 6 của cùng test và ops `04-blind`): bàn chỉ còn bot thì không
