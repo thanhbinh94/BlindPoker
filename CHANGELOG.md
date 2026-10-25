@@ -9,6 +9,67 @@ below are the real history.
 
 ---
 
+## BP-35 — eight outfits and twelve accessories for Halloween, winter and the beach, three of them epic, and five achievements — merged `MERGE` (2026-10-25)
+
+The user, 2026-10-25: "thêm 8 bộ trang phục, 12 phụ kiện (thuộc ít nhất 3 chủ đề tự chọn trong đó có halloween, có siêu
+hiếm), chạy luôn". Spec `2026-10-25-wardrobe-halloween-design.md` (themes Đêm Halloween, Đông & Noel, Hè biển; §6 records
+the result). Branch `feature/BP-35-wardrobe-halloween`. Task A put the catalogue on stand-ins; the lead drew the twenty
+pictures in ChatGPT in the user's Chrome and ingested them; Task C moved the pins and wrote the docs.
+
+- **What a player sees.** Twenty new pieces in the Phòng thay đồ and the Cửa hàng, each drawn on the chibi and worn by
+  both bodies, three of them epic ("Cực hiếm"). Fifteen are sold at the shop's seed price (common
+  10,000 points from rank 1, rare 30,000 from rank 3, epic 150,000 from rank 4; a GM can change any): the commons Bộ đồ
+  bộ xương, Áo len Giáng sinh, Áo phao mùa đông, Sơ mi Hawaii, Sừng quỷ nhỏ, Mặt nạ dơi, Chụp tai lông, Mũi đỏ tuần lộc
+  and Mũ rơm; the rares Váy phù thủy, Mũ phù thủy, Mũ Noel, Vòng hoa Hawaii and Kính trái tim; the epic Bá tước ma cà
+  rồng. Five are won, never sold, through five new achievements on counters the game already keeps: **Ông già Noel của
+  sảnh** (200 check-in days) gives the epic Áo Ông già Noel; **Tuần lộc chăm chỉ** (a 14-day check-in streak) the rare
+  Bờm sừng tuần lộc; **Bí ngô mù quáng** (500 Blind hands) the epic Mũ bí ngô; **Thủy thủ khắp bàn** (50 rooms joined)
+  the rare Đồ thủy thủ; **Đi ngang vẫn thắng** (7 hands won in a row) the rare Cua cưỡi đầu. Each achievement also adds
+  the item reward's reputation. The witch hat, the pumpkin, the Santa hat and the straw hat clip the hair under their
+  crown; the devil horns, the earmuffs, the antlers, the flower crown and the crab sit on the hair. The witch hat is a
+  soft emerald hat whose tip droops to the side, not a tall black cone (below).
+- **Under it.** `items.json` (twenty rows, 107 → 127), `achievements.json` (five rows, 39 → 44), both locales (names and
+  achievement texts in vi and en); the pipeline's `STAGE_ONE_ITEMS` (156 names) and `HAIR_CLIP` (ten hats);
+  `assets/avatar-src/registry.json` (twenty-one `v4/item_<slot>_<code>` entries: the twenty, plus
+  `v4/item_head_witch_hat01_b`, which supersedes the blocked first witch hat); 120 files in
+  `apps/normal-web/public/avatar/` (each outfit's L40, skin and skin-line masks and icon, each head and face item's layer
+  and icon, the four covering hats' hair clips, at @1x and @2x) and both manifests (157 real entries, one stand-in: the
+  withdrawn hood); both contact sheets. No engine, protocol, schema, migration or dependency change; the shop seeds twenty
+  price rows at the next boot (`seedPrices`, 107 → 127), the five rewards' rows disabled.
+- **Tests.** Task A: the catalogue (127 items), the achievement catalogue (44, the five pinned), the shop seed (127 rows,
+  the vampire count at the epic seed, the five rewards off sale), the locale parity, the stage-1 list (156), the sheets'
+  card counts (44 outfit cards, 272 fit cards). Task C, on the real art: the clipping hats (`items.test.ts`, sixteen with
+  the witch hat, the pumpkin, the Santa hat and the straw hat), the skin lines of twenty-four outfit layers and the
+  redrawn skin of six (`bodies.test.ts`; `avatar-pipeline.test.ts` — the witch dress joins for a sliver of neck above its
+  cape's brooch, the one outfit skin not at the feet), and the "never takes a covering hat's hair from below the hat's
+  edge" case walks all ten `HAIR_CLIP` hats again (80 composed pairs, 120 s timeout). The sheets were regenerated from the
+  final layers and match the pinned layouts (129 cards, 2460 × 3548; 272 fit cards, 1772 × 8716). The avatar layers weigh
+  21,584.5 KB at @2x across 360 files, under the 32 MB footprint budget. Unit: normal-server 797 + 1 skipped, normal-web
+  1,092 + 4 skipped (the footprint test's four bundle checks, with no `dist`; the ten-hat walk took 5.9 s under load).
+  `avatar:check`: 158 files, 2,054 checks, 0 failures.
+- **Docs.** `docs/avatar-2d.md` (§2 the clip on ten hats, §6 the mix back to one stand-in, §10.1 the `_b` entry, §10.7
+  extended: tall hats and the shrinking figure, the bob and a hat colour clear of purple, drafts judged before
+  `collect`), `docs/known-limitations.md` (the floppy witch hat, `verify`'s advisory width for head items, no male cuts,
+  the antlers on brown hair, no backfill; the shop shelf's counts), `docs/lessons-learned.md` (a BP-35 section), the
+  spec's §6.
+- **Khác với spec / Deviations from the spec.** The witch hat is a soft, floppy deep-emerald hat with a black band whose
+  tip droops to the side, drawn over `f_bob01`, not the spec's tall pointed black hat with a wide brim and a purple band
+  over `f_wavy01` (§3.2): three tall black pictures shrank or redrew the figure and pulled face and hair into the hat
+  layer, and the replacement entry is `v4/item_head_witch_hat01_b`. The vampire count's cape hangs straight and close
+  behind the body, never wider than the arms, not "falling to the calves" in a sweep (its first picture flared past the
+  hands). The earmuffs' prompt gained a line about the transparent background. The English names and texts of the twenty
+  pieces and five achievements were written by the session, not asked for by the user.
+- **Gate.** Not run yet.
+- **Deployed.** Not yet.
+- **Still open.** The witch hat is not the classic tall cone; a taller one waits on a way to keep the figure from
+  shrinking. `verify` only notes a head item's width ratio, so a shrunken figure under a hat passes it; a hard limit
+  (about 0.985–1.015, measured on the head so an arms-out party hat still passes) is recommended in
+  `docs/known-limitations.md`, not built. No male cut was drawn: all eight outfits render on body m from the f cut, and the
+  witch's dress is a dress on body m too. The brown antlers read faintly on a brown hair colour. The new achievements are
+  not granted back: a player already past a threshold gets it the next time its counter moves. The pieces on a real phone
+  and the sheets (`docs/avatar-2d-sheet.png`, `docs/avatar-2d-fit-sheet.png`) are the user's to look at; "<id> ng" sends a
+  piece back to the queue. Lite draws none of them.
+
 ## BP-33 — eight outfits, ten accessories and five achievements, drawn in ChatGPT — merged `799d307` (2026-10-25)
 
 The user, 2026-10-24: "chạy quy trình liên kết với ChatGPT (trên Chrome) để sinh thêm ít nhất 8 bộ trang phục và 10 phụ

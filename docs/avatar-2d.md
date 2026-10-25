@@ -79,8 +79,8 @@ server refuses an item whose flags disagree with its layer's entry in the manife
 the head rose through the hats that cover it: the ponytail's tie above the nón lá, the beanie and the beret, the spiky
 cut's spikes, the tousled cut's tuft, the bob's ahoge, the wavy cut's volume above the brim. So the hats in `HAIR_CLIP`
 (`masks.mjs`: `beanie01`, `beret_red01`, `conical_hat01`, and so every colour of them — and since BP-33 `cap_navy01`,
-`bucket_khaki01` and `fedora01`, whose clips the ingest of their real pictures cut, and since BP-35 `witch_hat01`,
-`pumpkin01`, `santa_hat01` and `straw_hat01`, whose clips are cut when their real pictures are ingested) carry a **hair clip**,
+`bucket_khaki01` and `fedora01`, and since BP-35 `witch_hat01`, `pumpkin01`, `santa_hat01` and `straw_hat01`: ten hats,
+every one's clip cut by the ingest of its real picture) carry a **hair clip**,
 `<hat>_hairclipmask` (`masks.hairClip`, §4.4): opaque where hair may still show, clear where the hat covers it — above the
 hat's lower edge in every column the hat reaches, and beside the hat above the edge of its nearest side, because hair
 that comes out from under a hat comes out below its edge. A column's edge (`hatEdges`) is the bottom of its **longest**
@@ -1128,10 +1128,10 @@ art batches the mix was 119 real manifest entries and one stand-in, `item_head_h
 no longer offers (§2). BP-33 (spec 2026-10-24) added eighteen wardrobe items to `STAGE_ONE_ITEMS` and to the catalogue
 before their pictures existed, so for a day the mix was 119 real entries and 19 stand-ins. Its art batch (2026-10-25,
 §10.7) ingested all eighteen, so the mix went back to its one stand-in: 137 real manifest entries and
-`item_head_hood_black01_L80` (with its icon). BP-35 (spec 2026-10-25) does the same with twenty more — eight outfits,
-nine head items and three face items for Halloween, winter and the beach — so until its art batch lands the mix is 137
-real entries and 21 stand-ins, the hood and the twenty, each on sale or won exactly as its real picture will be;
-`avatar:placeholder` redraws only those.
+`item_head_hood_black01_L80` (with its icon). BP-35 (spec 2026-10-25) did the same with twenty more — eight outfits,
+nine head items and three face items for Halloween, winter and the beach — so for a few hours the mix was 137 real
+entries and 21 stand-ins. Its art batch (2026-10-25, §10.7) ingested all twenty, so the mix is back to its one stand-in:
+157 real manifest entries and `item_head_hood_black01_L80` (with its icon); `avatar:placeholder` redraws only that one.
 
 ## 7. How the kit composes a chibi
 
@@ -1414,6 +1414,9 @@ The rules:
   and the three face items on `@item_hair_f_bob01` with `["--hair", "f_bob01"]`. The five head items that leave the
   crown showing (the devil horns, the earmuffs, the reindeer antlers, the flower crown and the crab) carry their own
   `prompt`, as the headband does, because the head template's hat "on top of the hair" with a brim does not fit them.
+  The black witch hat over `f_wavy01` failed three times and is `blocked`; `v4/item_head_witch_hat01_b` supersedes it,
+  a floppy emerald hat drawn over `f_bob01` with `["--hair", "f_bob01"]` (§10.7). The catalogue id and the layer are the
+  same.
 - **Fix lines.** After a failure the next prompt is the prompt plus one line per *distinct* reason the earlier
   attempts failed for: `redrawn` → "same image size, same hair, same clothing", `tears` → "No tears",
   `hair_colour` → "same hair colour", `background` → "transparent background, no checkerboard", `cropped` →
@@ -1608,7 +1611,7 @@ A batch is ten assets:
 4. Send the user the sheet. "<id> ng" → `reject <id>`, and the asset goes back into the queue with its reason;
    an answer of "ok", or silence, → `approve --batch`.
 
-### 10.7 BP-33: references rebuilt from the layers, and dark hats over a light hairstyle (2026-10-25)
+### 10.7 BP-33 and BP-35: references rebuilt from the layers, hat colours, and tall hats (2026-10-25)
 
 **When the source pictures are gone, rebuild the reference from the committed layers.** The originals in
 `assets/avatar-src/` (gitignored) were not on the machine that drew BP-33's eighteen items. Cutting never reads them —
@@ -1636,3 +1639,39 @@ figure, with the hat's hair clip applied, before approving. Two outfits were sen
 coat, beige, had its pocket area taken for skin and a skin-coloured rectangle cut into the coat (redrawn camel-brown,
 "clearly darker and browner than the skin"), and the first áo dài's white flat shoes lost one shoe to the skin cut,
 toes showing (redrawn with black closed shoes).
+
+**BP-35: a tall hat makes the model shrink the figure, and a head item's width is only a note.** The spec's tall,
+wide-brimmed black witch hat, drawn over `f_wavy01` by the dark-hat rule above, failed three times. The first picture
+redrew the fringe and moved the eyes (width 0.95), so the cut put hair and the female eyes into the hat layer — blue eyes
+over body m's. The second shrank the whole figure so the tall hat would fit the 1024 × 1536 canvas (width 0.911), and
+`verify` passed it, because a head item is cut from the head rows alone and its body box is advisory (the party hat's
+arms-out 1.107 was a clean layer). The third, a squat hat, still came back at 0.966 and failed C11 (its clip hid 127 px
+the hat left uncovered). Any shrink beyond about 1.5 % moves the head enough to pull face and hair into the hat layer, so
+for a head item read the measured width ratio and look at the composed figure on both bodies. The entry went `blocked`
+and `v4/item_head_witch_hat01_b` superseded it, as the `_w` entries did in BP-33: drawn over the default `f_bob01`, in
+deep emerald with a black band — green keeps clear of the bob's dark purple, which a black or purple hat would not. Its
+first picture, a squat pointed hat, came back at 0.966 with the same face-in-the-layer result and was rejected by eye;
+the second, a soft floppy hat whose tip droops to the side like the Santa hat's, "no taller than a beanie", measured
+1.008 and is clean on both bodies. A drooping tip stays inside the headroom the canvas has above the head; a tall one
+does not. (`docs/known-limitations.md` records the hat that is not a classic cone, and a hard width limit for head items
+as the follow-up.)
+
+**Prefer the bob under a hat, and pick a hat colour clear of dark purple.** The rebuilt `f_wavy01` reference (soft, see
+above) invites the model to redraw the fringe; every BP-35 head item drawn over `f_bob01` kept it. The dark-hat rule
+still holds: a black or navy hat over the bob loses its crown to the cut, so a hat that must sit on the bob takes a colour
+the cut cannot confuse with the bob's purple.
+
+**Judge drafts before `collect`, and collect only the one that measures clean.** `collect` records an attempt, and three
+failed attempts block an entry. For BP-35 the lead ran two or three drafts in parallel and measured each with `verify`'s
+own `comparePictures` (exported from `scripts/avatar-registry/verify.mjs`) in a scratch script before collecting, so a
+draft that measured off never spent an attempt: two emerald drafts (one zoomed to 1.097, one shifted 40 px down) and two
+floppy drafts were never collected.
+
+**Smaller notes.** The vampire count's first picture flared the cape out past the hands (`redrawn`, width 1.315, edges
+±80 px); the description became a cape "that hangs straight down close behind the body … never wider than the arms",
+and the second measured 0.998. The earmuffs' first picture came back on an opaque background (`background`); the second
+passed with "The background must stay fully transparent" appended. The other seventeen pieces passed on their first
+picture, and no outfit lost cloth to the cut: the Santa coat's white trim and the sailor top survived the skin cut, which
+the spec had flagged as a risk. The witch dress redrew a sliver of neck between its cape's collar, above the brooch
+(68 px @2x); the skin cut found it and the tone paints it, so `withSkin` in the pipeline test and `layerSkin` in
+`bodies.test.ts` list it beside the insteps.

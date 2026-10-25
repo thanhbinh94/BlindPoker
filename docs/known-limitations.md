@@ -501,7 +501,7 @@ enough to stop it opening over every later lobby visit.
 *Tracked:* `apps/normal-web/src/App.tsx` (`WELCOME_SHOWN_KEY`).
 
 **The epic shelf is thin until the gift months pass.** Of 15 epics, the achievements reward 7 and the check-in schedule
-gives 6 more in a later month (one a month from 11/2026 to 4/2027), so at launch two epics sell (`outfit_tuxedo01`, `outfit_royal_robe01`), beside 27 rares and 12 commons (32 and 20 since BP-33 put five rares and eight commons on sale). A monthly epic goes on sale
+gives 6 more in a later month (one a month from 11/2026 to 4/2027), so at launch two epics sell (`outfit_tuxedo01`, `outfit_royal_robe01`), beside 27 rares and 12 commons (32 and 20 since BP-33 put five rares and eight commons on sale). BP-35 adds three epics: it sells one, `outfit_vampire01`, and two are achievement rewards (`outfit_santa01`, `head_pumpkin01`), so of 18 epics the achievements reward 9, the schedule gives 6 and three sell, beside 37 rares and 29 commons (BP-35 put five rares and nine commons on sale). A monthly epic goes on sale
 the month after its own (R20), so the shelf fills one item a month.
 *Why it stays:* the user's ruling (Q12): a gift of the current or a later month must stay a reason to check in.
 *Tracked:* spec §3 B1, R20; `apps/normal-server/src/shop/shop-service.ts` (`lockOf`).
@@ -515,6 +515,13 @@ day — not at the deploy, and not when the Thành tựu page is opened.
 *Why it stays:* the service evaluates on events, never on read, and a one-shot backfill CLI for five rows was not worth
 its risk (Ruling 3 of BP-33's Task A, spec 2026-10-24 §3.3); every one of the five counters moves in ordinary play.
 *Tracked:* `apps/normal-server/src/achievements/achievement-service.ts` (`handle`); CHANGELOG BP-33.
+
+**BP-35's five new achievements are not granted back either.** `login_days_200`, `login_streak_14`, `blind_hands_500`,
+`rooms_50` and `win_streak_7` open, like BP-33's, the next time their counter is written: the next check-in day (it writes
+both `totalLoginDays` and `bestLoginStreak`), the next Blind hand, the next room joined, the next hand won (a win writes
+`bestWinStreak`) — not at the deploy, and not when the Thành tựu page is opened.
+*Why it stays:* the same as BP-33's (spec 2026-10-25 §3.3); every one of the five counters moves in ordinary play.
+*Tracked:* `apps/normal-server/src/achievements/achievement-service.ts` (`handle`); CHANGELOG BP-35.
 
 **`shop_prices` is written by code at boot, so a new catalogue item goes on sale at its rarity's seed price.** The
 migration cannot read `data/items.json`, so `seedPrices` inserts a row for every catalogue item that has none at every
@@ -663,6 +670,46 @@ out of place, but none of the eight is shaped for the male figure.
 *Why it stays:* spec 2026-10-24 §4 ("Không vẽ biến thể thân m trừ khi bảng ảnh cho thấy đồ lệch"); the user judges the
 sheet.
 *Tracked:* `CHANGELOG.md` (BP-33, "Still open"); `docs/avatar-2d.md` §3.1 for how a per-wear cut is added.
+
+**The witch hat is a soft emerald hat with a drooping tip, not the tall black cone (BP-35).** The spec asked for a tall
+pointed black hat with a wide brim. Drawn over the light `f_wavy01` (the dark-hat rule of BP-33), three pictures failed:
+the model redrew the fringe and moved the eyes, so the cut put hair and the female eyes into the hat layer (blue eyes on
+body m); then it shrank the whole figure to fit the tall hat on the canvas (width 0.911); then a squat hat still came back
+at 0.966 with a clip that hid hair the hat left uncovered (C11). A new entry drawn over the default `f_bob01` in deep
+emerald with a black band (clear of the bob's dark purple) failed once the same way as a squat cone, and passed as a floppy
+hat whose tip droops to the side like the Santa hat's, "no taller than a beanie" (width 1.008, clean on both bodies). It
+reads as a witch's hat at portrait size, but not as the classic Halloween silhouette.
+*Why it stays:* every tall version made the model shrink or redraw the figure, which pulls face and hair into the hat
+layer; a drooping tip stays inside the headroom the canvas has above the head. A taller hat would need a canvas with more
+headroom, which every reference and transform would have to follow.
+*Tracked:* `docs/avatar-2d.md` §10.7; registry `v4/item_head_witch_hat01` (`blocked`, superseded) and
+`v4/item_head_witch_hat01_b`.
+
+**`verify` only notes a head item's body-box width, so a shrunken figure passes it (BP-35).** A head item is cut from the
+head rows alone, so `verify` reports a body box that is off (`redrawn`, `drift`) as advisory for a head item (the party
+hat's body came back 1.107 wide with its arms held out and a clean layer). But a figure the model shrank to fit a tall hat
+moves the head too, and a shrink of more than about 1.5 % pulls the face and the fringe into the hat layer: the witch
+hat's pictures at 0.911 and 0.966 passed `verify` and were caught by eye on the composed figure.
+*Why it stays:* the lead looks at every composed head item before approving it (§10.7), which caught both. The
+recommended follow-up, not implemented: make a head item's width ratio outside about 0.985–1.015 a hard `ng` in `verify`
+— measured on the head (eye span or skull width), or limited to pictures whose arms did not move, so a party hat with its
+arms held out still passes.
+*Tracked:* `apps/normal-web/scripts/avatar-registry/verify.mjs` (the "advisory for a head item" note); `docs/avatar-2d.md`
+§10.7.
+
+**BP-35's eight outfits are cut on body f only, and the witch dress is a dress on body m too (BP-35).** As in BP-33, no
+male cut was drawn: all eight render on body m from the f cut, so the witch's ankle-length dress is worn as a dress by
+either body (no gendered variant).
+*Why it stays:* spec 2026-10-25 §4 ("Không vẽ biến thể thân m trừ khi bảng ảnh cho thấy đồ lệch"); the user judges the
+sheet, and a male cut is one more registry entry (`v4/item_outfit_<code>_m`, §3.1).
+*Tracked:* `CHANGELOG.md` (BP-35, "Still open"); `docs/avatar-2d.md` §3.1.
+
+**The reindeer antlers read faintly on brown hair (BP-35).** The antlers and their band are brown, drawn over the dark
+purple bob; on a brown or chestnut hair colour they sit close to the hair's own tone and read mostly by their outline and
+the gold bell.
+*Why it stays:* every hair colour is a tint the player picks, so some accessory always sits near one of them; the antlers
+stand above the hair, where the outline still separates them.
+*Tracked:* `CHANGELOG.md` (BP-35, "Still open").
 
 **The felt resizes slightly at the ring/stack breakpoint.** Crossing the breakpoint changes the table
 layout and the felt's height with it. The action tray's height is reserved from 768 px up so that it

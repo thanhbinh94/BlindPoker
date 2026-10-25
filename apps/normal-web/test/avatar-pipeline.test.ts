@@ -1409,8 +1409,8 @@ describe('the committed placeholder set', () => {
     const fronts = committedLayers.filter((name) => parseName(name)?.kind === 'hair' && parseName(name)?.layer === LAYERS.hairFront && manifest.files[name]!.real === true)
     const outfits = committedLayers.filter((name) => name.startsWith('item_outfit_') && manifest.files[name]!.cutOn !== undefined && manifest.files[name]!.real === true)
     expect(fronts).toHaveLength(8)
-    // Plan 19's six outfits and two male cuts, and BP-33's eight.
-    expect(outfits).toHaveLength(16)
+    // Plan 19's six outfits and two male cuts, BP-33's eight and BP-35's eight.
+    expect(outfits).toHaveLength(24)
     for (const name of [...fronts, ...outfits]) {
       expect(manifest.files[name]!.masks?.skin, `${name} has no skin mask`).toBeDefined()
       for (const density of DENSITIES) expect(existsSync(join(OUT_DIR, `${name}_skinmask@${density}x.png`)), `${name}_skinmask@${density}x.png`).toBe(true)
@@ -1423,14 +1423,24 @@ describe('the committed placeholder set', () => {
     }
     // The Tết áo dài (both cuts) and the royal robe redrew an instep inside a slipper; no outfit redrew any other skin —
     // not the gold trim the Tết's collar, cuffs and slit lay over the body's skin (pre-flight B1). BP-33 adds the áo bà
-    // ba's sandalled feet and the insteps above the brocade jacket's cloth shoes, at the feet too.
+    // ba's sandalled feet and the insteps above the brocade jacket's cloth shoes, at the feet too. BP-35's witch dress is
+    // the one exception: its picture redrew the sliver of neck between the cape's collar and above its brooch (68 px @2x,
+    // rows 477–483, x 375–392), paler than the body's but skin, so the tone paints it with the rest of the neck.
     const withSkin = outfits.filter((name) => manifest.files[name]!.masks!.skin!.empty !== true)
-    expect(withSkin.sort()).toEqual(['item_outfit_ao_ba_ba01_L40', 'item_outfit_brocade_red01_L40', 'item_outfit_royal_robe01_L40', 'item_outfit_tet_red01_L40', 'item_outfit_tet_red01_m_L40'])
+    expect(withSkin.sort()).toEqual(['item_outfit_ao_ba_ba01_L40', 'item_outfit_brocade_red01_L40', 'item_outfit_royal_robe01_L40', 'item_outfit_tet_red01_L40', 'item_outfit_tet_red01_m_L40', 'item_outfit_witch01_L40'])
+    const neck = { name: 'item_outfit_witch01_L40', top: 470, bottom: 490, left: 360, right: 408 }
     for (const name of withSkin) {
       const { alpha, width } = await alphaOf(`${name}_skinmask@2x.png`)
       let off = 0
-      for (let p = 0; p < alpha.length; p++) if (alpha[p] && Math.floor(p / width) < 760) off++
+      let atNeck = 0
+      for (let p = 0; p < alpha.length; p++) {
+        if (!alpha[p]) continue
+        const [x, y] = [p % width, Math.floor(p / width)]
+        if (name === neck.name && y >= neck.top && y <= neck.bottom && x >= neck.left && x <= neck.right) atNeck++
+        else if (y < 760) off++
+      }
       expect(off, `${name}'s skin above the feet`).toBe(0)
+      if (name === neck.name) expect(atNeck, `${name}'s neck`).toBeGreaterThan(0)
     }
     // A hair mask is its ink less the skin's share, and its meanL the ink's as committed before the skin was cut out (I8):
     // `hairTint` paints every hair colour against it. (The hime's is its ink's since fix round 1 took the copy of the body's
@@ -1534,7 +1544,7 @@ describe('the committed placeholder set', () => {
   })
 
   it('cuts every outfit layer on a body: cutOn f or m, on the default layer and on every per-wear cut', () => {
-    // Every real one: a stand-in (BP-35's eight, until their pictures are ingested) is cut on nothing (§5, C6).
+    // Every real one: a stand-in (none today; BP-35's eight were until their pictures were ingested) is cut on nothing (§5, C6).
     const all = Object.entries(manifest.files as Record<string, ManifestEntry & { cutOn?: string }>).filter(([name]) => name.startsWith('item_outfit_'))
     const outfits = all.filter(([, entry]) => entry.real === true)
     expect(outfits.length, 'six outfits and their male cuts').toBeGreaterThanOrEqual(8)
@@ -1794,12 +1804,11 @@ describe('the v4 review sheet and the fit sheet (Plan 19 A1d, spec §5.6)', () =
 
   it('never takes a covering hat’s hair from below the hat’s edge, on any hairstyle — the side locks under the nón lá’s brim stay (fix round 1)', async () => {
     const fit = fitCards(committed)
-    // Every hat in HAIR_CLIP whose layer carries its clip — BP-33's cap, bucket hat and fedora with Plan 19's three.
-    // BP-35's witch hat, pumpkin, Santa hat and straw hat are stand-ins with no clip until their pictures are ingested.
+    // Every hat in HAIR_CLIP — BP-35's witch hat, pumpkin, Santa hat and straw hat with BP-33's cap, bucket hat and
+    // fedora and Plan 19's three; the ingest of their real pictures cut every clip.
     expect(HAIR_CLIP.hats).toHaveLength(10)
-    const clipped = HAIR_CLIP.hats.filter((code: string) => committed.files[itemFile('head', code, 80)]?.masks?.hairClip !== undefined)
-    expect(clipped).toEqual(['beanie01', 'beret_red01', 'conical_hat01', 'cap_navy01', 'bucket_khaki01', 'fedora01'])
-    for (const code of clipped) {
+    for (const code of HAIR_CLIP.hats) expect(committed.files[itemFile('head', code, 80)]?.masks?.hairClip, `${code} carries no clip`).toBeDefined()
+    for (const code of HAIR_CLIP.hats) {
       const hat = itemFile('head', code, 80)
       // The hat's edge per @1x column: its raw solid ink's longest run, halved, and two rows of slack for the feather —
       // over the @2x columns the @1x clip was scaled down from, three either side (the downscale's kernel reaches that
@@ -1830,8 +1839,8 @@ describe('the v4 review sheet and the fit sheet (Plan 19 A1d, spec §5.6)', () =
         expect(low, `${hair} under ${code}: hair taken below the hat's edge`).toBe(0)
       }
     }
-    // 48 composed pairs: past vitest's 5 s under a full run's load (it timed out there with three hats).
-  }, 60_000)
+    // 80 composed pairs: past vitest's 5 s under a full run's load (it timed out there with three hats).
+  }, 120_000)
 
   it('paints a tone over skin and its line art only: the body, its face, the outfit’s copy of the outline and the hair’s redrawn skin, by their masks', async () => {
     const cards = grid(sheetCards(committed, { items: skinItems, hairs: ['f_bob01'], outfits: ['casual01'] }))

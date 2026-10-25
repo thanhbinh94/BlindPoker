@@ -265,8 +265,7 @@ describe('the shipped catalogue', () => {
     // The beret, the beanie and the nón lá: a ponytail's tie, the spiky cut's spikes and the tousled cut's tuft
     // rose through them. Read off the manifest's `masks.hairClip` of the hat's layer, which its colours share.
     // BP-33's cap, bucket hat and fedora cover the crown too: the ingest of their real pictures cut their clips.
-    // BP-35's witch hat, pumpkin, Santa hat and straw hat are in the pipeline's HAIR_CLIP, but their stand-in layers
-    // carry no clip: they join this list in the commit that ingests their real pictures (ingest cuts the clip).
+    // BP-35's witch hat, pumpkin, Santa hat and straw hat as well, cut the same way when their pictures were ingested.
     const clipping = catalog.all().filter((def) => def.asset?.clipsHair === true).map((def) => def.id).sort()
     expect(clipping).toEqual([
       'head_beanie01',
@@ -281,6 +280,10 @@ describe('the shipped catalogue', () => {
       'head_cap_navy01',
       'head_conical_hat01',
       'head_fedora01',
+      'head_pumpkin01',
+      'head_santa_hat01',
+      'head_straw_hat01',
+      'head_witch_hat01',
     ])
     for (const def of catalog.all()) if (def.asset?.clipsHair !== true) expect(def.asset?.clipsHair, def.id).toBeUndefined()
   })

@@ -1256,6 +1256,72 @@ migration change.
   and only then leaves; under load the card appears late and the five-second next-hand timer wins. Read the trace's
   screencast frame before the failing click before blaming the change.
 
+## BP-35 — a second wardrobe batch: Halloween, winter, the beach, three epics (merged `MERGE`, 2026-10-25)
+
+Spec `docs/superpowers/specs/2026-10-25-wardrobe-halloween-design.md` (the session's own choices, which the user delegated:
+"thêm 8 bộ trang phục, 12 phụ kiện … có halloween, có siêu hiếm, chạy luôn"). Task A put the twenty items, the five
+achievements and their names in the catalogue on labelled stand-ins and queued the registry with BP-33's lessons applied
+from the start; the lead drew all twenty in ChatGPT in the user's Chrome and ingested them; Task C moved the pins to the
+real art and wrote the docs. No engine, protocol, schema or migration change.
+
+### Rulings
+
+- Task A, Ruling 1: the witch hat's id is `head_witch_hat01`, without BP-33's `_w` suffix, although it was queued over
+  `f_wavy01`: `_w` named a redraw that superseded an entry, and this was a first entry.
+- Task A, Ruling 2: while the four new `HAIR_CLIP` hats were stand-ins with no clip, the pipeline test that no covering
+  hat takes hair from below its edge walked only the six hats whose layer carried one, and listed the four as stand-ins.
+  Task C undid the filter once the real clips landed.
+- Task A, Ruling 3: the registry keeps the spec's §3.2 order (by theme), not head items before face items.
+- Task A, Ruling 4: the five achievements' descriptions copy their neighbours' wording ("Chơi 500 ván Blind Poker." under "Chơi 100 ván Blind Poker."), so the
+  Thành tựu page reads as one list.
+- Lead, Ruling 5: the vampire count's first picture flared the cape out past the hands (`redrawn`, width 1.315, edges
+  ±80 px); the description now asks for a cape "that hangs straight down close behind the body … never wider than the
+  arms", and the second picture measured 0.998. Costs if wrong: a cape narrower than the spec's sweep.
+- Lead, Ruling 6: the black witch hat over `f_wavy01` failed three times (fringe redrawn and eyes moved at width 0.95, so
+  hair and the female eyes went into the hat layer; the figure shrunk to 0.911 to fit the tall hat, passing `verify`
+  because a head item's width is advisory; a squat hat at 0.966 failing C11, 127 px of hair hidden that the hat left
+  uncovered). The entry went `blocked` and `v4/item_head_witch_hat01_b` superseded it (BP-33's `_w` precedent): over the
+  default `f_bob01`, deep emerald with a black band, clear of the bob's dark purple. Its first picture (a squat emerald
+  cone, 0.966, face in the layer again) was rejected by eye; the second, a floppy hat whose tip droops to the side "no
+  taller than a beanie", measured 1.008 and is clean on both bodies. Costs if wrong: the witch hat is emerald and floppy,
+  not the spec's tall black cone — a deviation the user may send back ("head_witch_hat01 ng").
+- Lead, Ruling 7: drafts were judged before `collect` with `verify`'s own `comparePictures` in a scratch script, so a draft
+  that measured off did not spend one of the three attempts; two emerald drafts (zoomed 1.097, shifted 40 px down) and two
+  floppy drafts were never collected. Costs if wrong: the registry's attempts under-count what was drawn.
+- Lead: the earmuffs' first picture came back on an opaque background (`background`); the second passed with "The
+  background must stay fully transparent" appended. The other seventeen passed on their first picture, and no outfit had
+  a cut problem: the Santa coat's white trim and the sailor top survived the skin cut (spec §5's second risk).
+- Task C, Ruling 8: the witch dress joins the redrawn-skin outfit lists (`bodies.test.ts`, `avatar-pipeline.test.ts`), and
+  the pipeline test lets its skin sit in one neck box (rows 470–490, x 360–408 @2x) instead of below the 760 line the other
+  outfits keep: the picture redrew a 68 px sliver of neck between the cape's collar, above the brooch (rows 477–483), at a
+  paler skin tone (255, 231, 205 against the body's 252, 201, 172), so the mask is right and the tone paints that neck
+  with the rest. Not a rework. Costs if wrong: none in the art; a mask that crept elsewhere on the dress would still fail.
+- Task C, Ruling 9: the "never takes a covering hat's hair from below the hat's edge" case walks all ten `HAIR_CLIP` hats
+  again (80 composed pairs), asserts each carries a clip, and its timeout goes from 60 s to 120 s. Costs if wrong: a
+  slower run, never a false failure.
+- Task C, Ruling 10: the contact sheets are committed as `avatar-pipeline.mjs sheet` draws them from the final layers
+  (BP-33's Ruling 4): 129 cards on 2460 × 3548, 272 fit cards on 1772 × 8716.
+- Task C, Ruling 11: the hard width limit for head items in `verify` stays a recommendation in
+  `docs/known-limitations.md`, not code: BP-35 is an art batch, and a limit on the body box would have failed the party
+  hat (arms out, 1.107, a clean layer), so the rule wants measuring on the head, which is a design choice for the lead.
+  Costs if wrong: the next tall hat is caught by eye again, not by the tool.
+
+### Lessons
+
+- **A tall hat makes ChatGPT shrink the figure to fit the 1024 × 1536 canvas.** A head item's width ratio is only advisory
+  in `verify`, yet any shrink beyond about 1.5 % pulls face and hair into the hat layer. Read the width ratio for every
+  head item and look at the composed figure on both bodies. A droopy tip (the Santa hat, the floppy witch hat) stays
+  inside the headroom; a tall cone does not.
+- **The rebuilt `f_wavy01` reference invites the model to redraw the fringe.** Prefer the bob under a hat, and give a hat
+  that must sit on the bob a colour clear of its dark purple (emerald, not black or purple).
+- **Generate two or three drafts in parallel and collect only the one that measures clean.** `comparePictures` from
+  `verify.mjs` measures a draft without recording an attempt, so the three-attempt budget is spent only on pictures
+  worth judging.
+- **Describe the outline, not just the garment.** "A long cape" swept out past the hands; "hangs straight down close
+  behind the body … never wider than the arms" kept the figure's box.
+- **BP-33's colour rules held.** No outfit in BP-35 lost cloth to the skin cut: fabric colours were chosen clear of the
+  skin from the spec onward, and the white stayed on large areas of the torso, never at the feet.
+
 ## 5. Open items
 
 The single list is `docs/known-limitations.md`. As of this writing, the items a next session is most likely to meet:

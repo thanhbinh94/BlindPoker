@@ -89,3 +89,30 @@ Không vẽ biến thể thân m trừ khi bảng ảnh cho thấy đồ lệch 
 - Viền trắng (Noel, áo thủy thủ, mũ Noel) có thể bị phép cắt da ăn mất: nếu thủng, đổi viền sang trắng ánh xanh xám.
 - Bí ngô và mũ phù thủy lớn hơn mọi mũ đang có: `scope` hoặc giới hạn khung có thể chặn; vẽ lại nhỏ hơn nếu cần.
 - Giới hạn ảnh của ChatGPT, CAPTCHA: dừng và báo (§10.3); không giải CAPTCHA.
+
+## 6. Kết quả
+
+Ghi ngày 2026-10-25, sau đợt vẽ. Cả 20 món đã có ảnh thật, đã cắt và qua `avatar:check`; bảng §3 giữ nguyên như lúc viết
+spec, các chỗ khác đi ghi ở đây (chi tiết tiếng Anh: `docs/avatar-2d.md` §10.7, CHANGELOG BP-35).
+
+- **Mũ phù thủy** (`head_witch_hat01`): khác §3.2. Mũ đen cao vành rộng vẽ trên tóc `f_wavy01` trượt ba lần: lần 1 tóc mái
+  bị vẽ lại và mắt xê dịch (rộng 0,95), phép cắt đưa tóc và mắt nữ vào lớp mũ (mắt xanh trên thân m); lần 2 cả người bị
+  thu nhỏ cho vừa chiếc mũ cao (0,911) — `verify` vẫn qua vì độ rộng chỉ là ghi chú với món đội đầu; lần 3 mũ thấp vẫn
+  0,966 và trượt C11 (mặt nạ cắt tóc giấu 127 px tóc mà mũ không che). Mục cũ thành `blocked`, mục mới
+  `v4/item_head_witch_hat01_b` thay thế (như `_w` của BP-33): vẽ trên tóc mặc định `f_bob01`, màu xanh ngọc lục bảo đậm,
+  băng đen (xanh lục tách hẳn khỏi màu tím sẫm của tóc bob, mũ đen hay tím thì không). Ảnh đầu của mục mới (mũ nhọn thấp)
+  lại 0,966, mặt lọt vào lớp mũ, bị loại bằng mắt; ảnh thứ hai là mũ mềm, chóp rủ sang một bên như mũ Noel, "không cao
+  hơn mũ len", rộng 1,008, sạch trên cả hai thân. Vậy mũ phù thủy là mũ mềm xanh lục, không phải mũ chóp đen cao như bảng.
+- **Bá tước ma cà rồng** (`outfit_vampire01`): ảnh đầu áo choàng xòe rộng quá hai tay (`redrawn`, tỉ lệ 1,315, mép
+  ±80 px) → mô tả đổi thành áo choàng "rủ thẳng xuống sát sau lưng … không bao giờ rộng hơn hai cánh tay"; ảnh thứ hai
+  0,998.
+- **Chụp tai lông** (`head_earmuffs01`): ảnh đầu nền đục (`background`); ảnh thứ hai qua khi thêm câu "The background
+  must stay fully transparent".
+- Mười bảy món còn lại qua ngay ảnh đầu. Rủi ro §5 về viền trắng không xảy ra: viền trắng áo Noel và áo thủy thủ còn
+  nguyên sau phép cắt da. Váy phù thủy vẽ lại một mảnh da cổ nhỏ giữa cổ áo choàng, trên trâm cài (68 px @2x); phép cắt
+  nhận ra là da nên màu da người chơi tô lên đúng chỗ đó.
+- Bản nháp được đo bằng `comparePictures` của `verify` trước khi `collect`, nên một bản nháp lệch không tốn lượt nào
+  trong ba lượt: hai bản xanh lục (một bị phóng 1,097, một lệch xuống 40 px) và hai bản mũ mềm không được thu.
+- Không vẽ biến thể thân m nào: cả tám bộ dùng bản cắt trên thân f cho cả hai thân, váy phù thủy cũng là váy trên thân m.
+  Thành tựu mới không cấp bù (§3.3): mở ở lần cập nhật kế tiếp của chỉ số. Bờm sừng tuần lộc màu nâu hơi chìm trên tóc
+  màu nâu.
