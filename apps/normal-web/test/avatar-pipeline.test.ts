@@ -1270,10 +1270,11 @@ describe('the stage-1 name list', () => {
     // hairstyles, items and bots, and no name on it is a base's.
     expect([...new Set(files.map((file: { kind: string }) => file.kind))].sort()).toEqual(['body', 'bodyFace', 'bot', 'botFace', 'hair', 'item'])
     expect(files.filter((file: { name: string }) => file.name.startsWith('base_'))).toEqual([])
-    // BP-33 (spec 2026-10-24 §3): six more hats, four more face items and eight more outfits.
-    expect(byKind('item').filter((name) => name.startsWith('item_head_'))).toHaveLength(14)
-    expect(byKind('item').filter((name) => name.startsWith('item_face_'))).toHaveLength(8)
-    expect(byKind('item').filter((name) => name.startsWith('item_outfit_'))).toHaveLength(14)
+    // BP-33 (spec 2026-10-24 §3): six more hats, four more face items and eight more outfits; BP-35 (spec 2026-10-25
+    // §3): nine more head items, three more face items and eight more outfits.
+    expect(byKind('item').filter((name) => name.startsWith('item_head_'))).toHaveLength(23)
+    expect(byKind('item').filter((name) => name.startsWith('item_face_'))).toHaveLength(11)
+    expect(byKind('item').filter((name) => name.startsWith('item_outfit_'))).toHaveLength(22)
     expect(byKind('item').filter((name) => name.startsWith('item_aura_'))).toHaveLength(8)
     expect(byKind('item').filter((name) => name.startsWith('item_frame_'))).toHaveLength(6)
     expect(byKind('bot')).toHaveLength(8)
@@ -1283,8 +1284,12 @@ describe('the stage-1 name list', () => {
     expect(byKind('bodyFace')).toHaveLength(12)
     expect(byKind('hair').sort()).toEqual(HAIR_CODES.flatMap((code: string) => [hairFile(code, 20), hairFile(code, 60)]).sort())
     expect(byKind('hair')).toHaveLength(16)
-    // 172 before D1, less the six bases' three layers and six faces each (54): 118; BP-33's eighteen items make 136.
-    expect(files).toHaveLength(136)
+    // 172 before D1, less the six bases' three layers and six faces each (54): 118; BP-33's eighteen items make 136,
+    // BP-35's twenty 156.
+    expect(files).toHaveLength(156)
+    expect(files.map((file: { name: string }) => file.name)).toContain('item_outfit_vampire01_L40')
+    expect(files.map((file: { name: string }) => file.name)).toContain('item_head_crab01_L80')
+    expect(files.map((file: { name: string }) => file.name)).toContain('item_face_heart_glasses01_L70')
     expect(files.map((file: { name: string }) => file.name)).toContain('item_outfit_brocade_red01_L40')
     expect(files.map((file: { name: string }) => file.name)).toContain('item_face_monocle_gold01_L70')
     expect(files.map((file: { name: string }) => file.name)).toContain('item_head_tophat01_L80')
@@ -1404,8 +1409,8 @@ describe('the committed placeholder set', () => {
     const fronts = committedLayers.filter((name) => parseName(name)?.kind === 'hair' && parseName(name)?.layer === LAYERS.hairFront && manifest.files[name]!.real === true)
     const outfits = committedLayers.filter((name) => name.startsWith('item_outfit_') && manifest.files[name]!.cutOn !== undefined && manifest.files[name]!.real === true)
     expect(fronts).toHaveLength(8)
-    // Plan 19's six outfits and two male cuts, and BP-33's eight.
-    expect(outfits).toHaveLength(16)
+    // Plan 19's six outfits and two male cuts, BP-33's eight and BP-35's eight.
+    expect(outfits).toHaveLength(24)
     for (const name of [...fronts, ...outfits]) {
       expect(manifest.files[name]!.masks?.skin, `${name} has no skin mask`).toBeDefined()
       for (const density of DENSITIES) expect(existsSync(join(OUT_DIR, `${name}_skinmask@${density}x.png`)), `${name}_skinmask@${density}x.png`).toBe(true)
@@ -1418,14 +1423,24 @@ describe('the committed placeholder set', () => {
     }
     // The Tết áo dài (both cuts) and the royal robe redrew an instep inside a slipper; no outfit redrew any other skin —
     // not the gold trim the Tết's collar, cuffs and slit lay over the body's skin (pre-flight B1). BP-33 adds the áo bà
-    // ba's sandalled feet and the insteps above the brocade jacket's cloth shoes, at the feet too.
+    // ba's sandalled feet and the insteps above the brocade jacket's cloth shoes, at the feet too. BP-35's witch dress is
+    // the one exception: its picture redrew the sliver of neck between the cape's collar and above its brooch (68 px @2x,
+    // rows 477–483, x 375–392), paler than the body's but skin, so the tone paints it with the rest of the neck.
     const withSkin = outfits.filter((name) => manifest.files[name]!.masks!.skin!.empty !== true)
-    expect(withSkin.sort()).toEqual(['item_outfit_ao_ba_ba01_L40', 'item_outfit_brocade_red01_L40', 'item_outfit_royal_robe01_L40', 'item_outfit_tet_red01_L40', 'item_outfit_tet_red01_m_L40'])
+    expect(withSkin.sort()).toEqual(['item_outfit_ao_ba_ba01_L40', 'item_outfit_brocade_red01_L40', 'item_outfit_royal_robe01_L40', 'item_outfit_tet_red01_L40', 'item_outfit_tet_red01_m_L40', 'item_outfit_witch01_L40'])
+    const neck = { name: 'item_outfit_witch01_L40', top: 470, bottom: 490, left: 360, right: 408 }
     for (const name of withSkin) {
       const { alpha, width } = await alphaOf(`${name}_skinmask@2x.png`)
       let off = 0
-      for (let p = 0; p < alpha.length; p++) if (alpha[p] && Math.floor(p / width) < 760) off++
+      let atNeck = 0
+      for (let p = 0; p < alpha.length; p++) {
+        if (!alpha[p]) continue
+        const [x, y] = [p % width, Math.floor(p / width)]
+        if (name === neck.name && y >= neck.top && y <= neck.bottom && x >= neck.left && x <= neck.right) atNeck++
+        else if (y < 760) off++
+      }
       expect(off, `${name}'s skin above the feet`).toBe(0)
+      if (name === neck.name) expect(atNeck, `${name}'s neck`).toBeGreaterThan(0)
     }
     // A hair mask is its ink less the skin's share, and its meanL the ink's as committed before the skin was cut out (I8):
     // `hairTint` paints every hair colour against it. (The hime's is its ink's since fix round 1 took the copy of the body's
@@ -1529,7 +1544,7 @@ describe('the committed placeholder set', () => {
   })
 
   it('cuts every outfit layer on a body: cutOn f or m, on the default layer and on every per-wear cut', () => {
-    // Every real one: a stand-in (BP-33's eight, until their pictures are ingested) is cut on nothing (§5, C6).
+    // Every real one: a stand-in (none today; BP-35's eight were until their pictures were ingested) is cut on nothing (§5, C6).
     const all = Object.entries(manifest.files as Record<string, ManifestEntry & { cutOn?: string }>).filter(([name]) => name.startsWith('item_outfit_'))
     const outfits = all.filter(([, entry]) => entry.real === true)
     expect(outfits.length, 'six outfits and their male cuts').toBeGreaterThanOrEqual(8)
@@ -1647,15 +1662,15 @@ describe('the committed placeholder set', () => {
     const cards = sheetCards(manifest, { items })
     const count = (...blocks: string[]): number => cards.filter((card) => blocks.includes(card.block)).length
     expect(count('grid')).toBe(48)
-    expect(count('outfits')).toBe(28)
+    expect(count('outfits')).toBe(44)
     expect(count('auras', 'frames')).toBe(14)
     expect(count('expressions')).toBe(12)
     expect(count('bots')).toBe(8)
     expect(count('portraits')).toBe(3)
-    expect(cards).toHaveLength(48 + 28 + 14 + 12 + 8 + 3)
+    expect(cards).toHaveLength(48 + 44 + 14 + 12 + 8 + 3)
     // The fit sheet: every hat and every face item × the eight hairstyles.
     const fit = fitCards(manifest)
-    expect(fit).toHaveLength(176)
+    expect(fit).toHaveLength(272)
 
     // The committed pictures are the ones these lists lay out: a sheet left over from another card list fails here.
     const [sheet, fitSheet] = await Promise.all([sharp(SHEET).metadata(), sharp(FIT_SHEET).metadata()])
@@ -1789,8 +1804,10 @@ describe('the v4 review sheet and the fit sheet (Plan 19 A1d, spec §5.6)', () =
 
   it('never takes a covering hat’s hair from below the hat’s edge, on any hairstyle — the side locks under the nón lá’s brim stay (fix round 1)', async () => {
     const fit = fitCards(committed)
-    // Every hat in HAIR_CLIP — BP-33's cap, bucket hat and fedora with Plan 19's three.
-    expect(HAIR_CLIP.hats).toHaveLength(6)
+    // Every hat in HAIR_CLIP — BP-35's witch hat, pumpkin, Santa hat and straw hat with BP-33's cap, bucket hat and
+    // fedora and Plan 19's three; the ingest of their real pictures cut every clip.
+    expect(HAIR_CLIP.hats).toHaveLength(10)
+    for (const code of HAIR_CLIP.hats) expect(committed.files[itemFile('head', code, 80)]?.masks?.hairClip, `${code} carries no clip`).toBeDefined()
     for (const code of HAIR_CLIP.hats) {
       const hat = itemFile('head', code, 80)
       // The hat's edge per @1x column: its raw solid ink's longest run, halved, and two rows of slack for the feather —
@@ -1822,8 +1839,8 @@ describe('the v4 review sheet and the fit sheet (Plan 19 A1d, spec §5.6)', () =
         expect(low, `${hair} under ${code}: hair taken below the hat's edge`).toBe(0)
       }
     }
-    // 48 composed pairs: past vitest's 5 s under a full run's load (it timed out there with three hats).
-  }, 60_000)
+    // 80 composed pairs: past vitest's 5 s under a full run's load (it timed out there with three hats).
+  }, 120_000)
 
   it('paints a tone over skin and its line art only: the body, its face, the outfit’s copy of the outline and the hair’s redrawn skin, by their masks', async () => {
     const cards = grid(sheetCards(committed, { items: skinItems, hairs: ['f_bob01'], outfits: ['casual01'] }))

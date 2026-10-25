@@ -62,16 +62,18 @@ describe('loadBodies', () => {
       expect(tint?.eyes?.meanL, gender).toBe(shipped.files[faceFile(gender, 'neutral')]?.masks?.eyes?.meanL)
       // The skin's line art (2026-10-05): the body, all six faces and every outfit's copy of the outline (eight outfit
       // layers, the two male cuts included — any of them can be drawn over either body), at the skin's meanL. BP-33's
-      // eight real pictures make sixteen; a stand-in outfit would have no outline to copy and is not on the list.
+      // eight real pictures make sixteen and BP-35's eight twenty-four; a stand-in outfit would have no outline to copy
+      // and is not on the list.
       const outfits = Object.keys(shipped.files).filter((file) => file.startsWith('item_outfit_') && shipped.files[file]?.masks?.skinLine !== undefined).sort()
-      expect(outfits, gender).toHaveLength(16)
+      expect(outfits, gender).toHaveLength(24)
       expect(outfits.length, gender).toBeGreaterThan(0)
       expect(tint?.skinLine, gender).toEqual({ meanL: tint?.skin?.meanL, files: [`body_${gender}_L30`, ...EXPRESSIONS.map((expr) => faceFile(gender, expr)), ...outfits] })
       // The skin the pictures redrew (2026-10-05), at the skin's meanL: the Tết áo dài's and the royal robe's insteps,
       // and every front hair whose skin mask is not empty — at least the seven whose hair is darker than the skin.
       expect(tint?.layerSkin?.meanL, gender).toBe(tint?.skin?.meanL)
-      // BP-33 adds the áo bà ba's sandalled feet and the insteps above the brocade jacket's cloth shoes.
-      expect(tint?.layerSkin?.files.filter((file) => file.startsWith('item_outfit_')), gender).toEqual(['item_outfit_ao_ba_ba01_L40', 'item_outfit_brocade_red01_L40', 'item_outfit_royal_robe01_L40', 'item_outfit_tet_red01_L40', 'item_outfit_tet_red01_m_L40'])
+      // BP-33 adds the áo bà ba's sandalled feet and the insteps above the brocade jacket's cloth shoes; BP-35 the sliver
+      // of neck the witch dress redrew between its cape's collar, above the brooch.
+      expect(tint?.layerSkin?.files.filter((file) => file.startsWith('item_outfit_')), gender).toEqual(['item_outfit_ao_ba_ba01_L40', 'item_outfit_brocade_red01_L40', 'item_outfit_royal_robe01_L40', 'item_outfit_tet_red01_L40', 'item_outfit_tet_red01_m_L40', 'item_outfit_witch01_L40'])
       const fronts = Object.keys(shipped.files).filter((file) => file.startsWith('item_hair_') && file.endsWith('_L60')).sort()
       const redrew = fronts.filter((file) => shipped.files[file]?.masks?.skin !== undefined && shipped.files[file]?.masks?.skin?.empty !== true)
       expect(redrew, gender).toEqual(expect.arrayContaining(fronts.filter((file) => file !== 'item_hair_f_wavy01_L60')))

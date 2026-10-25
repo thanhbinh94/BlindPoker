@@ -82,17 +82,23 @@ export const SLOT_LAYER = {
 
 /**
  * Spec §4.4, verbatim, in the order the design lists them — then BP-33's wardrobe batch (spec 2026-10-24 §3.1–§3.2:
- * six hats, four face items, eight outfits), in its tables' order.
+ * six hats, four face items, eight outfits), in its tables' order — then BP-35's (spec 2026-10-25 §3.1–§3.2: nine
+ * head items, three face items, eight outfits for Halloween, winter and the beach), in its tables' order too.
  */
 export const STAGE_ONE_ITEMS = {
   head: [
     'tophat01', 'dealer_visor01', 'beret_red01', 'crown_gold01', 'conical_hat01', 'beanie01', 'party_cone01', 'hood_black01',
     'cap_navy01', 'bucket_khaki01', 'headband_red01', 'cat_ears01', 'lotus_pin01', 'fedora01',
+    'witch_hat01', 'pumpkin01', 'devil_horns01', 'santa_hat01', 'earmuffs01', 'reindeer01', 'straw_hat01', 'flower_crown01', 'crab01',
   ],
-  face: ['glasses_round_gold01', 'sunglasses01', 'masquerade01', 'eyepatch01', 'glasses_square01', 'bandaid01', 'aviators01', 'monocle_gold01'],
+  face: [
+    'glasses_round_gold01', 'sunglasses01', 'masquerade01', 'eyepatch01', 'glasses_square01', 'bandaid01', 'aviators01', 'monocle_gold01',
+    'bat_mask01', 'red_nose01', 'heart_glasses01',
+  ],
   outfit: [
     'casual01', 'dealer01', 'tuxedo01', 'royal_robe01', 'tet_red01', 'champion01',
     'hoodie_navy01', 'tracksuit_red01', 'ao_ba_ba01', 'denim01', 'bomber_neon01', 'ao_dai_jade01', 'trench01', 'brocade_red01',
+    'skeleton01', 'witch01', 'vampire01', 'sweater_xmas01', 'puffer01', 'santa01', 'hawaii01', 'sailor01',
   ],
   aura: ['water01', 'fire01', 'wind01', 'earth01', 'lightning01', 'sakura01', 'gold_cards01', 'ice01'],
   frame: ['bronze', 'silver', 'gold', 'monthly', 'veteran', 'founder'],
@@ -149,7 +155,7 @@ export const hairItemId = (code) => `hair_${code}`
  * The items and the bots, then the v4 set (Plan 19, spec §5.3): per gender a body and its six faces, then per
  * hairstyle its back and front layer — 30 names, which hold no icon (a hairstyle's wardrobe card is a portrait,
  * ruling 12). 118 names in all since the switch-over (D1) took the six flat bases' 54 off the front of the list, and
- * 136 since BP-33's eighteen wardrobe items.
+ * 136 since BP-33's eighteen wardrobe items, and 156 since BP-35's twenty.
  */
 export function stageOneFiles() {
   const files = []

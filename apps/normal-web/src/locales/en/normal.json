@@ -868,6 +868,26 @@
     "face_bandaid01": "Plaster",
     "face_aviators01": "Aviator sunglasses",
     "face_monocle_gold01": "Gold monocle",
+    "outfit_skeleton01": "Skeleton suit",
+    "outfit_witch01": "Witch's dress",
+    "outfit_vampire01": "Vampire count",
+    "outfit_sweater_xmas01": "Christmas jumper",
+    "outfit_puffer01": "Winter puffer",
+    "outfit_santa01": "Santa's coat",
+    "outfit_hawaii01": "Hawaiian shirt",
+    "outfit_sailor01": "Sailor suit",
+    "head_witch_hat01": "Witch hat",
+    "head_pumpkin01": "Pumpkin hat",
+    "head_devil_horns01": "Little devil horns",
+    "head_santa_hat01": "Santa hat",
+    "head_earmuffs01": "Fluffy earmuffs",
+    "head_reindeer01": "Reindeer antlers",
+    "head_straw_hat01": "Straw sun hat",
+    "head_flower_crown01": "Flower crown",
+    "head_crab01": "Crab rider",
+    "face_bat_mask01": "Bat mask",
+    "face_red_nose01": "Red reindeer nose",
+    "face_heart_glasses01": "Heart sunglasses",
     "hair_f_bob01": "Bob cut",
     "hair_f_hime01": "Long with bangs",
     "hair_f_wavy01": "Wavy bob",
@@ -921,9 +941,17 @@
       "name": "Seven-day streak",
       "desc": "Check in 7 days in a row."
     },
+    "login_streak_14": {
+      "name": "Steady reindeer",
+      "desc": "Check in 14 days in a row."
+    },
     "login_streak_28": {
       "name": "Twenty-eight-day streak",
       "desc": "Check in 28 days in a row."
+    },
+    "login_days_200": {
+      "name": "The lobby's Santa",
+      "desc": "Check in on 200 days."
     },
     "login_days_365": {
       "name": "A year in",
@@ -964,6 +992,10 @@
     "win_streak_5": {
       "name": "Five in a row",
       "desc": "Win 5 hands in a row."
+    },
+    "win_streak_7": {
+      "name": "Sideways to victory",
+      "desc": "Win 7 hands in a row."
     },
     "win_streak_10": {
       "name": "Ten in a row",
@@ -1013,6 +1045,10 @@
       "name": "A hundred Blind hands",
       "desc": "Play 100 hands of Blind mode."
     },
+    "blind_hands_500": {
+      "name": "Blind as a pumpkin",
+      "desc": "Play 500 hands of Blind mode."
+    },
     "blind_hands_1000": {
       "name": "A thousand Blind hands",
       "desc": "Play 1,000 hands of Blind mode."
@@ -1040,6 +1076,10 @@
     "rooms_10": {
       "name": "Ten rooms",
       "desc": "Join 10 rooms."
+    },
+    "rooms_50": {
+      "name": "Table hopper",
+      "desc": "Join 50 rooms."
     },
     "rooms_100": {
       "name": "A hundred rooms",
