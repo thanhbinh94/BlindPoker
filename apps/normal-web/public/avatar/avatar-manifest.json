@@ -1547,6 +1547,27 @@
         }
       }
     },
+    "item_outfit_ao_dai_jade01_m_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 92297,
+      "real": true,
+      "variantOf": "item_outfit_ao_dai_jade01_L40",
+      "wear": "m",
+      "cutOn": "m",
+      "masks": {
+        "skinLine": {
+          "bytes2x": 4495,
+          "meanL": 0.2599
+        },
+        "skin": {
+          "bytes2x": 4015,
+          "meanL": 0,
+          "empty": true
+        }
+      }
+    },
     "item_outfit_bomber_neon01_L40": {
       "layer": 40,
       "w": 384,
@@ -1971,6 +1992,27 @@
           "meanL": 0.806
         }
       }
+    },
+    "item_outfit_witch01_m_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 108684,
+      "real": true,
+      "variantOf": "item_outfit_witch01_L40",
+      "wear": "m",
+      "cutOn": "m",
+      "masks": {
+        "skinLine": {
+          "bytes2x": 4649,
+          "meanL": 0.2456
+        },
+        "skin": {
+          "bytes2x": 4015,
+          "meanL": 0,
+          "empty": true
+        }
+      }
     }
   },
   "icons": {
@@ -2377,6 +2419,14 @@
       "bytes2x": 25601,
       "real": true
     },
+    "item_outfit_ao_dai_jade01_m_icon": {
+      "kind": "icon",
+      "of": "item_outfit_ao_dai_jade01_m_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 23366,
+      "real": true
+    },
     "item_outfit_bomber_neon01_icon": {
       "kind": "icon",
       "of": "item_outfit_bomber_neon01_L40",
@@ -2552,6 +2602,14 @@
       "w": 96,
       "h": 96,
       "bytes2x": 24550,
+      "real": true
+    },
+    "item_outfit_witch01_m_icon": {
+      "kind": "icon",
+      "of": "item_outfit_witch01_m_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 25949,
       "real": true
     }
   },
