@@ -868,6 +868,26 @@
     "face_bandaid01": "Băng cá nhân",
     "face_aviators01": "Kính phi công",
     "face_monocle_gold01": "Kính một tròng vàng",
+    "outfit_skeleton01": "Bộ đồ bộ xương",
+    "outfit_witch01": "Váy phù thủy",
+    "outfit_vampire01": "Bá tước ma cà rồng",
+    "outfit_sweater_xmas01": "Áo len Giáng sinh",
+    "outfit_puffer01": "Áo phao mùa đông",
+    "outfit_santa01": "Áo Ông già Noel",
+    "outfit_hawaii01": "Sơ mi Hawaii",
+    "outfit_sailor01": "Đồ thủy thủ",
+    "head_witch_hat01": "Mũ phù thủy",
+    "head_pumpkin01": "Mũ bí ngô",
+    "head_devil_horns01": "Sừng quỷ nhỏ",
+    "head_santa_hat01": "Mũ Noel",
+    "head_earmuffs01": "Chụp tai lông",
+    "head_reindeer01": "Bờm sừng tuần lộc",
+    "head_straw_hat01": "Mũ rơm",
+    "head_flower_crown01": "Vòng hoa Hawaii",
+    "head_crab01": "Cua cưỡi đầu",
+    "face_bat_mask01": "Mặt nạ dơi",
+    "face_red_nose01": "Mũi đỏ tuần lộc",
+    "face_heart_glasses01": "Kính trái tim",
     "hair_f_bob01": "Tóc bob",
     "hair_f_hime01": "Tóc dài mái bằng",
     "hair_f_wavy01": "Tóc gợn sóng",
@@ -921,9 +941,17 @@
       "name": "Chuỗi 7 ngày",
       "desc": "Điểm danh liên tục 7 ngày."
     },
+    "login_streak_14": {
+      "name": "Tuần lộc chăm chỉ",
+      "desc": "Điểm danh liên tục 14 ngày."
+    },
     "login_streak_28": {
       "name": "Chuỗi 28 ngày",
       "desc": "Điểm danh liên tục 28 ngày."
+    },
+    "login_days_200": {
+      "name": "Ông già Noel của sảnh",
+      "desc": "Điểm danh đủ 200 ngày."
     },
     "login_days_365": {
       "name": "Một năm ghé bàn",
@@ -964,6 +992,10 @@
     "win_streak_5": {
       "name": "Năm ván liền tay",
       "desc": "Thắng 5 ván liên tiếp."
+    },
+    "win_streak_7": {
+      "name": "Đi ngang vẫn thắng",
+      "desc": "Thắng 7 ván liên tiếp."
     },
     "win_streak_10": {
       "name": "Mười ván liền tay",
@@ -1013,6 +1045,10 @@
       "name": "Trăm ván Blind Poker",
       "desc": "Chơi 100 ván Blind Poker."
     },
+    "blind_hands_500": {
+      "name": "Bí ngô mù quáng",
+      "desc": "Chơi 500 ván Blind Poker."
+    },
     "blind_hands_1000": {
       "name": "Nghìn ván Blind Poker",
       "desc": "Chơi 1.000 ván Blind Poker."
@@ -1040,6 +1076,10 @@
     "rooms_10": {
       "name": "Mười phòng",
       "desc": "Vào 10 phòng chơi."
+    },
+    "rooms_50": {
+      "name": "Thủy thủ khắp bàn",
+      "desc": "Vào 50 phòng chơi."
     },
     "rooms_100": {
       "name": "Trăm phòng",

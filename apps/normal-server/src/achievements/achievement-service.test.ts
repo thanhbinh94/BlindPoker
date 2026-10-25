@@ -125,7 +125,7 @@ const find = (playerId: string, id: string) => achievements.list(playerId).then(
 
 describe('loadAchievements', () => {
   it('reads the shipped catalogue, whose every metric is a counter and every item reward a real item', () => {
-    expect(defs.length).toBe(39)
+    expect(defs.length).toBe(44)
     expect(new Set(defs.map((d) => d.id)).size).toBe(defs.length)
     for (const id of [
       'login_days_7', 'login_streak_7', 'holdem_hands_10', 'win_streak_3', 'lose_streak_10', 'hand_royal',
@@ -143,6 +143,12 @@ describe('loadAchievements', () => {
     expect(defs.find((d) => d.id === 'blind_wins_250')).toMatchObject({ category: 'blind', metric: 'handsWonBlind', threshold: 250, reward: { itemId: 'outfit_brocade_red01' } })
     expect(defs.find((d) => d.id === 'big_win_250k')).toMatchObject({ category: 'holdem', metric: 'biggestWin', threshold: 250_000, reward: { itemId: 'head_fedora01' } })
     expect(defs.find((d) => d.id === 'login_days_60')).toMatchObject({ category: 'login', metric: 'totalLoginDays', threshold: 60, reward: { itemId: 'face_monocle_gold01' } })
+    // BP-35 (spec 2026-10-25 §3.3): five more on existing counters, each between two milestones already there.
+    expect(defs.find((d) => d.id === 'login_days_200')).toMatchObject({ category: 'login', metric: 'totalLoginDays', threshold: 200, reward: { itemId: 'outfit_santa01' } })
+    expect(defs.find((d) => d.id === 'login_streak_14')).toMatchObject({ category: 'login', metric: 'bestLoginStreak', threshold: 14, reward: { itemId: 'head_reindeer01' } })
+    expect(defs.find((d) => d.id === 'blind_hands_500')).toMatchObject({ category: 'blind', metric: 'handsPlayedBlind', threshold: 500, reward: { itemId: 'head_pumpkin01' } })
+    expect(defs.find((d) => d.id === 'rooms_50')).toMatchObject({ category: 'social', metric: 'roomsJoined', threshold: 50, reward: { itemId: 'outfit_sailor01' } })
+    expect(defs.find((d) => d.id === 'win_streak_7')).toMatchObject({ category: 'holdem', metric: 'bestWinStreak', threshold: 7, reward: { itemId: 'head_crab01' } })
   })
 
   it('maps §14.1’s special-hand thresholds onto the category ranks', () => {

@@ -30,11 +30,16 @@ const HAIR_STYLES: Record<Gender, readonly string[]> = {
 const HEAD_ITEMS = [
   'tophat01', 'dealer_visor01', 'beret_red01', 'crown_gold01', 'conical_hat01', 'beanie01', 'party_cone01', 'hood_black01',
   'cap_navy01', 'bucket_khaki01', 'headband_red01', 'cat_ears01', 'lotus_pin01', 'fedora01',
+  'witch_hat01', 'pumpkin01', 'devil_horns01', 'santa_hat01', 'earmuffs01', 'reindeer01', 'straw_hat01', 'flower_crown01', 'crab01',
 ]
-const FACE_ITEMS = ['eyepatch01', 'glasses_round_gold01', 'masquerade01', 'sunglasses01', 'glasses_square01', 'bandaid01', 'aviators01', 'monocle_gold01']
+const FACE_ITEMS = [
+  'eyepatch01', 'glasses_round_gold01', 'masquerade01', 'sunglasses01', 'glasses_square01', 'bandaid01', 'aviators01', 'monocle_gold01',
+  'bat_mask01', 'red_nose01', 'heart_glasses01',
+]
 const OUTFIT_ITEMS = [
   'casual01', 'champion01', 'dealer01', 'royal_robe01', 'tet_red01', 'tuxedo01',
   'hoodie_navy01', 'tracksuit_red01', 'ao_ba_ba01', 'denim01', 'bomber_neon01', 'ao_dai_jade01', 'trench01', 'brocade_red01',
+  'skeleton01', 'witch01', 'vampire01', 'sweater_xmas01', 'puffer01', 'santa01', 'hawaii01', 'sailor01',
 ]
 const AURA_ITEMS = ['earth01', 'fire01', 'gold_cards01', 'ice01', 'lightning01', 'sakura01', 'water01', 'wind01']
 const FRAME_ITEMS = ['bronze', 'founder', 'gold', 'monthly', 'silver', 'veteran']
@@ -51,7 +56,7 @@ const BODIES: Record<Gender, BodyRef> = { f: body('f'), m: body('m') }
 
 /** The hats whose layer carries a hair clip (2026-10-06): the ones that cover the crown. A copy of the pipeline's
  * `HAIR_CLIP.hats` (`apps/normal-web/scripts/avatar-pipeline/masks.mjs`) — `avatar-pipeline.test.ts` holds the two equal. */
-const CLIPPING_HATS = ['beanie01', 'beret_red01', 'conical_hat01', 'cap_navy01', 'bucket_khaki01', 'fedora01']
+const CLIPPING_HATS = ['beanie01', 'beret_red01', 'conical_hat01', 'cap_navy01', 'bucket_khaki01', 'fedora01', 'witch_hat01', 'pumpkin01', 'santa_hat01', 'straw_hat01']
 
 /** `item_<slot>_<code>_L<layer>` — the pipeline's naming convention. `hood_black01` is the one item drawn here with
  * both hide flags, so it is the one row that shows the hairstyle disappearing; `CLIPPING_HATS` clip it instead. */

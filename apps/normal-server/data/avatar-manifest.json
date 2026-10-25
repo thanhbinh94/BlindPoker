@@ -854,6 +854,13 @@
       "real": true,
       "cutOn": "f"
     },
+    "item_face_bat_mask01_L70": {
+      "layer": 70,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 7724,
+      "placeholder": true
+    },
     "item_face_eyepatch01_L70": {
       "layer": 70,
       "w": 384,
@@ -876,6 +883,13 @@
       "real": true,
       "cutOn": "f"
     },
+    "item_face_heart_glasses01_L70": {
+      "layer": 70,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 7817,
+      "placeholder": true
+    },
     "item_face_masquerade01_L70": {
       "layer": 70,
       "w": 384,
@@ -890,6 +904,13 @@
       "bytes2x": 14822,
       "real": true,
       "cutOn": "f"
+    },
+    "item_face_red_nose01_L70": {
+      "layer": 70,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 7610,
+      "placeholder": true
     },
     "item_face_sunglasses01_L70": {
       "layer": 70,
@@ -1312,6 +1333,13 @@
         }
       }
     },
+    "item_head_crab01_L80": {
+      "layer": 80,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 6936,
+      "placeholder": true
+    },
     "item_head_crown_gold01_L80": {
       "layer": 80,
       "w": 384,
@@ -1326,6 +1354,20 @@
       "bytes2x": 62630,
       "real": true
     },
+    "item_head_devil_horns01_L80": {
+      "layer": 80,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 8076,
+      "placeholder": true
+    },
+    "item_head_earmuffs01_L80": {
+      "layer": 80,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 7732,
+      "placeholder": true
+    },
     "item_head_fedora01_L80": {
       "layer": 80,
       "w": 384,
@@ -1339,6 +1381,13 @@
           "meanL": 0
         }
       }
+    },
+    "item_head_flower_crown01_L80": {
+      "layer": 80,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 8694,
+      "placeholder": true
     },
     "item_head_headband_red01_L80": {
       "layer": 80,
@@ -1383,12 +1432,47 @@
         }
       }
     },
+    "item_head_pumpkin01_L80": {
+      "layer": 80,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 7502,
+      "placeholder": true
+    },
+    "item_head_reindeer01_L80": {
+      "layer": 80,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 7624,
+      "placeholder": true
+    },
+    "item_head_santa_hat01_L80": {
+      "layer": 80,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 7926,
+      "placeholder": true
+    },
+    "item_head_straw_hat01_L80": {
+      "layer": 80,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 8063,
+      "placeholder": true
+    },
     "item_head_tophat01_L80": {
       "layer": 80,
       "w": 384,
       "h": 448,
       "bytes2x": 297382,
       "real": true
+    },
+    "item_head_witch_hat01_L80": {
+      "layer": 80,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 7838,
+      "placeholder": true
     },
     "item_outfit_ao_ba_ba01_L40": {
       "layer": 40,
@@ -1569,6 +1653,13 @@
         }
       }
     },
+    "item_outfit_hawaii01_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9235,
+      "placeholder": true
+    },
     "item_outfit_hoodie_navy01_L40": {
       "layer": 40,
       "w": 384,
@@ -1588,6 +1679,13 @@
         }
       }
     },
+    "item_outfit_puffer01_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9013,
+      "placeholder": true
+    },
     "item_outfit_royal_robe01_L40": {
       "layer": 40,
       "w": 384,
@@ -1605,6 +1703,34 @@
           "meanL": 0.838
         }
       }
+    },
+    "item_outfit_sailor01_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 8976,
+      "placeholder": true
+    },
+    "item_outfit_santa01_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9042,
+      "placeholder": true
+    },
+    "item_outfit_skeleton01_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9777,
+      "placeholder": true
+    },
+    "item_outfit_sweater_xmas01_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 10738,
+      "placeholder": true
     },
     "item_outfit_tet_red01_L40": {
       "layer": 40,
@@ -1700,6 +1826,20 @@
           "empty": true
         }
       }
+    },
+    "item_outfit_vampire01_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9468,
+      "placeholder": true
+    },
+    "item_outfit_witch01_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 8947,
+      "placeholder": true
     }
   },
   "icons": {
@@ -1783,6 +1923,14 @@
       "bytes2x": 40604,
       "real": true
     },
+    "item_face_bat_mask01_icon": {
+      "kind": "icon",
+      "of": "item_face_bat_mask01_L70",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 6408,
+      "placeholder": true
+    },
     "item_face_eyepatch01_icon": {
       "kind": "icon",
       "of": "item_face_eyepatch01_L70",
@@ -1807,6 +1955,14 @@
       "bytes2x": 9853,
       "real": true
     },
+    "item_face_heart_glasses01_icon": {
+      "kind": "icon",
+      "of": "item_face_heart_glasses01_L70",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 6023,
+      "placeholder": true
+    },
     "item_face_masquerade01_icon": {
       "kind": "icon",
       "of": "item_face_masquerade01_L70",
@@ -1822,6 +1978,14 @@
       "h": 96,
       "bytes2x": 21735,
       "real": true
+    },
+    "item_face_red_nose01_icon": {
+      "kind": "icon",
+      "of": "item_face_red_nose01_L70",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 6037,
+      "placeholder": true
     },
     "item_face_sunglasses01_icon": {
       "kind": "icon",
@@ -1929,6 +2093,14 @@
       "bytes2x": 16469,
       "real": true
     },
+    "item_head_crab01_icon": {
+      "kind": "icon",
+      "of": "item_head_crab01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 4347,
+      "placeholder": true
+    },
     "item_head_crown_gold01_icon": {
       "kind": "icon",
       "of": "item_head_crown_gold01_L80",
@@ -1945,6 +2117,22 @@
       "bytes2x": 21055,
       "real": true
     },
+    "item_head_devil_horns01_icon": {
+      "kind": "icon",
+      "of": "item_head_devil_horns01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5529,
+      "placeholder": true
+    },
+    "item_head_earmuffs01_icon": {
+      "kind": "icon",
+      "of": "item_head_earmuffs01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5263,
+      "placeholder": true
+    },
     "item_head_fedora01_icon": {
       "kind": "icon",
       "of": "item_head_fedora01_L80",
@@ -1952,6 +2140,14 @@
       "h": 96,
       "bytes2x": 16013,
       "real": true
+    },
+    "item_head_flower_crown01_icon": {
+      "kind": "icon",
+      "of": "item_head_flower_crown01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5874,
+      "placeholder": true
     },
     "item_head_headband_red01_icon": {
       "kind": "icon",
@@ -1986,6 +2182,38 @@
       "real": true,
       "tintMask": true
     },
+    "item_head_pumpkin01_icon": {
+      "kind": "icon",
+      "of": "item_head_pumpkin01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5147,
+      "placeholder": true
+    },
+    "item_head_reindeer01_icon": {
+      "kind": "icon",
+      "of": "item_head_reindeer01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5068,
+      "placeholder": true
+    },
+    "item_head_santa_hat01_icon": {
+      "kind": "icon",
+      "of": "item_head_santa_hat01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5341,
+      "placeholder": true
+    },
+    "item_head_straw_hat01_icon": {
+      "kind": "icon",
+      "of": "item_head_straw_hat01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5341,
+      "placeholder": true
+    },
     "item_head_tophat01_icon": {
       "kind": "icon",
       "of": "item_head_tophat01_L80",
@@ -1993,6 +2221,14 @@
       "h": 96,
       "bytes2x": 26018,
       "real": true
+    },
+    "item_head_witch_hat01_icon": {
+      "kind": "icon",
+      "of": "item_head_witch_hat01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5340,
+      "placeholder": true
     },
     "item_outfit_ao_ba_ba01_icon": {
       "kind": "icon",
@@ -2067,6 +2303,14 @@
       "bytes2x": 29645,
       "real": true
     },
+    "item_outfit_hawaii01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_hawaii01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 4715,
+      "placeholder": true
+    },
     "item_outfit_hoodie_navy01_icon": {
       "kind": "icon",
       "of": "item_outfit_hoodie_navy01_L40",
@@ -2075,6 +2319,14 @@
       "bytes2x": 25542,
       "real": true
     },
+    "item_outfit_puffer01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_puffer01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 4816,
+      "placeholder": true
+    },
     "item_outfit_royal_robe01_icon": {
       "kind": "icon",
       "of": "item_outfit_royal_robe01_L40",
@@ -2082,6 +2334,38 @@
       "h": 96,
       "bytes2x": 31913,
       "real": true
+    },
+    "item_outfit_sailor01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_sailor01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 4655,
+      "placeholder": true
+    },
+    "item_outfit_santa01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_santa01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 4612,
+      "placeholder": true
+    },
+    "item_outfit_skeleton01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_skeleton01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5221,
+      "placeholder": true
+    },
+    "item_outfit_sweater_xmas01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_sweater_xmas01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5653,
+      "placeholder": true
     },
     "item_outfit_tet_red01_icon": {
       "kind": "icon",
@@ -2122,6 +2406,22 @@
       "h": 96,
       "bytes2x": 24072,
       "real": true
+    },
+    "item_outfit_vampire01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_vampire01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5073,
+      "placeholder": true
+    },
+    "item_outfit_witch01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_witch01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 4637,
+      "placeholder": true
     }
   },
   "bodies": {
