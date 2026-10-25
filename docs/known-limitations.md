@@ -501,10 +501,20 @@ enough to stop it opening over every later lobby visit.
 *Tracked:* `apps/normal-web/src/App.tsx` (`WELCOME_SHOWN_KEY`).
 
 **The epic shelf is thin until the gift months pass.** Of 15 epics, the achievements reward 7 and the check-in schedule
-gives 6 more in a later month (one a month from 11/2026 to 4/2027), so at launch two epics sell (`outfit_tuxedo01`, `outfit_royal_robe01`), beside 27 rares and 12 commons. A monthly epic goes on sale
+gives 6 more in a later month (one a month from 11/2026 to 4/2027), so at launch two epics sell (`outfit_tuxedo01`, `outfit_royal_robe01`), beside 27 rares and 12 commons (32 and 20 since BP-33 put five rares and eight commons on sale). A monthly epic goes on sale
 the month after its own (R20), so the shelf fills one item a month.
 *Why it stays:* the user's ruling (Q12): a gift of the current or a later month must stay a reason to check in.
 *Tracked:* spec §3 B1, R20; `apps/normal-server/src/shop/shop-service.ts` (`lockOf`).
+
+**BP-33's five new achievements are not granted back to players already past them.** `bot_hands_200`,
+`holdem_hands_500`, `blind_wins_250`, `big_win_250k` and `login_days_60` are checked, like every achievement, when a
+`STATS_UPDATED` names their counter. A player who crossed a threshold before the deploy gets the achievement and its item
+the next time that counter is written — the next hand with a bot at the table, the next Hold'em hand, the next Blind hand
+won, the next hand won with any profit (`biggestWin` is written whenever a hand nets more than zero), the next check-in
+day — not at the deploy, and not when the Thành tựu page is opened.
+*Why it stays:* the service evaluates on events, never on read, and a one-shot backfill CLI for five rows was not worth
+its risk (Ruling 3 of BP-33's Task A, spec 2026-10-24 §3.3); every one of the five counters moves in ordinary play.
+*Tracked:* `apps/normal-server/src/achievements/achievement-service.ts` (`handle`); CHANGELOG BP-33.
 
 **`shop_prices` is written by code at boot, so a new catalogue item goes on sale at its rarity's seed price.** The
 migration cannot read `data/items.json`, so `seedPrices` inserts a row for every catalogue item that has none at every
@@ -625,6 +635,34 @@ allows one: a hairstyle is an item).
 (Q2); a second pose is a second full set of body, faces, hairs and outfits, and a drawn skin tone is a body each.
 *Tracked:* `docs/superpowers/specs/2026-10-03-avatar-v4-design.md` §2 (Q1–Q3) and §3 ("Không làm"); the mask
 rules in `docs/avatar-2d.md` §4.4.1.
+
+**The navy cap and the black fedora carry a few light specks of the wavy fringe at their brims (BP-33).** A head item's
+cut drops every hat pixel within the colour tolerance of the hair it was drawn over, so a dark hat drawn over the dark
+`f_bob01` came out with holes in its crown. Both were redrawn over the light `f_wavy01` instead, which keeps the crown
+whole but leaves a few beige pixels of that fringe under the cap's brim and at the fedora's brim ends; over a dark
+hairstyle they show as small light specks, at portrait size and up. The other four BP-33 hats were drawn over the bob and
+show nothing of the kind.
+*Why it stays:* a third picture of each would trade the specks for the holes or for a hand clean-up, which the pipeline
+does not do (every layer is cut from a picture); the specks are a handful of pixels, the holes were the size of the crown.
+*Tracked:* `docs/avatar-2d.md` §10.7; registry `v4/item_head_cap_navy01_w`, `v4/item_head_fedora01_w`.
+
+**The references `verify` and `ingest` read were rebuilt from the committed layers, and are softer than the originals
+(BP-33).** The source pictures in `assets/avatar-src/` (gitignored) were not on the machine that drew BP-33, so
+`body_f.png`, `body_m.png`, `item_hair_f_bob01.png` and `item_hair_f_wavy01.png` were rebuilt from the @2x layers by the
+inverse of the body transform and upscaled × 2.03. They measure within 1–2 px of the originals' box, heads and C12, and
+the cut never reads them, but their edges are softer: a head or face item's `scope` rule reads more of the picture as
+changed against them, so it fails a little sooner than it did against the originals (the plaster's first picture, at
+3.7 %, had a real glow). A machine that still holds the originals should use those.
+*Why it stays:* the originals cannot be recovered from the repository; the rebuilt ones passed every item of the batch.
+*Tracked:* `docs/avatar-2d.md` §10.7.
+
+**All eight BP-33 outfits are cut on body f only, and body m wears that cut (BP-33).** The spec drew a male cut only where
+the sheet showed the outfit off on body m (as `dealer01` and `tet_red01` have); none was drawn this round, so the áo
+dài, the trench coat and the rest are the female cut on both bodies. Both bodies share one silhouette, so nothing sits
+out of place, but none of the eight is shaped for the male figure.
+*Why it stays:* spec 2026-10-24 §4 ("Không vẽ biến thể thân m trừ khi bảng ảnh cho thấy đồ lệch"); the user judges the
+sheet.
+*Tracked:* `CHANGELOG.md` (BP-33, "Still open"); `docs/avatar-2d.md` §3.1 for how a per-wear cut is added.
 
 **The felt resizes slightly at the ring/stack breakpoint.** Crossing the breakpoint changes the table
 layout and the felt's height with it. The action tray's height is reserved from 768 px up so that it

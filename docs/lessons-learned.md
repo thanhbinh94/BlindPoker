@@ -1178,6 +1178,72 @@ Brainstormed, specified, planned, built, gated, merged and deployed in one day f
 - **One day is enough for a four-task plan when reviews run beside implementers** (read-only reviewers never blocked a
   writer) and when a second worktree takes the one task that touches different files (Task 1 ran beside Task 2a).
 
+## BP-33 — a wardrobe batch drawn in ChatGPT: eight outfits, ten accessories, five achievements (merged `MERGE`, 2026-10-25)
+
+Spec `docs/superpowers/specs/2026-10-24-wardrobe-batch-design.md` (the session's own choices, which the user delegated:
+"tự chọn chủ đề đi, chạy luôn"). Task A put the eighteen items, the five achievements and their names in the catalogue on
+labelled stand-ins and queued the registry; the lead drew all eighteen in ChatGPT in the user's Chrome (`docs/avatar-2d.md`
+§10.3) and ingested them; Task C moved the pins to the real art and wrote the docs. No engine, protocol, schema or
+migration change.
+
+### Rulings
+
+- Task A, Ruling 1: the cap, the bucket hat and the fedora join `HAIR_CLIP`; the headband, the cat-ear headband and the
+  lotus hairpin sit on the hair and leave the crown showing, so they carry no clip. Costs if wrong: hair rising through a
+  hat, or a ponytail cut flat under a hairband — a one-line change to `HAIR_CLIP` and a re-cut.
+- Task A, Ruling 2: brand-new items take registry ids `v4/item_<slot>_<code>` and files `v4_…`, though they have no Plan 12
+  history to keep apart from, so every picture drawn on a v4 body reads as one.
+- Task A, Ruling 3: no backfill for the five achievements; a player past a threshold gets it the next time its counter is
+  written (the service evaluates on `STATS_UPDATED`, never on read). Costs if wrong: a veteran waits one hand or one
+  check-in for the item.
+- Task A, Ruling 4: the server's clipping-hat list stays read off the manifest (`masks.hairClip` → `clipsHair`), so a hat
+  in `HAIR_CLIP` clips only once its real picture's ingest has cut the clip; the stand-ins carried none.
+- Task A, Ruling 5: the eighteen rows go into `items.json` before the hairstyle rows, beside their slots' other items.
+- Lead: the headband, the cat ears and the lotus pin got manual prompts (`prompt` overrides): the head template speaks of
+  a hat "sitting naturally on top of the hair", its brim and the fringe below it, none of which fits a band across the
+  forehead or a pin above the ear.
+- Lead: a side is named as the character's, with the picture's side after it ("on the character's left cheek (the right
+  side of the picture)"), for the plaster, the hairpin and the monocle; "the left cheek" alone is ambiguous to the model.
+- Lead: `bot_hands_200` is "Tri kỷ của bot / One of the machines", not the spec's first "Bạn của bot / Bot buddy", so the
+  200-hand award outranks the 50-hand "Bạn thân của bot" by name (the spec's table was amended).
+- Lead, four reworks after `verify` had passed or failed for the wrong reason: the trench coat redrawn camel-brown (the
+  beige one lost its pocket area to the skin cut), the áo dài's shoes redrawn black and closed (a white flat shoe was cut
+  as skin), the cap and the fedora redrawn over `f_wavy01` as new `_w` entries that supersede the first ones (holes in the
+  crown over the dark bob), the plaster redrawn with the `scope` fix line (a glow around the figure). Denim's first
+  picture was `redrawn` (scale 1.056), its second passed.
+- Lead: the pictures went from ChatGPT to the disk through a local receiver page, not Chrome's downloads (lessons below).
+- Task C, Ruling 1: the source pictures being gone, the references stay rebuilt (gitignored) and documented in
+  `docs/avatar-2d.md` §10.7, not committed. Costs if wrong: the next batch on another machine rebuilds them again from the
+  same transform.
+- Task C, Ruling 2: the redrawn-skin outfit lists in `bodies.test.ts` and `avatar-pipeline.test.ts` take `ao_ba_ba01` and
+  `brocade_red01` (skin at the feet only, rows 782–810 @2x, below the 760 line the pipeline test holds), not a rework: a sandal
+  and a cloth shoe show an instep as the Tết áo dài's slipper does. Costs if wrong: none in the art; a tone tints those
+  insteps.
+- Task C, Ruling 3: the pipeline test that no covering hat takes hair from below its edge walks `HAIR_CLIP.hats` instead of
+  its three names, with a 60 s timeout (it timed out at 5 s under a full run before the change; 4.9 s alone with six).
+  Costs if wrong: about 5 s more per run.
+- Task C, Ruling 4: the contact sheets are committed as `avatar-pipeline.mjs sheet` draws them from the final layers
+  (the run is byte-for-byte repeatable), not as handed over, which differed. Costs if wrong: none; same layouts.
+
+### Lessons
+
+- **When the source pictures are gone, the committed layers are the source.** The inverse of the body transform
+  (`F01_TRANSFORM`, the 1024 × 1536 canvas at @2x x 131, y 104, 505 × 758) and a × 2.03 upscale rebuilt references within
+  1–2 px of the originals' recorded numbers. Their softer edges make `scope` a little stricter on head and face items.
+- **`verify` passing is not enough for a head item over dark hair or an outfit in a skin-like colour.** The cut drops hat
+  pixels near the hair's colour and takes skin-coloured cloth for skin, and neither shows in a check. Look at the composed
+  figure, with the hat's hair clip applied, before approving.
+- **Draw a navy or black hat over a light hairstyle.** Over the dark `f_bob01` the cap and the fedora came out with holes in
+  the crown; over `f_wavy01` they are whole, at the cost of a few fringe specks under the brim.
+- **Ask for clothing colours clearly away from the skin.** "Beige" and "white flat shoes" both lost cloth to the skin cut;
+  "clearly darker and browner than the skin" and "black closed shoes" did not.
+- **Chrome stops automatic downloads after three**, and kept the next ones as `.tmp` while asking where to save, so
+  `collect`'s downloads folder went quiet. chatgpt.com's CSP `connect-src` blocks a fetch to localhost from the page.
+- **The transfer that worked:** a local receiver on 127.0.0.1:47011 serving a `/recv` page, opened as a popup by a trusted
+  click on a button injected into the ChatGPT tab (its COOP is `same-origin-allow-popups`, so the opener survives); the
+  ChatGPT tab `postMessage`s the image's `ArrayBuffer` to the popup, and the popup POSTs it to its own origin.
+- **Do the transfer from the front tab.** A background tab reports `innerWidth` 0 and cannot take the trusted click.
+
 ## 5. Open items
 
 The single list is `docs/known-limitations.md`. As of this writing, the items a next session is most likely to meet:

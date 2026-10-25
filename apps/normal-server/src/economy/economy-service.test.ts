@@ -506,7 +506,9 @@ describe('claimDaily', () => {
         timezone: 'UTC',
         onBalanceChanged: () => {},
         rng: () => 0,
-        reservedItemIds: ['aura_ice01'],
+        // The achievement rewards stay reserved as `app.ts` reserves them — BP-33 made two of them (the fedora and the
+        // monocle) rares in a drawable slot — plus the one id this case reserves on top.
+        reservedItemIds: [...reserved, 'aura_ice01'],
         gifts: () => gifts,
       })
       const pool = drawable('rare').filter((id) => id !== 'aura_ice01')

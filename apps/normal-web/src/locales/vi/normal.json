@@ -850,6 +850,24 @@
     "head_beanie_mustard01": "Mũ len vàng mù tạt",
     "head_party_cone_blue01": "Mũ sinh nhật xanh dương",
     "head_party_cone_green01": "Mũ sinh nhật xanh lá",
+    "outfit_hoodie_navy01": "Áo hoodie xanh than",
+    "outfit_tracksuit_red01": "Bộ thể thao đỏ",
+    "outfit_ao_ba_ba01": "Áo bà ba nâu",
+    "outfit_denim01": "Áo khoác jean",
+    "outfit_bomber_neon01": "Áo bomber đêm neon",
+    "outfit_ao_dai_jade01": "Áo dài xanh ngọc",
+    "outfit_trench01": "Áo măng tô thám tử",
+    "outfit_brocade_red01": "Áo gấm đỏ",
+    "head_cap_navy01": "Mũ lưỡi trai xanh than",
+    "head_bucket_khaki01": "Mũ tai bèo kaki",
+    "head_headband_red01": "Băng đô đỏ",
+    "head_cat_ears01": "Bờm tai mèo",
+    "head_lotus_pin01": "Hoa sen cài tóc",
+    "head_fedora01": "Mũ phớt đen",
+    "face_glasses_square01": "Kính gọng vuông đen",
+    "face_bandaid01": "Băng cá nhân",
+    "face_aviators01": "Kính phi công",
+    "face_monocle_gold01": "Kính một tròng vàng",
     "hair_f_bob01": "Tóc bob",
     "hair_f_hime01": "Tóc dài mái bằng",
     "hair_f_wavy01": "Tóc gợn sóng",
@@ -891,6 +909,10 @@
       "name": "Ba mươi ngày ghé bàn",
       "desc": "Điểm danh đủ 30 ngày."
     },
+    "login_days_60": {
+      "name": "Khách quen",
+      "desc": "Điểm danh đủ 60 ngày."
+    },
     "login_days_100": {
       "name": "Trăm ngày ghé bàn",
       "desc": "Điểm danh đủ 100 ngày."
@@ -914,6 +936,10 @@
     "holdem_hands_100": {
       "name": "Trăm ván Hold'em",
       "desc": "Chơi 100 ván Hold'em."
+    },
+    "holdem_hands_500": {
+      "name": "Thám tử bàn bài",
+      "desc": "Chơi 500 ván Hold'em."
     },
     "holdem_hands_1000": {
       "name": "Nghìn ván Hold'em",
@@ -971,6 +997,10 @@
       "name": "Trăm nghìn một ván",
       "desc": "Ăn 100.000 điểm trong một ván."
     },
+    "big_win_250k": {
+      "name": "Tay chơi lớn",
+      "desc": "Ăn 250.000 điểm trong một ván."
+    },
     "big_win_500k": {
       "name": "Nửa triệu một ván",
       "desc": "Ăn 500.000 điểm trong một ván."
@@ -995,9 +1025,17 @@
       "name": "Trăm ván thắng Blind Poker",
       "desc": "Thắng 100 ván Blind Poker."
     },
+    "blind_wins_250": {
+      "name": "Phúc lộc đầy nhà",
+      "desc": "Thắng 250 ván Blind Poker."
+    },
     "bot_hands_50": {
       "name": "Bạn thân của bot",
       "desc": "Chơi 50 ván có bot cùng bàn."
+    },
+    "bot_hands_200": {
+      "name": "Tri kỷ của bot",
+      "desc": "Chơi 200 ván có bot cùng bàn."
     },
     "rooms_10": {
       "name": "Mười phòng",

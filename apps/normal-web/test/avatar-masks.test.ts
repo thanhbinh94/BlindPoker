@@ -1545,7 +1545,8 @@ describe('hairClipMask and a covering hat’s hair clip (2026-10-06)', () => {
   })
 
   it('is cut for the hats in HAIR_CLIP and no other, at both densities, recorded with meanL 0', async () => {
-    expect([...HAIR_CLIP.hats].sort()).toEqual(['beanie01', 'beret_red01', 'conical_hat01'])
+    // BP-33: the cap, the bucket hat and the fedora cover the crown too; its headbands and hairpin do not.
+    expect([...HAIR_CLIP.hats].sort()).toEqual(['beanie01', 'beret_red01', 'bucket_khaki01', 'cap_navy01', 'conical_hat01', 'fedora01'])
     const targets = maskTargets({
       files: {
         item_head_beanie01_L80: { real: true, layer: 80 },

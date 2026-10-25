@@ -1,6 +1,7 @@
 [
   { "id": "login_days_7", "category": "login", "metric": "totalLoginDays", "threshold": 7, "reward": { "points": 5000 } },
   { "id": "login_days_30", "category": "login", "metric": "totalLoginDays", "threshold": 30, "reward": { "points": 20000 } },
+  { "id": "login_days_60", "category": "login", "metric": "totalLoginDays", "threshold": 60, "reward": { "itemId": "face_monocle_gold01" } },
   { "id": "login_days_100", "category": "login", "metric": "totalLoginDays", "threshold": 100, "reward": { "itemId": "head_crown_gold01" } },
   { "id": "login_days_365", "category": "login", "metric": "totalLoginDays", "threshold": 365, "reward": { "itemId": "frame_founder" } },
   { "id": "login_streak_7", "category": "login", "metric": "bestLoginStreak", "threshold": 7, "reward": { "points": 5000 } },
@@ -8,6 +9,7 @@
 
   { "id": "holdem_hands_10", "category": "holdem", "metric": "handsPlayedHoldem", "threshold": 10, "reward": { "points": 2000 } },
   { "id": "holdem_hands_100", "category": "holdem", "metric": "handsPlayedHoldem", "threshold": 100, "reward": { "points": 10000 } },
+  { "id": "holdem_hands_500", "category": "holdem", "metric": "handsPlayedHoldem", "threshold": 500, "reward": { "itemId": "outfit_trench01" } },
   { "id": "holdem_hands_1000", "category": "holdem", "metric": "handsPlayedHoldem", "threshold": 1000, "reward": { "points": 50000 } },
   { "id": "holdem_wins_10", "category": "holdem", "metric": "handsWonHoldem", "threshold": 10, "reward": { "points": 5000 } },
   { "id": "holdem_wins_100", "category": "holdem", "metric": "handsWonHoldem", "threshold": 100, "reward": { "points": 20000 } },
@@ -25,6 +27,7 @@
   { "id": "hand_royal", "category": "holdem", "metric": "bestHandRank", "threshold": 9, "reward": { "itemId": "aura_gold_cards01" } },
 
   { "id": "big_win_100k", "category": "holdem", "metric": "biggestWin", "threshold": 100000, "reward": { "points": 10000 } },
+  { "id": "big_win_250k", "category": "holdem", "metric": "biggestWin", "threshold": 250000, "reward": { "itemId": "head_fedora01" } },
   { "id": "big_win_500k", "category": "holdem", "metric": "biggestWin", "threshold": 500000, "reward": { "points": 30000 } },
 
   { "id": "blind_hands_10", "category": "blind", "metric": "handsPlayedBlind", "threshold": 10, "reward": { "points": 2000 } },
@@ -32,8 +35,10 @@
   { "id": "blind_hands_1000", "category": "blind", "metric": "handsPlayedBlind", "threshold": 1000, "reward": { "points": 50000 } },
   { "id": "blind_wins_10", "category": "blind", "metric": "handsWonBlind", "threshold": 10, "reward": { "points": 5000 } },
   { "id": "blind_wins_100", "category": "blind", "metric": "handsWonBlind", "threshold": 100, "reward": { "points": 20000 } },
+  { "id": "blind_wins_250", "category": "blind", "metric": "handsWonBlind", "threshold": 250, "reward": { "itemId": "outfit_brocade_red01" } },
 
   { "id": "bot_hands_50", "category": "social", "metric": "botHands", "threshold": 50, "reward": { "points": 5000 } },
+  { "id": "bot_hands_200", "category": "social", "metric": "botHands", "threshold": 200, "reward": { "itemId": "outfit_denim01" } },
   { "id": "rooms_10", "category": "social", "metric": "roomsJoined", "threshold": 10, "reward": { "points": 2000 } },
   { "id": "rooms_100", "category": "social", "metric": "roomsJoined", "threshold": 100, "reward": { "points": 10000 } },
   { "id": "games_50", "category": "social", "metric": "gamesCompleted", "threshold": 50, "reward": { "points": 5000 } },

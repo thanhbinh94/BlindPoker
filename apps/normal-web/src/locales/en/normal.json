@@ -850,6 +850,24 @@
     "head_beanie_mustard01": "Mustard beanie",
     "head_party_cone_blue01": "Blue party cone",
     "head_party_cone_green01": "Green party cone",
+    "outfit_hoodie_navy01": "Navy hoodie",
+    "outfit_tracksuit_red01": "Red tracksuit",
+    "outfit_ao_ba_ba01": "Brown áo bà ba",
+    "outfit_denim01": "Denim jacket",
+    "outfit_bomber_neon01": "Neon-night bomber",
+    "outfit_ao_dai_jade01": "Jade áo dài",
+    "outfit_trench01": "Detective trench coat",
+    "outfit_brocade_red01": "Red brocade jacket",
+    "head_cap_navy01": "Navy cap",
+    "head_bucket_khaki01": "Khaki bucket hat",
+    "head_headband_red01": "Red headband",
+    "head_cat_ears01": "Cat-ear headband",
+    "head_lotus_pin01": "Lotus hairpin",
+    "head_fedora01": "Black fedora",
+    "face_glasses_square01": "Black square glasses",
+    "face_bandaid01": "Plaster",
+    "face_aviators01": "Aviator sunglasses",
+    "face_monocle_gold01": "Gold monocle",
     "hair_f_bob01": "Bob cut",
     "hair_f_hime01": "Long with bangs",
     "hair_f_wavy01": "Wavy bob",
@@ -891,6 +909,10 @@
       "name": "Thirty days in",
       "desc": "Check in on 30 days."
     },
+    "login_days_60": {
+      "name": "Regular",
+      "desc": "Check in on 60 days."
+    },
     "login_days_100": {
       "name": "A hundred days in",
       "desc": "Check in on 100 days."
@@ -914,6 +936,10 @@
     "holdem_hands_100": {
       "name": "A hundred Hold'em hands",
       "desc": "Play 100 hands of Hold'em."
+    },
+    "holdem_hands_500": {
+      "name": "Table detective",
+      "desc": "Play 500 hands of Hold'em."
     },
     "holdem_hands_1000": {
       "name": "A thousand Hold'em hands",
@@ -971,6 +997,10 @@
       "name": "A hundred thousand in one",
       "desc": "Take 100,000 points in a single hand."
     },
+    "big_win_250k": {
+      "name": "High roller",
+      "desc": "Take 250,000 points in a single hand."
+    },
     "big_win_500k": {
       "name": "Half a million in one",
       "desc": "Take 500,000 points in a single hand."
@@ -995,9 +1025,17 @@
       "name": "A hundred Blind hands won",
       "desc": "Win 100 hands of Blind mode."
     },
+    "blind_wins_250": {
+      "name": "Fortune's favourite",
+      "desc": "Win 250 hands of Blind mode."
+    },
     "bot_hands_50": {
       "name": "Friend of the machines",
       "desc": "Play 50 hands with a bot at the table."
+    },
+    "bot_hands_200": {
+      "name": "One of the machines",
+      "desc": "Play 200 hands with a bot at the table."
     },
     "rooms_10": {
       "name": "Ten rooms",
