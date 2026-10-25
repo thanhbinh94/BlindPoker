@@ -1404,7 +1404,8 @@ describe('the committed placeholder set', () => {
     const fronts = committedLayers.filter((name) => parseName(name)?.kind === 'hair' && parseName(name)?.layer === LAYERS.hairFront && manifest.files[name]!.real === true)
     const outfits = committedLayers.filter((name) => name.startsWith('item_outfit_') && manifest.files[name]!.cutOn !== undefined && manifest.files[name]!.real === true)
     expect(fronts).toHaveLength(8)
-    expect(outfits).toHaveLength(8)
+    // Plan 19's six outfits and two male cuts, and BP-33's eight.
+    expect(outfits).toHaveLength(16)
     for (const name of [...fronts, ...outfits]) {
       expect(manifest.files[name]!.masks?.skin, `${name} has no skin mask`).toBeDefined()
       for (const density of DENSITIES) expect(existsSync(join(OUT_DIR, `${name}_skinmask@${density}x.png`)), `${name}_skinmask@${density}x.png`).toBe(true)
@@ -1416,9 +1417,10 @@ describe('the committed placeholder set', () => {
       return { alpha, width: pic.width }
     }
     // The Tết áo dài (both cuts) and the royal robe redrew an instep inside a slipper; no outfit redrew any other skin —
-    // not the gold trim the Tết's collar, cuffs and slit lay over the body's skin (pre-flight B1).
+    // not the gold trim the Tết's collar, cuffs and slit lay over the body's skin (pre-flight B1). BP-33 adds the áo bà
+    // ba's sandalled feet and the insteps above the brocade jacket's cloth shoes, at the feet too.
     const withSkin = outfits.filter((name) => manifest.files[name]!.masks!.skin!.empty !== true)
-    expect(withSkin.sort()).toEqual(['item_outfit_royal_robe01_L40', 'item_outfit_tet_red01_L40', 'item_outfit_tet_red01_m_L40'])
+    expect(withSkin.sort()).toEqual(['item_outfit_ao_ba_ba01_L40', 'item_outfit_brocade_red01_L40', 'item_outfit_royal_robe01_L40', 'item_outfit_tet_red01_L40', 'item_outfit_tet_red01_m_L40'])
     for (const name of withSkin) {
       const { alpha, width } = await alphaOf(`${name}_skinmask@2x.png`)
       let off = 0
@@ -1787,7 +1789,9 @@ describe('the v4 review sheet and the fit sheet (Plan 19 A1d, spec §5.6)', () =
 
   it('never takes a covering hat’s hair from below the hat’s edge, on any hairstyle — the side locks under the nón lá’s brim stay (fix round 1)', async () => {
     const fit = fitCards(committed)
-    for (const code of ['beanie01', 'beret_red01', 'conical_hat01']) {
+    // Every hat in HAIR_CLIP — BP-33's cap, bucket hat and fedora with Plan 19's three.
+    expect(HAIR_CLIP.hats).toHaveLength(6)
+    for (const code of HAIR_CLIP.hats) {
       const hat = itemFile('head', code, 80)
       // The hat's edge per @1x column: its raw solid ink's longest run, halved, and two rows of slack for the feather —
       // over the @2x columns the @1x clip was scaled down from, three either side (the downscale's kernel reaches that
@@ -1818,7 +1822,8 @@ describe('the v4 review sheet and the fit sheet (Plan 19 A1d, spec §5.6)', () =
         expect(low, `${hair} under ${code}: hair taken below the hat's edge`).toBe(0)
       }
     }
-  })
+    // 48 composed pairs: past vitest's 5 s under a full run's load (it timed out there with three hats).
+  }, 60_000)
 
   it('paints a tone over skin and its line art only: the body, its face, the outfit’s copy of the outline and the hair’s redrawn skin, by their masks', async () => {
     const cards = grid(sheetCards(committed, { items: skinItems, hairs: ['f_bob01'], outfits: ['casual01'] }))

@@ -79,7 +79,7 @@ server refuses an item whose flags disagree with its layer's entry in the manife
 the head rose through the hats that cover it: the ponytail's tie above the nón lá, the beanie and the beret, the spiky
 cut's spikes, the tousled cut's tuft, the bob's ahoge, the wavy cut's volume above the brim. So the hats in `HAIR_CLIP`
 (`masks.mjs`: `beanie01`, `beret_red01`, `conical_hat01`, and so every colour of them — and since BP-33 `cap_navy01`,
-`bucket_khaki01` and `fedora01`, whose clip is cut when their real picture is ingested) carry a **hair clip**,
+`bucket_khaki01` and `fedora01`, whose clips the ingest of their real pictures cut) carry a **hair clip**,
 `<hat>_hairclipmask` (`masks.hairClip`, §4.4): opaque where hair may still show, clear where the hat covers it — above the
 hat's lower edge in every column the hat reaches, and beside the hat above the edge of its nearest side, because hair
 that comes out from under a hat comes out below its edge. A column's edge (`hatEdges`) is the bottom of its **longest**
@@ -1123,8 +1123,9 @@ downstream — the server's catalogue, the kit's `Chibi`, any test — treats th
 placeholder is exactly as valid a layer as a real one, just not the picture the design wants for good. After Plan 19's
 art batches the mix was 119 real manifest entries and one stand-in, `item_head_hood_black01_L80`, the hood the catalogue
 no longer offers (§2). BP-33 (spec 2026-10-24) added eighteen wardrobe items to `STAGE_ONE_ITEMS` and to the catalogue
-before their pictures existed, so until its art batch lands the mix is 119 real entries and 19 stand-ins — the hood and
-the eighteen, each on sale or won exactly as its real picture will be; `avatar:placeholder` redraws only those.
+before their pictures existed, so for a day the mix was 119 real entries and 19 stand-ins. Its art batch (2026-10-25,
+§10.7) ingested all eighteen, so the mix is back to its one stand-in: 137 real manifest entries and
+`item_head_hood_black01_L80` (with its icon); `avatar:placeholder` redraws only that one.
 
 ## 7. How the kit composes a chibi
 
@@ -1400,7 +1401,8 @@ The rules:
   tables' order: eight `v4/item_outfit_<code>` (reference `@body_f`, `ingest` `item:outfit:<code>`, `base` f) and six
   `v4/item_head_<code>` and four `v4/item_face_<code>` (reference `@item_hair_f_bob01`, `base` f, `flags`
   `["--hair", "f_bob01"]`). A new item has no Plan 12 history to keep apart from, but it takes the `v4/` prefix and the
-  `v4_` file anyway, so every picture drawn on a v4 body reads as one.
+  `v4_` file anyway, so every picture drawn on a v4 body reads as one. The cap and the fedora were redrawn over
+  `f_wavy01` as `v4/item_head_<code>_w`, which supersede their first entries (§10.7).
 - **Fix lines.** After a failure the next prompt is the prompt plus one line per *distinct* reason the earlier
   attempts failed for: `redrawn` → "same image size, same hair, same clothing", `tears` → "No tears",
   `hair_colour` → "same hair colour", `background` → "transparent background, no checkerboard", `cropped` →
@@ -1594,3 +1596,32 @@ A batch is ten assets:
    manifests, and `items.json` if a variant landed.
 4. Send the user the sheet. "<id> ng" → `reject <id>`, and the asset goes back into the queue with its reason;
    an answer of "ok", or silence, → `approve --batch`.
+
+### 10.7 BP-33: references rebuilt from the layers, and dark hats over a light hairstyle (2026-10-25)
+
+**When the source pictures are gone, rebuild the reference from the committed layers.** The originals in
+`assets/avatar-src/` (gitignored) were not on the machine that drew BP-33's eighteen items. Cutting never reads them —
+an item is diffed against the committed `body_f_L30@2x` (and, with `--hair`, the hairstyle's two layers) placed by the
+body's stored transform — but `verify` and `ingest` need the reference on disk to align a picture and for the box,
+`drift` and `scope` rules. So `body_f.png`, `body_m.png`, `item_hair_f_bob01.png` and `item_hair_f_wavy01.png` were
+rebuilt by the inverse of the body transform (`F01_TRANSFORM`: scale 0.2467, offset 65.57 / 52.02, so the 1024 × 1536
+canvas sits at @2x x 131, y 104, 505 × 758): the composed @2x layers cut out at that rectangle and upscaled × 2.03 onto
+the canvas. They measure within 1–2 px of the originals' recorded box, heads and C12 numbers, and stay gitignored. They
+are softer than the originals, so a head or face item's `scope` (1 % of the figure changed below the head and outside
+the crop, §10.4) is stricter against them: the plaster's first picture failed it at 3.7 % for a purple and orange glow
+around the figure, and passed redrawn with the `scope` fix line.
+
+**A navy or black hat is drawn over the light `f_wavy01`, not the dark `f_bob01`.** A head item's cut drops every hat
+pixel within the colour tolerance of the hair drawn under it, so the navy cap and the black fedora, drawn over the bob's
+dark purple, came out with holes in the crown — and C11 and `verify` both passed (the fedora's first picture had also
+failed C11 for its tilt). They were redrawn as new registry entries `v4/item_head_cap_navy01_w` and
+`v4/item_head_fedora01_w` (reference `@item_hair_f_wavy01`, `flags` `["--hair", "f_wavy01"]`), each with a `note`, and
+the old entries are `superseded` by them; the catalogue ids and the layers are the same. The cost: a few beige pixels
+of the wavy fringe stay under the cap's brim and at the fedora's brim ends, visible as small light specks over a dark
+hairstyle (`docs/known-limitations.md`).
+
+**`verify` passing is not the end for a head item over dark hair or an outfit in a skin-like colour.** Look at the composed
+figure, with the hat's hair clip applied, before approving. Two outfits were sent back that way: the first trench
+coat, beige, had its pocket area taken for skin and a skin-coloured rectangle cut into the coat (redrawn camel-brown,
+"clearly darker and browner than the skin"), and the first áo dài's white flat shoes lost one shoe to the skin cut,
+toes showing (redrawn with black closed shoes).

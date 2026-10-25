@@ -78,3 +78,26 @@ thân m trừ khi bảng ảnh cho thấy đồ lệch trên thân m. Không th�
   commit (xem kế hoạch khi làm). Nếu dựng lại không đủ tốt cho `verify`/`ingest`, đợt này dừng ở bước ChatGPT và báo.
 - Mũ v4 chưa từng sinh qua sổ (mũ đang dùng là của Plan 12): món mũ đầu tiên là phép thử.
 - Giới hạn ảnh của ChatGPT, CAPTCHA: dừng và báo (§10.3); không giải CAPTCHA.
+
+## 6. Kết quả
+
+Ghi ngày 2026-10-25, sau đợt vẽ. Cả 18 món đã có ảnh thật, đã cắt và qua `avatar:check`; bảng §3 giữ nguyên như lúc viết
+spec, các chỗ khác đi ghi ở đây (chi tiết tiếng Anh: `docs/avatar-2d.md` §10.7, CHANGELOG BP-33).
+
+- **Ảnh tham chiếu dựng lại từ lớp đã commit** (rủi ro §5 thứ nhất): `body_f`, `body_m`, `item_hair_f_bob01`,
+  `item_hair_f_wavy01` dựng bằng phép biến đổi ngược của thân (`F01_TRANSFORM`, khung 1024 × 1536 nằm ở @2x x 131,
+  y 104, 505 × 758, phóng × 2,03); lệch 1–2 px so với số đo của ảnh gốc, đủ cho `verify` và `ingest`.
+- **Măng tô** (`outfit_trench01`): ảnh đầu màu be, phần túi áo bị cắt như da (một ô màu da trong áo) → vẽ lại màu nâu lạc
+  đà, "rõ ràng sẫm và nâu hơn da".
+- **Áo dài xanh ngọc** (`outfit_ao_dai_jade01`): ảnh đầu đi giày bệt trắng, một chiếc bị cắt như da, lộ ngón chân → vẽ lại
+  với giày kín màu đen.
+- **Mũ lưỡi trai và mũ phớt** (`head_cap_navy01`, `head_fedora01`): vẽ trên tóc `f_bob01` màu tím sẫm thì phép cắt bỏ mọi
+  điểm mũ gần màu tóc, đỉnh mũ thủng lỗ (C11 và `verify` vẫn qua; ảnh mũ phớt đầu còn trượt C11 vì nghiêng). Vẽ lại trên
+  tóc sáng `f_wavy01`, thành hai mục mới trong sổ `v4/item_head_cap_navy01_w`, `v4/item_head_fedora01_w`; mục cũ
+  `superseded`. Còn lại vài điểm màu be của mái tóc wavy dưới vành mũ lưỡi trai và ở hai đầu vành mũ phớt.
+- **Băng cá nhân** (`face_bandaid01`): ảnh đầu có quầng tím cam quanh người, trượt `scope` (3,7 %) → vẽ lại với dòng sửa
+  `scope`. **Áo khoác jean**: ảnh đầu bị vẽ lại khác cỡ (`redrawn`, tỉ lệ 1,056), ảnh thứ hai qua.
+- **Tên thành tựu** `bot_hands_200`: đổi từ "Bạn của bot / Bot buddy" thành "Tri kỷ của bot / One of the machines" để
+  xếp trên "Bạn thân của bot" (50 ván) (bảng §3.3 đã sửa theo).
+- Không vẽ biến thể thân m nào: cả tám bộ dùng bản cắt trên thân f cho cả hai thân. Thành tựu mới không cấp bù (§3.3):
+  mở ở lần cập nhật kế tiếp của chỉ số.
