@@ -31,7 +31,8 @@ cut of every BP-33 and BP-35 outfit. Branch `feature/BP-36-male-dress-cuts`.
 - **Gate** (the branch's tree, `main` unmoved): typecheck and lint clean; unit 3,467 passed, 18 skipped; `build:normal`
   ok; `build:lite` up to the exe step (Node 22 needed, this machine has 24); `avatar:check` 160 files, 2,080 checks, 0
   failures; e2e Normal 24/24; e2e Lite 4/4; ops 56/56 — all on the first run.
-- **Deployed.** Not yet.
+- **Deployed.** On the VPS since 2026-10-25, shipped by git bundle ahead of the push (`6d86d7b..9c05623`; backup
+  `bp-2026-10-25-2155`, no migration, health ok, rooms 0). The LAN host was not touched. Lite not shipped.
 - **Still open.** The royal robe, Santa's coat and the other unisex outfits keep one layer by design. The two new
   layers wait on the user's look like the rest of BP-33 and BP-35.
 
