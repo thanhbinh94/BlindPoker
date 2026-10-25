@@ -1409,8 +1409,8 @@ describe('the committed placeholder set', () => {
     const fronts = committedLayers.filter((name) => parseName(name)?.kind === 'hair' && parseName(name)?.layer === LAYERS.hairFront && manifest.files[name]!.real === true)
     const outfits = committedLayers.filter((name) => name.startsWith('item_outfit_') && manifest.files[name]!.cutOn !== undefined && manifest.files[name]!.real === true)
     expect(fronts).toHaveLength(8)
-    // Plan 19's six outfits and two male cuts, BP-33's eight and BP-35's eight.
-    expect(outfits).toHaveLength(24)
+    // Plan 19's six outfits and two male cuts, BP-33's eight, BP-35's eight and BP-36's two male cuts.
+    expect(outfits).toHaveLength(26)
     for (const name of [...fronts, ...outfits]) {
       expect(manifest.files[name]!.masks?.skin, `${name} has no skin mask`).toBeDefined()
       for (const density of DENSITIES) expect(existsSync(join(OUT_DIR, `${name}_skinmask@${density}x.png`)), `${name}_skinmask@${density}x.png`).toBe(true)

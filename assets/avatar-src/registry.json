@@ -7504,6 +7504,112 @@
       "ingested": true
     },
     {
+      "id": "v4/item_outfit_ao_dai_jade01_m",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": "m",
+      "catalog": "outfit_ao_dai_jade01",
+      "look": {
+        "description": "a jade-green traditional Vietnamese men's áo dài: a straight jade-green tunic with a high stand-up collar, an opening curving from the collar down the wearer's right side, long sleeves and short side slits, ending just above the knees, over loose white trousers, and black closed flat shoes that fully cover the feet"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "v4_item_outfit_ao_dai_jade01_m.png",
+      "ingest": {
+        "as": "item:outfit:ao_dai_jade01",
+        "base": "m",
+        "variant": "m",
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-25T14:10:40.990Z",
+          "chat": "https://chatgpt.com/c/6ade0d45-8b00-83ec-913d-076f7b1fae52",
+          "file": "v4_item_outfit_ao_dai_jade01_m.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1.002,
+            "widthRatio": 0.989,
+            "drift": {
+              "left": -1,
+              "top": 0,
+              "right": -7,
+              "bottom": -2
+            },
+            "registered": {
+              "scale": 0.985,
+              "dx": 4,
+              "dy": 0,
+              "iou": 0.724
+            },
+            "heads": 2.53
+          },
+          "reason": "heads",
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 0.985 about the feet, then 4, 0 px (IoU 0.724) — drift is judged there, not on the edges as drawn"
+          ]
+        },
+        {
+          "n": 2,
+          "at": "2026-10-25T14:11:35.925Z",
+          "chat": "https://chatgpt.com/c/6ade0d45-6ea8-83ec-989c-e400108e874b",
+          "file": "v4_item_outfit_ao_dai_jade01_m.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.999,
+            "widthRatio": 0.999,
+            "drift": {
+              "left": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 1
+            },
+            "registered": {
+              "scale": 0.995,
+              "dx": 0,
+              "dy": -4,
+              "iou": 0.738
+            },
+            "heads": 2.452,
+            "hairDelta": 4.766,
+            "checks": {
+              "item_outfit_ao_dai_jade01_m_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 0.995 about the feet, then 0, -4 px (IoU 0.738) — drift is judged there, not on the edges as drawn"
+          ]
+        }
+      ],
+      "ingested": true,
+      "note": "BP-36: the men's cut, drawn on body m, so a male chibi no longer wears the dress cut on body f."
+    },
+    {
       "id": "v4/item_outfit_trench01",
       "kind": "item",
       "slot": "outfit",
@@ -8675,6 +8781,73 @@
         }
       ],
       "ingested": true
+    },
+    {
+      "id": "v4/item_outfit_witch01_m",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": "m",
+      "catalog": "outfit_witch01",
+      "look": {
+        "description": "a black long-sleeved warlock's tunic falling to mid-thigh with a purple sash at the waist, a short black cape over the shoulders, straight black trousers and black pointed boots"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "v4_item_outfit_witch01_m.png",
+      "ingest": {
+        "as": "item:outfit:witch01",
+        "base": "m",
+        "variant": "m",
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-25T14:14:45.429Z",
+          "chat": "https://chatgpt.com/c/6ade0e5c-d098-83ec-8151-355592250728",
+          "file": "v4_item_outfit_witch01_m.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1.006,
+            "widthRatio": 0.975,
+            "drift": {
+              "left": 5,
+              "top": -3,
+              "right": -10,
+              "bottom": -10
+            },
+            "registered": {
+              "scale": 1.01,
+              "dx": 4,
+              "dy": 15,
+              "iou": 0.73
+            },
+            "heads": 2.45,
+            "hairDelta": 4.888,
+            "checks": {
+              "item_outfit_witch01_m_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 1.01 about the feet, then 4, 15 px (IoU 0.73) — drift is judged there, not on the edges as drawn"
+          ]
+        }
+      ],
+      "ingested": true,
+      "note": "BP-36: the men's cut, drawn on body m, so a male chibi no longer wears the dress cut on body f."
     },
     {
       "id": "v4/item_outfit_vampire01",

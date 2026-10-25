@@ -666,10 +666,12 @@ changed against them, so it fails a little sooner than it did against the origin
 **All eight BP-33 outfits are cut on body f only, and body m wears that cut (BP-33).** The spec drew a male cut only where
 the sheet showed the outfit off on body m (as `dealer01` and `tet_red01` have); none was drawn this round, so the áo
 dài, the trench coat and the rest are the female cut on both bodies. Both bodies share one silhouette, so nothing sits
-out of place, but none of the eight is shaped for the male figure.
+out of place, but none of the eight is shaped for the male figure. BP-36 (2026-10-25) drew the men's cut of the jade áo
+dài (`outfit_ao_dai_jade01` → `item_outfit_ao_dai_jade01_m_L40`, a straight men's áo dài over white trousers); the other
+seven are unisex cuts (jacket, hoodie, tracksuit, áo bà ba, trench, brocade jacket, bomber) and keep the one layer.
 *Why it stays:* spec 2026-10-24 §4 ("Không vẽ biến thể thân m trừ khi bảng ảnh cho thấy đồ lệch"); the user judges the
-sheet.
-*Tracked:* `CHANGELOG.md` (BP-33, "Still open"); `docs/avatar-2d.md` §3.1 for how a per-wear cut is added.
+sheet, and asked only for the dresses (BP-36).
+*Tracked:* `CHANGELOG.md` (BP-33, "Still open"; BP-36); `docs/avatar-2d.md` §3.1 for how a per-wear cut is added.
 
 **The witch hat is a soft emerald hat with a drooping tip, not the tall black cone (BP-35).** The spec asked for a tall
 pointed black hat with a wide brim. Drawn over the light `f_wavy01` (the dark-hat rule of BP-33), three pictures failed:
@@ -697,12 +699,14 @@ arms held out still passes.
 *Tracked:* `apps/normal-web/scripts/avatar-registry/verify.mjs` (the "advisory for a head item" note); `docs/avatar-2d.md`
 §10.7.
 
-**BP-35's eight outfits are cut on body f only, and the witch dress is a dress on body m too (BP-35).** As in BP-33, no
-male cut was drawn: all eight render on body m from the f cut, so the witch's ankle-length dress is worn as a dress by
-either body (no gendered variant).
-*Why it stays:* spec 2026-10-25 §4 ("Không vẽ biến thể thân m trừ khi bảng ảnh cho thấy đồ lệch"); the user judges the
-sheet, and a male cut is one more registry entry (`v4/item_outfit_<code>_m`, §3.1).
-*Tracked:* `CHANGELOG.md` (BP-35, "Still open"); `docs/avatar-2d.md` §3.1.
+**BP-35's other seven outfits are cut on body f only (BP-35, BP-36).** BP-35 drew no male cut, so the witch's
+ankle-length dress was a dress on body m too; BP-36 (2026-10-25) gave it a men's cut (`item_outfit_witch01_m_L40`: a
+black warlock's tunic to mid-thigh with the same purple sash and short cape, over black trousers and pointed boots).
+The other seven (skeleton suit, vampire count, Christmas jumper, puffer, Santa's coat, Hawaiian shirt, sailor suit)
+are unisex and keep the one layer.
+*Why it stays:* spec 2026-10-25 §4; the user asked only for the dresses, and a male cut is one more registry entry
+(`v4/item_outfit_<code>_m`, §3.1).
+*Tracked:* `CHANGELOG.md` (BP-35, "Still open"; BP-36); `docs/avatar-2d.md` §3.1.
 
 **The reindeer antlers read faintly on brown hair (BP-35).** The antlers and their band are brown, drawn over the dark
 purple bob; on a brown or chestnut hair colour they sit close to the hair's own tone and read mostly by their outline and
