@@ -1403,11 +1403,13 @@ export async function describeColours({ dir, manifest, names, items = [], log = 
  * is the whole crown and no hat hides a hair layer, so whatever hair stands above the head — the ponytail's tie, the
  * spiky cut's spikes, the tousled cut's tuft, the bob's ahoge, the wavy cut's volume — rose through the beret, the
  * beanie and the nón lá. The top hat, the visor, the crown and the party cone sit on the hair rather than over it, and
- * a high ponytail rising behind the small top hat reads as one; clipping there cuts the tail flat. `open` and `feather`
+ * a high ponytail rising behind the small top hat reads as one; clipping there cuts the tail flat. BP-33 adds the three
+ * of its six hats that cover the crown — the cap, the bucket hat and the fedora; the headband, the cat-ear headband and
+ * the lotus hairpin sit on the hair and leave the crown showing, so they carry none. `open` and `feather`
  * are @2x pixels: the hat's solid ink is opened by `open` before its edge is read (`hatEdges`), and the clip's edge is
  * softened over `feather`.
  */
-export const HAIR_CLIP = { hats: ['beanie01', 'beret_red01', 'conical_hat01'], open: 4, feather: 1 }
+export const HAIR_CLIP = { hats: ['beanie01', 'beret_red01', 'conical_hat01', 'cap_navy01', 'bucket_khaki01', 'fedora01'], open: 4, feather: 1 }
 
 /**
  * A hat's lower edge in each column (2026-10-06): the last row of the column's **longest** run of `mask`, or -1 where the

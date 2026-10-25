@@ -113,15 +113,19 @@ const entryOf = async (playerId: string, itemId: string, now = OCT) => (await sh
 describe('ShopService', () => {
   it('seeds a price per catalogue item once', async () => {
     await db.delete(shopPrices)
-    expect(await shop.seedPrices()).toBe(89)
+    expect(await shop.seedPrices()).toBe(107)
     const prices = new Map((await shop.prices()).map((p) => [p.itemId, p]))
-    expect(prices.size).toBe(89)
+    expect(prices.size).toBe(107)
     expect(prices.get('outfit_casual01')).toMatchObject({ enabled: false })
     expect(prices.get('outfit_casual_red01')).toMatchObject({ enabled: false })
     expect(prices.get('outfit_champion01')).toMatchObject({ enabled: false })
     expect(prices.get('outfit_tuxedo01')).toEqual({ itemId: 'outfit_tuxedo01', pricePoints: 150_000, minRank: 4, enabled: true, salePrice: null })
     expect(prices.get('head_beanie01')).toEqual({ itemId: 'head_beanie01', pricePoints: 10_000, minRank: 1, enabled: true, salePrice: null })
     expect(prices.get('outfit_dealer01')).toMatchObject({ pricePoints: 30_000, minRank: 3, enabled: true })
+    // BP-33: a sold piece takes its rarity's seed; a piece an achievement gives is off sale.
+    expect(prices.get('outfit_bomber_neon01')).toEqual({ itemId: 'outfit_bomber_neon01', pricePoints: 30_000, minRank: 3, enabled: true, salePrice: null })
+    expect(prices.get('face_bandaid01')).toEqual({ itemId: 'face_bandaid01', pricePoints: 10_000, minRank: 1, enabled: true, salePrice: null })
+    for (const id of ['outfit_denim01', 'outfit_trench01', 'outfit_brocade_red01', 'head_fedora01', 'face_monocle_gold01']) expect(prices.get(id), id).toMatchObject({ enabled: false })
     // A gift of the schedule is not frozen into the seed: the live lock covers it (B1).
     expect(prices.get('head_tophat01')).toMatchObject({ enabled: true })
     expect(await shop.seedPrices()).toBe(0)
@@ -151,7 +155,7 @@ describe('ShopService', () => {
     await db.delete(shopPrices).where(eq(shopPrices.itemId, 'head_beanie01'))
     await db.update(shopPrices).set({ enabled: false }).where(eq(shopPrices.itemId, 'outfit_dealer01'))
     const view = await shop.view(me, OCT)
-    expect(view.entries).toHaveLength(89)
+    expect(view.entries).toHaveLength(107)
     expect(view.entries.find((e) => e.itemId === 'head_beanie01')).toMatchObject({ lock: { kind: 'unpriced' }, purchasable: false })
     expect(view.entries.find((e) => e.itemId === 'outfit_dealer01')).toMatchObject({ lock: { kind: 'disabled' }, purchasable: false })
     expect(view.me).toMatchObject({ balance: 42_000, reputation: 0, rank: 3 })

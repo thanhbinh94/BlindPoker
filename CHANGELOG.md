@@ -9,6 +9,70 @@ below are the real history.
 
 ---
 
+## BP-33 — eight outfits, ten accessories and five achievements, drawn in ChatGPT — merged `799d307` (2026-10-25)
+
+The user, 2026-10-24: "chạy quy trình liên kết với ChatGPT (trên Chrome) để sinh thêm ít nhất 8 bộ trang phục và 10 phụ
+kiện mới (từ cấp độ thường đến hiếm, tự phân loại có mua được không hay mở theo thành tựu)", then "tự chọn chủ đề đi, chạy
+luôn". Spec `2026-10-24-wardrobe-batch-design.md` (the theme "Đêm Sài Gòn" goes out on the street; §6 records the result).
+Branch `feature/BP-33-wardrobe-batch`. Task A put the catalogue on stand-ins; the lead drew the eighteen pictures in
+ChatGPT in the user's Chrome and ingested them; Task C moved the pins and wrote the docs.
+
+- **What a player sees.** Eighteen new pieces in the Phòng thay đồ and the Cửa hàng, each drawn on the chibi and worn by
+  both bodies. Thirteen are sold at the shop's seed price (common 10,000 points from rank 1, rare 30,000 from rank 3; a GM
+  can change either): the commons Áo hoodie xanh than, Bộ thể thao đỏ, Áo bà ba nâu, Mũ lưỡi trai xanh than, Mũ tai bèo
+  kaki, Băng đô đỏ, Kính gọng vuông đen and Băng cá nhân; the rares Áo bomber đêm neon, Áo dài xanh ngọc, Bờm tai mèo, Hoa
+  sen cài tóc and Kính phi công. Five are won, never sold, through five new achievements on counters the game already
+  keeps: **Tri kỷ của bot** (200 hands with a bot at the table) gives the common Áo khoác jean; **Thám tử bàn bài** (500
+  Hold'em hands) the rare Áo măng tô thám tử; **Phúc lộc đầy nhà** (250 Blind hands won) the rare Áo gấm đỏ; **Tay chơi
+  lớn** (250,000 points won in one hand) the rare Mũ phớt đen; **Khách quen** (60 check-in days) the rare Kính một tròng
+  vàng. Each achievement also adds the item reward's reputation, as every item achievement does. The cap, the bucket hat
+  and the fedora clip the hair under their crown; the headband, the cat ears and the lotus pin sit on the hair.
+- **Under it.** `items.json` (eighteen rows, before the hairstyles), `achievements.json` (five rows, 34 → 39), both locales
+  (names and achievement texts in vi and en); the pipeline's `STAGE_ONE_ITEMS` (136 names) and `HAIR_CLIP` (six hats);
+  `assets/avatar-src/registry.json` (twenty `v4/item_<slot>_<code>` entries: the eighteen, plus `v4/item_head_cap_navy01_w`
+  and `v4/item_head_fedora01_w`, which supersede the first cap and fedora); 110 files in `apps/normal-web/public/avatar/`
+  (each outfit's L40, skin and skin-line masks and icon, each hat's and face item's layer and icon, the three covering hats'
+  hair clips, at @1x and @2x) and both manifests (137 real entries, one stand-in: the withdrawn hood); both contact sheets.
+  The source pictures were not on this machine, so the references `verify` reads were rebuilt from the committed layers
+  (`docs/avatar-2d.md` §10.7). No engine, protocol, schema, migration or dependency change; the shop seeds the thirteen
+  prices at the next boot (`seedPrices`, 89 → 107 rows) and keeps the five rewards off sale.
+- **Tests.** Task A: the achievement catalogue (39, the five pinned), the reputation chain (`login_days_60` before
+  `login_days_100`), the shop seed (107 rows, a sold piece at its rarity's price, the five rewards off sale), the daily
+  draw's reserved ids, the locale parity, the stage-1 list (136), the sheets' card counts (28 outfit cards, 176 fit cards).
+  Task C, on the real art: the clipping hats (`items.test.ts`, twelve with the cap, the bucket hat and the fedora), the
+  skin lines of sixteen outfit layers and the redrawn skin of five (`bodies.test.ts`; `avatar-pipeline.test.ts`), and
+  the "never takes a covering hat's hair from below the hat's edge" case now walks every hat in `HAIR_CLIP` (six, 48
+  composed pairs, with a 60 s timeout: with three it had already timed out at 5 s under a full run). The sheets were
+  regenerated from the final layers and match the pinned layouts (113 cards, 2460 × 3276; 176 fit cards, 1772 × 5644).
+  Unit: normal-server 797 + 1 skipped, normal-web 1,092 + 4 skipped (the GM-console route and `GiftsTab` timed out under
+  load and pass alone), ui-kit 777. `avatar:check`: 138 files, 1,794 checks, 0 failures.
+- **Docs.** `docs/avatar-2d.md` (§2 the clip, §6 the mix back to one stand-in, §10.1 the `_w` entries, §10.7 new: the
+  rebuilt references, dark hats over a light hairstyle, the composed-figure look), `docs/known-limitations.md` (the brim
+  specks, the rebuilt references, no male cuts, no backfill; the shop shelf's counts), `docs/lessons-learned.md` (a BP-33
+  section), the spec's §6.
+- **Khác với spec / Deviations from the spec.** The trench coat is camel-brown, not beige (the beige one lost its pocket
+  area to the skin cut). The áo dài wears black closed shoes, not white flat ones (one white shoe was cut as skin). The cap
+  and the fedora were drawn over `f_wavy01`, not the default `f_bob01` (§1: "đội kiểu tóc mặc định"), under new registry
+  ids with a `_w` suffix. `bot_hands_200` is "Tri kỷ của bot / One of the machines", not the spec's first "Bạn của bot /
+  Bot buddy", so it outranks the 50-hand "Bạn thân của bot" (the spec's table was amended). The English names and texts
+  of the eighteen pieces and five achievements were written by the session, not asked for by the user.
+- **Gate** (branch tree = the merge tree; the machine was under heavy load from another program): typecheck and lint
+  clean; unit 3,463 passed, 18 skipped, 4 timed out at 5 s (two in `AuthScreen.test.tsx`, two in `ShopTab.test.tsx`; all
+  four, and the GM-console route and `GiftsTab` that timed out in a normal-web re-run, pass alone); `build:normal` ok;
+  `build:lite` up to the exe step, which needs Node 22 (this machine has 24); `avatar:check` 138 files, 1,794 checks, 0
+  failures; e2e Normal 24/24 on the second run (the first lost "một tài khoản chơi trọn một ván Blind với bot" to a
+  next-hand race, below); e2e Lite 4/4; ops 56/56.
+- **Deployed.** Not yet.
+- **Still open.** A few light specks of the wavy fringe under the cap's brim and at the fedora's brim ends, over a dark
+  hairstyle. No male cut was drawn: all eight outfits render on body m from the f cut, the áo dài included. The new
+  achievements are not granted back: a player already past a threshold gets it the next time its counter moves. The
+  pieces on a real phone and the sheets (`docs/avatar-2d-sheet.png`, `docs/avatar-2d-fit-sheet.png`) are the user's to
+  look at; "<id> ng" sends a piece back to the queue. Lite draws none of them (it ships only the default outfit and hairs).
+  The Blind e2e "một tài khoản chơi trọn một ván Blind với bot" can lose one ante under CPU load: the result card shows
+  late, the server's five-second timer (started at settlement) deals the next hand before the test leaves, and the
+  balance comes out 1,000 short (seen in the trace as "Ván tiếp theo sau 0 giây" before the "Rời phòng" click). No game
+  code changed here; hardening the test is a separate task.
+
 ## BP-31 — the phone table gets a fanned hand and a one-row tray, a raise is a slider on every frame, and a Blind table takes ten wagers — merged `e35ea39` (2026-10-23)
 
 The user, 2026-10-23: "khi xoay ngang màn hình hoặc xoay dọc ở lúc vào bàn, thiết kế các nút quá to, khá khó nhìn bài",
