@@ -1347,7 +1347,7 @@ real art and wrote the docs. No engine, protocol, schema or migration change.
 - **BP-33's colour rules held.** No outfit in BP-35 lost cloth to the skin cut: fabric colours were chosen clear of the
   skin from the spec onward, and the white stayed on large areas of the torso, never at the feet.
 
-## BP-36 — the two dresses get a men's cut (merged `MERGE`, 2026-10-25)
+## BP-36 — the two dresses get a men's cut (merged `ccf45f0`, 2026-10-25)
 
 The user asked for men's cuts of "các bộ váy". Two registry entries on body m, drawn and ingested like `tet_red01_m`;
 `items.json`'s `asset.variants.m` written by the ingest. No spec (bounded).

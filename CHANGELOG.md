@@ -9,7 +9,7 @@ below are the real history.
 
 ---
 
-## BP-36 — the two dresses get a men's cut: a warlock's tunic and a men's áo dài — merged `MERGE` (2026-10-25)
+## BP-36 — the two dresses get a men's cut: a warlock's tunic and a men's áo dài — merged `ccf45f0` (2026-10-25)
 
 The user, 2026-10-25: "làm bản cắt dáng nam cho các bộ váy", after the wardrobe review found body m wearing the women's
 cut of every BP-33 and BP-35 outfit. Branch `feature/BP-36-male-dress-cuts`.
@@ -28,7 +28,9 @@ cut of every BP-33 and BP-35 outfit. Branch `feature/BP-36-male-dress-cuts`.
   rest stay unisex), `docs/avatar-2d.md` (the sheet's per-wear list), `docs/lessons-learned.md` (a BP-36 section).
 - **Khác với spec / Deviations from the spec.** No spec (a bounded change). The men's áo dài is a slightly greener jade
   (29,124,94 against the women's 33,122,114): the closer-coloured draft measured 2.53 heads, over verify's 2.5.
-- **Gate.** Not run yet.
+- **Gate** (the branch's tree, `main` unmoved): typecheck and lint clean; unit 3,467 passed, 18 skipped; `build:normal`
+  ok; `build:lite` up to the exe step (Node 22 needed, this machine has 24); `avatar:check` 160 files, 2,080 checks, 0
+  failures; e2e Normal 24/24; e2e Lite 4/4; ops 56/56 — all on the first run.
 - **Deployed.** Not yet.
 - **Still open.** The royal robe, Santa's coat and the other unisex outfits keep one layer by design. The two new
   layers wait on the user's look like the rest of BP-33 and BP-35.
