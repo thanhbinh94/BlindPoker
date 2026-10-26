@@ -441,6 +441,13 @@ export interface PlayerStatsDto {
   bestLoginStreak: number
 }
 
+/** One card a chaos hand used: the seat that held it, the card's id, and how it ended (`applied`, `blocked`, `reflected` or `fizzled`). */
+export interface HistoryChaosUseDto {
+  seat: number
+  cardId: string
+  outcome: string
+}
+
 export interface HistorySeatDto {
   /**
    * The account that sat here, or `null` for a bot (and for a human whose account has since been deleted).
@@ -472,6 +479,11 @@ export interface HistoryEntryDto {
   bestCategory: number | null
   cancelled: boolean
   players: HistorySeatDto[]
+  /**
+   * Plan 37: the chaos cards this hand used ("Thẻ đã dùng"). Absent for a hand that used none, and for every hand of a
+   * table without chaos.
+   */
+  chaosUsed?: HistoryChaosUseDto[]
 }
 
 /** One row of `GET /api/me/ledger`. `createdAt` is epoch milliseconds. */

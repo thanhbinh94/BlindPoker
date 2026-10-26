@@ -414,6 +414,28 @@ describe('ProfileScreen', () => {
     expect(hands.getByText('Bot 5')).toBeInTheDocument()
   })
 
+  it('prints "Thẻ đã dùng" on a chaos hand — who used which card, and how a stopped one ended — and nothing on any other', async () => {
+    const chaos: HistoryEntryDto = {
+      ...HAND,
+      mode: 'blind',
+      chaosUsed: [
+        { seat: 0, cardId: 's_swap_one', outcome: 'applied' },
+        { seat: 0, cardId: 's_peek_1', outcome: 'applied' },
+        { seat: 1, cardId: 's_steal_one', outcome: 'blocked' },
+      ],
+    }
+    const plain: HistoryEntryDto = { ...HAND, handId: 'h2', chaosUsed: [] }
+    renderScreen(stubApi({ history: vi.fn().mockResolvedValue([chaos, plain, { ...HAND, handId: 'h3' }]) }))
+    await screen.findByRole('heading', { name: 'Bình', level: 2 })
+
+    const rows = within(screen.getByRole('list', { name: viNormal.profile.history.title })).getAllByRole('listitem')
+    expect(within(rows[0]!).getByText('Thẻ đã dùng')).toBeInTheDocument()
+    expect(within(rows[0]!).getByText('Binh — Đổi lá, Nhìn trộm; Lan — Rút lá lẻ (Bị chặn)')).toBeInTheDocument()
+    // An empty list and an absent one are the same: no label, no line.
+    expect(within(rows[1]!).queryByText('Thẻ đã dùng')).toBeNull()
+    expect(within(rows[2]!).queryByText('Thẻ đã dùng')).toBeNull()
+  })
+
   it('prints a room name as text, whatever it contains', async () => {
     const odd: HistoryEntryDto = { ...HAND, roomName: '<b>Bàn</b> & co' }
     renderScreen(stubApi({ history: vi.fn().mockResolvedValue([odd]) }))

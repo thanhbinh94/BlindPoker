@@ -167,6 +167,23 @@ function RenameForm({ api, current, onRenamed }: RenameFormProps) {
   )
 }
 
+/**
+ * Plan 37: the "Thẻ đã dùng" line of a chaos hand, the way the result card prints it: "Ann — Đổi lá, Nhìn trộm; Bob —
+ * Khiên gỗ (Bị chặn)". A seat that is no longer in the hand's list reads "#n". `null` for a hand that used no card.
+ */
+export function chaosUsedLine(hand: HistoryEntryDto, tg: TFunction): string | null {
+  const used = hand.chaosUsed ?? []
+  if (used.length === 0) return null
+  const bySeat = new Map<number, string[]>()
+  for (const u of used) {
+    const name = String(tg(`chaos.cards.${u.cardId}.name`, { defaultValue: u.cardId }))
+    const text = u.outcome === 'applied' ? name : `${name} (${String(tg(`chaos.outcome.${u.outcome}`, { defaultValue: u.outcome }))})`
+    bySeat.set(u.seat, [...(bySeat.get(u.seat) ?? []), text])
+  }
+  const who = (seat: number): string => hand.players.find((p) => p.seat === seat)?.label ?? `#${seat + 1}`
+  return [...bySeat].map(([seat, names]) => `${who(seat)} — ${names.join(', ')}`).join('; ')
+}
+
 /* ── the page ──────────────────────────────────────────────────────────────── */
 
 /**
@@ -178,6 +195,7 @@ function RenameForm({ api, current, onRenamed }: RenameFormProps) {
  */
 export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenProps) {
   const { t } = useTranslation('normal')
+  const { t: tg } = useTranslation('game')
   const bundle = useAsync<[MeDto, PlayerStatsDto, HistoryEntryDto[], ItemDto[], AvatarCatalogDto]>(() =>
     Promise.all([
       api.me(),
@@ -322,6 +340,7 @@ export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenPr
               // may share one — including with the reader, who would then vanish from their own opponents
               // list, or appear in it.
               const others = hand.players.filter((seat) => seat.playerId !== me.playerId)
+              const chaosLine = chaosUsedLine(hand, tg)
               return (
                 <li className={s.handRow} key={hand.handId}>
                   <span className={s.rowMain}>
@@ -345,6 +364,12 @@ export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenPr
                       <>
                         <dt className={s.rowMeta}>{t('profile.history.bestHand')}</dt>
                         <dd className={s.rowValue}>{categoryText(hand.bestCategory, t)}</dd>
+                      </>
+                    )}
+                    {chaosLine === null ? null : (
+                      <>
+                        <dt className={s.rowMeta}>{tg('chaos.used')}</dt>
+                        <dd className={s.rowValue}>{chaosLine}</dd>
                       </>
                     )}
                     <dt className={s.rowMeta}>{t('profile.history.opponents')}</dt>
