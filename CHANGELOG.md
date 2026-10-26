@@ -34,7 +34,8 @@ The user's bug log, `docs/bug-log.md` §10 E6 (found 2026-10-23 while screenshot
   ui-kit and normal-web while another program held the CPU (34 min instead of 7), then ui-kit 910/910 and normal-web
   1,110 passed on a re-run with only the known GM-console route flake; `build:normal` ok; `build:lite` up to the Node 22
   exe step; `avatar:check` 0 failures; e2e Normal 24/24; e2e Lite 4/4; ops 59/59.
-- **Deployed.** Not yet.
+- **Deployed.** On the VPS since 2026-10-27, by git bundle ahead of the push (`ab1dffd..f602641`; backup
+  `bp-2026-10-27-0004`; no migration; rooms 0; health ok). The LAN host is not touched.
 - **Still open.** Nothing from this item.
 
 
