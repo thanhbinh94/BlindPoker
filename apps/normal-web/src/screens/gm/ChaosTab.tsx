@@ -63,8 +63,16 @@ function draftOf(card: GmChaosCardDto): Draft {
   }
 }
 
-const windowBroken = (draft: Draft): boolean => draft.from !== '' && draft.to !== '' && draft.to < draft.from
-const isValid = (draft: Draft): boolean => parseWhole(draft.weight, WEIGHT_MAX) !== null && !windowBroken(draft)
+/**
+ * A date box is fine when empty (open) or a real `YYYY-MM-DD` day. A date input also takes a five-digit year
+ * (`20266-11-01`), which `Date.parse` turns into NaN and JSON into `null`: an open window the GM never asked for.
+ */
+const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/u
+const dayOk = (key: string): boolean => key === '' || (DAY_KEY.test(key) && Number.isFinite(dayStartOf(key)))
+
+/** The window ends before it starts, by the numeric day starts (only judged when both ends are real days). */
+const windowBroken = (draft: Draft): boolean => draft.from !== '' && draft.to !== '' && dayOk(draft.from) && dayOk(draft.to) && dayStartOf(draft.to) < dayStartOf(draft.from)
+const isValid = (draft: Draft): boolean => parseWhole(draft.weight, WEIGHT_MAX) !== null && dayOk(draft.from) && dayOk(draft.to) && !windowBroken(draft)
 
 /**
  * One card's edit as the server wants it, or `null` when nothing differs. A window end that was not touched keeps the
@@ -75,7 +83,8 @@ function changeOf(card: GmChaosCardDto, draft: Draft): GmChaosRuleChangeDto | nu
   const was = draftOf(card)
   if (draft.enabled === was.enabled && draft.weight === was.weight && draft.from === was.from && draft.to === was.to) return null
   const weight = parseWhole(draft.weight, WEIGHT_MAX)
-  if (weight === null) return null
+  // A date that is no real day never becomes a time: `NaN` would reach the server as `null`, an open end nobody chose.
+  if (weight === null || !dayOk(draft.from) || !dayOk(draft.to)) return null
   const startsAt = draft.from === was.from ? (card.rule?.startsAt ?? null) : draft.from === '' ? null : dayStartOf(draft.from)
   const endsAt = draft.to === was.to ? (card.rule?.endsAt ?? null) : draft.to === '' ? null : dayStartOf(draft.to) + DAY_MS
   return { cardId: card.id, enabled: draft.enabled, weight, startsAt, endsAt }
@@ -227,7 +236,7 @@ function CardsEditor({ api, cards, onDone }: CardsEditorProps) {
                             className={`${s.input} ${g.dateInput}`}
                             type="date"
                             aria-label={t('gm.chaos.fromOf', { card: name })}
-                            aria-invalid={windowBroken(draft) ? true : undefined}
+                            aria-invalid={!dayOk(draft.from) || windowBroken(draft) ? true : undefined}
                             value={draft.from}
                             onChange={(event) => edit(card, { from: event.target.value })}
                           />
@@ -237,7 +246,7 @@ function CardsEditor({ api, cards, onDone }: CardsEditorProps) {
                             className={`${s.input} ${g.dateInput}`}
                             type="date"
                             aria-label={t('gm.chaos.toOf', { card: name })}
-                            aria-invalid={windowBroken(draft) ? true : undefined}
+                            aria-invalid={!dayOk(draft.to) || windowBroken(draft) ? true : undefined}
                             value={draft.to}
                             onChange={(event) => edit(card, { to: event.target.value })}
                           />

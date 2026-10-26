@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError, type GmChaosCardDto, type GmChaosDto, type NormalApi } from '../../api.js'
@@ -210,6 +210,27 @@ describe('ChaosTab', () => {
     await user.type(silver.getByLabelText('Đổi lá: đến ngày'), '2026-11-09')
     expect(screen.getByRole('alert')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: c.save })[0]).toBeDisabled()
+    expect(api.gmSetChaosRules).not.toHaveBeenCalled()
+  })
+
+  it('refuses a date with a five-digit year: marked invalid, Lưu off, no request sent', async () => {
+    const user = userEvent.setup()
+    const { api } = setup()
+    const silver = await section('Bạc · 3/3 thẻ đang bật')
+
+    const to = silver.getByLabelText('Đổi lá: đến ngày')
+    fireEvent.change(to, { target: { value: '20266-11-01' } })
+    expect(to).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('alert')).toHaveTextContent('Đổi lá')
+    expect(screen.getAllByRole('button', { name: c.save })[0]).toBeDisabled()
+    // The same for the start, and a five-digit start must not pass as "before" a four-digit end.
+    fireEvent.change(to, { target: { value: '' } })
+    const from = silver.getByLabelText('Đổi lá: từ ngày')
+    fireEvent.change(from, { target: { value: '20266-11-01' } })
+    expect(from).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getAllByRole('button', { name: c.save })[0]).toBeDisabled()
+    await user.click(screen.getAllByRole('button', { name: c.save })[0]!)
+    expect(screen.queryByRole('dialog')).toBeNull()
     expect(api.gmSetChaosRules).not.toHaveBeenCalled()
   })
 

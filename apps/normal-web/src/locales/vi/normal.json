@@ -171,7 +171,7 @@
       "toOf": "{{card}}: đến ngày",
       "reset": "Theo file",
       "resetOf": "{{card}}: về theo file",
-      "invalid": "Trọng số là số nguyên từ 0 đến 100, và ngày kết thúc không được trước ngày bắt đầu.",
+      "invalid": "Trọng số là số nguyên từ 0 đến 100, ngày phải có năm đủ bốn chữ số, và ngày kết thúc không được trước ngày bắt đầu.",
       "invalidCards": "Kiểm tra: {{cards}}",
       "save": "Lưu",
       "saveTitle": "Lưu {{count}} thẻ",
