@@ -96,7 +96,10 @@ cung cấp 3 loại thẻ ngẫu nhiên có thể làm thay đổi ván đấu",
   `build:normal` ok; `build:lite` up to the exe step, which needs Node 22 (this machine has 24); `avatar:check` 160 files,
   2,080 checks, 0 failures; e2e Normal 24/24; e2e Lite 4/4; ops 56 passed with E-06 ("Theo mọi mức", Hold'em — the known
   150 ms polling flake) failing once and its two later cases not run, then `03-holdem` re-run 6/6, so 59/59 cases green.
-- **Deployed.** Not yet.
+- **Deployed.** On the VPS since 2026-10-26, shipped by git bundle ahead of the push (`9c05623..ab1dffd`; backup
+  `bp-2026-10-26-1225`; migration 0007 applied — 8 migrations, `chaos_card_rules`, `chaos_config`, `games.chaos_used`;
+  restarted with one room open on the user's word; health ok). The LAN host (Neon) is not touched and still needs 0007
+  before it can serve this build (ask first). Lite not shipped.
 - **Still open.**
   - **The LAN host's Neon database needs migration 0007** (`run.ps1` without `-NoMigrate`): ask first. The VPS runs it at boot.
   - What the user must see by hand: the English card copy (and the new "reverseNote", "borrowed" strings); the icons, the draft,
