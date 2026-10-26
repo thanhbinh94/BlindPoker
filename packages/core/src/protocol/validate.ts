@@ -1,5 +1,5 @@
 import { ECONOMY } from '../constants/economy.js'
-import type { EngineErrorCode, PlayerAction, Ruleset } from '../hand/types.js'
+import type { BlindRules, EngineErrorCode, PlayerAction, Ruleset } from '../hand/types.js'
 import type { BlindRoomConfig, ClientMessage, ErrorCode, HoldemRoomConfig, RoomConfig } from './messages.js'
 
 export type ParseResult<T> = { ok: true; value: T } | { ok: false; code: ErrorCode; message: string }
@@ -57,6 +57,10 @@ export function parseClientMessage(raw: unknown): ParseResult<ClientMessage> {
       return isBool(raw.ready) ? { ok: true, value: withReq({ t: 'READY', ready: raw.ready }) } : fail('INVALID_MESSAGE', 'READY needs boolean ready')
     case 'KICK':
       return isStr(raw.playerId) ? { ok: true, value: withReq({ t: 'KICK', playerId: raw.playerId }) } : fail('INVALID_MESSAGE', 'KICK needs playerId')
+    case 'CHAOS_PICK':
+      return isStr(raw.offerId) && raw.offerId.length > 0 && isStr(raw.cardId) && raw.cardId.length > 0
+        ? { ok: true, value: withReq({ t: 'CHAOS_PICK', offerId: raw.offerId, cardId: raw.cardId }) }
+        : fail('INVALID_MESSAGE', 'CHAOS_PICK needs offerId and cardId')
     case 'ACTION': {
       const action = parseAction(raw.action)
       if (!isStr(raw.reqId) || !isInt(raw.baseSeq) || !action) return fail('INVALID_MESSAGE', 'ACTION needs reqId, baseSeq and a valid action')
@@ -117,6 +121,11 @@ export function validateRoomConfig(raw: unknown): ParseResult<RoomConfig> {
     const squeeze = b.squeeze === undefined ? false : b.squeeze
     if (!isBool(squeeze)) return bad('squeeze must be boolean')
     const blind: BlindRoomConfig = { holeCards: b.holeCards, decisionMode, fixedWager: b.fixedWager, botCount, squeeze }
+    // Poker hỗn loạn: absent is a plain Blind table; anything but one of the cycles is refused, never guessed.
+    if (b.chaosCycle !== undefined) {
+      if (!(ECONOMY.chaosCycles as readonly unknown[]).includes(b.chaosCycle)) return bad(`chaosCycle must be one of ${ECONOMY.chaosCycles.join(', ')}`)
+      blind.chaosCycle = b.chaosCycle as 5 | 10
+    }
     config.blind = blind
   }
   return { ok: true, value: config }
@@ -128,7 +137,9 @@ export function roomConfigToRuleset(config: RoomConfig): Ruleset {
     return { mode: 'holdem', smallBlind: h.smallBlind, bigBlind: h.bigBlind, tableFeeRate: ECONOMY.tableFeeRate, tableFeeCapBB: ECONOMY.tableFeeCapBB }
   }
   const b = config.blind!
-  return { mode: 'blind', holeCards: b.holeCards, decisionMode: b.decisionMode, fixedWager: b.fixedWager, tableFeeRate: ECONOMY.blindTableFeeRate, squeeze: b.squeeze === true }
+  const rules: BlindRules = { mode: 'blind', holeCards: b.holeCards, decisionMode: b.decisionMode, fixedWager: b.fixedWager, tableFeeRate: ECONOMY.blindTableFeeRate, squeeze: b.squeeze === true }
+  if (b.chaosCycle !== undefined) rules.chaosCycle = b.chaosCycle
+  return rules
 }
 
 const ENGINE_ERROR_TO_CODE: Record<EngineErrorCode, ErrorCode> = {

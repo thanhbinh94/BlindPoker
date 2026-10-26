@@ -7,6 +7,7 @@ import type { TimerHandle } from '../infra/clock.js'
 import { newId } from '../infra/ids.js'
 import { InsufficientBalanceError, type BalanceEntry, type HandSummary, type SettlementMeta } from '../repositories.js'
 import { HandRunner } from './hand-runner.js'
+import { ChaosTable } from './room-chaos.js'
 import { RoomError, type AdminRoomSummary, type RoomDeps, type RoomPlayer } from './types.js'
 
 export interface RoomInit {
@@ -80,6 +81,8 @@ export class Room {
    * farm "Mười phòng"/"Trăm phòng" by pressing Leave and rejoining.
    */
   private readonly everJoined = new Set<string>()
+  /** Poker hỗn loạn (Plan 37): the draft, the plans and the card credits of a chaos table; `null` on every other table. */
+  private readonly chaos: ChaosTable | null = null
 
   constructor(init: RoomInit) {
     this.roomId = init.roomId
@@ -89,6 +92,17 @@ export class Room {
     this.createdAt = init.deps.clock.now()
     this.rules = roomConfigToRuleset(init.config)
     this.hostPlayerId = init.host.playerId
+    const rules = this.rules
+    if (rules.mode === 'blind' && rules.chaosCycle !== undefined) {
+      if (!init.deps.chaos) throw new RoomError('CHAOS_UNAVAILABLE', 'this server has no chaos cards')
+      this.chaos = new ChaosTable(init.deps.chaos, {
+        roomId: this.roomId, rules, deps: this.deps, players: this.players,
+        broadcast: (event) => this.broadcastRoomEvent(event),
+        pushBalance: (playerId) => this.pushBalance(playerId),
+        enqueue: (fn) => void this.enqueue(fn),
+        onDraftEnd: () => this.endDraft(),
+      })
+    }
     this.addPlayer(init.host)
     const blind = init.config.blind
     if (init.config.mode === 'blind' && blind !== undefined) {
@@ -130,6 +144,11 @@ export class Room {
     return this.runner !== null && !this.runner.isComplete
   }
 
+  /** Hands started at a chaos table (its cycle counter); 0 on any other table. */
+  get tableHands(): number {
+    return this.chaos?.tableHands ?? 0
+  }
+
   hasPlayer(playerId: string): boolean {
     return this.players.has(playerId)
   }
@@ -163,7 +182,9 @@ export class Room {
     const viewer = viewerId === null ? undefined : this.players.get(viewerId)
     const seat = viewer?.seat ?? null
     const hand = this.runner && !this.runner.isComplete ? playerView(this.runner.state, seat) : null
-    return { t: 'ROOM_SNAPSHOT', seq: this.seq, room: this.view(), hand, deadlineAt: hand ? this.deadlineAt : null }
+    const snapshot: Snapshot = { t: 'ROOM_SNAPSHOT', seq: this.seq, room: this.view(), hand, deadlineAt: hand ? this.deadlineAt : null }
+    if (this.chaos) snapshot.chaos = this.chaos.snapshotFor(viewer === undefined ? null : viewerId)
+    return snapshot
   }
 
   // ---------- membership ----------
@@ -488,6 +509,19 @@ export class Room {
     })
   }
 
+  /**
+   * Poker hỗn loạn: the player takes one card of the offer it was sent in the open draft (spec §3.2). The last pick the
+   * draft waited for ends it and deals the hand. `CHAOS_NO_OFFER` for an offer that is not open to this player.
+   */
+  pickChaos(playerId: string, offerId: string, cardId: string): Promise<void> {
+    return this.enqueue(async () => {
+      this.assertOpen()
+      this.mustPlayer(playerId)
+      if (!this.chaos) throw new RoomError('CHAOS_NO_OFFER')
+      if (this.chaos.pick(playerId, offerId, cardId)) await this.endDraft()
+    })
+  }
+
   // ---------- connection lifecycle ----------
 
   onDisconnect(playerId: string): Promise<void> {
@@ -710,9 +744,13 @@ export class Room {
 
   // ---------- hand lifecycle ----------
 
-  /** Deals the next hand if the table can play one; `false` when it cannot (too few eligible seats, or only bots). */
-  private async startHand(): Promise<boolean> {
-    if (this.status === 'CLOSED' || (this.runner && !this.runner.isComplete)) return false
+  /**
+   * Deals the next hand if the table can play one; `false` when it cannot (too few eligible seats, or only bots). On a
+   * chaos table a seat that has not drafted in this cycle opens a draft first: `true`, and the hand is dealt when the
+   * draft ends (`endDraft`, which comes back here with `skipDraft`).
+   */
+  private async startHand(skipDraft = false): Promise<boolean> {
+    if (this.status === 'CLOSED' || (this.runner && !this.runner.isComplete) || this.chaos?.draft) return false
     this.nextHandTimer?.cancel()
     this.nextHandTimer = null
     this.carryOverReleaseTimer?.cancel()
@@ -739,6 +777,14 @@ export class Room {
       this.toOpen()
       return false
     }
+    // The draft waits between hands as the hand interval does: IN_GAME, the next deal at its deadline (spec §3.2).
+    if (this.chaos && !skipDraft && (await this.chaos.openDraft(eligible))) {
+      this.status = 'IN_GAME'
+      this.nextHandAt = this.chaos.draft!.deadlineAt
+      this.broadcastRoomEvent({ type: 'ROOM_STATUS', status: 'IN_GAME', nextHandAt: this.nextHandAt })
+      this.changed()
+      return true
+    }
     // This hand is going ahead without them, so every voluntary sitter has been skipped once more.
     // Spec §11.3: after `handsSatOutToStand` in a row the seat goes back to the table, stack returned,
     // down the same path as the timeout stand-up — nobody parks on a seat they are not using.
@@ -758,6 +804,7 @@ export class Room {
     const seats = eligible.map((p) => p.seat!)
     this.button = nextButton(this.button, seats, this.deps.rng)
     const handId = newId()
+    const chaos = this.chaos?.planHand(eligible)
     const runner = new HandRunner(
       {
         clock: this.deps.clock,
@@ -772,7 +819,7 @@ export class Room {
         onEvents: (events, deadlineAt) => this.onHandEvents(events, deadlineAt),
         onComplete: () => void this.enqueue(() => this.onHandComplete()),
       },
-      { handId, rules: this.rules, seats: eligible.map((p) => ({ seat: p.seat!, playerId: p.identity.playerId, stack: p.stack, isBot: p.identity.isBot })), button: this.button, carryOverIn: this.carryOverPot },
+      { handId, rules: this.rules, seats: eligible.map((p) => ({ seat: p.seat!, playerId: p.identity.playerId, stack: p.stack, isBot: p.identity.isBot })), button: this.button, carryOverIn: this.carryOverPot, ...(chaos ? { chaos } : {}) },
     )
     this.runner = runner
     this.carryOverPot = 0 // the pot is this hand's now: whoever wins it takes it
@@ -829,6 +876,7 @@ export class Room {
       if (rp) rp.stack = hp.stack
       summary.players.push({ playerId: hp.playerId, seat: hp.seat, isBot: hp.isBot, net, won: net > 0, bestCategory: result.showdown?.find((h) => h.seat === hp.seat)?.category ?? null })
     }
+    if (state.chaos && !runner.wasCancelled) summary.chaosUsed = state.chaos.used.map((u) => ({ seat: u.seat, cardId: u.cardId, outcome: u.outcome }))
     this.carryOverPot = result.carryOverOut
     this.runner = null
     this.deadlineAt = null
@@ -848,6 +896,15 @@ export class Room {
       this.deps.log.error('recordHand failed', { roomId: this.roomId, handId: state.handId, err: String(err) })
     }
     this.deps.onDomainEvent?.({ type: 'HAND_SETTLED', summary })
+    // The cards' side of the hand, before anyone is stood up: a seat a hand left at 0 can still be rescued (spec §5.4).
+    // Its credits move stacks only, never the summary's `net`. A cancelled hand settles nothing.
+    if (this.chaos && !runner.wasCancelled) {
+      try {
+        await this.chaos.settleHand(state, runner.stacksBefore, (seat) => this.seatPlayer(seat))
+      } catch (err) {
+        this.deps.log.error('chaos settlement failed', { roomId: this.roomId, handId: state.handId, err: String(err) })
+      }
+    }
 
     const required = this.requiredStack()
     for (const p of [...this.players.values()]) {
@@ -872,6 +929,18 @@ export class Room {
     this.nextHandAt = this.deps.clock.now() + this.deps.options.handIntervalMs
     this.broadcastRoomEvent({ type: 'ROOM_STATUS', status: 'IN_GAME', nextHandAt: this.nextHandAt })
     this.nextHandTimer = this.deps.clock.setTimeout(() => void this.enqueue(() => this.startHand()), this.deps.options.handIntervalMs)
+  }
+
+  /**
+   * The chaos draft is over — every offer picked, its deadline passed, or the last seat waited on gone: the cards are
+   * handed out and the hand is dealt, without a second draft. A seat that became eligible during the draft plays this
+   * hand undrafted and drafts before its next one.
+   */
+  private async endDraft(): Promise<void> {
+    if (!this.chaos?.draft || this.status === 'CLOSED') return
+    this.chaos.endDraft()
+    this.nextHandAt = null
+    await this.startHand(true)
   }
 
   private toOpen(): void {
@@ -994,6 +1063,7 @@ export class Room {
       connected: p.connected, seat: p.seat, status, sittingOut: p.sitOutRequested || p.sittingOut, stack: p.stack, ready: p.ready,
     }
     if (p.cosmetics !== undefined) view.cosmetics = p.cosmetics
+    if (this.chaos && p.seat !== null) view.chaos = this.chaos.seatView(p)
     return view
   }
 
@@ -1041,6 +1111,9 @@ export class Room {
     p.sitId = null
     p.seat = null
     p.stack = 0
+    // Chaos cards and points belong to the seat (spec §3.4): gone with it. The cycle's draft is not given back.
+    p.chaos = undefined
+    this.chaos?.dropOffer(p.identity.playerId)
     p.ready = false
     p.standAfterHand = false
     p.sittingOut = false
@@ -1194,5 +1267,6 @@ export class Room {
     for (const t of this.playerTimers.values()) t.cancel()
     this.playerTimers.clear()
     this.runner?.dispose()
+    this.chaos?.cancel()
   }
 }

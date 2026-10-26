@@ -23,6 +23,8 @@ export interface BlindRules {
    * the table waits — a `SQUEEZE` phase in pure luck, the 20 s decision round in play-or-fold. Absent means off.
    */
   squeeze?: boolean
+  /** Poker hỗn loạn (spec 2026-10-26): the table drafts chaos cards every this many hands. Absent means no chaos. */
+  chaosCycle?: 5 | 10
 }
 
 export type Ruleset = HoldemRules | BlindRules

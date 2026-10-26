@@ -309,6 +309,13 @@ function applyRoomEvent(room: RoomView, event: RoomEvent): RoomView {
       return { ...room, status: event.status, nextHandAt: event.nextHandAt, playerCount: room.players.length }
     case 'ROOM_CLOSED':
       return room
+    // Poker hỗn loạn: the draft and the seats' cards are shown by the chaos table UI (Plan 37 Task 6).
+    case 'CHAOS_DRAFT':
+    case 'CHAOS_PICKED':
+    case 'CHAOS_STATE':
+    case 'CHAOS_CREDIT':
+    case 'CHAOS_AWARDED':
+      return room
   }
 }
 

@@ -20,6 +20,8 @@ export const ECONOMY = {
   blindTurnTimers: [10, 15, 30],
   /** A squeeze table's round (spec 2026-10-08 §4.2.1): fixed, not one of `blindTurnTimers`. */
   squeezeTurnTimerSec: 20,
+  /** Poker hỗn loạn (spec 2026-10-26 §3.2): a chaos table drafts cards every 5 or 10 hands it starts; 5 is the form's default. */
+  chaosCycles: [5, 10],
   maxPlayersHoldem: 9,
   maxPlayersBlind: 8,
   buyInBBRange: { min: 20, max: 500 },

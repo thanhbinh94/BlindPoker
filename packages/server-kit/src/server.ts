@@ -1,6 +1,7 @@
 import type { IncomingMessage } from 'node:http'
 import type { Duplex } from 'node:stream'
 import { createBotStrategy, type BotStrategy, type Rng, type ServerMessage } from '@bp/core'
+import type { ChaosPort } from './chaos-port.js'
 import type { DomainEvent } from './domain-events.js'
 import { DEFAULT_GATEWAY_OPTIONS, Gateway, type GatewayOptions } from './gateway/gateway.js'
 import { realClock, type Clock } from './infra/clock.js'
@@ -22,6 +23,8 @@ export interface GameServerOptions {
   roomOptions?: Partial<RoomOptions>
   gatewayOptions?: Partial<GatewayOptions>
   onDomainEvent?: (e: DomainEvent) => void
+  /** Poker hỗn loạn's cards, settings and ledger (Normal); without it chaos tables are refused (`CHAOS_UNAVAILABLE`). */
+  chaos?: ChaosPort
   /** Upper bound on `shutdown()`; past it the remaining work is abandoned and a warning is logged. Default 10s. */
   shutdownTimeoutMs?: number
 }
@@ -66,6 +69,7 @@ export function createGameServer(options: GameServerOptions): GameServer {
     log,
     options: { ...DEFAULT_ROOM_OPTIONS, ...options.roomOptions },
     ...(options.onDomainEvent ? { onDomainEvent: options.onDomainEvent } : {}),
+    ...(options.chaos ? { chaos: options.chaos } : {}),
   })
   gateway = new Gateway({ clock, rooms, resolver: options.resolver, repos: options.repos, log, options: { ...DEFAULT_GATEWAY_OPTIONS, ...options.gatewayOptions } })
   const gw = gateway
