@@ -1,4 +1,5 @@
 import type { Card as CardId } from '@bp/core'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Card } from './Card.js'
 import { BOARD_STAGGER_MS } from './motion.js'
@@ -14,6 +15,8 @@ export interface CommunityCardsProps {
   handId?: string | null
   /** "Nhìn trộm": the next board cards, for this viewer alone, face up in the first empty slots with a tag over the first. */
   peek?: CardId[]
+  /** The chaos banner's slot: laid over the board's own box, centred, taking no room. */
+  banner?: ReactNode
 }
 
 const SLOTS = [0, 1, 2, 3, 4]
@@ -23,7 +26,7 @@ const SLOTS = [0, 1, 2, 3, 4]
  * three cards come in `BOARD_STAGGER_MS` apart, each sliding in while the one before it turns; the turn and the river
  * come alone. A board that was already out shows at once.
  */
-export function CommunityCards({ cards, highlight, dealt = false, handId = null, peek = [] }: CommunityCardsProps) {
+export function CommunityCards({ cards, highlight, dealt = false, handId = null, peek = [], banner }: CommunityCardsProps) {
   const { t } = useTranslation()
   return (
     <div className={s.community} role="group" aria-label={t('labels.community')}>
@@ -50,6 +53,7 @@ export function CommunityCards({ cards, highlight, dealt = false, handId = null,
           />
         )
       })}
+      {banner}
     </div>
   )
 }

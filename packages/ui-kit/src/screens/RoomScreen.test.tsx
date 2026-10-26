@@ -1734,7 +1734,7 @@ describe('RoomScreen on a Poker hỗn loạn table', () => {
 
     it('shows the cards that fired over the board, one by one, and holds the result card until the last', () => {
       wrap(fakeClient(stateWith({ applied: fired }, { ...finished, restored: false })))
-      const board = screen.getByRole('group', { name: 'Community cards' }).parentElement!
+      const board = screen.getByRole('group', { name: 'Community cards' })
       expect(within(board).getByText('Ann plays Card Swap')).toBeInTheDocument()
       expect(screen.queryByRole('heading', { name: 'Winner' }), 'the result waits for the cards').toBeNull()
       act(() => void vi.advanceTimersByTime(900))

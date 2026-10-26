@@ -292,6 +292,7 @@
 
 /* ---------------- Community ---------------- */
 .community {
+  position: relative;
   display: flex;
   gap: var(--space-2);
   justify-content: center;
@@ -860,8 +861,6 @@
 }
 
 .centre {
-  /* the chaos banner's anchor; the ring's own `.ring .centre` is absolute already and wins by specificity */
-  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3228,23 +3227,19 @@
   line-height: 1.25;
 }
 
-/* The banner over the board: a pill that sits on the board's top edge (the board is `.centre`'s first child) and takes no
-   room of its own, so the felt below it never moves. Its live region is always there, empty, so the first card is read. */
+/* The banner over the board: its slot is the board's own box (`.community`, which `CommunityCards` makes the slot's parent) and
+   the pill is centred in it, whichever way the layout lays the board out — above the pot's row, or beside it in the landscape
+   frame. Over the board there is always room: above it, on a short stage,
+   the top seat's lines reach into the band, and the viewer's seat and the tray are below. It takes no room of its own, so the
+   felt never moves. The live region is always there, empty, so the first card is read. */
 .chaosBannerSlot {
   position: absolute;
-  left: 50%;
-  bottom: calc(100% + var(--space-2));
+  inset: 0;
   z-index: 3;
-  width: max-content;
-  max-width: min(92vw, 26rem);
-  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   pointer-events: none;
-}
-
-/* On a phone the board sits right under the opponents' strip, whose last chip row would be under a banner that stood clear of
-   the board: it overlaps the board's top edge by two pixels instead. */
-.stack .chaosBannerSlot {
-  bottom: calc(100% - 2px);
 }
 
 .chaosBanner {
@@ -3252,20 +3247,22 @@
   align-items: baseline;
   justify-content: center;
   gap: 0 var(--space-2);
+  max-width: 100%;
   margin: 0;
-  padding: 4px var(--space-3);
+  padding: 4px var(--space-2);
   border: 1.5px solid var(--t-frame);
   border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--t-frame) 18%, #0a1220);
   box-shadow: var(--shadow-2), 0 0 18px color-mix(in srgb, var(--t-frame) 35%, transparent);
   font-family: var(--font-display);
-  font-size: 0.9375rem;
+  font-size: 0.8125rem;
+  line-height: 1.3;
   text-align: center;
   color: var(--ink);
 }
 
-/* One line: a long name gives with "…" (the title carries the whole line) rather than a second row that would climb over the
-   opponents' strip on a phone. */
+/* One line: a long name gives with "…" (the title carries the whole line) rather than a second row taller than the board's
+   band on a short stage. */
 .chaosBannerText {
   min-width: 0;
   overflow: hidden;
@@ -3275,7 +3272,7 @@
 
 .chaosBannerOutcome {
   flex: none;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   white-space: nowrap;
   font-style: italic;
   color: var(--t-ink);

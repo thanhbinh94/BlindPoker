@@ -75,7 +75,7 @@ export interface PokerTableProps {
    * face up in the ghost slots, and a viewer whose cards are down under a blindfold is told. Absent, the table is as it was.
    */
   chaos?: ClientChaos | null
-  /** The chaos banner (`ChaosBanner`): laid on the board's top edge, taking no room of its own. */
+  /** The chaos banner (`ChaosBanner`): laid over the board's own box, centred, taking no room of its own. */
   banner?: ReactNode
 }
 
@@ -313,8 +313,7 @@ export function PokerTable({
   // strip — finds no deck and fades in: a table that has just mounted shows its cards where they lie.
   const centre = (
     <div className={s.centre}>
-      {banner}
-      <CommunityCards cards={community} highlight={highlight} dealt={boardDealt} handId={hand?.handId ?? null} peek={peek} />
+      <CommunityCards cards={community} highlight={highlight} dealt={boardDealt} handId={hand?.handId ?? null} peek={peek} banner={banner} />
       <div className={s.centreRow}>
         <Deck ref={deckRef} />
         {showPot ? (

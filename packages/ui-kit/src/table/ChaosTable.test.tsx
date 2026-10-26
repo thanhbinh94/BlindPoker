@@ -130,11 +130,11 @@ describe('PokerTable on a Poker hỗn loạn table', () => {
     expect(screen.queryByText(/Bạo kích/)).toBeNull()
   })
 
-  it('carries the banner on the board’s top edge, inside the centre', () => {
+  it('carries the banner inside the board’s own box, so it is centred on the board wherever the layout puts it', () => {
     draw(handOf(), chaos(), { banner: <p data-testid="banner">cờ</p> })
-    const centre = screen.getByTestId('banner').parentElement!
-    expect(centre).toHaveClass(s.centre!)
-    expect(centre.firstElementChild).toBe(screen.getByTestId('banner'))
+    const board = screen.getByRole('group', { name: 'Bài chung' })
+    expect(screen.getByTestId('banner').parentElement).toBe(board)
+    expect(board).toHaveClass(s.community!)
   })
 })
 
@@ -163,5 +163,16 @@ describe('PokerTable on a crowded Poker hỗn loạn phone table', () => {
   it('draws the full row on the ring, however many seats there are', () => {
     drawNine('ring')
     expect(seatBox(3).querySelectorAll('[data-chaos-cards] [role="img"]')).toHaveLength(3)
+  })
+})
+
+describe('the chaos banner’s slot in the stylesheet', () => {
+  it('fills the board’s box and takes no room, and the board is its anchor', async () => {
+    const css = (await import('./table.module.css?raw')).default.replace(/\r\n/g, '\n')
+    const slot = /\.chaosBannerSlot\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
+    expect(slot).toMatch(/position:\s*absolute/)
+    expect(slot).toMatch(/inset:\s*0/)
+    expect(slot).toMatch(/pointer-events:\s*none/)
+    expect(/\.community\s*\{([^}]*)\}/.exec(css)?.[1]).toMatch(/position:\s*relative/)
   })
 })
