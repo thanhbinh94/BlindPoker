@@ -328,6 +328,21 @@ stack layout".
 | Spec §3.6, R5 (the Blind limit): ten wagers go from the balance to the table at sit-down, for every wager tier and both decision modes; bots take the same | `packages/core/src/hand/blind.test.ts` | sets the table limit at ten wagers for every tier | added in BP-31 |
 | Spec §3.1, R1, R2, R10, R11 in a browser (the upright phone): the seat's controls in the header's "Thêm" menu and Sẵn sàng / Bắt đầu in the dock between hands; in a Hold'em hand the tray is one row of at most 64 px, my two cards fan out at least 52 px wide (`offsetWidth`), the pot clear of them; "Tố ▴" opens the panel in place of the row, End reaches the slider's maximum and the confirm reads "Tố" with that amount, Hủy folds it back, and a raise of 600 reaches the table; at a full Blind table (seven bots) the room fits in the hand, my cards stay ≥ 52 px and the pot meets neither a card nor an opponent's chip; no text over text in any state | `apps/normal-web/e2e/ops/09-phone.spec.ts` | M-06 the phone table: one-row tray, fanned cards, the bet panel and the header menu @mobile | added in BP-31 — runs outside `pnpm test` |
 
+## Plan 37 — Poker hỗn loạn (spec 2026-10-26)
+
+Not rows of §29.2, §29.3 or §30: the chaos cards' money path, the game history's "Thẻ đã dùng" line, and the table in a browser.
+F-13 is the ops pack's `desktop` project's, F-13b its `mobile` project's (375 × 812, touch; title tagged `@mobile`) and F-13c its
+`landscape` project's (915 × 412; `@landscape`); all three run outside `pnpm test`, as every e2e does. The rules of the 47 cards
+are held by `packages/core/src/chaos/*.test.ts` (catalogue, draws, plan, settlement, the engine's appliers and the 500-hand
+simulation) and are not repeated here.
+
+| Rule | Test file | Test name | Status |
+|---|---|---|---|
+| Spec §4 (the fences): 200 seeded chaos hands, with their drafts and card credits, keep the books at 0 after every hand, and the test asserts at least 40 drafts, some `chaosUsed` lines and one `chaos_to_table` row, so the credit path really ran | `packages/server-kit/src/room/room-hands.test.ts` | 200 chaos hands, drafts and card credits included, keep the books at 0 | added in Plan 37 |
+| Spec §4 (the books at the database): a chaos credit writes its source row and the paired `chaos_to_table` row, leaves every balance alone, and the sources, the transfers and the stack gain agree | `apps/normal-server/src/chaos/chaos-service.test.ts` | keeps the books: balances are untouched, the sources and the table transfers cancel, and the stack gain equals the sources | added in Plan 37 |
+| Spec §9 (the history): a hand that used cards prints "Thẻ đã dùng" in the profile's "Ván gần đây" — who used which card, a stopped one with its outcome — and a hand that used none prints nothing | `apps/normal-web/src/screens/ProfileScreen.test.tsx` | prints "Thẻ đã dùng" on a chaos hand — who used which card, and how a stopped one ended — and nothing on any other | added in Plan 37 |
+| Spec §3.1–§3.6, §9 in a browser: a "Poker hỗn loạn" room with three bots shows the "Hỗn loạn" badge in its header and in another player's lobby; the draft offers three cards, one pick ends it; the seats wear card icons; a hand that fires a card says so in "Thẻ đã dùng" on its result card, in `GET /api/me/history` and on the profile page; the draft is back for the 6th hand; no text over text. On the upright phone the draft is a sheet and on the landscape phone a compact row, each whole on screen above the tray, with the room fitting and the result card fitting too | `apps/normal-web/e2e/ops/10-chaos.spec.ts` | F-13: a Poker hỗn loạn table — the badge, a draft of three, icons on the seats, "Thẻ đã dùng" on a result card and in the history, and the draft again after the 5th hand · F-13b: @mobile the chaos draft fits a phone — a sheet of three cards above the tray, then the result card · F-13c: @landscape the chaos draft fits a phone on its side — the compact row of three cards, then the result card | added in Plan 37 — runs outside `pnpm test` |
+
 ## Ruling recorded: the `reqId` cache is per connection
 
 Plan 7's first review round raised the `reqId` ring buffer as an open question, with a

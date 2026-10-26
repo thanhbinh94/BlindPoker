@@ -910,7 +910,8 @@ from "Điểm danh" as before.
 27).** `normal.json` (vi and en) is one resource loaded at boot; the lazy screens' strings are not split out. Plan 27's
 strings took the entry chunk to about 136 KB gzip of a 140 KB budget (under 4 KB of headroom), and the budget `MAX_ENTRY_GZIP` was raised from 130 to 140 KB
 (Ruling 13). BP-31's bet panel and phone tray took it to 140.3 KB, and the budget rose again to 150 KB (the SRS's own
-limit in §24 is 500 KB).
+limit in §24 is 500 KB). Plan 37's chaos table (the 47 cards' vi and en texts, the draft, the banner, the icons and the GM tab)
+took it to 152.0 KB, and the budget rose to 160 KB (a Task 8 ruling for the lead to confirm at the gate).
 *Why it stays:* splitting namespaces per lazy screen is a change to the i18n bootstrap for about 10 KB.
 *Tracked:* `apps/normal-web/test/footprint.test.ts`.
 
@@ -975,6 +976,73 @@ row. The 8 px is the smallest of the three costs.
 stepper, so the name is centred between the arrows, about 35 px left of the stage's centre at 1920×940.
 *Why it stays:* putting Xoay on its own row would make the left column taller than the 940 px screen allows.
 *Tracked:* `apps/normal-web/src/screens/wardrobe/wardrobe.module.css` (`.stageControls`).
+
+---
+
+## Poker hỗn loạn (Plan 37)
+
+**The Lite edition has no chaos table.** The create-room form hides "Poker hỗn loạn" (`chaosOffered` is false), and a `chaosCycle`
+sent to a Lite server is answered `CHAOS_UNAVAILABLE`, because Lite passes no `ChaosPort`.
+*Why it stays:* spec §6.3 — Lite has no account to hold the daily cap and no GM to switch cards. The code is shared through the packages,
+so opening it later is a port and a catalogue, not a rewrite.
+*Tracked:* spec `2026-10-26-chaos-poker-design.md` §6.3; `apps/lite` (no `chaos` in `createGameServer`).
+
+**The English card names and descriptions, and the new `chaos.*` strings, are unreviewed.** The 47 cards' vi text is the spec's "Tên" column
+with a one-line description; the English was written in the same pass and nobody has read it as a player.
+*Why it stays:* CLAUDE.md §6 — English copy changes only when the user asks. The parity test holds vi and en to the same keys.
+*Tracked:* `packages/ui-kit/src/i18n/locales/en/game.json` (`chaos.*`).
+
+**A card is a CSS frame with its first letter, not a picture.** The seat icon is the tier's frame, the name's initial and the hands left;
+"Khiên gỗ" and "Khiên sắt" are both "K", and the name is only in the tooltip and the accessible name. The draft shows names and text, no art.
+*Why it stays:* spec §8 — the first version uses CSS frames; card art comes later.
+*Tracked:* `packages/ui-kit/src/table/ChaosCardIcon.tsx`.
+
+**Bots pick their cards at random and never plan with them.** A bot's draft is a random one of its three, and the strategy is the
+ordinary Blind one (a blindfolded bot plays half its hands). A bot at a chaos table therefore does not play around its cards.
+*Why it stays:* spec §8 allows "random forever"; a smarter bot is a game-design task of its own.
+*Tracked:* spec §3.2, §8; `packages/core/src/bot/strategy.ts`.
+
+**At a width of 320 px a chaos room's header is 30 px taller** (104 → 134 px) because the "Hỗn loạn" badge needs its own line; at 360, 375
+and 414 px it is unchanged.
+*Why it stays:* a CSS special case for one phone width that almost nobody has.
+*Tracked:* `packages/ui-kit/src/table/RoomHeader.tsx`; Plan 37 Task 6 report.
+
+**On the upright phone the viewer's strip cuts a long name once it wears a card.** The strip is one line: the name, the points, the
+"Chủ phòng" badge, the card icons and the bet chip. With one icon the name has about 69 px at 375 px wide, so a name of about nine
+characters or more ends in "…" (it needed 93 px for eleven); without the icon it has about 28 px more. The full name stays in the
+accessible name. F-13b uses a one-letter stem for its account for that reason.
+*Why it stays:* the name already truncates for a long name without a card, and a second row for the icons would cost the stack
+layout's height. A dense strip (seven opponents or more) already shows one icon with a count (`summary`).
+*Tracked:* `packages/ui-kit/src/table/Seat.tsx` (`.stripLine`); `apps/normal-web/e2e/ops/10-chaos.spec.ts` (F-13b); found by the
+full ops run of Plan 37 Task 8.
+
+**The chaos banner and the draft are opaque, and `expectNoTextOverlap` does not count text under an opaque box as overlapped.** The banner
+sits inside the board's own box where no other text is, and a CSS-text test pins that (`ChaosTable.test.tsx`), but nothing measures it in
+a browser. The draft panel stands above the viewer's seat on purpose; at 1440 × 900 its right edge covers the left half of the lower-right
+opponent's plate while it is open (15 s at most). The reveal banner also hides the middle community cards for about 0.9 s per card that fires.
+*Why it stays:* the panel is what the table waits on, and it goes away on the last pick; making the banner translucent is a visual call for the user.
+*Tracked:* `packages/ui-kit/src/table/ChaosBanner.tsx`, `table.module.css` (`.chaosBannerSlot`, `.draft`); Plan 37 Task 7 report.
+
+**The result card waits for the banner queue, about 0.9 s per card fired, with no upper bound.** A hand in which a dozen cards fire holds
+its result card for ten seconds or so (the next hand starts 5 s after the settlement and the draft hides the card).
+*Why it stays:* rare in practice (a seat fires one debuff a hand), and capping it would skip effects the table wants to see.
+*Tracked:* `packages/ui-kit/src/table/ChaosBanner.tsx` (`useChaosBanner`).
+
+**A frozen seat's wait cards do not fire and stay held.** "Đóng băng" blocks a seat from using its cards for the hand (spec §3.5.6), and that
+includes Cấp cứu, Thần tài and Bạo kích: a frozen player at stack 0 waits one more lost hand for its rescue, and may be stood up first.
+*Why it stays:* the spec's rule; the other reading would let freeze be ignored by the one card that matters most to a broke seat.
+*Tracked:* Plan 37 ruling 3 of Task 1, `packages/core/src/chaos/settle.ts`.
+
+**A GM's card dates are economy days at UTC+7, fixed in the client, and the server's refusal text is English.** The "Từ ngày" / "Đến ngày"
+boxes turn a date into the start of that day in `Asia/Ho_Chi_Minh` as the gift schedule does; a refusal such as "silver would keep 0
+drawable cards for mode playOrFold" prints with the server's raw tier and mode ids.
+*Why it stays:* the economy day is one timezone (`ECONOMY_TIMEZONE`) and every GM refusal is English today.
+*Tracked:* `apps/normal-web/src/screens/gm/ChaosTab.tsx`; `apps/normal-server/src/chaos/chaos-service.ts`.
+
+**A credit's replay protection lasts one server process.** `ledger_keys` are pruned at boot (as for every keyed write), so a chaos credit
+retried across a restart could be paid twice.
+*Why it stays:* the room that would retry is in the same process and does not survive a restart either; a hard kill loses the stack anyway.
+*Tracked:* `apps/normal-server/src/chaos/chaos-service.ts` (`credit`); `docs/normal-server.md` ("Poker hỗn loạn").
 
 ---
 

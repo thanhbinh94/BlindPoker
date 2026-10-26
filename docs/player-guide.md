@@ -135,7 +135,7 @@ Khi số dư **dưới 5.000 điểm**, mở "Điểm danh" và bấm "Nhận c�
 Bản Normal: mở "Hồ sơ".
 
 - "Lịch sử điểm": mỗi lần số dư thay đổi là một dòng, ví dụ "Điểm khởi đầu", "Vào bàn", "Rời bàn", "Điểm danh hằng ngày", "Điểm danh (điểm thay vật phẩm)", "Điểm cứu trợ", "Thưởng thành tựu", "Hoàn điểm", "Mua ở Cửa hàng". Bấm "Tải thêm" để xem dòng cũ hơn. Kết quả từng ván không thành dòng riêng: hai dòng "Vào bàn" và "Rời bàn" cho biết bạn được hay mất bao nhiêu trong **cả lần ngồi**. Phí bàn cũng không có dòng riêng, vì nó được trừ thẳng từ pot.
-- "Ván gần đây": các ván vừa chơi, ở bàn nào, gặp ai, có thắng không.
+- "Ván gần đây": các ván vừa chơi, ở bàn nào, gặp ai, có thắng không. Ván ở bàn "Poker hỗn loạn" có thêm dòng "Thẻ đã dùng" (mục 6a).
 - "Thống kê": số ván chơi và thắng của từng chế độ, chuỗi thắng/thua, bài mạnh nhất, ván thắng lớn nhất, số ngày điểm danh.
 
 Bản Lite: máy chủ giữ tên hiển thị, số dư và chuỗi điểm danh của bạn, nhưng không có hồ sơ, lịch sử hay thống kê để xem. Máy chủ nhận ra bạn nhờ một mã lưu trong trình duyệt. Nếu bạn xóa dữ liệu trang, đổi trình duyệt hay đổi thiết bị, bạn sẽ thành người chơi mới với 100.000 điểm, còn tên cũ vẫn bị giữ nên không dùng lại được.
@@ -182,6 +182,7 @@ Bấm "Tạo phòng" ở "Sảnh chờ". Hộp thoại "Tạo phòng mới" gồ
 | "Mức cược cố định" (Blind) | 1.000, 2.000, 5.000, 10.000, 20.000 hoặc 50.000. Dòng dưới ô cho biết hạn mức mỗi người (10× mức cược). |
 | "Số lượng bot" (Blind) | Từ 0 đến số ghế trừ 1. Bot ngồi sẵn từ lúc tạo phòng. |
 | "Nặn bài" (Blind) | Bài của bạn được chia úp để bạn tự nặn (mục 6). |
+| "Poker hỗn loạn" và "Chu kỳ thẻ" (Blind, chỉ bản Normal) | Cả bàn chọn thẻ hiệu ứng trước ván đầu và mỗi 5 hoặc 10 ván (mục 6a). "Chu kỳ thẻ" chỉ chọn được khi đã tick ô. |
 | "Phòng riêng tư" | Không hiện trong danh sách, chỉ vào bằng mã. Có thể đặt thêm "Mật khẩu phòng" (4–20 ký tự) hoặc để trống. |
 | "Tự động bắt đầu" | Ván tự bắt đầu khi mọi người đang ngồi đã sẵn sàng (cần ít nhất 2 ghế, tính cả bot). |
 
@@ -315,6 +316,142 @@ Không muốn nặn thì bấm nút nhỏ "Lật" dưới bài để mở hết 
 - iPhone, iPad: tắt **Cài đặt → Trợ năng → Chuyển động → Giảm chuyển động** (bản tiếng Anh: **Settings → Accessibility → Motion → Reduce Motion**).
 - Máy khác: tìm mục giảm chuyển động trong phần trợ năng; tên mục có thể khác theo phiên bản máy.
 
+## 6a. Poker hỗn loạn (bản Normal)
+
+"Poker hỗn loạn" là một bàn Blind Poker có thêm **thẻ hiệu ứng**: cả bàn cùng chọn thẻ, và thẻ đổi bài, thêm lá, rút lá của đối thủ, hoàn điểm hay nhân phần thắng. Mọi luật Blind khác (mức cược cố định, hạn mức, "Chơi hoặc bỏ" / "Hoàn toàn may rủi", "Nặn bài", bot, tất tay) giữ nguyên. Chế độ này chỉ có ở **bản Normal**; bản Lite không có.
+
+**Bật chế độ.** Khi tạo phòng Blind Poker, tick ô **"Poker hỗn loạn"** (mặc định tắt) rồi chọn **"Chu kỳ thẻ"**: 5 ván (mặc định) hoặc 10 ván. Phòng có nhãn **"Hỗn loạn"** trong sảnh và ở đầu bàn. Sau khi tạo, không đổi được.
+
+### Chọn thẻ
+
+- **Khung chọn thẻ** mở trước ván đầu tiên bạn ngồi vào bàn, rồi trước ván thứ 6 (hoặc thứ 11) và cứ thế mỗi chu kỳ, tính theo số ván của bàn. Khung hiện ngay trên bàn, phía trên bài của bạn: ba thẻ, một dòng mô tả mỗi thẻ và đồng hồ **15 giây**.
+- **Cả bàn cùng một cấp** trong một khung: **Bạc** 60 %, **Vàng** 30 %, **Kim cương** 10 %. Bạn nhận ba thẻ khác nhau của cấp đó và chọn một, bấm vào thẻ là xong. Bàn bắt đầu ván ngay khi mọi người đã chọn.
+- Bot và người mất kết nối được chọn **ngẫu nhiên** ngay; người bật "Tự động chơi" được trò chơi chọn thẻ đầu tiên ngay; ai chưa chọn khi hết 15 giây cũng bị chọn ngẫu nhiên một trong ba.
+- Vào bàn giữa chừng: bạn chọn thẻ trước ván đầu tiên của mình (nếu bạn ngồi vào đúng lúc khung chọn đang mở thì chơi ván đó chưa có thẻ). Mỗi người chỉ chọn **một lần mỗi chu kỳ**: đứng dậy rồi ngồi lại trong cùng chu kỳ thì không được chọn lại.
+- Người bị "Đóng băng" vẫn chọn thẻ ở khung; đóng băng chỉ chặn việc **dùng** thẻ trong ván đó.
+- Chọn Bạc, Vàng hay Kim cương không ưu ái ai: cấp rút một lần cho cả bàn.
+
+### Thẻ làm việc thế nào
+
+Thẻ **tự áp** đúng lúc của nó, bạn không phải bấm gì. Bên dưới tên ghế của mỗi người có các **biểu tượng thẻ** nhỏ (khung theo cấp: bạc, vàng, xanh băng; chữ cái đầu của tên thẻ; số ván còn lại ở góc). Rê chuột hoặc chạm vào để đọc tên. Ai cũng thấy thẻ của ai, nên cả bàn biết đang chờ màn lật kèo nào. Mỗi lần một thẻ có hiệu ứng, một dải thông báo hiện trên bàn: "Bot 1 dùng Rút lá cả bàn lên Ann", kèm "Bị chặn", "Bị phản lại" hoặc "Không có tác dụng" nếu thẻ không chạm tới ai. Lúc áp thẻ có năm loại:
+
+- **Lúc chia**: áp khi bài vừa được chia (đổi lá, chia nhiều bộ giữ bộ tốt nhất, thêm lá, "Che mắt", "Đóng băng"…). Chỉ "Thế giới đảo ngược" là báo cho cả bàn biết ngay lúc chia; các thẻ chia khác chỉ chủ thẻ và người bị nhắm biết, cả bàn biết ở cuối ván qua dòng "Thẻ đã dùng".
+- **Lúc chọn** (✱, chỉ bàn "Chơi hoặc bỏ"): cho bạn thêm thông tin trước khi chọn "Chơi" hay "Bỏ bài", ví dụ xem trước lá chung.
+- **Lúc lật**: áp khi bài lật (rút lá, hạ lá, tráo bài, chia lại lá chung, bảo hiểm, bạo kích). Thứ tự cố định: khiên và gương chặn hoặc phản, rồi thẻ đổi lá riêng, rồi thẻ đổi lá chung, rồi mượn lá, rồi chấm bài, rồi mới tính tiền (bảo hiểm, bạo kích, thần tài). Nếu chỉ còn một người trong ván thì không có lật bài, và thẻ "lúc lật" ở lại cho ván sau.
+- **Chờ điều kiện**: "Cấp cứu", "Thần tài", "Khiên", "Gương" nằm chờ tới khi điều kiện xảy ra.
+- **Ngay khi nhận**: "Tích lũy" và "Cấp độ" dùng ngay lúc nhận, không nằm trên tay.
+
+Các luật chung:
+
+- Thẻ có thời hạn n ván thì áp liên tiếp n ván kể từ ván kế tiếp. Thẻ dùng một lần xếp hàng theo thứ tự bạn nhận.
+- **Mỗi người chịu tối đa 1 thẻ gây hại mỗi ván** ("Rút lá", "Hạ lá", "Che mắt", "Đóng băng", "Tráo bài"). Thẻ gây hại thứ hai nhắm vào cùng một người trong ván đó bị bỏ, và thẻ vẫn tính là đã dùng. Mỗi ghế cũng chỉ **phát ra** tối đa một thẻ gây hại mỗi ván; các thẻ gây hại khác chờ ván sau.
+- **Không thẻ nào nhắm thẳng vào một người**: thẻ gây hại chọn đối thủ ngẫu nhiên (hoặc mọi đối thủ), và thẻ chỉ ảnh hưởng người còn trong ván.
+- **Khiên** chặn thẻ gây hại, **Gương** phản nó về người đã dùng. Thẻ "Đóng băng" chặn việc **nhận thẻ mới và việc dùng thẻ** của người bị đóng băng trong ván kế tiếp (thẻ của họ vẫn còn đó).
+- Hai thẻ có thời hạn cùng kiểu hiệu ứng (ví dụ hai thẻ "chia nhiều bộ") thì không cộng dồn: thẻ mới cấp cao hơn thay thẻ cũ; cùng thẻ thì cộng thêm ván; thẻ cấp thấp hơn bị bỏ.
+- Các thẻ "giữ bộ tốt hơn" so các bộ **chỉ bằng lá riêng**, không nhìn lá chung. Lá bị bỏ bị đốt khỏi bộ bài.
+- **Rời bàn** (đứng dậy, rời phòng, bị mời ra, hết điểm) thì mọi thẻ và điểm hỗn loạn của bạn mất.
+
+### Điểm hỗn loạn và thẻ thưởng
+
+Mỗi người có **điểm hỗn loạn** riêng ở bàn: **+1** mỗi ván thắng, **+2** mỗi ván thua; từ ván thứ 3 của một chuỗi thắng hoặc chuỗi thua, điểm ván đó nhân đôi (thẻ "Cày điểm" nhân đôi thêm). Bỏ bài tính như thua. Ván cộng dồn và ván bị hủy không tính. Đủ **10 điểm** thì bạn nhận ngay **1 thẻ thưởng**: cấp rút ngẫu nhiên Bạc 60 % / Vàng 30 % / Kim cương 10 %, không phải chọn. Điểm này không phải điểm thật và không quy ra điểm thật.
+
+### Bốn họ thẻ đặc biệt
+
+- **Bạo kích**: khi thắng, có cơ hội nhân phần thắng ròng (phần bạn ăn từ pot trừ phần bạn đã đặt) lên ×2 hoặc ×3, trong 3 ván. Bàn hiện "Bạo kích ×2!" hoặc "×3!" ở ghế người thắng. Người thua không mất thêm gì.
+- **Thần tài**: nằm chờ; chỉ nổ khi bạn thắng ngay sau một chuỗi thua từ 2 ván trở lên. Chuỗi thua càng dài thưởng càng lớn:
+
+  | Chuỗi thua vừa kết thúc | Thần tài bạc | Thần tài vàng | Thần tài kim cương |
+  |---|---|---|---|
+  | 2–3 ván | +2 × mức cược | +4 × mức cược | +8 × mức cược và 1 thẻ Bạc |
+  | 4–5 ván | +4 × mức cược và 1 thẻ Bạc | +8 × mức cược và 1 thẻ Vàng | +15 × mức cược và 1 thẻ Kim cương |
+  | từ 6 ván | +6 × mức cược và 1 thẻ Vàng | +12 × mức cược và 2 thẻ Vàng | +20 × mức cược và 2 thẻ Kim cương |
+
+  Thẻ thưởng kèm theo dùng ngay như thẻ vừa nhận.
+- **Cấp cứu**: sau một ván **thua ở bàn này** mà stack còn dưới 2 mức cược, nhận thêm vào stack 5 × (Bạc), 10 × (Vàng) hoặc 20 × (Kim cương) mức cược. Không nổ lúc vừa ngồi xuống. Dùng được cả ở bàn bot.
+- **Cấp độ** và **Tay bạc**: "Cấp độ" đổi ngay thành thẻ khác (không bao giờ lại là Cấp độ). "Tay bạc" kéo dài tới khung chọn kế tiếp, mỗi ván tự áp một hiệu ứng ngẫu nhiên của một thẻ Bạc hoặc Vàng (trừ Cấp cứu, Thần tài, Cấp độ, Tay bạc).
+
+### Rào chắn: điểm của bạn vẫn là điểm thật
+
+- Thẻ **không đổi mức cược** của bàn, và không thẻ nào làm bạn mất nhiều hơn phần bạn đã đặt trong ván (tối đa 2 mức cược ở "Chơi hoặc bỏ", 1 mức ở "Hoàn toàn may rủi"). Không có thẻ cược thêm hay nhân pot từ tiền người thua.
+- Thẻ **hoàn tiền** ("Bảo hiểm", "Bỏ không mất") trả từ pot cho người có thẻ trước khi chia pot, nên không tạo điểm mới.
+- Chỉ ba họ **tạo điểm mới**: Cấp cứu, Bạo kích, Thần tài (phần tiền). Mỗi khoản là một dòng riêng trong "Lịch sử điểm" ("Thẻ cấp cứu", "Thẻ bạo kích", "Thẻ thần tài", cùng một dòng "Thẻ hỗn loạn lên bàn" đối ứng khi tiền vào stack).
+- **Trần mỗi ngày** cho mỗi tài khoản (ngày kinh tế): tổng điểm mới từ ba họ này tối đa **100.000 điểm**, và Cấp cứu tối đa **3 lần**. Vượt trần thì phần tiền của thẻ bị cắt về phần còn lại (thẻ vẫn tính là đã dùng) và thẻ kết quả ghi **"Đã chạm trần thẻ hôm nay"**. Người quản trị đổi được các con số này.
+- Bot cũng nhận và dùng thẻ (chọn ngẫu nhiên). Điểm thẻ của bot là điểm ảo, không ghi sổ. Thẻ gây hại của bot lên người thật áp như của người.
+
+### Kết quả ván, lịch sử, thành tựu
+
+- Thẻ kết quả có thêm dòng **"Thẻ đã dùng"**: ai dùng thẻ nào (kèm "Bị chặn" hoặc "Bị phản lại" nếu có), và các khoản thẻ trả như "Bạo kích ×2 +6.000" hay "Cấp cứu +5.000". Thẻ kết quả đợi dải thông báo chạy xong (khoảng 1 giây mỗi thẻ) rồi mới hiện.
+- Mở "Hồ sơ" → "Ván gần đây": ván nào dùng thẻ cũng có dòng **"Thẻ đã dùng"** với cùng nội dung.
+- Ván hỗn loạn **chỉ tính số ván đã chơi** (số ván Blind, số ván trọn vẹn, ván có bot) và số phòng đã vào, cùng danh vọng của ván đã chơi như bàn thường. Nó **không tính** ván thắng, chuỗi thắng hay thua, bộ bài mạnh nhất, ván thắng lớn nhất và mọi thành tựu dựa trên các số đó, vì thẻ đẩy các chỉ số ấy lên.
+
+### Bộ 47 thẻ
+
+Tên dưới đây là đúng chữ trên màn hình. ✱ là thẻ chỉ có ở bàn "Chơi hoặc bỏ" (bàn "Hoàn toàn may rủi" không rút chúng). "Mức cược" là mức cược cố định của bàn.
+
+**Bạc (18)**
+
+| Thẻ | Tác dụng | Lúc áp |
+|---|---|---|
+| "Đổi lá" | Lá riêng thấp nhất được chia lại, 1 ván. | Lúc chia |
+| "Bùa may nhỏ" | Chia 2 bộ riêng, giữ bộ tốt hơn, 1 ván. | Lúc chia |
+| "Chất bổ" | Bài riêng chắc chắn có ít nhất 1 lá từ 10 trở lên, 1 ván. | Lúc chia |
+| "Đồng hoa" | 2 lá riêng đầu tiên cùng chất, 1 ván. | Lúc chia |
+| "Chia lại bài yếu" | Bài riêng không có đôi và không có lá từ J trở lên thì được chia lại một lần, 1 ván. | Lúc chia |
+| "Nhìn trộm" ✱ | Xem trước 1 lá chung trước khi chọn, 1 ván. | Lúc chọn |
+| "Bỏ không mất" ✱ | Nếu chọn "Bỏ bài", được hoàn mức cược đầu ván (trích từ pot), 1 ván. | Lúc chọn |
+| "Bảo hiểm bạc" | Thua thì được hoàn 50 % phần đã đặt, 1 ván. | Lúc lật |
+| "Khiên gỗ" | Chặn 1 thẻ gây hại kế tiếp. | Chờ |
+| "Cấp cứu bạc" | +5 × mức cược vào stack khi thua mà stack còn dưới 2 mức cược. | Chờ |
+| "Tích lũy" | +3 điểm hỗn loạn. | Ngay |
+| "Rút lá lẻ" | 1 đối thủ ngẫu nhiên mất 1 lá riêng. | Lúc lật |
+| "Hạ lá" | Lá riêng cao nhất của 1 đối thủ ngẫu nhiên bị chia lại. | Lúc lật |
+| "Che mắt" ✱ | 1 đối thủ ngẫu nhiên không được xem bài riêng ở ván sau (bài của họ úp cho tới lúc lật, kèm nhãn "Bị che mắt"). | Lúc chia |
+| "Đóng băng nhỏ" | 1 đối thủ ngẫu nhiên không dùng được thẻ ở ván sau. | Lúc chia |
+| "Bạo kích bạc" | Khi thắng: 20 % cơ hội phần thắng ròng ×2, trong 3 ván. | Lúc lật |
+| "Thần tài bạc" | Xem bảng Thần tài ở trên. | Chờ |
+| "Cấp độ bạc" | Nhận ngay 1 thẻ Vàng ngẫu nhiên. | Ngay |
+
+**Vàng (15)**
+
+| Thẻ | Tác dụng | Lúc áp |
+|---|---|---|
+| "Đổi bài" | Chia lại cả bài riêng khi bài không có đôi và không có lá từ Q trở lên, 1 ván. | Lúc chia |
+| "Bùa may" | Giữ bộ tốt hơn trong 2 bộ, 3 ván. | Lúc chia |
+| "Thêm lá" | +1 lá riêng, 1 ván. | Lúc chia |
+| "Nhìn trộm vàng" ✱ | Xem trước 3 lá chung trước khi chọn, 1 ván. | Lúc chọn |
+| "Mượn lá" | Được dùng thêm 1 lá riêng của 1 đối thủ ngẫu nhiên (chép, họ không mất lá). | Lúc lật |
+| "Bảo hiểm vàng" | Thua thì được hoàn 100 % phần đã đặt, 1 ván. | Lúc lật |
+| "Khiên sắt" | Chặn mọi thẻ gây hại trong 3 ván. | Chờ |
+| "Cấp cứu vàng" | +10 × mức cược khi thua mà stack còn dưới 2 mức cược. | Chờ |
+| "Cày điểm" | Điểm hỗn loạn nhân đôi trong 5 ván. | Lúc chia |
+| "Rút lá cả bàn" | Mỗi đối thủ mất 1 lá riêng. | Lúc lật |
+| "Chia lại lá chung" | 1 lá chung ngẫu nhiên được chia lại (cả bàn chịu). | Lúc lật |
+| "Đóng băng bàn" | Mọi đối thủ không dùng được thẻ ở ván sau. | Lúc chia |
+| "Bạo kích vàng" | Khi thắng: 25 % cơ hội ×2 và 10 % cơ hội ×3 phần thắng ròng, trong 3 ván. | Lúc lật |
+| "Thần tài vàng" | Xem bảng Thần tài ở trên. | Chờ |
+| "Cấp độ vàng" | Nhận ngay 1 thẻ Kim cương ngẫu nhiên. | Ngay |
+
+**Kim cương (14)**
+
+| Thẻ | Tác dụng | Lúc áp |
+|---|---|---|
+| "Chọn bài" | Chia 3 bộ riêng, giữ bộ tốt nhất, 1 ván. | Lúc chia |
+| "Bùa may lớn" | Giữ bộ tốt hơn trong 2 bộ, 5 ván. | Lúc chia |
+| "Thêm lá kim cương" | +1 lá riêng, 3 ván. | Lúc chia |
+| "Thấu thị" ✱ | Xem trước cả 5 lá chung trước khi chọn, 1 ván. | Lúc chọn |
+| "Bảo hiểm kim cương" | Thua thì được hoàn 100 % phần đã đặt, 2 ván. | Lúc lật |
+| "Gương phản chiếu" | Phản thẻ gây hại kế tiếp về đúng người đã dùng nó. | Chờ |
+| "Cấp cứu kim cương" | +20 × mức cược khi thua mà stack còn dưới 2 mức cược (trong trần ngày). | Chờ |
+| "Tráo bài" | Tráo cả bài riêng với 1 đối thủ ngẫu nhiên. | Lúc lật |
+| "Bão lá chung" | Chia lại cả 5 lá chung (cả bàn chịu). | Lúc lật |
+| "Thế giới đảo ngược" | Bộ yếu nhất ăn pot ván này; cả bàn được báo từ lúc chia. | Lúc chia |
+| "Bạo kích kim cương" | Khi thắng: 30 % cơ hội ×2 và 15 % cơ hội ×3 phần thắng ròng, trong 3 ván. | Lúc lật |
+| "Thần tài kim cương" | Xem bảng Thần tài ở trên. | Chờ |
+| "Tay bạc" | Mỗi ván tự áp 1 hiệu ứng ngẫu nhiên của một thẻ Bạc hoặc Vàng, tới khung chọn kế tiếp. | Lúc chia |
+| "Cấp độ kim cương" | Nhận ngay 2 thẻ ngẫu nhiên, mỗi thẻ cấp ngẫu nhiên từ Bạc tới Kim cương. | Ngay |
+
+**Người quản trị** bật/tắt từng thẻ theo mùa, đổi trọng số rút và đổi các con số (tỉ lệ cấp, ngưỡng điểm hỗn loạn, thời gian chọn, trần ngày) trong tab "Thẻ hỗn loạn" của "Quản trị". Một thẻ bị tắt có hiệu lực từ khung chọn kế tiếp; thẻ đã nằm trên tay người chơi vẫn chạy hết thời hạn.
+
 ## 7. Mất kết nối, rời bàn, tự động chơi
 
 | Tình huống | Điều gì xảy ra |
@@ -385,7 +522,7 @@ Bấm "Mua" thì hộp "Mua món này?" hỏi lại, ví dụ "Mua Nón lá vớ
 
 ## 9. Thành tựu (bản Normal)
 
-Mở "Hồ sơ" rồi bấm "Thành tựu". Trang này cho biết bạn "Đã đạt" bao nhiêu trên tổng số, tiến độ từng thành tựu và ngày đạt. Khi đạt, bạn thấy thông báo "Đạt thành tựu mới" và nhận thưởng ngay, không phải bấm nhận. Ván bị hủy (ví dụ khi máy chủ khởi động lại) không được tính. Có 34 thành tựu trong bốn mục.
+Mở "Hồ sơ" rồi bấm "Thành tựu". Trang này cho biết bạn "Đã đạt" bao nhiêu trên tổng số, tiến độ từng thành tựu và ngày đạt. Khi đạt, bạn thấy thông báo "Đạt thành tựu mới" và nhận thưởng ngay, không phải bấm nhận. Ván bị hủy (ví dụ khi máy chủ khởi động lại) không được tính. Ván ở bàn "Poker hỗn loạn" chỉ tính vào số ván đã chơi (cả ván Blind, ván trọn vẹn và ván có bot) và số phòng đã vào, không tính vào ván thắng, chuỗi, bộ bài mạnh hay ván thắng lớn (mục 6a). Có 34 thành tựu trong bốn mục.
 
 **"Điểm danh"**: *ngày ghé bàn* là số ngày bạn bấm "Nhận thưởng" ở "Điểm danh", không phải số lần đăng nhập.
 
@@ -467,6 +604,7 @@ Trang "Cài đặt" của **bản Lite** có "Giao diện", "Ngôn ngữ", "Phi�
 | Cách vào | Email và mật khẩu | Tên hiển thị, không mật khẩu |
 | Nhiều thiết bị | Một tài khoản, mọi thiết bị | Gắn với trình duyệt trên một thiết bị |
 | Texas Hold'em, Blind Poker, bot, nặn bài | Có | Có |
+| "Poker hỗn loạn" (thẻ hiệu ứng, mục 6a) | Có | Không |
 | Phí bàn (chỉ Hold'em), cứu trợ | Có | Có |
 | Điểm danh | Điểm và vật phẩm, đếm số lần trong tháng; có "Lịch điểm danh", "Tuần đầu tiên" và chấm vàng trên tab khi còn quà | Chỉ có điểm, đếm theo chuỗi liên tiếp |
 | Quà chào mừng, danh vọng và bậc, "Cửa hàng" | Có | Không |

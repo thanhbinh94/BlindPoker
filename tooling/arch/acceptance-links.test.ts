@@ -271,8 +271,9 @@ describe('docs/test-matrix.md', () => {
     // three (the short landscape tier: the tier and the seats, the hint and the nudge, L-06 in a browser), and BP-30's
     // two (the chibi idle-life pass, spec 2026-10-22 K6: the shop figure live in P-06, still under reduced motion in P-07),
     // and BP-31's four (spec 2026-10-23: the bet slider's reach, the landscape bet panel in L-04, the Blind limit at ten
-    // wagers, the phone table in M-06)
-    expect(rows).toBe(43 + 10 + 4 + 7 + 5 + 8 + 3 + 5 + 5 + 3 + 3 + 2 + 4)
+    // wagers, the phone table in M-06), and Plan 37's four (spec 2026-10-26: the chaos credits' books in the room and in the
+    // database, the history's "Thẻ đã dùng" line, the chaos table in a browser in F-13, F-13b and F-13c)
+    expect(rows).toBe(43 + 10 + 4 + 7 + 5 + 8 + 3 + 5 + 5 + 3 + 3 + 2 + 4 + 4)
     expect(citations.length).toBeGreaterThanOrEqual(40)
   })
 

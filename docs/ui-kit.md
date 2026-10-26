@@ -501,6 +501,56 @@ only "Đã chọn", which stands for both (the line under the plate stays one ba
 `labels.waitOthersReveal`, `labels.squeezeMode` ("Nặn bài", the badge), `create.squeeze`, `create.squeezeHint` and
 `create.squeezeTimer` ("{{time}} · nặn bài"); no `phase.squeeze` — nothing prints the round's name.
 
+### The chaos table (Plan 37, spec 2026-10-26 §3.6, §7)
+
+"Poker hỗn loạn" is a Blind table with `room.config.blind.chaosCycle` set. The rules are in `@bp/core`, the room in server-kit
+(`docs/server-kit.md`, "The chaos room"); this package draws it.
+
+**State.** `ClientState.chaos` (`ClientChaos`, `initialChaos` on a table without chaos): `draft` (`ClientChaosDraft`: tier, `deadlineAt`,
+`offer` — the viewer's three card ids and `offerId`, `null` for a spectator or an empty offer — and `picked`), `seats` (every seat's
+held cards as `HeldCardView`s and its chaos points, public), `applied` (the hand's `CHAOS_APPLIED`, in order), `credits`, `awarded`
+and `peek` (the viewer's own peeked board cards; another seat's blanked `CHAOS_PEEK` is ignored). The reducer handles the `CHAOS_OFFER`
+notification **without `notify()`** (no toast), merges the offer and the `CHAOS_DRAFT` frame whichever arrives first, closes the draft
+on `CHAOS_STATE` or `HAND_STARTED`, rebuilds seats and draft from a snapshot, starts a seat that sits with no cards, and puts
+`CHAOS_SUMMARY` into `hand.result.chaosUsed` (the viewer's `CHAOS_APPLIED` list is the fallback). `useGameClient().pickChaos(offerId,
+cardId)` sends `CHAOS_PICK` and, on its ACK, dispatches `chaosPicked`; with auto-play on, the hook picks the first offered card at
+once (once per `offerId`, like the squeeze's auto-REVEAL).
+
+**Create and lobby.** `CreateRoomForm` takes `chaosOffered` (default `false`; **Normal sets it, Lite does not**, so Lite's form and
+its wire config are unchanged). Offered, a Blind form shows the "Poker hỗn loạn" tick and the "Chu kỳ thẻ" select ("Chu kỳ thẻ: 5
+ván" / 10), and submits `blind.chaosCycle` only when ticked. `.modeFieldsChaos` reserves the taller 17 rem for both modes, so the
+dialog does not change height between Hold'em and Blind. `Badge` has a `chaos` tone (violet, from `--rarity-epic`); `RoomList` and
+`RoomHeader` show "Hỗn loạn" when `chaosCycle` is defined. `tokens.css` adds `--tier-silver|gold|diamond` (frames, at least 3:1 on
+`--bg`) and `--tier-*-ink` (text, at least 4.5:1) in the dark, light and night palettes.
+
+| Component | Props |
+| --- | --- |
+| `ChaosDraft` | `draft`, `serverNow`, `onPick`, `layout?`, `frame?`, `short?` — the panel: a `TurnTimer` ring on `deadlineAt` (`DRAFT_MS` 15 s), three real `<button>`s (tier chip, name, one line), focus on the first when the offer lands, one pick (a ref guards a double click), "Đã chọn — chờ người chơi khác" at once, and a refusal lets the player choose again. A spectator or a seat with no offer sees "Các tay chơi đang chọn thẻ". Stamps `data-layout`, `data-frame`, `data-short` |
+| `ChaosCardIcon`, `ChaosCardRow` | `card` / `cards`, `summary?` — the 22 px tier-framed icon (`role="img"`, accessible name and `title` "Khiên gỗ (Bạc) · còn 2 ván", the card's first letter inside, hands left in the corner); at most `MAX_CHAOS_ICONS` (4), then "+N"; `summary` is one icon with the count, for a dense phone strip (seven or more opponents) |
+| `ChaosBanner`, `useChaosBanner` | the queue (`BANNER_MS` 900 ms per card, worked out in the render so no frame of the result card slips through) and a `role="status"` slot, always mounted: "A dùng X" / "A dùng X lên B, C" and "Bị chặn" / "Bị phản lại" / "Không có tác dụng" |
+
+**On the table.** `RoomScreen` mounts `ChaosDraft` in an overlay in `<main>` beside the result overlay and disables the action tray while
+it is up; the previous hand's result card steps aside during a draft, and is held while the banner queue runs on a completed hand
+(a snapshot-rebuilt hand replays nothing). `useSeatClearance(stage, active, seat, { minRoom, aboveHand })`: the draft passes
+`{ minRoom: 0, aboveHand: true }`, so it always stands just above the viewer's seat block and the highest card of the viewer's fan; the
+result card keeps its tiers. `PokerTable` takes `chaos` and `banner`: each `Seat` shows its icons (in `.tags`, and in `.stripLine` for the
+viewer's phone strip), "Bạo kích ×2!" / "×3!" beside the payout (from `CHAOS_CREDIT.multiplier`, held back while the result is pending),
+a "Bị che mắt" badge on the viewer's own blindfolded seat (inferred: chaos room, own seat, `cardCount > 0`, `holeCards === null`, hand
+not complete), and `CommunityCards` shows the viewer's peek face up in the first empty slots under "Nhìn trộm". The banner is rendered
+**inside the board's own box** (`.community`, `position: absolute; inset: 0`, centred, `pointer-events: none`), where nothing else
+draws text. `HandResult` prints "Thẻ đã dùng: Ann — Đổi lá, Nhìn trộm; Bob — Khiên gỗ (Bị chặn)" and a line per credit ("Ann: Bạo kích
+×2 +6.000", "Cấp cứu +N · Đã chạm trần thẻ hôm nay"). All new motion (`.draft`, `.chaosBannerIn`, `.critShout`, the card hover) is in the
+"Motion off" block of `table.module.css`; the banner's slide class is only applied when not `prefers-reduced-motion`.
+
+**Card names** are `chaos.cards.<id>.name|desc` in `game.json` for all 47 ids, vi and en; the tier of a card that has just acted (a
+one-shot is no longer held) is read from the id's prefix (`s_`, `g_`, `d_`). Bạc/Vàng/Kim cương are `chaos.tier.*`, and `errors.CHAOS_UNAVAILABLE`
+and `errors.CHAOS_NO_OFFER` are in `common.json`.
+
+**Playground.** `blindC` ("Blind B · hỗn loạn") runs the real chaos rules (`drawTier`, `drawOffer`, `receiveCard`, `planHand`,
+`afterHand`) around the engine in `mock-client.ts`: a draft before every hand (not every 5th, so the pages are reachable), bots pick
+at once. `#worst/<state>/…` gains `chaosDraft`, `chaosReveal` (the one that is not a restored snapshot, so its banner plays),
+`chaosFour`, `chaosPeel`, `chaosBlind` and `chaosResult`.
+
 ### Avatars (`src/avatar2d/`)
 
 The kit does render an avatar — a **chibi**: pre-rendered PNG layers on a shared frame, not a 3D rig or anything
@@ -1165,6 +1215,13 @@ full-viewport, for measuring a layout against a screen size.
   covers the side seats, and at 844 × 390 the top of the viewer's plate. A Hold'em table with nine occupied plates in
   landscape (a room seats nine) has no browser test, only the playground's `#worst/…/9/…/short`; on a stage narrower than
   about 800 px its top line passes over the end seats (BP-28). All in `docs/known-limitations.md`.
+- **The chaos table** (Plan 37): the card icons are the card's first letter in a tier frame (Khiên gỗ and Khiên sắt are both
+  "K"; the name is in the tooltip and the accessible name), there is no card art; the draft panel and the reveal banner are
+  opaque, so `expectNoTextOverlap` reads text under them as covered, not overlapped (the banner has its own CSS-text test in
+  `ChaosTable.test.tsx`, and the draft stands above the viewer's seat on purpose: at 1440 × 900 its right edge covers the left half of the lower-right
+  opponent's plate while the draft is open); the English
+  card names and descriptions are unreviewed by the user; the 320 px room header is 30 px taller with the badge. All in
+  `docs/known-limitations.md`.
 - **The bet slider has been driven by keyboard only, in Chromium** (BP-31): no touch drag on a real phone, and a screen
   reader's "increase" swipe can seem stuck (it moves the native range by 1 point, which rounds back to the same cell).
   After a hand at a table of seven opponents and more a chip's hand name is cut with "…" when it is long, and the dock's

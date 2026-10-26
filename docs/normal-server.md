@@ -59,19 +59,22 @@ src/
                      avatar.ts (config v4 + validation) · avatar-migrate.ts (reads a v1/v2/v3 config back as v4)
                      colour.ts (Lab and ΔE76, for the migration's eye rule)
   achievements/      definitions.ts (loader) · achievement-service.ts (listens, grants)
-  stats/             player-stats.ts (the 16 counters) · stats-service.ts (listens, counts)
+  stats/             player-stats.ts (the 16 counters) · stats-service.ts (listens, counts) · chaos-hand.ts (is this hand a chaos hand?)
+  chaos/             chaos-catalogue.ts (loads and checks data/chaos-cards.json) · chaos-service.ts (the rules a GM edits, the config,
+                     the daily cap and the credits) · chaos-port.ts (the ChaosPort server-kit's rooms are handed): "Poker hỗn loạn (Plan 37)"
   history/           history-service.ts (writes a settled hand, reads a player's last N)
   gm/                gm-service.ts (points, items, lock, role, reads, the action log) · gm-rooms.ts (list, kick, close:
                      a thin layer over the live rooms) · grant-gm.ts (the CLI's logic) · mask-email.ts
   http/              routes.ts + routes-auth/-me/-rewards/-catalog/-outfits/-gm/-shop/-welcome.ts · auth-guard.ts · types.ts
 
-data/                items.json, item-aliases.json, avatar-bodies.json, achievements.json, daily-gifts.json — content, not code
+data/                items.json, item-aliases.json, avatar-bodies.json, achievements.json, daily-gifts.json, chaos-cards.json — content, not code
                       avatar-manifest.json — Task 1's asset pipeline output, mirrored from normal-web
 drizzle/             committed migration SQL (0000 generated; 0001_avatar_v2, 0002_outfits hand-written, data only;
                       0003_ledger_keys generated, then guarded with IF NOT EXISTS — the keys `balances.apply` claims;
                       0004_gm generated, then guarded with IF NOT EXISTS — users.role, locked_at, locked_reason and gm_actions;
                       0005_plan26 — gift_months, inventory.ref; 0006_plan27 — reputation, shop, newcomer and welcome tables,
-                      players.reputation/rank/welcome_claimed_at, daily_logins.consecutive, and the month-count data step)
+                      players.reputation/rank/welcome_claimed_at, daily_logins.consecutive, and the month-count data step;
+                      0007_chaos — chaos_card_rules, chaos_config and games.chaos_used, guarded with IF NOT EXISTS)
 test/build.test.ts   the build itself, as a test
 ```
 
@@ -560,11 +563,11 @@ kick that happened, the route warns (`gm kick not logged`) and still answers `20
 the room becomes a 4xx; anything else is rethrown and stays a 500. The GM's reason stays in the
 log; the broadcast reason is the fixed string `closed_by_gm`.
 
-**Routes.** `http/routes-gm.ts` mounts twenty-nine routes under `/api/gm/` behind `requireGm` (fifteen from Plan 25,
-seven from Plan 26, seven from Plan 27), with CSRF and the `/api/*` rate limits as usual. `GET /api/gm/rooms/:id` returns the `AdminRoomSummary` (members included), not `room.view()`.
+**Routes.** `http/routes-gm.ts` mounts thirty-two routes under `/api/gm/` behind `requireGm` (fifteen from Plan 25,
+seven from Plan 26, seven from Plan 27, three from Plan 37), with CSRF and the `/api/*` rate limits as usual. `GET /api/gm/rooms/:id` returns the `AdminRoomSummary` (members included), not `room.view()`.
 Search is a `POST` so an address never sits in a URL or an access log.
 
-**The second batch (Plan 26, spec 2026-10-20 Part A).** Four capabilities, seven of the twenty-nine routes, all through the
+**The second batch (Plan 26, spec 2026-10-20 Part A).** Four capabilities, seven of the first twenty-nine routes, all through the
 same door as the first batch: a reason of 3 to 200 characters first, the effect and its `gm_actions` row in one
 transaction, the player's `BALANCE` and `GM_NOTICE` only after the commit.
 
@@ -704,6 +707,66 @@ achievement's rule, minus the live events whose reason mirrors those counters (`
 event `('backfill', 'plan27')` per player. No `RANK_UP`. A rerun skips every credited player. Prints
 `players=<n> applied=<n> ranks=[r1,…,r5]`, prefixed `(dry run) ` under `--dry-run`; exit 0, 2 without `DATABASE_URL`
 or on an unknown flag (with the usage line, nothing written), 1 on an error. Run it once per upgrade at a quiet moment (the operator's steps: `docs/deployment-normal.md` §7).
+
+---
+
+## Poker hỗn loạn (Plan 37)
+
+Spec: `docs/superpowers/specs/2026-10-26-chaos-poker-design.md`. A Blind table created with `chaosCycle` (5 or 10) drafts and plays
+chaos cards. The rules of the cards live in `@bp/core` (`packages/core/src/chaos/`) and the room, the draft and the port in
+server-kit (`docs/server-kit.md`, "The chaos room"); this package supplies the data, the database half of the port and the GM's
+controls. **Lite never passes a `ChaosPort`**: `RoomManager.create` answers `CHAOS_UNAVAILABLE` to a `chaosCycle` without one.
+
+**The catalogue: `data/chaos-cards.json`.** The 47 cards, one per line: `{ id, tier, family, effect, params, timing, modes, debuff, enabled }`.
+`chaos/chaos-catalogue.ts` loads it at boot through core's `parseChaosCatalogue`, so a bad file (an unknown effect kind, a duplicate
+id, a fractional param, fewer than three enabled cards of a tier for either mode) stops the boot with the file's path in the message.
+The same 47 cards are `CHAOS_CARDS_SPEC` in `@bp/core` (`fixtures.ts`), and `chaos-catalogue.test.ts` holds the two equal, so the file
+and the tests cannot drift: a seasonal change belongs in the GM's rules, a permanent one in both. A new card with an existing effect
+kind is a data row plus its `chaos.cards.<id>.name/desc` strings in ui-kit's `vi` and `en`; a new effect kind needs code.
+
+**The tables (migration `0007_chaos.sql`, additive, every statement `IF NOT EXISTS`).**
+
+| Table | Holds |
+| --- | --- |
+| `chaos_card_rules` | One row per card a GM has touched: `card_id`, `enabled`, `weight` (0–100, CHECK), `starts_at`, `ends_at` (null = open), `updated_by` (no FK), `updated_at`. |
+| `chaos_config` | Key → JSON, the one key `chaos`: `tierWeights`, `pointsThreshold`, `draftMs`, `dailyCapPoints`, `dailyRescues`. A missing or damaged field falls back to `DEFAULT_CHAOS_CONFIG`. |
+| `games.chaos_used` | `jsonb NULL`: the hand's `HandSummary.chaosUsed` (`{ seat, cardId, outcome }[]`), null for any other hand. |
+
+`resetDb` truncates the two rule tables. `GM_ACTION_KINDS` gains `set_chaos_rules` and `set_chaos_config`.
+
+**`chaos/chaos-service.ts`.** `active(nowMs)` is what the room's port returns at each draft: a rule inside `[starts_at, ends_at)`
+governs (`enabled`, `weight`), otherwise the file's `enabled` at weight 1; a card at weight 0 stays listed but is never drawn.
+The server reads it at **every draft**, so a change reaches a table at its next draft and a card already held runs its course.
+`setRules(tx, changes, updatedBy)` validates the whole batch (known card, integer weight 0–100, `endsAt > startsAt`), writes it, and
+then re-reads the rules inside the caller's transaction and refuses the batch (`INVALID_CHAOS_RULES`, rolled back) when any tier would have
+fewer than three drawable cards for either mode **now or at any start/end boundary of the edited set**: a GM cannot save a state
+that a date would turn into a broken one. `setConfig` checks each number against `LIMITS` (threshold 1–100, draft 5–60 s, cap 0–10,000,000,
+rescues 0–20, tier weights whole and not all zero; `INVALID_CHAOS_CONFIG`).
+
+**`credit` (the only chaos code that moves points).** One call per card payout (`chaos_rescue`, `chaos_crit`, `chaos_fortune`), in one
+transaction: lock the `players` row, claim the `ledger_keys` key (`chaos:<roomId>:<handId>:<seat>:<uid>:<reason>`), sum today's chaos rows
+and count today's rescues in `[dayStart, nextDayStart)` of the economy day, cut the amount to what the cap leaves (0 for a rescue past
+`dailyRescues`), and write **two rows** with `creditWithin`: `+credited` under the reason and `-credited` as `chaos_to_table` (the transfer
+from balance to the table stack). The player's balance is therefore unchanged and the room puts the points on the stack. The three
+reasons are **sources** (`gm-service`'s `SOURCE_REASONS`, so Plan 26's sources-and-sinks table counts them) and `chaos_to_table` is in
+neither set. A replay of a key returns the amount already written under that `refId` (and `capped` when it was cut); the key is claimed
+even for a payout cut to 0, so a retry cannot pass the cap after midnight; `ledger_keys` are pruned at boot, so replay protection lasts
+one process lifetime, as for every keyed write. Conservation (a credit leaves `Σ balances + Σ sinks` unchanged; Σ sources = −Σ
+`chaos_to_table`) is pinned in `chaos-service.test.ts`, `gm-service.test.ts` and `app.test.ts`.
+
+**Hands, statistics, reputation (spec §9).** `stats/chaos-hand.ts` `isChaosHand(summary)`: `patchForHand` still counts `gamesCompleted`,
+`handsPlayed*` and `botHands`, and skips `handsWonBlind`, `biggestWin`, `bestHandRank` and both streaks (no increment and no reset);
+`reputation-service` pays `hand_played` and never `hand_won` for a chaos hand, so the achievements built on the skipped counters cannot
+be earned at a chaos table. `history-repo.recordHand` writes `summary.chaosUsed ?? null`; `HistoryEntry.chaosUsed` is present only for a
+hand that has it, so an ordinary hand's wire shape is unchanged, and the profile page prints it as "Thẻ đã dùng".
+
+**GM routes (behind `requireGm`, a reason of 3–200 characters first).** `GET /api/gm/chaos` (the 47 cards with `activeNow`, the rules and
+the config), `PUT /api/gm/chaos/rules` `{ changes, reason }` (a change is a whole rule — `cardId`, `enabled`, `weight`, `startsAt`,
+`endsAt` — or `{ cardId, clear: true }`; only `clear === true` clears), `PUT /api/gm/chaos/config` `{ config, reason }`. Each write and its
+`gm_actions` row (`set_chaos_rules` / `set_chaos_config`) are one transaction. The web tab is "Thẻ hỗn loạn" (`docs/normal-web.md`).
+
+**Deploying it.** The migration writes the database once (`run.ps1` without `-NoMigrate`; Docker at boot), and `data/chaos-cards.json` is
+a build sidecar, shipped with `dist/` and `data/` as siblings. A server without the file does not boot.
 
 ---
 
