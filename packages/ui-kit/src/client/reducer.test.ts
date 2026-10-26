@@ -818,6 +818,16 @@ describe('Poker hỗn loạn', () => {
     expect(s.chaos.peek).toBeNull()
   })
 
+  it("keeps my peek when another seat's blanked CHAOS_PEEK arrives later, and ignores one that comes first", () => {
+    // `filterEvent` turns a peek for someone else into `cards: []` instead of dropping it.
+    let s = game(inChaosRoom(), 11, started)
+    s = game(s, 12, { type: 'CHAOS_PEEK', seat: 2, cards: [] })
+    expect(s.chaos.peek).toBeNull()
+    s = game(s, 13, { type: 'CHAOS_PEEK', seat: 0, cards: parseCards('Ah Kd') })
+    s = game(s, 14, { type: 'CHAOS_PEEK', seat: 1, cards: [] })
+    expect(s.chaos.peek).toEqual({ seat: 0, cards: parseCards('Ah Kd') })
+  })
+
   it('moves what the hand used into result.chaosUsed at settlement (from the public summary)', () => {
     let s = game(inChaosRoom(), 11, started)
     s = game(s, 12, swap)

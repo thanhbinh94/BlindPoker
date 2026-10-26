@@ -223,7 +223,7 @@
     "chaos": "Poker hỗn loạn",
     "chaosHint": "Cả bàn chọn thẻ theo chu kỳ; thẻ đổi bài, che chắn hoặc gây hại đối thủ trong một vài ván.",
     "chaosCycle": "Chu kỳ thẻ",
-    "chaosCycleOption": "{{count}} ván",
+    "chaosCycleOption": "Chu kỳ thẻ: {{count}} ván",
     "submit": "Tạo phòng",
     "hint": {
       "name": "Tên phòng cần 1–30 ký tự.",

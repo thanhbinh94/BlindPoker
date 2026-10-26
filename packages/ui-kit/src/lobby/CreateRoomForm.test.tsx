@@ -361,6 +361,8 @@ describe('the "Poker hỗn loạn" option', () => {
   const wrapVi = (ui: React.ReactElement) =>
     render(<I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>{ui}</I18nextProvider>)
   const create = () => screen.getByRole('button', { name: /^tạo phòng/i })
+  /** The cycle select as a player finds it: by the words it shows, which carry the stable term "Chu kỳ thẻ". */
+  const cycleSelect = () => screen.getByDisplayValue(/^Chu kỳ thẻ: \d+ ván$/)
 
   it('is not offered without chaosOffered (Lite, and any host that has no chaos)', () => {
     wrapVi(<CreateRoomForm onSubmit={vi.fn()} lang="vi" initialMode="blind" />)
@@ -377,10 +379,12 @@ describe('the "Poker hỗn loạn" option', () => {
     expect(box).toHaveAttribute('type', 'checkbox')
     expect(box).not.toBeChecked()
     expect(box).toHaveAccessibleDescription(expect.stringContaining('thẻ'))
-    const cycle = screen.getByLabelText('Chu kỳ thẻ')
+    const cycle = cycleSelect()
+    expect(cycle).toHaveDisplayValue('Chu kỳ thẻ: 5 ván')
+    expect(cycle).toHaveAccessibleName('Chu kỳ thẻ')
     expect(cycle).toHaveValue('5')
     expect(cycle).toBeDisabled() // nothing to cycle until the table is chaotic
-    expect([...(cycle as HTMLSelectElement).options].map((o) => o.value)).toEqual(['5', '10'])
+    expect([...(cycle as HTMLSelectElement).options].map((o) => [o.value, o.text])).toEqual([['5', 'Chu kỳ thẻ: 5 ván'], ['10', 'Chu kỳ thẻ: 10 ván']])
     await user.click(box)
     expect(cycle).toBeEnabled()
     await user.click(screen.getByRole('button', { name: "Texas Hold'em" }))
@@ -396,7 +400,7 @@ describe('the "Poker hỗn loạn" option', () => {
     expect(onSubmit.mock.calls[0]![0]).toMatchObject({ mode: 'blind', blind: { chaosCycle: 5 } })
     expect(validateRoomConfig(onSubmit.mock.calls[0]![0]).ok).toBe(true)
 
-    await user.selectOptions(screen.getByLabelText('Chu kỳ thẻ'), '10')
+    await user.selectOptions(cycleSelect(), '10')
     await user.click(create())
     expect(onSubmit.mock.calls[1]![0]).toMatchObject({ blind: { chaosCycle: 10 } })
   })
@@ -409,7 +413,7 @@ describe('the "Poker hỗn loạn" option', () => {
     expect(Object.hasOwn(onSubmit.mock.calls[0]![0].blind, 'chaosCycle')).toBe(false)
 
     await user.click(screen.getByLabelText('Poker hỗn loạn'))
-    await user.selectOptions(screen.getByLabelText('Chu kỳ thẻ'), '10')
+    await user.selectOptions(cycleSelect(), '10')
     await user.click(screen.getByLabelText('Poker hỗn loạn'))
     await user.click(create())
     expect(Object.hasOwn(onSubmit.mock.calls[1]![0].blind, 'chaosCycle')).toBe(false)
@@ -439,6 +443,7 @@ describe('the "Poker hỗn loạn" option', () => {
     const user = userEvent.setup()
     wrap(<CreateRoomForm onSubmit={vi.fn()} lang="en" initialMode="blind" chaosOffered />)
     await user.click(screen.getByLabelText('Chaos poker'))
+    expect(screen.getByDisplayValue('Card cycle: 5 hands')).toBeEnabled()
     expect(screen.getByLabelText('Card cycle')).toBeEnabled()
   })
 

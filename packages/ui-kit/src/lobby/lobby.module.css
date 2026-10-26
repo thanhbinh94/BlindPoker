@@ -309,17 +309,20 @@
   }
 }
 
-/* The "Poker hỗn loạn" row: the tick takes the width, the cycle's select a fixed share on the right. */
+/* The "Poker hỗn loạn" row: the tick on the left, the cycle's select on the right. The select's own words carry the term
+   ("Chu kỳ thẻ: 5 ván"), so it is wide enough for the longest of them; where the row is too narrow for both (a phone) the
+   select drops under the tick and takes the width, which a phone's scrolling dialog allows. */
 .chaosRow {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-2) var(--space-3);
 }
 
 .chaosCycle {
-  flex: none;
-  width: 8.5rem;
+  flex: 1 1 13rem;
+  max-width: 14rem;
 }
 
 .input {

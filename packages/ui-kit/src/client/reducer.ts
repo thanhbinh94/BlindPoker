@@ -263,7 +263,9 @@ function applyHandEvent(state: ClientState, hand: ClientHand, event: GameEvent &
       const { type: _type, ...applied } = event
       return { ...state, chaos: { ...state.chaos, applied: [...state.chaos.applied, applied] } }
     }
+    // `filterEvent` blanks another seat's peek to `cards: []` rather than dropping it: only my own seat's is mine to keep.
     case 'CHAOS_PEEK':
+      if (event.seat !== hand.mySeat) return state
       return { ...state, chaos: { ...state.chaos, peek: { seat: event.seat, cards: event.cards.slice() } } }
     case 'CHAOS_SUMMARY':
       return withHand(state, hand, { result: { ...(hand.result ?? NO_RESULT), chaosUsed: event.used.map((u) => ({ seat: u.seat, cardId: u.cardId, outcome: u.outcome })) } })
