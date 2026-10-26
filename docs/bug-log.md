@@ -769,3 +769,33 @@ merge sẽ ghi sau.
 để thử, đã bỏ trước khi commit).
 
 **Phân loại:** Bounded fix, chỉ sửa test.
+
+## 12. Phản hồi người chơi về Poker hỗn loạn (2026-10-26)
+
+**Tin tốt:** người chơi rất thích chế độ hỗn loạn; cần giữ tính bất ngờ trong từng ván.
+
+| # | Nguồn | Mức | Mô tả | Nguyên nhân | Trạng thái |
+|---|---|---|---|---|---|
+| H1 | người dùng 26/10 | P1 | Trên điện thoại, dải thông báo hiệu ứng thẻ đè mất thẻ người thắng. | Dải thông báo và thẻ kết quả cùng nằm giữa bàn; thẻ kết quả chờ hàng đợi dải thông báo (Plan 37 Task 7) rồi mở đúng chỗ đó. | mở — brainstorm |
+| H2 | người dùng 26/10 | P1 | Thời gian hiện kết quả ván quá ngắn: ở bàn hỗn loạn không kịp đọc thẻ nào đã nổ, nghĩa là gì. | Ván kế chia sau 5 giây tính từ lúc tính tiền (`handIntervalMs`), như mọi bàn; thẻ kết quả còn phải chờ dải thông báo (~0,9 giây mỗi thẻ) nên thời gian đọc thực tế còn ngắn hơn. | mở — brainstorm |
+| H3 | người dùng 26/10 | P1 | Muốn đổi thông báo hiệu ứng thẻ thành toast: nhiều hiệu ứng nối nhau làm không kịp đọc. | Dải thông báo hiện từng thẻ ~0,9 giây, một dòng, chữ bị cắt "…". | mở — brainstorm |
+| H4 | người dùng 26/10 | P1 | Xoay ngang (Samsung Galaxy S25): hiệu ứng thẻ và bảng thứ tự người thắng phải cuộn, không nhìn được toàn cục ván; muốn màn chọn thẻ thành một hàng ngang khi xoay; lấy độ phân giải chuẩn của S25. | Các màn đã kiểm ở 915×412 và 855×319; S25 xoay ngang khoảng 780×360 điểm CSS (1080×2340 ở tỉ lệ 3) — thấp và hẹp hơn mọi khung đã kiểm. | mở — brainstorm |
+| H5 | người dùng 26/10 | P1 | Thẻ thưởng (đủ điểm hỗn loạn) đang tự rút ngẫu nhiên; người chơi muốn tự chọn — không can thiệp được thì mất hứng. | Spec §3.3 (phiên chọn): thẻ thưởng nhận ngay, không chọn. | mở — brainstorm |
+| H6 | người dùng 26/10 | P3 | Một số thẻ có vẻ quá mạnh/quá yếu; người dùng sẽ thống kê. Cụ thể "rút 1 lá" bị cho là quá mạnh và "có vẻ ưu tiên rút lá mạnh". | Mã: "Rút lá lẻ" (`s_steal_one`) bỏ một lá **ngẫu nhiên** (`engine.ts` `handDebuff`, `rng.int`); còn "Hạ lá" (`s_lower`) **cố ý** chia lại lá cao nhất. Bàn 2 lá mất 1 lá là mất nửa bài, nên dễ cảm giác bị nhắm. Dữ liệu `games.chaos_used` đủ để thống kê. | chờ thống kê của người dùng |
+| H7 | người dùng 26/10 | P2 | Muốn bỏ hạn mức ở bàn hỗn loạn, hoặc ít nhất ×100 mức cược: nhiều biến số, hết tiền trên bàn trước khi kịp trải nghiệm. | Hạn mức Blind là 10 × mức cược (BP-31) cho mọi bàn. | mở — brainstorm |
+
+**Lựa chọn và đề xuất ban đầu (sẽ chốt khi brainstorm):**
+- H1 + H3: (a) bỏ dải giữa bàn, thay bằng **toast xếp chồng ở một góc** (mỗi toast ~4 giây, tối đa 3 cái, chạm để giữ),
+  và thẻ người thắng giữ chỗ cũ; (b) giữ dải nhưng dời thẻ người thắng vào một góc. **Đề xuất (a)**: một thay đổi giải
+  cả H1 và H3.
+- H2: (a) bàn hỗn loạn chờ lâu hơn cố định (ví dụ 10 giây); (b) 5 giây + thêm ~2 giây mỗi thẻ đã nổ, tối đa ~15 giây;
+  (c) thẻ kết quả ở lại tới khi người chơi bấm "Tiếp" (bàn đông dễ bị chờ). **Đề xuất (b)**.
+- H4: thiết kế lại khung xoay ngang cho 780×360 (S25) — màn chọn thẻ một hàng 3 thẻ, toast nhỏ ở góc, thẻ kết quả gọn
+  không cuộn; thêm cỡ này vào bộ kiểm tra ops.
+- H5: (a) thẻ thưởng thành **một lượt chọn 1 trong 3** (cấp vẫn ngẫu nhiên, giữ bất ngờ), chọn giữa hai ván hoặc ngay lúc
+  chờ; (b) cho giữ thẻ thưởng trên tay và tự bấm dùng. **Đề xuất (a)**.
+- H6: chờ thống kê; nếu cần, cân lại số liệu qua tab GM (trọng số) mà không cần sửa mã.
+- H7: (a) hạn mức bàn hỗn loạn = 100 × mức cược (vẫn lấy tối đa số dư); (b) bỏ hạn mức, mang cả số dư lên bàn. **Đề xuất
+  (a)**: giữ một trần cho người có số dư rất lớn.
+
+**Phân loại:** thay đổi thiết kế của Plan 37 (luật thẻ thưởng, hạn mức, bố cục) → brainstorm, spec bổ sung, rồi plan.
