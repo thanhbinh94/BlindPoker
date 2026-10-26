@@ -1,6 +1,6 @@
 import type { GameEvent, HandView, LegalActions, RoomEvent, RoomView, ServerMessage } from '@bp/core'
-import { initialClientState } from './types.js'
-import type { ClientAction, ClientHand, ClientHandResult, ClientSeat, ClientState } from './types.js'
+import { initialChaos, initialClientState } from './types.js'
+import type { ClientAction, ClientChaos, ClientHand, ClientHandResult, ClientSeat, ClientState } from './types.js'
 
 export { initialClientState }
 
@@ -78,7 +78,9 @@ function startHand(state: ClientState, event: Extract<GameEvent, { type: 'HAND_S
     button: event.button, actingSeat: null, seats, mySeat, legal: null, result: null, potPulse: 0,
     restored: false, dealtAt: null, boardAt: null, showdownAt: null,
   }
-  return { ...state, hand, deadlineAt: null, preAction: null }
+  // A new hand closes whatever the last one left: a draft that every seat finished at once is over, and the banner,
+  // the credits and the peek were that hand's. The seats' cards stay.
+  return { ...state, hand, deadlineAt: null, preAction: null, chaos: { ...state.chaos, draft: null, applied: [], credits: [], awarded: [], peek: null } }
 }
 
 /**
@@ -91,6 +93,8 @@ const bettingResumes = (hand: ClientHand): boolean => hand.mode === 'holdem' && 
 function settle(state: ClientState, hand: ClientHand, event: Extract<GameEvent, { type: 'SETTLEMENT' }>): ClientState {
   const stacks = new Map(event.stacks.map((s) => [s.seat, s.stack]))
   const uncalled = event.uncalledReturned
+  // The public summary is what the result line shows; a hand that never sent one falls back to what this viewer saw fire.
+  const chaosUsed = hand.result?.chaosUsed ?? (state.chaos.applied.length > 0 ? state.chaos.applied.map((a) => ({ seat: a.seat, cardId: a.cardId, outcome: a.outcome })) : undefined)
   const seats = hand.seats.map((s) => {
     const stack = stacks.get(s.seat)
     const mine = uncalled?.seat === s.seat
@@ -115,7 +119,7 @@ function settle(state: ClientState, hand: ClientHand, event: Extract<GameEvent, 
       ...hand, seats, phase: 'COMPLETE', legal: null, actingSeat: null,
       // The engine subtracts the returned bet from the pot without a further `POT_UPDATED`.
       pot: hand.pot - (uncalled?.amount ?? 0),
-      result: { payouts: event.payouts, pots: event.pots, fee: event.fee, showdown: hand.result?.showdown ?? null, carryOverOut: event.carryOverOut, uncalledReturned: uncalled, cancelled: false, reason: null },
+      result: { payouts: event.payouts, pots: event.pots, fee: event.fee, showdown: hand.result?.showdown ?? null, carryOverOut: event.carryOverOut, uncalledReturned: uncalled, cancelled: false, reason: null, ...(chaosUsed ? { chaosUsed } : {}) },
     },
   }
 }
@@ -254,11 +258,15 @@ function applyHandEvent(state: ClientState, hand: ClientHand, event: GameEvent &
       return { ...state, deadlineAt: null, hand: { ...hand, phase: 'COMPLETE', legal: null, actingSeat: null } }
     case 'HAND_STARTED':
       return state
-    // Poker hỗn loạn: shown by the chaos table UI (Plan 37 Task 6); the hand itself does not change.
-    case 'CHAOS_APPLIED':
+    // Poker hỗn loạn: the hand itself does not change; the table reads the cards that acted from `state.chaos`.
+    case 'CHAOS_APPLIED': {
+      const { type: _type, ...applied } = event
+      return { ...state, chaos: { ...state.chaos, applied: [...state.chaos.applied, applied] } }
+    }
     case 'CHAOS_PEEK':
+      return { ...state, chaos: { ...state.chaos, peek: { seat: event.seat, cards: event.cards.slice() } } }
     case 'CHAOS_SUMMARY':
-      return state
+      return withHand(state, hand, { result: { ...(hand.result ?? NO_RESULT), chaosUsed: event.used.map((u) => ({ seat: u.seat, cardId: u.cardId, outcome: u.outcome })) } })
   }
 }
 
@@ -309,7 +317,7 @@ function applyRoomEvent(room: RoomView, event: RoomEvent): RoomView {
       return { ...room, status: event.status, nextHandAt: event.nextHandAt, playerCount: room.players.length }
     case 'ROOM_CLOSED':
       return room
-    // Poker hỗn loạn: the draft and the seats' cards are shown by the chaos table UI (Plan 37 Task 6).
+    // Poker hỗn loạn: these live in `ClientState.chaos` (`applyChaosRoomEvent`), not in the roster.
     case 'CHAOS_DRAFT':
     case 'CHAOS_PICKED':
     case 'CHAOS_STATE':
@@ -317,6 +325,66 @@ function applyRoomEvent(room: RoomView, event: RoomEvent): RoomView {
     case 'CHAOS_AWARDED':
       return room
   }
+}
+
+/** The chaos half of a room event. `mySeat` is the viewer's seat before the event (null when it has none). */
+function applyChaosRoomEvent(chaos: ClientChaos, event: RoomEvent, mySeat: number | null, seatOf: (playerId: string) => number | null): ClientChaos {
+  switch (event.type) {
+    case 'CHAOS_DRAFT': {
+      const open = chaos.draft
+      // The offer may have beaten the draft frame here (they travel on different paths): same draft, keep it.
+      if (open && open.tier === event.tier && open.deadlineAt === event.deadlineAt) return chaos
+      return { ...chaos, draft: { tier: event.tier, deadlineAt: event.deadlineAt, offer: null, picked: false } }
+    }
+    case 'CHAOS_PICKED':
+      return chaos.draft && event.seat === mySeat ? { ...chaos, draft: { ...chaos.draft, picked: true } } : chaos
+    // Sent after a draft and after each hand: a draft is over by then.
+    case 'CHAOS_STATE':
+      return { ...chaos, draft: null, seats: Object.fromEntries(event.seats.map((s) => [s.seat, { cards: s.cards, points: s.points }])) }
+    case 'CHAOS_CREDIT': {
+      const { type: _type, ...credit } = event
+      return { ...chaos, credits: [...chaos.credits, credit] }
+    }
+    case 'CHAOS_AWARDED':
+      return { ...chaos, awarded: [...chaos.awarded, { seat: event.seat, cardIds: event.cardIds }] }
+    // `PLAYER_SAT` carries no `chaos` field: a new seat starts with nothing, and says so until `CHAOS_STATE`.
+    case 'PLAYER_SAT':
+      return { ...chaos, seats: { ...chaos.seats, [event.seat]: chaos.seats[event.seat] ?? { cards: [], points: 0 } } }
+    case 'PLAYER_STOOD':
+      return dropSeat(chaos, event.seat)
+    case 'PLAYER_LEFT': {
+      const seat = seatOf(event.playerId)
+      return seat === null ? chaos : dropSeat(chaos, seat)
+    }
+    default:
+      return chaos
+  }
+}
+
+function dropSeat(chaos: ClientChaos, seat: number): ClientChaos {
+  if (!(seat in chaos.seats)) return chaos
+  const { [seat]: _gone, ...seats } = chaos.seats
+  return { ...chaos, seats }
+}
+
+/** The seats' chaos cards as a snapshot's roster carries them; a chaos table gives every seated player an entry. */
+function chaosFromSnapshot(room: RoomView, draft: ClientChaos['draft']): ClientChaos {
+  const table = room.config.blind?.chaosCycle !== undefined
+  const seats: ClientChaos['seats'] = {}
+  for (const p of room.players) if (p.seat !== null && (p.chaos || table)) seats[p.seat] = { cards: p.chaos?.cards ?? [], points: p.chaos?.points ?? 0 }
+  return { ...initialChaos, seats, draft }
+}
+
+/** `NOTIFICATION { kind: 'CHAOS_OFFER' }`: this player's three cards. Anything malformed is ignored. */
+function applyChaosOffer(chaos: ClientChaos, payload: unknown): ClientChaos {
+  const p = payload as { offerId?: unknown; tier?: unknown; cardIds?: unknown; deadlineAt?: unknown } | null
+  if (!p || typeof p.offerId !== 'string' || typeof p.deadlineAt !== 'number' || (p.tier !== 'silver' && p.tier !== 'gold' && p.tier !== 'diamond')) return chaos
+  if (!Array.isArray(p.cardIds) || !p.cardIds.every((c) => typeof c === 'string')) return chaos
+  const offer = { offerId: p.offerId, cardIds: p.cardIds as string[] }
+  const open = chaos.draft
+  const same = open !== null && open.tier === p.tier && open.deadlineAt === p.deadlineAt
+  const picked = same && open.offer?.offerId === offer.offerId ? open.picked : false
+  return { ...chaos, draft: { tier: p.tier, deadlineAt: p.deadlineAt, offer, picked } }
 }
 
 /**
@@ -368,6 +436,7 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
         roomStale: false,
         roomReturns: state.roomStale ? state.roomReturns + 1 : state.roomReturns,
         hand: msg.hand ? handFromView(msg.hand, msg.room) : null,
+        chaos: chaosFromSnapshot(msg.room, msg.chaos?.draft ?? null),
         seq: msg.seq,
         deadlineAt: msg.deadlineAt,
         resyncNeeded: false,
@@ -376,7 +445,8 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
     case 'BALANCE':
       return { ...state, balance: msg.balance }
     case 'NOTIFICATION':
-      return notify(state, msg.kind, msg.payload, now)
+      // The offer is a draft's business, not a slip to dismiss.
+      return msg.kind === 'CHAOS_OFFER' ? { ...state, chaos: applyChaosOffer(state.chaos, msg.payload) } : notify(state, msg.kind, msg.payload, now)
     case 'ERROR': {
       // The other answer the reconnect probe can get: the server has no room for us. That is news to the state,
       // not to the player — silence it while the room was unconfirmed, or when there was no room to lose.
@@ -387,6 +457,7 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
           room: null,
           roomStale: false,
           hand: null,
+          chaos: initialChaos,
           seq: 0,
           deadlineAt: null,
           preAction: null,
@@ -406,7 +477,7 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
     case 'ROOM_EVENT': {
       const resyncNeeded = state.resyncNeeded || state.room === null || gap(state, msg.seq)
       if (msg.event.type === 'ROOM_CLOSED') {
-        return { ...notify(state, 'ROOM_CLOSED', { reason: msg.event.reason }, now), room: null, hand: null, seq: msg.seq, resyncNeeded, preAction: null, autoPlay: false }
+        return { ...notify(state, 'ROOM_CLOSED', { reason: msg.event.reason }, now), room: null, hand: null, chaos: initialChaos, seq: msg.seq, resyncNeeded, preAction: null, autoPlay: false }
       }
       const event = msg.event
       // Standing, leaving or sitting out ends the seat's standing preferences with it.
@@ -415,12 +486,14 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
       // when the hand ended. The room is gone for this client exactly as after a leave it asked for: the room screen
       // hands over to the app (`onLeft`). A kick also brings its own KICKED notification; that stays a toast only.
       if (mine && event.type === 'PLAYER_LEFT') {
-        return { ...state, room: null, hand: null, seq: msg.seq, deadlineAt: null, preAction: null, autoPlay: false }
+        return { ...state, room: null, hand: null, chaos: initialChaos, seq: msg.seq, deadlineAt: null, preAction: null, autoPlay: false }
       }
+      const myPlayer = state.me !== null ? state.room?.players.find((p) => p.playerId === state.me!.playerId) : undefined
       const stopsAutoPlay = mine && (event.type === 'PLAYER_STOOD' || (event.type === 'PLAYER_SIT_OUT' && event.sittingOut))
       return {
         ...state,
         room: state.room ? applyRoomEvent(state.room, event) : null,
+        chaos: applyChaosRoomEvent(state.chaos, event, myPlayer?.seat ?? null, (id) => state.room?.players.find((p) => p.playerId === id)?.seat ?? null),
         seq: msg.seq,
         resyncNeeded,
         autoPlay: stopsAutoPlay ? false : state.autoPlay,
@@ -445,12 +518,16 @@ export function reduceClient(state: ClientState, action: ClientAction): ClientSt
     case 'resyncSent':
       return { ...state, resyncNeeded: false }
     case 'leftRoom':
-      return { ...state, room: null, hand: null, preAction: null, autoPlay: false }
+      return { ...state, room: null, hand: null, chaos: initialChaos, preAction: null, autoPlay: false }
     case 'preAction':
       // A tick needs a hand to belong to; outside one there is nothing it could mean.
       return { ...state, preAction: action.kind === null || state.hand === null ? null : { kind: action.kind, handId: state.hand.handId } }
     case 'autoPlay':
       return { ...state, autoPlay: action.on }
+    case 'chaosPicked': {
+      const draft = state.chaos.draft
+      return draft?.offer?.offerId === action.offerId ? { ...state, chaos: { ...state.chaos, draft: { ...draft, picked: true } } } : state
+    }
     case 'renamed':
       // Only `me`. The room the player is in (if any) seated them under the name they entered it with, for
       // everyone at the table, and keeps it; the server hands the new name to the player's live connection

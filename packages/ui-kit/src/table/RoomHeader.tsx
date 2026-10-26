@@ -56,6 +56,7 @@ export function RoomHeader({ room, status, onLeave, lang, right, compact = false
   )
   const squeeze = blind?.squeeze === true
   const squeezeBadge = squeeze ? <Badge tone="gold">{t('labels.squeezeMode')}</Badge> : null
+  const chaosBadge = blind?.chaosCycle === undefined ? null : <Badge tone="chaos">{t('labels.chaosMode')}</Badge>
   const code = (
     <span className={s.code} aria-label={t('labels.code')}>
       {room.code}
@@ -73,6 +74,7 @@ export function RoomHeader({ room, status, onLeave, lang, right, compact = false
         {conn}
         <h1 className={s.roomName}>{room.name}</h1>
         {squeezeBadge}
+        {chaosBadge}
         {code}
         {stakes === '' ? null : <span className={s.stakes}>{stakes}</span>}
         <div className={s.headRight}>
@@ -100,6 +102,7 @@ export function RoomHeader({ room, status, onLeave, lang, right, compact = false
               <Badge tone="gold">{t(`mode.${room.mode}`)}</Badge>
               {blind === undefined ? null : <Badge tone="teal">{t(blind.holeCards === 3 ? 'blind.cards3' : 'blind.cards2')}</Badge>}
               {blind === undefined ? null : <Badge tone="muted">{t(`blind.decision.${blind.decisionMode}`)}</Badge>}
+              {chaosBadge}
               <span className={cx(s.code, s.metaTail)} aria-label={t('labels.code')}>
                 {room.code}
               </span>

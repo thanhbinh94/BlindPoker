@@ -54,6 +54,7 @@
     "bot": "Bot",
     "buyIn": "Buy-in",
     "carryOver": "Cộng dồn",
+    "chaosMode": "Hỗn loạn",
     "code": "Mã phòng",
     "community": "Bài chung",
     "dealer": "Cái",
@@ -219,6 +220,10 @@
     "squeeze": "Nặn bài",
     "squeezeHint": "Mỗi vòng tối đa 20 giây, kết thúc sớm khi mọi người đã lật.",
     "squeezeTimer": "{{time}} · nặn bài",
+    "chaos": "Poker hỗn loạn",
+    "chaosHint": "Cả bàn chọn thẻ theo chu kỳ; thẻ đổi bài, che chắn hoặc gây hại đối thủ trong một vài ván.",
+    "chaosCycle": "Chu kỳ thẻ",
+    "chaosCycleOption": "{{count}} ván",
     "submit": "Tạo phòng",
     "hint": {
       "name": "Tên phòng cần 1–30 ký tự.",
@@ -282,6 +287,225 @@
     "min": "Min",
     "half": "½ pot",
     "pot": "Pot"
+  },
+  "chaos": {
+    "capped": "Đã chạm trần thẻ hôm nay",
+    "cycle": "Chu kỳ thẻ",
+    "cardsTab": "Thẻ hỗn loạn",
+    "used": "Thẻ đã dùng",
+    "points": "Điểm hỗn loạn",
+    "handsLeft": "còn {{count}} ván",
+    "tier": {
+      "silver": "Bạc",
+      "gold": "Vàng",
+      "diamond": "Kim cương"
+    },
+    "draft": {
+      "title": "Chọn một thẻ {{tier}}",
+      "picked": "Đã chọn — chờ người chơi khác",
+      "watching": "Các tay chơi đang chọn thẻ"
+    },
+    "outcome": {
+      "applied": "Đã áp",
+      "blocked": "Bị chặn",
+      "reflected": "Bị phản lại",
+      "fizzled": "Không có tác dụng"
+    },
+    "credit": {
+      "chaos_rescue": "Cấp cứu +{{amount}}",
+      "chaos_crit": "Bạo kích ×{{multiplier}} +{{amount}}",
+      "chaos_fortune": "Thần tài +{{amount}}"
+    },
+    "cards": {
+      "s_swap_one": {
+        "name": "Đổi lá",
+        "desc": "Lá riêng thấp nhất được chia lại, trong 1 ván."
+      },
+      "s_luck_1": {
+        "name": "Bùa may nhỏ",
+        "desc": "Chia 2 bộ bài riêng và giữ bộ tốt hơn, trong 1 ván."
+      },
+      "s_high_card": {
+        "name": "Chất bổ",
+        "desc": "Bài riêng chắc chắn có ít nhất 1 lá từ 10 trở lên, trong 1 ván."
+      },
+      "s_suited": {
+        "name": "Đồng hoa",
+        "desc": "Hai lá riêng đầu tiên cùng chất, trong 1 ván."
+      },
+      "s_redeal_weak": {
+        "name": "Chia lại bài yếu",
+        "desc": "Bài riêng không có đôi và không có lá từ J trở lên thì được chia lại một lần, trong 1 ván."
+      },
+      "s_peek_1": {
+        "name": "Nhìn trộm",
+        "desc": "Xem trước 1 lá chung trước khi chọn Chơi hoặc Bỏ bài, trong 1 ván."
+      },
+      "s_free_fold": {
+        "name": "Bỏ không mất",
+        "desc": "Chọn Bỏ bài thì được hoàn mức cược đầu ván, trong 1 ván."
+      },
+      "s_insure_half": {
+        "name": "Bảo hiểm bạc",
+        "desc": "Thua thì được hoàn 50% phần đã đặt, trong 1 ván."
+      },
+      "s_shield": {
+        "name": "Khiên gỗ",
+        "desc": "Chặn 1 thẻ gây hại kế tiếp nhắm vào bạn."
+      },
+      "s_rescue": {
+        "name": "Cấp cứu bạc",
+        "desc": "Thua mà stack còn dưới 2 mức cược thì được cộng 5 × mức cược."
+      },
+      "s_charge": {
+        "name": "Tích lũy",
+        "desc": "Nhận ngay 3 điểm hỗn loạn."
+      },
+      "s_steal_one": {
+        "name": "Rút lá lẻ",
+        "desc": "Khi lật bài, 1 đối thủ ngẫu nhiên mất 1 lá riêng."
+      },
+      "s_lower": {
+        "name": "Hạ lá",
+        "desc": "Khi lật bài, lá riêng cao nhất của 1 đối thủ ngẫu nhiên bị chia lại."
+      },
+      "s_blindfold": {
+        "name": "Che mắt",
+        "desc": "1 đối thủ ngẫu nhiên không được xem bài riêng ở ván sau."
+      },
+      "s_freeze_one": {
+        "name": "Đóng băng nhỏ",
+        "desc": "1 đối thủ ngẫu nhiên không dùng được thẻ ở ván sau."
+      },
+      "s_crit": {
+        "name": "Bạo kích bạc",
+        "desc": "Khi thắng, 20% cơ hội nhân đôi phần thắng ròng, trong 3 ván."
+      },
+      "s_fortune": {
+        "name": "Thần tài bạc",
+        "desc": "Nằm chờ; thắng ngay sau chuỗi thua từ 2 ván thì nhận thưởng, chuỗi thua càng dài thưởng càng lớn."
+      },
+      "s_level": {
+        "name": "Cấp độ bạc",
+        "desc": "Đổi ngay thành 1 thẻ Vàng ngẫu nhiên."
+      },
+      "g_swap_all": {
+        "name": "Đổi bài",
+        "desc": "Chia lại cả bài riêng khi không có đôi và không có lá từ Q trở lên, trong 1 ván."
+      },
+      "g_luck_3": {
+        "name": "Bùa may",
+        "desc": "Chia 2 bộ bài riêng và giữ bộ tốt hơn, trong 3 ván."
+      },
+      "g_extra_card": {
+        "name": "Thêm lá",
+        "desc": "Thêm 1 lá riêng, trong 1 ván."
+      },
+      "g_peek_3": {
+        "name": "Nhìn trộm vàng",
+        "desc": "Xem trước 3 lá chung trước khi chọn Chơi hoặc Bỏ bài, trong 1 ván."
+      },
+      "g_borrow": {
+        "name": "Mượn lá",
+        "desc": "Khi lật bài, dùng thêm 1 lá riêng của 1 đối thủ ngẫu nhiên; họ vẫn giữ lá đó."
+      },
+      "g_insure_full": {
+        "name": "Bảo hiểm vàng",
+        "desc": "Thua thì được hoàn 100% phần đã đặt, trong 1 ván."
+      },
+      "g_shield_3": {
+        "name": "Khiên sắt",
+        "desc": "Chặn mọi thẻ gây hại nhắm vào bạn trong 3 ván."
+      },
+      "g_rescue": {
+        "name": "Cấp cứu vàng",
+        "desc": "Thua mà stack còn dưới 2 mức cược thì được cộng 10 × mức cược."
+      },
+      "g_farm": {
+        "name": "Cày điểm",
+        "desc": "Điểm hỗn loạn nhân đôi trong 5 ván."
+      },
+      "g_steal_all": {
+        "name": "Rút lá cả bàn",
+        "desc": "Khi lật bài, mỗi đối thủ mất 1 lá riêng."
+      },
+      "g_redeal_board_1": {
+        "name": "Chia lại lá chung",
+        "desc": "1 lá chung ngẫu nhiên được chia lại; cả bàn cùng chịu."
+      },
+      "g_freeze_all": {
+        "name": "Đóng băng bàn",
+        "desc": "Mọi đối thủ không dùng được thẻ ở ván sau."
+      },
+      "g_crit": {
+        "name": "Bạo kích vàng",
+        "desc": "Khi thắng, 25% cơ hội ×2 và 10% cơ hội ×3 phần thắng ròng, trong 3 ván."
+      },
+      "g_fortune": {
+        "name": "Thần tài vàng",
+        "desc": "Nằm chờ; thắng ngay sau chuỗi thua từ 2 ván thì nhận thưởng, chuỗi thua càng dài thưởng càng lớn."
+      },
+      "g_level": {
+        "name": "Cấp độ vàng",
+        "desc": "Đổi ngay thành 1 thẻ Kim cương ngẫu nhiên."
+      },
+      "d_pick_3": {
+        "name": "Chọn bài",
+        "desc": "Chia 3 bộ bài riêng và giữ bộ tốt nhất, trong 1 ván."
+      },
+      "d_luck_5": {
+        "name": "Bùa may lớn",
+        "desc": "Chia 2 bộ bài riêng và giữ bộ tốt hơn, trong 5 ván."
+      },
+      "d_extra_card_3": {
+        "name": "Thêm lá kim cương",
+        "desc": "Thêm 1 lá riêng, trong 3 ván."
+      },
+      "d_peek_5": {
+        "name": "Thấu thị",
+        "desc": "Xem trước cả 5 lá chung trước khi chọn Chơi hoặc Bỏ bài, trong 1 ván."
+      },
+      "d_insure_2": {
+        "name": "Bảo hiểm kim cương",
+        "desc": "Thua thì được hoàn 100% phần đã đặt, trong 2 ván."
+      },
+      "d_mirror": {
+        "name": "Gương phản chiếu",
+        "desc": "Phản thẻ gây hại kế tiếp về đúng người đã dùng nó."
+      },
+      "d_rescue": {
+        "name": "Cấp cứu kim cương",
+        "desc": "Thua mà stack còn dưới 2 mức cược thì được cộng 20 × mức cược (trong trần mỗi ngày)."
+      },
+      "d_swap_hands": {
+        "name": "Tráo bài",
+        "desc": "Khi lật bài, tráo cả bài riêng với 1 đối thủ ngẫu nhiên."
+      },
+      "d_storm": {
+        "name": "Bão lá chung",
+        "desc": "Chia lại cả 5 lá chung; cả bàn cùng chịu."
+      },
+      "d_reverse": {
+        "name": "Thế giới đảo ngược",
+        "desc": "Bộ yếu nhất ăn pot ván này; cả bàn được báo ngay từ lúc chia."
+      },
+      "d_crit": {
+        "name": "Bạo kích kim cương",
+        "desc": "Khi thắng, 30% cơ hội ×2 và 15% cơ hội ×3 phần thắng ròng, trong 3 ván."
+      },
+      "d_fortune": {
+        "name": "Thần tài kim cương",
+        "desc": "Nằm chờ; thắng ngay sau chuỗi thua từ 2 ván thì nhận thưởng, chuỗi thua càng dài thưởng càng lớn."
+      },
+      "d_gambler": {
+        "name": "Tay bạc",
+        "desc": "Mỗi ván tự áp 1 hiệu ứng ngẫu nhiên của một thẻ Bạc hoặc Vàng, cho tới khung chọn thẻ kế tiếp."
+      },
+      "d_level": {
+        "name": "Cấp độ kim cương",
+        "desc": "Đổi ngay thành 2 thẻ ngẫu nhiên, mỗi thẻ cấp ngẫu nhiên từ Bạc đến Kim cương."
+      }
+    }
   },
   "avatar": {
     "turn": "Xoay",

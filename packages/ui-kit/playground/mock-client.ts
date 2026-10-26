@@ -350,6 +350,8 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
       }
       return ACK
     },
+    // The playground's tables deal no chaos cards (yet): nothing is on offer, so a pick is an ACK that changes nothing.
+    pickChaos: async () => ACK,
     setPreAction: (kind) => publish(reduceClient(state, { type: 'preAction', kind })),
     setAutoPlay: (on) => publish(reduceClient(state, { type: 'autoPlay', on })),
     resync: () => {},

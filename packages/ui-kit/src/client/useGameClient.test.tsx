@@ -272,3 +272,84 @@ describe('useGameClient squeeze mode', () => {
     await act(async () => { await expect(p).resolves.toMatchObject({ t: 'ACK' }) })
   })
 })
+
+describe('useGameClient Poker hỗn loạn', () => {
+  beforeEach(() => { vi.useFakeTimers(); FakeSocket.reset() })
+  afterEach(() => { vi.useRealTimers() })
+
+  const chaosRoom = {
+    roomId: 'r', code: 'C', name: 'n', mode: 'blind' as const,
+    config: { name: 'n', mode: 'blind' as const, maxPlayers: 3, isPrivate: false, turnTimerSec: 20, autoStart: false, hasPassword: false, blind: { holeCards: 2 as const, decisionMode: 'playOrFold' as const, fixedWager: 1000, botCount: 0, chaosCycle: 5 as const } },
+    playerCount: 2, maxPlayers: 3, status: 'IN_GAME' as const, hostPlayerId: 'a', carryOverPot: 0, nextHandAt: null,
+    players: [
+      { playerId: 'a', displayName: 'A', isBot: false, isHost: true, connected: true, seat: 0, status: 'SEATED' as const, sittingOut: false, stack: 20000, ready: true },
+      { playerId: 'b', displayName: 'B', isBot: false, isHost: false, connected: true, seat: 1, status: 'SEATED' as const, sittingOut: false, stack: 20000, ready: true },
+    ],
+  }
+  const OFFER = { offerId: 'o1', tier: 'silver', cardIds: ['s_shield', 's_peek_board', 's_free_fold'], deadlineAt: Date.now() + 15_000 }
+
+  function atTheDraft() {
+    const rendered = renderHook(() => useGameClient({ url: 'ws://x/ws', token: 'tok:a', socketFactory: fakeSocketFactory }))
+    const sock = () => FakeSocket.instances.at(-1)!
+    act(() => sock().open())
+    act(() => sock().receive({ t: 'WELCOME', playerId: 'a', displayName: 'A', balance: 100, serverTime: Date.now() }))
+    act(() => sock().receive({ t: 'ROOM_SNAPSHOT', seq: 7, room: chaosRoom, hand: null, deadlineAt: null }))
+    return { ...rendered, sock }
+  }
+  const offerTo = (sock: () => FakeSocket) => {
+    act(() => sock().receive({ t: 'NOTIFICATION', kind: 'CHAOS_OFFER', payload: OFFER }))
+    act(() => sock().receive({ t: 'ROOM_EVENT', seq: 8, event: { type: 'CHAOS_DRAFT', tier: 'silver', deadlineAt: OFFER.deadlineAt, seats: [0, 1] } }))
+  }
+  const picks = (sock: () => FakeSocket) => sock().sent.filter((m) => (m as { t: string }).t === 'CHAOS_PICK')
+
+  it('pickChaos sends CHAOS_PICK with a request id, and marks the offer picked once the server acknowledges', async () => {
+    const { result, sock } = atTheDraft()
+    offerTo(sock)
+    let p!: Promise<{ t: string }>
+    act(() => { p = result.current.pickChaos('o1', 's_peek_board') })
+    const sent = sock().sent.at(-1) as { t: string; reqId: string }
+    expect(sent).toMatchObject({ t: 'CHAOS_PICK', offerId: 'o1', cardId: 's_peek_board' })
+    expect(sent.reqId).toEqual(expect.any(String))
+    expect(result.current.state.chaos.draft?.picked).toBe(false)
+    act(() => sock().receive({ t: 'ACK', reqId: sent.reqId }))
+    await act(async () => { await expect(p).resolves.toMatchObject({ t: 'ACK' }) })
+    expect(result.current.state.chaos.draft?.picked).toBe(true)
+  })
+
+  it('a refused pick leaves the offer open', async () => {
+    const { result, sock } = atTheDraft()
+    offerTo(sock)
+    let p!: Promise<{ t: string }>
+    act(() => { p = result.current.pickChaos('o1', 's_shield') })
+    const sent = sock().sent.at(-1) as { t: string; reqId: string }
+    act(() => sock().receive({ t: 'ERROR', reqId: sent.reqId, code: 'CHAOS_NO_OFFER', message: 'late' }))
+    await act(async () => { await p })
+    expect(result.current.state.chaos.draft?.picked).toBe(false)
+  })
+
+  it('auto-play takes the first offered card at once, one CHAOS_PICK per offer', () => {
+    const { result, sock } = atTheDraft()
+    act(() => result.current.setAutoPlay(true))
+    offerTo(sock)
+    expect(picks(sock)).toHaveLength(1)
+    expect(picks(sock)[0]).toMatchObject({ offerId: 'o1', cardId: 's_shield' })
+    act(() => sock().receive({ t: 'BALANCE', balance: 5 }))
+    expect(picks(sock)).toHaveLength(1)
+    act(() => sock().receive({ t: 'NOTIFICATION', kind: 'CHAOS_OFFER', payload: { ...OFFER, offerId: 'o2', cardIds: ['s_free_fold'] } }))
+    expect(picks(sock)).toHaveLength(2)
+    expect(picks(sock)[1]).toMatchObject({ offerId: 'o2', cardId: 's_free_fold' })
+  })
+
+  it('without auto-play the player chooses', () => {
+    const { sock } = atTheDraft()
+    offerTo(sock)
+    expect(picks(sock)).toHaveLength(0)
+  })
+
+  it('auto-play picks nothing for a spectator\'s draft (no offer) or an offer already picked', () => {
+    const { result, sock } = atTheDraft()
+    act(() => result.current.setAutoPlay(true))
+    act(() => sock().receive({ t: 'ROOM_EVENT', seq: 8, event: { type: 'CHAOS_DRAFT', tier: 'silver', deadlineAt: OFFER.deadlineAt, seats: [1] } }))
+    expect(picks(sock)).toHaveLength(0)
+  })
+})

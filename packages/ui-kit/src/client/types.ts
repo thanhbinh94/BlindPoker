@@ -1,5 +1,6 @@
 import type {
-  Card, Decision, ErrorCode, GameMode, LegalActions, PlayerAction, RoomSummary, RoomView, ServerMessage, ShowdownHand,
+  Card, ChaosCreditReason, ChaosEffectKind, ChaosOutcome, ChaosTier, Decision, ErrorCode, GameMode, HeldCardView, LegalActions, PlayerAction,
+  RoomSummary, RoomView, ServerMessage, ShowdownHand,
 } from '@bp/core'
 import type { PreActionKind } from './preaction.js'
 
@@ -52,6 +53,11 @@ export interface ClientHandResult {
   uncalledReturned: { seat: number; amount: number } | null
   cancelled: boolean
   reason: string | null
+  /**
+   * Poker hỗn loạn: the cards the hand used, in the order they acted ("Thẻ đã dùng"), from the public `CHAOS_SUMMARY`
+   * just before `SETTLEMENT`. Absent on a hand that used none and on a table without chaos.
+   */
+  chaosUsed?: { seat: number; cardId: string; outcome: string }[]
 }
 
 export interface ClientHand {
@@ -82,6 +88,55 @@ export interface ClientHand {
   /** The `SHOWDOWN`; see `dealtAt`. */
   showdownAt: number | null
 }
+
+/** One `CHAOS_APPLIED` as the viewer received it: deal-time buffs only ever reach their owner, so a seat's own are the only ones it sees early. */
+export interface AppliedChaosView {
+  seat: number
+  cardId: string
+  effect: ChaosEffectKind
+  targets: number[]
+  outcome: ChaosOutcome
+  community?: Card[]
+  amount?: number
+}
+
+/**
+ * A chaos draft as this viewer sees it: `offer` is the three cards sent to this player alone (`null` for a spectator,
+ * and for a seat drafted with nothing to choose from), `picked` once its choice is made.
+ */
+export interface ClientChaosDraft {
+  tier: ChaosTier
+  deadlineAt: number
+  offer: { offerId: string; cardIds: string[] } | null
+  picked: boolean
+}
+
+export interface ClientChaosCredit {
+  seat: number
+  amount: number
+  reason: ChaosCreditReason
+  /** The daily cap cut the credit (`amount` is what was actually paid). */
+  capped: boolean
+  /** Bạo kích only. */
+  multiplier?: 2 | 3
+}
+
+/** Poker hỗn loạn (spec 2026-10-26): everything the client keeps about the chaos cards. Empty on a table without them. */
+export interface ClientChaos {
+  draft: ClientChaosDraft | null
+  /** Every seat's held cards and chaos points (public). */
+  seats: Record<number, { cards: HeldCardView[]; points: number }>
+  /** This hand's `CHAOS_APPLIED`, in order; cleared when the next hand starts. */
+  applied: AppliedChaosView[]
+  /** The credits cards paid after the last hand; cleared when the next hand starts. */
+  credits: ClientChaosCredit[]
+  /** Bonus or prize cards seats received after the last hand; cleared when the next hand starts. */
+  awarded: { seat: number; cardIds: string[] }[]
+  /** "Nhìn trộm": the next board cards, for this viewer only; cleared when the next hand starts. */
+  peek: { seat: number; cards: Card[] } | null
+}
+
+export const initialChaos: ClientChaos = { draft: null, seats: {}, applied: [], credits: [], awarded: [], peek: null }
 
 export interface ClientError {
   code: ErrorCode
@@ -140,6 +195,7 @@ export interface ClientState {
    * A standing preference rather than a one-hand tick, because a Blind hand asks exactly one question.
    */
   autoPlay: boolean
+  chaos: ClientChaos
 }
 
 export type ClientAction =
@@ -151,6 +207,8 @@ export type ClientAction =
   | { type: 'leftRoom' }
   | { type: 'preAction'; kind: PreActionKind | null }
   | { type: 'autoPlay'; on: boolean }
+  /** The server acknowledged my `CHAOS_PICK`: the offer is picked now, not only when the draft ends. */
+  | { type: 'chaosPicked'; offerId: string }
   /**
    * The account's display name changed (the app's own rename succeeded): `me` takes the new name at once. `me`
    * came from `WELCOME` and would otherwise keep the old name until the next one, and the lobby bar reads it.
@@ -185,4 +243,5 @@ export const initialClientState: ClientState = {
   replaced: false,
   preAction: null,
   autoPlay: false,
+  chaos: initialChaos,
 }

@@ -134,6 +134,7 @@ function RoomTicket({ room, onJoin, lang, busy }: RoomTicketProps) {
             <Badge tone="muted">{t(blind.holeCards === 3 ? 'blind.cards3' : 'blind.cards2')}</Badge>
             <Badge tone="muted">{t(`blind.decision.${blind.decisionMode}`)}</Badge>
             {blind.squeeze === true ? <Badge tone="gold">{t('labels.squeezeMode')}</Badge> : null}
+            {blind.chaosCycle === undefined ? null : <Badge tone="chaos">{t('labels.chaosMode')}</Badge>}
           </div>
         )}
 

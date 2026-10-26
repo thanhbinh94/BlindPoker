@@ -23,7 +23,9 @@
     "NOT_ENOUGH_PLAYERS": "Not enough players",
     "DISPLAY_NAME_TAKEN": "That display name is taken",
     "SERVER_SHUTDOWN": "Server is shutting down",
-    "INTERNAL": "Something went wrong — please try again"
+    "INTERNAL": "Something went wrong — please try again",
+    "CHAOS_UNAVAILABLE": "This server has no chaos poker yet",
+    "CHAOS_NO_OFFER": "There is no card left to pick"
   },
   "language": {
     "vi": "Tiếng Việt",

@@ -25,6 +25,8 @@ export interface GameClientApi {
   act(action: PlayerAction): Promise<AckOrError>
   /** Squeeze mode: tell the table every one of my cards is turned (spec 2026-10-08). Harmless on a plain table. */
   reveal(): Promise<AckOrError>
+  /** Poker hỗn loạn: take `cardId` from the offer `offerId` this player was sent in the open draft. */
+  pickChaos(offerId: string, cardId: string): Promise<AckOrError>
   /**
    * Tick (or clear, with `null`) what to do when the turn comes: the hook sends the matching legal action the
    * moment the server says it is this seat's turn, exactly as if the player had pressed the button then. Only
@@ -140,6 +142,26 @@ export function useGameClient(opts: UseGameClientOptions): GameClientApi {
     request({ t: 'REVEAL' }).catch(() => undefined)
   }, [autoPlay, squeeze, current, myCards, returns, request])
 
+  // The pick: a refusal comes back as `lastError` like any other; the offer is marked picked only on the ACK.
+  const pickChaos = useCallback(
+    async (offerId: string, cardId: string): Promise<AckOrError> => {
+      const r = await request({ t: 'CHAOS_PICK', offerId, cardId })
+      if (r.t === 'ACK') dispatch({ type: 'chaosPicked', offerId })
+      return r
+    },
+    [request],
+  )
+
+  // Poker hỗn loạn with auto-play on: the first offered card is taken the moment the offer lands, once per offer. Keyed on
+  // the offer id like the squeeze REVEAL above is keyed on the hand, so a re-render or StrictMode never sends it twice.
+  const pickedFor = useRef<string | null>(null)
+  const offer = state.chaos.draft?.picked === false ? state.chaos.draft.offer : null
+  useEffect(() => {
+    if (!autoPlay || offer === null || offer.cardIds.length === 0 || pickedFor.current === offer.offerId) return
+    pickedFor.current = offer.offerId
+    pickChaos(offer.offerId, offer.cardIds[0]!).catch(() => undefined)
+  }, [autoPlay, offer, pickChaos])
+
   return useMemo<GameClientApi>(
     () => ({
       state,
@@ -163,6 +185,7 @@ export function useGameClient(opts: UseGameClientOptions): GameClientApi {
       // `reqId` is a placeholder: `connection.request` always overwrites it with the id it correlates on.
       act: (action) => request({ t: 'ACTION', reqId: '', baseSeq: stateRef.current.seq, action }),
       reveal: () => request({ t: 'REVEAL' }),
+      pickChaos,
       setPreAction: (kind) => dispatch({ type: 'preAction', kind }),
       setAutoPlay: (on) => dispatch({ type: 'autoPlay', on }),
       resync: () => void connection.send({ t: 'RESYNC' }),
@@ -172,7 +195,7 @@ export function useGameClient(opts: UseGameClientOptions): GameClientApi {
       reset: () => dispatch({ type: 'reset' }),
       serverNow: () => Date.now() + stateRef.current.serverTimeOffset,
     }),
-    [state, connection, request],
+    [state, connection, request, pickChaos],
   )
 }
 

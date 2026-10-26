@@ -306,6 +306,13 @@
   background: color-mix(in srgb, var(--ink-muted) 14%, transparent);
 }
 
+/* A Poker hỗn loạn table: the violet of the rarity scale, which nothing else in a room's tags uses (gold = Nặn bài, teal =
+   cards, grey = the decision). Drawn toward --ink like the others so it clears 4.5:1 on its own tint. */
+.badge.chaos {
+  color: color-mix(in srgb, var(--rarity-epic) 80%, var(--ink));
+  background: color-mix(in srgb, var(--rarity-epic) 16%, transparent);
+}
+
 /* ---------- Modal ---------- */
 .backdrop {
   position: fixed;

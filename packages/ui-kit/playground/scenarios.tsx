@@ -380,6 +380,7 @@ function frozenClient(state: ClientState): GameClientApi {
     kick: ack,
     act: ack,
     reveal: ack,
+    pickChaos: ack,
     setPreAction: () => {},
     setAutoPlay: () => {},
     resync: () => {},

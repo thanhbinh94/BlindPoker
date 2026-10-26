@@ -301,6 +301,25 @@
   .modeFields {
     min-height: 14rem;
   }
+
+  /* Where the host offers Poker hỗn loạn (Normal), Blind brings one more row — the tick and its cycle, 44 px and a gap —
+     and both modes reserve the taller box, as above: the reserve is Blind's 206 px + 16 + 44. */
+  .modeFieldsChaos {
+    min-height: 17rem;
+  }
+}
+
+/* The "Poker hỗn loạn" row: the tick takes the width, the cycle's select a fixed share on the right. */
+.chaosRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.chaosCycle {
+  flex: none;
+  width: 8.5rem;
 }
 
 .input {

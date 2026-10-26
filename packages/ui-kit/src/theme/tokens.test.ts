@@ -210,6 +210,43 @@ describe('theme contrast', () => {
   })
 })
 
+// --------------------------------------------------------------------------- the chaos tiers
+
+describe('the chaos tier tokens (Bạc, Vàng, Kim cương)', () => {
+  const TIERS = ['silver', 'gold', 'diamond'] as const
+
+  it('declare a frame and a text ink per tier in every palette', () => {
+    for (const [name, palette] of Object.entries(PALETTES)) {
+      for (const tier of TIERS) {
+        expect(palette[`--tier-${tier}`], `${name} --tier-${tier}`).toMatch(HEX)
+        expect(palette[`--tier-${tier}-ink`], `${name} --tier-${tier}-ink`).toMatch(HEX)
+      }
+    }
+  })
+
+  it('print the ink at AA (4.5:1) on the page and on a raised panel, and draw the frame at 3:1 against the page', () => {
+    for (const [name, palette] of Object.entries(PALETTES)) {
+      for (const tier of TIERS) {
+        for (const ground of ['--bg', '--bg-elev']) {
+          const ink = contrast(palette[`--tier-${tier}-ink`]!, palette[ground]!)
+          expect(ink, `${name} --tier-${tier}-ink on ${ground} is ${ink.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA)
+        }
+        const frame = contrast(palette[`--tier-${tier}`]!, palette['--bg']!)
+        expect(frame, `${name} --tier-${tier} on --bg is ${frame.toFixed(2)}:1`).toBeGreaterThanOrEqual(NON_TEXT)
+      }
+    }
+  })
+
+  it('keep the three tiers apart in every palette', () => {
+    for (const [name, palette] of Object.entries(PALETTES)) {
+      const frames = TIERS.map((tier) => palette[`--tier-${tier}`])
+      expect(new Set(frames).size, `${name} frames`).toBe(3)
+      const inks = TIERS.map((tier) => palette[`--tier-${tier}-ink`])
+      expect(new Set(inks).size, `${name} inks`).toBe(3)
+    }
+  })
+})
+
 // --------------------------------------------------------------------------- the red split
 
 /** Every stylesheet the kit ships: the split is held across all of them, not only the ones that spend red today. */

@@ -56,6 +56,16 @@
   --rank-4: #c58cff;
   --rank-5: #f1c75b;
 
+  /* Poker hỗn loạn's three card tiers (Plan 37): Bạc cool steel, Vàng gold, Kim cương ice cyan. `--tier-*` is the frame
+     and the fill — 3:1 against the page — and `--tier-*-ink` the same hue as text, 4.5:1 on `--bg` and `--bg-elev`
+     (`tokens.test.ts`). */
+  --tier-silver: #a9b6cc;
+  --tier-silver-ink: #c0cadb;
+  --tier-gold: #d9a441;
+  --tier-gold-ink: #e3b552;
+  --tier-diamond: #4fc9e0;
+  --tier-diamond-ink: #7ad9ec;
+
   --focus: #e8b95a;
   --shadow-1: 0 1px 2px rgba(3, 6, 16, 0.5), 0 2px 8px rgba(3, 6, 16, 0.32);
   --shadow-2: 0 10px 30px rgba(3, 6, 16, 0.55), 0 2px 6px rgba(3, 6, 16, 0.4);
@@ -108,6 +118,13 @@
   --rank-4: #6b3fb3;
   --rank-5: #856011;
 
+  --tier-silver: #68758c;
+  --tier-silver-ink: #4b5870;
+  --tier-gold: #9a7414;
+  --tier-gold-ink: #7a5a0f;
+  --tier-diamond: #17859f;
+  --tier-diamond-ink: #0d6178;
+
   --focus: #8a5b12;
   --shadow-1: 0 1px 2px rgba(27, 31, 46, 0.12), 0 2px 8px rgba(27, 31, 46, 0.08);
   --shadow-2: 0 10px 28px rgba(27, 31, 46, 0.18), 0 2px 6px rgba(27, 31, 46, 0.1);
@@ -143,6 +160,12 @@
   --rank-3: #7cc4ff;
   --rank-4: #c58cff;
   --rank-5: #f1c75b;
+  --tier-silver: #a9b6cc;
+  --tier-silver-ink: #c0cadb;
+  --tier-gold: #d9a441;
+  --tier-gold-ink: #e3b552;
+  --tier-diamond: #4fc9e0;
+  --tier-diamond-ink: #7ad9ec;
   --focus: #e8b95a;
 }
 

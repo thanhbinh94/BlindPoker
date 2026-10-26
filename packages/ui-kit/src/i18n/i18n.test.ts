@@ -1,4 +1,4 @@
-import { HAND_CATEGORY_KEYS, HandCategory, parseCard } from '@bp/core'
+import { CHAOS_CARDS_SPEC, HAND_CATEGORY_KEYS, HandCategory, parseCard } from '@bp/core'
 import { describe, expect, it } from 'vitest'
 import { cardLabel, createI18n, detectLanguage, errorLabel, formatCompactPoints, formatPoints, handLabel, setLanguage } from './index.js'
 import en from './locales/en/game.json'
@@ -46,6 +46,50 @@ describe('locale resources', () => {
     }
     expect(viCommon.units.pointsShort).toBe('điểm')
     expect(enCommon.units.pointsShort).toBe('pts')
+  })
+})
+
+// Plan 37: every card the catalogue can deal has a name and a one-line description in both languages, and no id shows.
+describe('chaos card copy', () => {
+  const cards = (res: typeof vi) => res.chaos.cards as Record<string, { name: string; desc: string }>
+
+  it('names and describes every card of the catalogue in vi and en, and nothing else', () => {
+    const ids = CHAOS_CARDS_SPEC.map((c) => c.id).sort()
+    expect(ids).toHaveLength(47)
+    for (const [lang, res] of [['vi', vi], ['en', en]] as const) {
+      expect(Object.keys(cards(res)).sort(), lang).toEqual(ids)
+      for (const id of ids) {
+        const { name, desc } = cards(res)[id]!
+        expect(name.trim(), `${lang} ${id} name`).not.toBe('')
+        expect(desc.trim(), `${lang} ${id} desc`).not.toBe('')
+        expect(desc, `${lang} ${id} desc is one line`).not.toMatch(/\n/)
+        expect(`${name} ${desc}`, `${lang} ${id} shows no id`).not.toMatch(/\b[sgd]_[a-z0-9_]+\b/)
+      }
+    }
+  })
+
+  it('gives every card a name of its own within a language', () => {
+    for (const res of [vi, en]) {
+      const names = Object.values(cards(res)).map((c) => c.name)
+      expect(new Set(names).size).toBe(names.length)
+    }
+  })
+
+  it('names the three tiers, the daily cap, and the stable terms', () => {
+    expect(vi.chaos.tier).toEqual({ silver: 'Bạc', gold: 'Vàng', diamond: 'Kim cương' })
+    expect(en.chaos.tier).toEqual({ silver: 'Silver', gold: 'Gold', diamond: 'Diamond' })
+    expect(vi.chaos.capped).toBe('Đã chạm trần thẻ hôm nay')
+    expect(vi.labels.chaosMode).toBe('Hỗn loạn')
+    expect(vi.create.chaos).toBe('Poker hỗn loạn')
+    expect(vi.create.chaosCycle).toBe('Chu kỳ thẻ')
+    expect(vi.chaos.used).toBe('Thẻ đã dùng')
+  })
+
+  it('labels the chaos error codes in both languages', () => {
+    for (const res of [viCommon, enCommon]) {
+      expect(res.errors.CHAOS_UNAVAILABLE.trim()).not.toBe('')
+      expect(res.errors.CHAOS_NO_OFFER.trim()).not.toBe('')
+    }
   })
 })
 

@@ -28,6 +28,7 @@ function fakeClient(state: ClientState, overrides: Partial<GameClientApi> = {}):
     kick: vi.fn().mockResolvedValue(ACK),
     act: vi.fn().mockResolvedValue(ACK),
     reveal: vi.fn().mockResolvedValue(ACK),
+    pickChaos: vi.fn().mockResolvedValue(ACK),
     resync: vi.fn(),
     renamed: vi.fn(),
     clearError: vi.fn(),
@@ -139,6 +140,23 @@ describe('LobbyScreen', () => {
     expect(config).toMatchObject({ name: 'Night Room', mode: 'holdem', maxPlayers: 6, turnTimerSec: 30 })
     await waitFor(() => expect(onEnteredRoom).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('offers "Poker hỗn loạn" in the create dialog only where the app says chaosOffered', async () => {
+    const open = async (chaosOffered: boolean) => {
+      const { unmount } = render(
+        <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+          <LobbyScreen client={fakeClient(makeState({ lobby: [] }))} lang="en" onEnteredRoom={vi.fn()} chaosOffered={chaosOffered} />
+        </I18nextProvider>,
+      )
+      await userEvent.click(screen.getByRole('button', { name: 'Create room' }))
+      await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Blind Poker' }))
+      const offered = screen.queryByLabelText('Chaos poker') !== null
+      unmount()
+      return offered
+    }
+    expect(await open(false)).toBe(false)
+    expect(await open(true)).toBe(true)
   })
 
   it('surfaces a rejected join as an alert and stays in the lobby', async () => {

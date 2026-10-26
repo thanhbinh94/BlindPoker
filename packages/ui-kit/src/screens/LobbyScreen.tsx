@@ -27,6 +27,8 @@ export interface LobbyScreenProps {
   header?: ReactNode
   /** App links carried inside the player bar, on its line, so they add no row to the lobby's height (Plan 27 fix wave). */
   barLinks?: ReactNode
+  /** Whether the create dialog offers "Poker hỗn loạn" (the Normal edition deals chaos cards; Lite does not). */
+  chaosOffered?: boolean
 }
 
 /**
@@ -35,7 +37,7 @@ export interface LobbyScreenProps {
  * Composition only. It owns three things — the mode filter, whether the create dialog is open, and the reply to its
  * own last request — and asks `GameClientApi` for everything else.
  */
-export function LobbyScreen({ client, lang, onEnteredRoom, avatar, rank = null, header, barLinks }: LobbyScreenProps) {
+export function LobbyScreen({ client, lang, onEnteredRoom, avatar, rank = null, header, barLinks, chaosOffered = false }: LobbyScreenProps) {
   const { t } = useTranslation()
   const { state } = client
   const [filter, setFilter] = useState<RoomFilter>('all')
@@ -113,7 +115,7 @@ export function LobbyScreen({ client, lang, onEnteredRoom, avatar, rank = null, 
       </main>
 
       <Modal open={creating} title={t('create.title')} closeLabel={t('actions.close')} onClose={closeCreate}>
-        <CreateRoomForm onSubmit={create} busy={request.busy} lang={lang} />
+        <CreateRoomForm onSubmit={create} busy={request.busy} lang={lang} chaosOffered={chaosOffered} />
       </Modal>
 
       <Toasts
