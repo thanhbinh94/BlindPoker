@@ -35,6 +35,8 @@ interface Draft {
   id: string
   tier: ChaosTier
   deadlineAt: number
+  /** The window's whole length, told to the clients for their timer's full circle. */
+  draftMs: number
   entries: DraftEntry[]
 }
 
@@ -56,6 +58,12 @@ export class ChaosTable {
   private weights: ReadonlyMap<string, number> = new Map()
   private config: ChaosConfig = DEFAULT_CHAOS_CONFIG
   private draftTimer: TimerHandle | null = null
+  /**
+   * Credits whose write failed twice, per player, oldest first (ledger ruling, Plan 37 final wave). A failed write may
+   * still have landed, so the credit is kept under its key until a retry is acknowledged — the same rule as a pending
+   * cash-out. Kept through a stand-up attempt: the room settles them before it cashes the stack out.
+   */
+  private readonly pending = new Map<string, { credit: ChaosCredit; request: Parameters<ChaosPort['credit']>[0] }[]>()
   private uid = 0
   private readonly cycleLength: number
 
@@ -106,13 +114,14 @@ export class ChaosTable {
       if (cardIds.length > 0 && (p.identity.isBot || !p.connected)) entry.picked = cardIds[rng.int(cardIds.length)]!
       entries.push(entry)
     }
-    const draft: Draft = { id: newId(), tier, deadlineAt, entries }
+    const draftMs = this.config.draftMs
+    const draft: Draft = { id: newId(), tier, deadlineAt, draftMs, entries }
     this.draft = draft
     for (const e of entries) {
       if (done(e)) continue
-      this.host.deps.outbox.send(e.playerId, { t: 'NOTIFICATION', kind: 'CHAOS_OFFER', payload: { offerId: e.offerId, tier, cardIds: e.cardIds, deadlineAt } })
+      this.host.deps.outbox.send(e.playerId, { t: 'NOTIFICATION', kind: 'CHAOS_OFFER', payload: { offerId: e.offerId, tier, cardIds: e.cardIds, deadlineAt, draftMs } })
     }
-    this.host.broadcast({ type: 'CHAOS_DRAFT', tier, deadlineAt, seats: entries.map((e) => e.seat).sort((a, b) => a - b) })
+    this.host.broadcast({ type: 'CHAOS_DRAFT', tier, deadlineAt, draftMs, seats: entries.map((e) => e.seat).sort((a, b) => a - b) })
     if (entries.every(done)) {
       this.endDraft()
       return false
@@ -229,6 +238,7 @@ export class ChaosTable {
       draft: {
         tier: draft.tier,
         deadlineAt: draft.deadlineAt,
+        draftMs: draft.draftMs,
         offer: mine && mine.cardIds.length > 0 ? { offerId: mine.offerId, cardIds: mine.cardIds } : null,
         picked: mine !== undefined && mine.picked !== null,
       },
@@ -247,26 +257,60 @@ export class ChaosTable {
     this.draft = null
   }
 
+  /** Whether this player has a credit whose write was never acknowledged (`pendingCredits`). */
+  hasPending(playerId: string): boolean {
+    return (this.pending.get(playerId)?.length ?? 0) > 0
+  }
+
+  /**
+   * Retries every credit this player is owed, oldest first, once each, under its own key — a write that landed already
+   * answers with what it wrote, so the stack is raised exactly once. Throws on the first one that fails again (it and
+   * the ones after it stay pending). The room calls it after every hand and before any stand-up, Leave or kick cashes the
+   * stack out: a cash-out without a landed credit would leave its `chaos_to_table` row with no stack behind it.
+   */
+  async settlePending(p: RoomPlayer): Promise<void> {
+    const playerId = p.identity.playerId
+    const queue = this.pending.get(playerId)
+    while (queue && queue.length > 0) {
+      const owed = queue[0]!
+      const paid = await this.port.credit(owed.request)
+      queue.shift()
+      this.applyCredit(p, owed.credit, paid)
+      await this.host.pushBalance(playerId)
+    }
+    this.pending.delete(playerId)
+  }
+
   private async payCredit(handId: string, p: RoomPlayer, credit: ChaosCredit): Promise<void> {
-    const extra = credit.multiplier === undefined ? {} : { multiplier: credit.multiplier }
     if (p.identity.isBot) {
-      p.stack += credit.amount
-      this.host.broadcast({ type: 'CHAOS_CREDIT', seat: credit.seat, amount: credit.amount, reason: credit.reason, capped: false, ...extra })
+      this.applyCredit(p, credit, { credited: credit.amount, capped: false })
       return
     }
     const playerId = p.identity.playerId
     const key = `chaos:${this.host.roomId}:${handId}:${credit.seat}:${credit.uid}:${credit.reason}`
     const request = { playerId, roomId: this.host.roomId, amount: credit.amount, reason: credit.reason, key }
+    // Behind an older credit still owed: queued, so the stack is raised in the order the cards paid.
+    if (this.hasPending(playerId)) {
+      this.pending.get(playerId)!.push({ credit, request })
+      return
+    }
     let paid: { credited: number; capped: boolean }
     try {
       paid = await this.port.credit(request).catch(() => this.port.credit(request)) // one retry, under the same key
     } catch (err) {
-      this.host.deps.log.error('chaos credit failed', { roomId: this.host.roomId, playerId, amount: credit.amount, reason: credit.reason, key, err: String(err) })
+      // It may have landed (a lost reply): kept under its key, never dropped (`settlePending`).
+      this.pending.set(playerId, [{ credit, request }])
+      this.host.deps.log.error('chaos credit failed; pending', { roomId: this.host.roomId, playerId, amount: credit.amount, reason: credit.reason, key, err: String(err) })
       return
     }
-    p.stack += paid.credited
+    this.applyCredit(p, credit, paid)
     await this.host.pushBalance(playerId)
-    this.host.broadcast({ type: 'CHAOS_CREDIT', seat: credit.seat, amount: paid.credited, reason: credit.reason, capped: paid.capped, ...extra })
+  }
+
+  private applyCredit(p: RoomPlayer, credit: ChaosCredit, paid: { credited: number; capped: boolean }): void {
+    const extra = credit.multiplier === undefined ? {} : { multiplier: credit.multiplier }
+    p.stack += paid.credited
+    this.host.broadcast({ type: 'CHAOS_CREDIT', seat: p.seat ?? credit.seat, amount: paid.credited, stack: p.stack, reason: credit.reason, capped: paid.capped, ...extra })
   }
 
   private broadcastState(): void {

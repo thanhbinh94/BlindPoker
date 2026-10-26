@@ -896,6 +896,18 @@ export class Room {
       this.deps.log.error('recordHand failed', { roomId: this.roomId, handId: state.handId, err: String(err) })
     }
     this.deps.onDomainEvent?.({ type: 'HAND_SETTLED', summary })
+    // A card credit an earlier hand could not get acknowledged is retried first, under its key (`ChaosTable.pending`),
+    // so it lands before this hand's credits and before any stand-up below.
+    if (this.chaos) {
+      for (const p of this.players.values()) {
+        if (!this.chaos.hasPending(p.identity.playerId)) continue
+        try {
+          await this.chaos.settlePending(p)
+        } catch (err) {
+          this.deps.log.error('pending chaos credit failed again', { roomId: this.roomId, playerId: p.identity.playerId, err: String(err) })
+        }
+      }
+    }
     // The cards' side of the hand, before anyone is stood up: a seat a hand left at 0 can still be rescued (spec §5.4).
     // Its credits move stacks only, never the summary's `net`. A cancelled hand settles nothing.
     if (this.chaos && !runner.wasCancelled) {
@@ -919,7 +931,12 @@ export class Room {
         }
         if (p.leaveAfterHand) await this.removePlayer(p, 'left')
         else if (p.standAfterHand) await this.standUpNow(p)
-        else if (p.seat !== null && !p.identity.isBot && p.stack < required) await this.standUpSpent(p)
+        else if (p.seat !== null && !p.identity.isBot && p.stack < required) {
+          // A card credit still owed may be what keeps the seat (a rescue whose reply was lost): settled first. One that
+          // fails again leaves the seat as it is — sat out by the next deal — and is retried after the next hand.
+          if (this.chaos?.hasPending(p.identity.playerId)) await this.chaos.settlePending(p)
+          if (p.stack < required) await this.standUpSpent(p)
+        }
         else if (p.cashOutPending) await this.standUpNow(p)
       } catch (err) {
         this.deps.log.error('stand-up after hand failed', { roomId: this.roomId, playerId: p.identity.playerId, key: this.pendingKeyOf(p), err: String(err) })
@@ -1093,6 +1110,17 @@ export class Room {
   private async standUpNow(p: RoomPlayer): Promise<void> {
     if (p.seat === null) return
     const seat = p.seat
+    // A card credit still owed is settled before the stack is cashed out: it may have landed, and its `chaos_to_table`
+    // row needs the stack behind it. Until it is acknowledged the seat is frozen exactly like a pending cash-out.
+    if (this.chaos?.hasPending(p.identity.playerId)) {
+      p.cashOutPending = true
+      try {
+        await this.chaos.settlePending(p)
+      } catch (err) {
+        this.setSittingOut(p, true)
+        throw err
+      }
+    }
     if (!p.identity.isBot && p.stack > 0) {
       // Every human seat gets its id in `sitDown`; this only guarantees the key never names a missing sitting.
       const sitId = (p.sitId ??= newId())

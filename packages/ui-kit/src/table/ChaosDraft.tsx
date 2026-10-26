@@ -8,8 +8,6 @@ import type { TableLayout } from './PokerTable.js'
 import { TurnTimer } from './TurnTimer.js'
 import s from './table.module.css'
 
-/** The server's draft window (spec 2026-10-26 §3.2): the timer ring's full circle. A shorter deadline just starts part-way round. */
-export const DRAFT_MS = 15_000
 /** The ring's size in the panel's head. */
 const TIMER_PX = 36
 /** …and in the short tier (`data-short`, whose box in the CSS is as big). */
@@ -73,7 +71,7 @@ export function ChaosDraft({ draft, serverNow, onPick, layout = 'ring', frame = 
           {title}
         </h2>
         <span className={s.draftTimer}>
-          <TurnTimer deadlineAt={draft.deadlineAt} serverNow={serverNow} totalMs={DRAFT_MS} size={short ? SHORT_TIMER_PX : TIMER_PX} />
+          <TurnTimer deadlineAt={draft.deadlineAt} serverNow={serverNow} totalMs={draft.totalMs} size={short ? SHORT_TIMER_PX : TIMER_PX} />
         </span>
       </header>
 

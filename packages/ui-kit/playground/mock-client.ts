@@ -249,8 +249,8 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
     const offers = Array.from({ length: SEATS }, (_, seat) => ({ seat, cards: drawOffer(CHAOS_CARDS_SPEC, tier, 'playOrFold', RNG, 3) }))
     const mine = offers[MY_SEAT]!.cards.map((c) => c.id)
     const offerId = `o${handNo + 1}`
-    push({ t: 'NOTIFICATION', kind: 'CHAOS_OFFER', payload: { offerId, tier, cardIds: mine, deadlineAt } })
-    roomEvent({ type: 'CHAOS_DRAFT', tier, deadlineAt, seats: offers.map((o) => o.seat) })
+    push({ t: 'NOTIFICATION', kind: 'CHAOS_OFFER', payload: { offerId, tier, cardIds: mine, deadlineAt, draftMs: DEFAULT_CHAOS_CONFIG.draftMs } })
+    roomEvent({ type: 'CHAOS_DRAFT', tier, deadlineAt, draftMs: DEFAULT_CHAOS_CONFIG.draftMs, seats: offers.map((o) => o.seat) })
     const chosen = await new Promise<string | null>((resolve) => {
       drafting = { offerId, cardIds: mine, pick: resolve }
       timer = setTimeout(() => resolve(null), DEFAULT_CHAOS_CONFIG.draftMs)
@@ -304,6 +304,7 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
         type: 'CHAOS_CREDIT',
         seat: credit.seat,
         amount: credit.amount,
+        stack: stacks.get(credit.seat) ?? 0,
         reason: credit.reason,
         capped: false,
         ...(credit.multiplier === undefined ? {} : { multiplier: credit.multiplier }),

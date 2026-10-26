@@ -1655,9 +1655,9 @@ describe('RoomScreen on a Poker hỗn loạn table', () => {
     result: { payouts: [{ seat: 2, amount: 2_000 }], pots: [], fee: 0, showdown: null, carryOverOut: 0, uncalledReturned: null, cancelled: false, reason: null },
   })
   const offer = { offerId: 'o1', cardIds: ['s_swap_one', 's_shield', 's_peek_1'] }
-  const drafting = { tier: 'silver' as const, deadlineAt: 1_015_000, offer, picked: false }
+  const drafting = { tier: 'silver' as const, deadlineAt: 1_015_000, totalMs: 15_000, offer, picked: false }
   const stateWith = (chaos: Partial<ClientState['chaos']>, hand: ClientHand | null = finished): ClientState =>
-    makeState({ room: chaosRoom, hand, chaos: { draft: null, seats: {}, applied: [], credits: [], awarded: [], peek: null, ...chaos } })
+    makeState({ room: chaosRoom, hand, chaos: { draft: null, seats: {}, applied: [], credits: [], awarded: [], peek: null, reverse: false, blindfolded: null, ...chaos } })
   const PICK_A_SILVER = { name: 'Pick a Silver card' }
 
   it('opens the draft over the felt, and a pick goes to the client', async () => {

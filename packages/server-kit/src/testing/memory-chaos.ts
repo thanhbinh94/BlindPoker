@@ -16,6 +16,8 @@ export interface MemoryChaosOptions {
   failReads?: () => boolean
   /** Test hook: throw from `credit()` before writing, while it returns true (called once per attempt). */
   failCredit?: () => boolean
+  /** Test hook: write the credit, then throw as if the reply were lost, while it returns true (called once per attempt). */
+  loseCreditReply?: () => boolean
 }
 
 /**
@@ -56,6 +58,7 @@ export function createMemoryChaosPort(opts: MemoryChaosOptions): ChaosPort {
           return { credited: again?.entry.delta ?? 0, capped: (again?.entry.delta ?? 0) < amount }
         }
       }
+      if (opts.loseCreditReply?.()) throw new Error('chaos credit reply lost')
       return { credited, capped: credited < amount }
     },
   }

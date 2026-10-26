@@ -298,7 +298,7 @@ describe('useGameClient Poker hỗn loạn', () => {
   }
   const offerTo = (sock: () => FakeSocket) => {
     act(() => sock().receive({ t: 'NOTIFICATION', kind: 'CHAOS_OFFER', payload: OFFER }))
-    act(() => sock().receive({ t: 'ROOM_EVENT', seq: 8, event: { type: 'CHAOS_DRAFT', tier: 'silver', deadlineAt: OFFER.deadlineAt, seats: [0, 1] } }))
+    act(() => sock().receive({ t: 'ROOM_EVENT', seq: 8, event: { type: 'CHAOS_DRAFT', tier: 'silver', draftMs: 15_000, deadlineAt: OFFER.deadlineAt, seats: [0, 1] } }))
   }
   const picks = (sock: () => FakeSocket) => sock().sent.filter((m) => (m as { t: string }).t === 'CHAOS_PICK')
 
@@ -349,7 +349,7 @@ describe('useGameClient Poker hỗn loạn', () => {
   it('auto-play picks nothing for a spectator\'s draft (no offer) or an offer already picked', () => {
     const { result, sock } = atTheDraft()
     act(() => result.current.setAutoPlay(true))
-    act(() => sock().receive({ t: 'ROOM_EVENT', seq: 8, event: { type: 'CHAOS_DRAFT', tier: 'silver', deadlineAt: OFFER.deadlineAt, seats: [1] } }))
+    act(() => sock().receive({ t: 'ROOM_EVENT', seq: 8, event: { type: 'CHAOS_DRAFT', tier: 'silver', draftMs: 15_000, deadlineAt: OFFER.deadlineAt, seats: [1] } }))
     expect(picks(sock)).toHaveLength(0)
   })
 })

@@ -112,14 +112,20 @@ export type RoomEvent =
   | { type: 'PLAYER_RECONNECTED'; playerId: string }
   | { type: 'ROOM_STATUS'; status: 'OPEN' | 'IN_GAME'; nextHandAt: number | null }
   | { type: 'ROOM_CLOSED'; reason: string }
-  /** A chaos draft opened (spec §3.2): `seats` are drafting a card of `tier` before the next hand, until `deadlineAt`. */
-  | { type: 'CHAOS_DRAFT'; tier: ChaosTier; deadlineAt: number; seats: number[] }
+  /**
+   * A chaos draft opened (spec §3.2): `seats` are drafting a card of `tier` before the next hand, until `deadlineAt`.
+   * `draftMs` is the window's whole length (the GM sets it, 5–60 s): a client draws its timer's full circle from it.
+   */
+  | { type: 'CHAOS_DRAFT'; tier: ChaosTier; deadlineAt: number; draftMs: number; seats: number[] }
   /** The draft is over: what each seat received (every card, a Cấp độ's results included). */
   | { type: 'CHAOS_PICKED'; seat: number; cardIds: string[] }
   /** Every seat's held cards and chaos points, after a draft and after each hand. */
   | { type: 'CHAOS_STATE'; seats: { seat: number; cards: HeldCardView[]; points: number }[] }
-  /** New points a card paid onto the seat's stack (`amount` as credited; `capped` when the daily cap cut it). */
-  | { type: 'CHAOS_CREDIT'; seat: number; amount: number; reason: ChaosCreditReason; capped: boolean; multiplier?: 2 | 3 }
+  /**
+   * New points a card paid onto the seat's stack (`amount` as credited; `capped` when the daily cap cut it). `stack` is
+   * the seat's stack after the credit, absolute, so a client never has to add it up (a seat at 0 rescued between hands).
+   */
+  | { type: 'CHAOS_CREDIT'; seat: number; amount: number; stack: number; reason: ChaosCreditReason; capped: boolean; multiplier?: 2 | 3 }
   /** Bonus or prize cards the seat received at the end of a hand. */
   | { type: 'CHAOS_AWARDED'; seat: number; cardIds: string[] }
 
@@ -129,11 +135,13 @@ export interface ChaosOfferPayload {
   tier: ChaosTier
   cardIds: string[]
   deadlineAt: number
+  /** The draft window's whole length, as in `CHAOS_DRAFT`. */
+  draftMs: number
 }
 
 /** `ROOM_SNAPSHOT.chaos`: the draft as the viewer sees it — its own offer (none for a spectator) and whether it picked. */
 export interface ChaosSnapshot {
-  draft: { tier: ChaosTier; deadlineAt: number; offer: { offerId: string; cardIds: string[] } | null; picked: boolean } | null
+  draft: { tier: ChaosTier; deadlineAt: number; draftMs: number; offer: { offerId: string; cardIds: string[] } | null; picked: boolean } | null
 }
 
 /** Every client message may carry a `reqId`; the server echoes it on `ACK` / `ERROR`. `ACTION` requires one. */

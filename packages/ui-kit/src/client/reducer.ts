@@ -80,7 +80,7 @@ function startHand(state: ClientState, event: Extract<GameEvent, { type: 'HAND_S
   }
   // A new hand closes whatever the last one left: a draft that every seat finished at once is over, and the banner,
   // the credits and the peek were that hand's. The seats' cards stay.
-  return { ...state, hand, deadlineAt: null, preAction: null, chaos: { ...state.chaos, draft: null, applied: [], credits: [], awarded: [], peek: null } }
+  return { ...state, hand, deadlineAt: null, preAction: null, chaos: { ...state.chaos, draft: null, applied: [], credits: [], awarded: [], peek: null, reverse: false, blindfolded: null } }
 }
 
 /**
@@ -258,10 +258,14 @@ function applyHandEvent(state: ClientState, hand: ClientHand, event: GameEvent &
       return { ...state, deadlineAt: null, hand: { ...hand, phase: 'COMPLETE', legal: null, actingSeat: null } }
     case 'HAND_STARTED':
       return state
-    // Poker hỗn loạn: the hand itself does not change; the table reads the cards that acted from `state.chaos`.
+    // Poker hỗn loạn: the table reads the cards that acted from `state.chaos`. A card that re-deals the board
+    // (redealBoard, the storm) carries the new board: it lands like a street, so the cards come out of the deck again.
     case 'CHAOS_APPLIED': {
       const { type: _type, ...applied } = event
-      return { ...state, chaos: { ...state.chaos, applied: [...state.chaos.applied, applied] } }
+      const reverse = state.chaos.reverse || (event.effect === 'reverseRank' && event.outcome === 'applied')
+      const chaos = { ...state.chaos, applied: [...state.chaos.applied, applied], reverse }
+      const board = event.community === undefined ? hand : { ...hand, community: event.community.slice(), boardAt: now }
+      return { ...state, hand: board, chaos }
     }
     // `filterEvent` blanks another seat's peek to `cards: []` rather than dropping it: only my own seat's is mine to keep.
     case 'CHAOS_PEEK':
@@ -320,10 +324,12 @@ function applyRoomEvent(room: RoomView, event: RoomEvent): RoomView {
     case 'ROOM_CLOSED':
       return room
     // Poker hỗn loạn: these live in `ClientState.chaos` (`applyChaosRoomEvent`), not in the roster.
+    // A credit raises the seat's stack (absolute, from the server): between hands the roster is what the next deal reads.
+    case 'CHAOS_CREDIT':
+      return { ...room, players: room.players.map((p) => (p.seat === event.seat ? { ...p, stack: event.stack } : p)) }
     case 'CHAOS_DRAFT':
     case 'CHAOS_PICKED':
     case 'CHAOS_STATE':
-    case 'CHAOS_CREDIT':
     case 'CHAOS_AWARDED':
       return room
   }
@@ -336,7 +342,7 @@ function applyChaosRoomEvent(chaos: ClientChaos, event: RoomEvent, mySeat: numbe
       const open = chaos.draft
       // The offer may have beaten the draft frame here (they travel on different paths): same draft, keep it.
       if (open && open.tier === event.tier && open.deadlineAt === event.deadlineAt) return chaos
-      return { ...chaos, draft: { tier: event.tier, deadlineAt: event.deadlineAt, offer: null, picked: false } }
+      return { ...chaos, draft: { tier: event.tier, deadlineAt: event.deadlineAt, totalMs: event.draftMs, offer: null, picked: false } }
     }
     case 'CHAOS_PICKED':
       return chaos.draft && event.seat === mySeat ? { ...chaos, draft: { ...chaos.draft, picked: true } } : chaos
@@ -344,7 +350,7 @@ function applyChaosRoomEvent(chaos: ClientChaos, event: RoomEvent, mySeat: numbe
     case 'CHAOS_STATE':
       return { ...chaos, draft: null, seats: Object.fromEntries(event.seats.map((s) => [s.seat, { cards: s.cards, points: s.points }])) }
     case 'CHAOS_CREDIT': {
-      const { type: _type, ...credit } = event
+      const { type: _type, stack: _stack, ...credit } = event
       return { ...chaos, credits: [...chaos.credits, credit] }
     }
     case 'CHAOS_AWARDED':
@@ -370,23 +376,35 @@ function dropSeat(chaos: ClientChaos, seat: number): ClientChaos {
 }
 
 /** The seats' chaos cards as a snapshot's roster carries them; a chaos table gives every seated player an entry. */
-function chaosFromSnapshot(room: RoomView, draft: ClientChaos['draft']): ClientChaos {
+function chaosFromSnapshot(room: RoomView, draft: ClientChaos['draft'], hand: HandView | null): ClientChaos {
   const table = room.config.blind?.chaosCycle !== undefined
   const seats: ClientChaos['seats'] = {}
   for (const p of room.players) if (p.seat !== null && (p.chaos || table)) seats[p.seat] = { cards: p.chaos?.cards ?? [], points: p.chaos?.points ?? 0 }
-  return { ...initialChaos, seats, draft }
+  // The hand view carries what the event stream had built up: the viewer's peek, the reversed ranking and a blindfold.
+  const view = hand?.chaos
+  const mine = hand?.mySeat ?? null
+  const peek = view !== undefined && view.peek.length > 0 && mine !== null ? { seat: mine, cards: view.peek.slice() } : null
+  return { ...initialChaos, seats, draft, peek, reverse: view?.reverse ?? false, blindfolded: view === undefined ? null : view.blindfolded }
 }
+
+/** The server's default draft window (`DEFAULT_CHAOS_CONFIG.draftMs`), for a draft whose length a frame did not carry. */
+const DEFAULT_DRAFT_MS = 15_000
+
+const draftFromSnapshot = (d: NonNullable<Extract<ServerMessage, { t: 'ROOM_SNAPSHOT' }>['chaos']>['draft']): ClientChaos['draft'] =>
+  d === null ? null : { tier: d.tier, deadlineAt: d.deadlineAt, totalMs: d.draftMs, offer: d.offer, picked: d.picked }
 
 /** `NOTIFICATION { kind: 'CHAOS_OFFER' }`: this player's three cards. Anything malformed is ignored. */
 function applyChaosOffer(chaos: ClientChaos, payload: unknown): ClientChaos {
-  const p = payload as { offerId?: unknown; tier?: unknown; cardIds?: unknown; deadlineAt?: unknown } | null
+  const p = payload as { offerId?: unknown; tier?: unknown; cardIds?: unknown; deadlineAt?: unknown; draftMs?: unknown } | null
   if (!p || typeof p.offerId !== 'string' || typeof p.deadlineAt !== 'number' || (p.tier !== 'silver' && p.tier !== 'gold' && p.tier !== 'diamond')) return chaos
   if (!Array.isArray(p.cardIds) || !p.cardIds.every((c) => typeof c === 'string')) return chaos
   const offer = { offerId: p.offerId, cardIds: p.cardIds as string[] }
   const open = chaos.draft
   const same = open !== null && open.tier === p.tier && open.deadlineAt === p.deadlineAt
   const picked = same && open.offer?.offerId === offer.offerId ? open.picked : false
-  return { ...chaos, draft: { tier: p.tier, deadlineAt: p.deadlineAt, offer, picked } }
+  // The window's length rides on the offer too (it may beat the draft frame here); without it, the draft frame's, else the default.
+  const totalMs = typeof p.draftMs === 'number' && p.draftMs > 0 ? p.draftMs : same ? open.totalMs : DEFAULT_DRAFT_MS
+  return { ...chaos, draft: { tier: p.tier, deadlineAt: p.deadlineAt, totalMs, offer, picked } }
 }
 
 /**
@@ -438,7 +456,7 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
         roomStale: false,
         roomReturns: state.roomStale ? state.roomReturns + 1 : state.roomReturns,
         hand: msg.hand ? handFromView(msg.hand, msg.room) : null,
-        chaos: chaosFromSnapshot(msg.room, msg.chaos?.draft ?? null),
+        chaos: chaosFromSnapshot(msg.room, draftFromSnapshot(msg.chaos?.draft ?? null), msg.hand),
         seq: msg.seq,
         deadlineAt: msg.deadlineAt,
         resyncNeeded: false,
@@ -492,8 +510,11 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
       }
       const myPlayer = state.me !== null ? state.room?.players.find((p) => p.playerId === state.me!.playerId) : undefined
       const stopsAutoPlay = mine && (event.type === 'PLAYER_STOOD' || (event.type === 'PLAYER_SIT_OUT' && event.sittingOut))
+      // A card credit lands after the hand settled; the finished hand is still on the table, so its plate shows the raise too.
+      const credited = event.type === 'CHAOS_CREDIT' && state.hand !== null && state.hand.seats.some((x) => x.seat === event.seat)
       return {
         ...state,
+        hand: credited ? { ...state.hand!, seats: mapSeat(state.hand!, event.seat, (x) => ({ ...x, stack: event.stack })) } : state.hand,
         room: state.room ? applyRoomEvent(state.room, event) : null,
         chaos: applyChaosRoomEvent(state.chaos, event, myPlayer?.seat ?? null, (id) => state.room?.players.find((p) => p.playerId === id)?.seat ?? null),
         seq: msg.seq,

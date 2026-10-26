@@ -1,6 +1,6 @@
 import {
   applyCommand, createHand, filterEvent, legalActions, parseCards, playerView, seededRng,
-  type BlindRules, type GameEvent, type HandState, type HoldemRules, type PlayerAction, type Rng, type RoomConfig, type RoomEvent, type RoomView, type ServerMessage,
+  type BlindRules, type GameEvent, type HandState, type HandView, type HoldemRules, type PlayerAction, type Rng, type RoomConfig, type RoomEvent, type RoomView, type ServerMessage,
 } from '@bp/core'
 import { describe, expect, it } from 'vitest'
 import { initialClientState, reduceClient } from './reducer.js'
@@ -702,7 +702,7 @@ describe('arrival stamps (the card motion reads them)', () => {
 
 describe('Poker hỗn loạn', () => {
   const card = (uid: number, cardId: string, tier: 'silver' | 'gold' | 'diamond' = 'silver', handsLeft: number | null = null) => ({ uid, cardId, tier, handsLeft })
-  const OFFER = { offerId: 'o1', tier: 'gold' as const, cardIds: ['g_freeze', 's_shield', 's_peek_board'], deadlineAt: 50_000 }
+  const OFFER = { offerId: 'o1', tier: 'gold' as const, cardIds: ['g_freeze', 's_shield', 's_peek_board'], deadlineAt: 50_000, draftMs: 30_000 }
   type Snapshot = Extract<ServerMessage, { t: 'ROOM_SNAPSHOT' }>
 
   function chaosRoom(): RoomView {
@@ -717,19 +717,19 @@ describe('Poker hỗn loạn', () => {
   const room = (s: ClientState, seq: number, event: Extract<ServerMessage, { t: 'ROOM_EVENT' }>['event']) => reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq, event }, now: 1 })
   const game = (s: ClientState, seq: number, event: GameEvent) => reduceClient(s, { type: 'server', msg: { t: 'GAME_EVENT', seq, event }, now: 1 })
   const offer = (s: ClientState, payload: unknown = OFFER) => reduceClient(s, { type: 'server', msg: { t: 'NOTIFICATION', kind: 'CHAOS_OFFER', payload }, now: 1 })
-  const draftFrame: RoomEvent = { type: 'CHAOS_DRAFT', tier: 'gold', deadlineAt: 50_000, seats: [0, 1, 2] }
+  const draftFrame: RoomEvent = { type: 'CHAOS_DRAFT', tier: 'gold', deadlineAt: 50_000, draftMs: 30_000, seats: [0, 1, 2] }
   const started: GameEvent = { type: 'HAND_STARTED', handId: 'h1', mode: 'blind', button: 0, seats: [0, 1, 2], carryOverIn: 0 }
   const swap: GameEvent = { type: 'CHAOS_APPLIED', seat: 0, cardId: 's_swap_lowest', effect: 'swapLowest', targets: [], outcome: 'applied' }
   const settlement: GameEvent = { type: 'SETTLEMENT', payouts: [], fee: 0, pots: [], carryOverOut: 0, stacks: [], uncalledReturned: null }
 
   it('starts with no draft, no cards and nothing applied', () => {
-    expect(initialClientState.chaos).toEqual({ draft: null, seats: {}, applied: [], credits: [], awarded: [], peek: null })
+    expect(initialClientState.chaos).toEqual({ draft: null, seats: {}, applied: [], credits: [], awarded: [], peek: null, reverse: false, blindfolded: null })
   })
 
   it('takes every seat\'s cards and points from the snapshot, and a draft it was in the middle of', () => {
-    const s = inChaosRoom({ draft: { tier: 'gold', deadlineAt: 50_000, offer: { offerId: 'o1', cardIds: OFFER.cardIds }, picked: false } })
+    const s = inChaosRoom({ draft: { tier: 'gold', deadlineAt: 50_000, draftMs: 30_000, offer: { offerId: 'o1', cardIds: OFFER.cardIds }, picked: false } })
     expect(s.chaos.seats[1]).toEqual({ cards: [card(7, 's_shield')], points: 3 })
-    expect(s.chaos.draft).toEqual({ tier: 'gold', deadlineAt: 50_000, offer: { offerId: 'o1', cardIds: OFFER.cardIds }, picked: false })
+    expect(s.chaos.draft).toEqual({ tier: 'gold', deadlineAt: 50_000, totalMs: 30_000, offer: { offerId: 'o1', cardIds: OFFER.cardIds }, picked: false })
   })
 
   it('a snapshot without a draft leaves none, and a plain table keeps an empty chaos state', () => {
@@ -739,19 +739,28 @@ describe('Poker hỗn loạn', () => {
 
   it('stores a CHAOS_OFFER notification as the draft\'s offer, without making a toast', () => {
     const s = offer(room(inChaosRoom(), 11, draftFrame))
-    expect(s.chaos.draft).toEqual({ tier: 'gold', deadlineAt: 50_000, offer: { offerId: 'o1', cardIds: OFFER.cardIds }, picked: false })
+    expect(s.chaos.draft).toEqual({ tier: 'gold', deadlineAt: 50_000, totalMs: 30_000, offer: { offerId: 'o1', cardIds: OFFER.cardIds }, picked: false })
     expect(s.notifications).toEqual([])
   })
 
   it('keeps the offer whichever of the offer and the draft frame arrives first', () => {
     const s = room(offer(inChaosRoom()), 11, draftFrame)
-    expect(s.chaos.draft).toEqual({ tier: 'gold', deadlineAt: 50_000, offer: { offerId: 'o1', cardIds: OFFER.cardIds }, picked: false })
+    expect(s.chaos.draft).toEqual({ tier: 'gold', deadlineAt: 50_000, totalMs: 30_000, offer: { offerId: 'o1', cardIds: OFFER.cardIds }, picked: false })
     expect(s.notifications).toEqual([])
   })
 
   it('a draft frame alone is a draft with no offer of mine (a spectator, or a seat drafted with nothing to pick)', () => {
-    const s = room(inChaosRoom(), 11, { type: 'CHAOS_DRAFT', tier: 'silver', deadlineAt: 40_000, seats: [1] })
-    expect(s.chaos.draft).toEqual({ tier: 'silver', deadlineAt: 40_000, offer: null, picked: false })
+    const s = room(inChaosRoom(), 11, { type: 'CHAOS_DRAFT', tier: 'silver', deadlineAt: 40_000, draftMs: 15_000, seats: [1] })
+    expect(s.chaos.draft).toEqual({ tier: 'silver', deadlineAt: 40_000, totalMs: 15_000, offer: null, picked: false })
+  })
+
+  it('carries the draft window\'s length from the draft frame, the offer and the snapshot (M2)', () => {
+    expect(room(inChaosRoom(), 11, { ...draftFrame, draftMs: 45_000 } as RoomEvent).chaos.draft?.totalMs).toBe(45_000)
+    expect(offer(inChaosRoom(), { ...OFFER, draftMs: 8_000 }).chaos.draft?.totalMs).toBe(8_000)
+    const { draftMs: _gone, ...older } = OFFER
+    expect(offer(room(inChaosRoom(), 11, draftFrame), older).chaos.draft?.totalMs).toBe(30_000) // the frame's, kept
+    expect(offer(inChaosRoom(), older).chaos.draft?.totalMs).toBe(15_000) // nothing said: the default
+    expect(inChaosRoom({ draft: { tier: 'gold', deadlineAt: 50_000, draftMs: 60_000, offer: null, picked: false } }).chaos.draft?.totalMs).toBe(60_000)
   })
 
   it('ignores a malformed offer payload', () => {
@@ -793,8 +802,8 @@ describe('Poker hỗn loạn', () => {
   })
 
   it('collects credits and awards, and clears them with the next hand', () => {
-    let s = room(inChaosRoom(), 11, { type: 'CHAOS_CREDIT', seat: 0, amount: 4000, reason: 'chaos_crit', capped: false, multiplier: 2 })
-    s = room(s, 12, { type: 'CHAOS_CREDIT', seat: 1, amount: 0, reason: 'chaos_rescue', capped: true })
+    let s = room(inChaosRoom(), 11, { type: 'CHAOS_CREDIT', seat: 0, amount: 4000, stack: 24000, reason: 'chaos_crit', capped: false, multiplier: 2 })
+    s = room(s, 12, { type: 'CHAOS_CREDIT', seat: 1, amount: 0, stack: 20000, reason: 'chaos_rescue', capped: true })
     s = room(s, 13, { type: 'CHAOS_AWARDED', seat: 2, cardIds: ['s_peek_board'] })
     expect(s.chaos.credits).toEqual([
       { seat: 0, amount: 4000, reason: 'chaos_crit', capped: false, multiplier: 2 },
@@ -847,10 +856,76 @@ describe('Poker hỗn loạn', () => {
   })
 
   it('clears a draft left over when the hand starts (a draft that every seat finished at once)', () => {
-    let s = room(inChaosRoom(), 11, { type: 'CHAOS_DRAFT', tier: 'silver', deadlineAt: 40_000, seats: [1] })
+    let s = room(inChaosRoom(), 11, { type: 'CHAOS_DRAFT', tier: 'silver', deadlineAt: 40_000, draftMs: 15_000, seats: [1] })
     expect(s.chaos.draft).not.toBeNull()
     s = game(s, 12, started)
     expect(s.chaos.draft).toBeNull()
+  })
+
+  it('a credit raises the roster stack, so a seat rescued at 0 is dealt in with chips, posts its ante and is asked to play', () => {
+    // Plan 37 final wave (C1): the stack comes from the server, absolute, so a seat at 0 shows its rescue straight away.
+    let s = room(inChaosRoom(), 11, { type: 'PLAYER_SAT', playerId: 'p0', seat: 0, stack: 0 })
+    expect(s.room!.players.find((p) => p.seat === 0)!.stack).toBe(0)
+    s = room(s, 12, { type: 'CHAOS_CREDIT', seat: 0, amount: 5000, stack: 5000, reason: 'chaos_rescue', capped: false })
+    expect(s.room!.players.find((p) => p.seat === 0)!.stack).toBe(5000)
+    expect(s.chaos.credits).toEqual([{ seat: 0, amount: 5000, reason: 'chaos_rescue', capped: false }]) // the stack is the roster's
+    s = game(s, 13, started)
+    s = game(s, 14, { type: 'BLINDS_POSTED', posts: [0, 1, 2].map((seat) => ({ seat, amount: 1000, kind: 'ANTE' as const })) })
+    expect(s.hand!.seats.find((x) => x.seat === 0)).toMatchObject({ stack: 4000, allIn: false })
+    s = reduceClient(s, { type: 'server', msg: { t: 'GAME_EVENT', seq: 15, event: { type: 'DECISION_PHASE', seats: [0, 1, 2], turnSeq: 1, deadlineAt: 9_000 } as GameEvent }, now: 1 })
+    expect(s.hand!.legal).toMatchObject({ seat: 0, kinds: ['play', 'fold'], callAmount: 1000 })
+  })
+
+  it('a credit after a finished hand raises that seat on the hand still shown too', () => {
+    let s = game(inChaosRoom(), 11, started)
+    s = game(s, 12, { ...settlement, stacks: [{ seat: 1, stack: 0 }] } as GameEvent)
+    s = room(s, 13, { type: 'CHAOS_CREDIT', seat: 1, amount: 5000, stack: 5000, reason: 'chaos_rescue', capped: false })
+    expect(s.hand!.seats.find((x) => x.seat === 1)!.stack).toBe(5000)
+    expect(s.room!.players.find((p) => p.seat === 1)!.stack).toBe(5000)
+  })
+
+  it('a re-dealt board (CHAOS_APPLIED with community) replaces the board and lands like a street', () => {
+    // Plan 37 final wave (C2): SHOWDOWN and SETTLEMENT carry no board, so this is the only place the new one comes from.
+    let s = game(inChaosRoom(), 11, started)
+    s = game(s, 12, { type: 'COMMUNITY_REVEALED', street: 'RIVER', community: parseCards('2c 3d 4h 5s 7c') } as GameEvent)
+    const redeal = parseCards('Ah Kh Qh Jh Th')
+    s = reduceClient(s, { type: 'server', msg: { t: 'GAME_EVENT', seq: 13, event: { type: 'CHAOS_APPLIED', seat: 1, cardId: 'g_redeal_board', effect: 'redealBoard', targets: [], outcome: 'applied', community: redeal } }, now: 777 })
+    expect(s.hand!.community).toEqual(redeal)
+    expect(s.hand!.boardAt).toBe(777)
+    expect(s.chaos.applied.at(-1)).toMatchObject({ effect: 'redealBoard', community: redeal })
+    // one without a board leaves the board alone
+    const before = s.hand!
+    s = game(s, 14, swap)
+    expect(s.hand!.community).toBe(before.community)
+    expect(s.hand!.boardAt).toBe(777)
+  })
+
+  it('keeps "Thế giới đảo ngược" on for the hand from its public CHAOS_APPLIED, and clears it at the next hand', () => {
+    let s = game(inChaosRoom(), 11, started)
+    s = game(s, 12, { type: 'CHAOS_APPLIED', seat: 2, cardId: 'd_reverse', effect: 'reverseRank', targets: [], outcome: 'blocked' })
+    expect(s.chaos.reverse).toBe(false) // stopped: the ranking is not reversed
+    s = game(s, 13, { type: 'CHAOS_APPLIED', seat: 2, cardId: 'd_reverse', effect: 'reverseRank', targets: [], outcome: 'applied' })
+    expect(s.chaos.reverse).toBe(true)
+    s = game(s, 14, { ...started, handId: 'h2' } as GameEvent)
+    expect(s.chaos.reverse).toBe(false)
+  })
+
+  it('a reconnect mid-hand keeps the viewer\'s peek, the reversed ranking and the blindfold from the snapshot\'s hand view', () => {
+    // Plan 37 final wave (I2): the event stream that built them is gone; the server's hand view still carries them.
+    const view: HandView = {
+      handId: 'h1', mode: 'blind', phase: 'DECISION', street: 'PREFLOP', community: [], pot: 3000, carryOverIn: 0, currentBet: 0, minRaise: 0,
+      button: 0, actingSeat: null, turnSeq: 1, mySeat: 0, legal: null, result: null,
+      seats: [0, 1, 2].map((seat) => ({ seat, playerId: `p${seat}`, isBot: false, stack: 19000, betThisStreet: 1000, totalCommitted: 1000, folded: false, allIn: false, cardCount: 2, holeCards: null, hasDecided: false, decision: null, revealed: true })),
+      chaos: { reverse: true, peek: parseCards('Ah Kd'), blindfolded: true },
+    }
+    const s = reduceClient(inChaosRoom(), { type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: 20, room: chaosRoom(), hand: view, deadlineAt: null }, now: 5 })
+    expect(s.chaos.peek).toEqual({ seat: 0, cards: parseCards('Ah Kd') })
+    expect(s.chaos.reverse).toBe(true)
+    expect(s.chaos.blindfolded).toBe(true)
+    // a hand view with nothing of the sort, and a snapshot with no hand, leave them off (and the blindfold to the deal)
+    const plain = reduceClient(inChaosRoom(), { type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: 21, room: chaosRoom(), hand: { ...view, chaos: { reverse: false, peek: [], blindfolded: false } }, deadlineAt: null }, now: 5 })
+    expect([plain.chaos.peek, plain.chaos.reverse, plain.chaos.blindfolded]).toEqual([null, false, false])
+    expect([inChaosRoom().chaos.reverse, inChaosRoom().chaos.blindfolded]).toEqual([false, null])
   })
 
   it('reset and leaving the room forget the chaos state', () => {

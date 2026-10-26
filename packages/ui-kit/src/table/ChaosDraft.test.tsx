@@ -11,7 +11,7 @@ const ACK: AckOrError = { t: 'ACK', reqId: 'x' }
 const REFUSED: AckOrError = { t: 'ERROR', code: 'CHAOS_NO_OFFER', message: 'no', reqId: 'x' }
 
 const OFFER = { offerId: 'o1', cardIds: ['g_swap_all', 'g_shield_3', 'g_rescue'] }
-const draft = (patch: Partial<ClientChaosDraft> = {}): ClientChaosDraft => ({ tier: 'gold', deadlineAt: 1_015_000, offer: OFFER, picked: false, ...patch })
+const draft = (patch: Partial<ClientChaosDraft> = {}): ClientChaosDraft => ({ tier: 'gold', deadlineAt: 1_015_000, totalMs: 15_000, offer: OFFER, picked: false, ...patch })
 
 const mount = (patch: Partial<ChaosDraftProps> = {}, lang: 'vi' | 'en' = 'vi') => {
   const onPick = vi.fn<ChaosDraftProps['onPick']>().mockResolvedValue(ACK)
@@ -34,6 +34,15 @@ describe('ChaosDraft', () => {
     expect(cards.map((c) => c.querySelector('span:nth-child(2)')?.textContent)).toEqual(['Đổi bài', 'Khiên sắt', 'Cấp cứu vàng'])
     for (const c of cards) expect(c.querySelector('span:nth-child(3)')?.textContent).toMatch(/\S/)
     expect(screen.getByRole('timer')).toHaveTextContent('15')
+  })
+
+  it('draws the ring against the window the GM set, not a fixed 15 s (M2)', () => {
+    // 15 s left: a full circle of a 15 s draft, half of a 30 s one.
+    const { unmount } = mount({ draft: draft({ totalMs: 15_000 }) })
+    expect(screen.getByRole('timer').style.getPropertyValue('--pct')).toBe('100.00%')
+    unmount()
+    mount({ draft: draft({ totalMs: 30_000 }) })
+    expect(screen.getByRole('timer').style.getPropertyValue('--pct')).toBe('50.00%')
   })
 
   it('names the tier of each card in words, not only in colour', () => {

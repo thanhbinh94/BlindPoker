@@ -107,6 +107,8 @@ export interface AppliedChaosView {
 export interface ClientChaosDraft {
   tier: ChaosTier
   deadlineAt: number
+  /** The window's whole length (the GM's `draftMs`, 5–60 s): the timer ring's full circle. */
+  totalMs: number
   offer: { offerId: string; cardIds: string[] } | null
   picked: boolean
 }
@@ -134,9 +136,20 @@ export interface ClientChaos {
   awarded: { seat: number; cardIds: string[] }[]
   /** "Nhìn trộm": the next board cards, for this viewer only; cleared when the next hand starts. */
   peek: { seat: number; cards: Card[] } | null
+  /**
+   * "Thế giới đảo ngược" is on this hand: the weakest hand wins. Set by its public `CHAOS_APPLIED` or by a snapshot's hand
+   * view (`chaos.reverse`), so a reconnect still says so; cleared when the next hand starts.
+   */
+  reverse: boolean
+  /**
+   * Whether the viewer's own cards are down under a blindfold this hand, as a snapshot's hand view says (`chaos.blindfolded`).
+   * `null` when no snapshot said: no event announces a blindfold, so the table reads it off the deal (a seat holding cards it
+   * was shown none of). Cleared to `null` when the next hand starts.
+   */
+  blindfolded: boolean | null
 }
 
-export const initialChaos: ClientChaos = { draft: null, seats: {}, applied: [], credits: [], awarded: [], peek: null }
+export const initialChaos: ClientChaos = { draft: null, seats: {}, applied: [], credits: [], awarded: [], peek: null, reverse: false, blindfolded: null }
 
 export interface ClientError {
   code: ErrorCode

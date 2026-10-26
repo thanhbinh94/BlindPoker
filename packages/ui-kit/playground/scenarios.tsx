@@ -395,7 +395,7 @@ function chaosState(n: number, state: ChaosState, now: number): ClientChaos {
   }
   const chaos: ClientChaos = { ...initialChaos, seats }
   if (state === 'chaosDraft') {
-    return { ...chaos, draft: { tier: 'gold', deadlineAt: now + 15_000, offer: { offerId: 'worst', cardIds: ['g_swap_all', 'g_shield_3', 'g_rescue'] }, picked: false } }
+    return { ...chaos, draft: { tier: 'gold', totalMs: 15_000, deadlineAt: now + 15_000, offer: { offerId: 'worst', cardIds: ['g_swap_all', 'g_shield_3', 'g_rescue'] }, picked: false } }
   }
   if (state === 'chaosReveal') {
     return {

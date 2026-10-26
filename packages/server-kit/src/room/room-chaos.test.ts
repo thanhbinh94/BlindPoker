@@ -23,7 +23,7 @@ const tick = (h: RoomHarness) => h.room.enqueue(() => undefined)
 const roomEvents = (h: RoomHarness, id: string): RoomEvent[] => h.ofType(id, 'ROOM_EVENT').map((m) => m.event)
 const ofEvent = <T extends RoomEvent['type']>(h: RoomHarness, id: string, type: T) =>
   roomEvents(h, id).filter((e): e is Extract<RoomEvent, { type: T }> => e.type === type)
-type Offer = { offerId: string; tier: string; cardIds: string[]; deadlineAt: number }
+type Offer = { offerId: string; tier: string; cardIds: string[]; deadlineAt: number; draftMs: number }
 const offers = (h: RoomHarness, id: string): Offer[] =>
   h.ofType(id, 'NOTIFICATION').filter((m: Extract<ServerMessage, { t: 'NOTIFICATION' }>) => m.kind === 'CHAOS_OFFER').map((m) => m.payload as Offer)
 const lastOffer = (h: RoomHarness, id: string): Offer => offers(h, id).at(-1)!
@@ -89,7 +89,7 @@ describe('Chaos room: the draft', () => {
     const deadlineAt = h.clock.now() + DRAFT_MS
     const draft = ofEvent(h, 'b', 'CHAOS_DRAFT')
     expect(draft).toHaveLength(1)
-    expect(draft[0]).toMatchObject({ deadlineAt, seats: [0, 1, 3, 4] }) // the bots sit on 4 and 3
+    expect(draft[0]).toMatchObject({ deadlineAt, draftMs: DRAFT_MS, seats: [0, 1, 3, 4] }) // the bots sit on 4 and 3
     expect(h.last('h', 'ROOM_EVENT')?.event).toEqual({ type: 'ROOM_STATUS', status: 'IN_GAME', nextHandAt: deadlineAt })
     expect(h.room.nextHandAt).toBe(deadlineAt)
     for (const id of ['h', 'a']) {
@@ -97,6 +97,7 @@ describe('Chaos room: the draft', () => {
       const offer = lastOffer(h, id)
       expect(offer.tier).toBe(draft[0]!.tier)
       expect(offer.deadlineAt).toBe(deadlineAt)
+      expect(offer.draftMs).toBe(DRAFT_MS)
       expect(new Set(offer.cardIds).size).toBe(3)
       expect(offer.cardIds.every((c) => byId.get(c)?.tier === offer.tier)).toBe(true)
     }
@@ -183,8 +184,8 @@ describe('Chaos room: the draft', () => {
     await h.room.startGame('h')
     const offer = lastOffer(h, 'h')
     const deadlineAt = h.clock.now() + DRAFT_MS
-    expect(h.room.snapshot('h').chaos).toEqual({ draft: { tier: offer.tier, deadlineAt, offer: { offerId: offer.offerId, cardIds: offer.cardIds }, picked: false } })
-    expect(h.room.snapshot('b').chaos).toEqual({ draft: { tier: offer.tier, deadlineAt, offer: null, picked: false } })
+    expect(h.room.snapshot('h').chaos).toEqual({ draft: { tier: offer.tier, deadlineAt, draftMs: DRAFT_MS, offer: { offerId: offer.offerId, cardIds: offer.cardIds }, picked: false } })
+    expect(h.room.snapshot('b').chaos).toEqual({ draft: { tier: offer.tier, deadlineAt, draftMs: DRAFT_MS, offer: null, picked: false } })
     expect(h.room.snapshot('h').room.nextHandAt).toBe(deadlineAt)
     await h.room.pickChaos('h', offer.offerId, offer.cardIds[2]!)
     expect(h.room.snapshot('h').chaos!.draft).toMatchObject({ picked: true })
@@ -285,6 +286,15 @@ describe('Chaos room: the draft', () => {
     expect(offers(h, 'h')).toHaveLength(1)
   })
 
+  it('tells the GM’s draft length (not a fixed 15 s) in the frame, the offer and the snapshot', async () => {
+    const h = createRoomHarness(CHAOS, { chaos: { config: { draftMs: 40_000 } } })
+    await seat(h, ['h', 'a'])
+    await h.room.startGame('h')
+    expect(ofEvent(h, 'h', 'CHAOS_DRAFT')[0]).toMatchObject({ draftMs: 40_000, deadlineAt: h.clock.now() + 40_000 })
+    expect(lastOffer(h, 'h').draftMs).toBe(40_000)
+    expect(h.room.snapshot('h').chaos!.draft!.draftMs).toBe(40_000)
+  })
+
   it('a port that cannot answer is logged and the hand is dealt without a draft', async () => {
     let down = true
     const h = createRoomHarness(CHAOS, { chaos: { failReads: () => down } })
@@ -315,8 +325,8 @@ describe('Chaos room: the draft', () => {
 
 describe('Chaos room: credits', () => {
   /** One human with 1.500 (so one lost ante leaves 500, under 2 wagers) and two bots, every card a Cấp cứu Bạc. */
-  const rescueTable = (opts: { failCredit?: () => boolean } = {}) =>
-    createRoomHarness(CHAOS, { players: [['h', 1_500]], chaos: { cards: RESCUE_ONLY, config: SILVER_ONLY, ...opts } })
+  const rescueTable = (opts: { failCredit?: () => boolean } = {}, stake = 1_500) =>
+    createRoomHarness(CHAOS, { players: [['h', stake]], chaos: { cards: RESCUE_ONLY, config: SILVER_ONLY, ...opts } })
 
   it('a rescue credit writes chaos_rescue + chaos_to_table under its key and raises the stack, outside the hand\'s net', async () => {
     const h = rescueTable()
@@ -334,7 +344,7 @@ describe('Chaos room: credits', () => {
     expect(h.room.players.get('h')!.stack).toBe(500 + 5_000)
     expect(h.room.players.get('h')!.seat).toBe(0)
     expect(h.room.players.get('h')!.chaos!.cards).toEqual([]) // the card paid and left
-    expect(ofEvent(h, 'h', 'CHAOS_CREDIT')).toEqual([{ type: 'CHAOS_CREDIT', seat: 0, amount: 5_000, reason: 'chaos_rescue', capped: false }])
+    expect(ofEvent(h, 'h', 'CHAOS_CREDIT')).toEqual([{ type: 'CHAOS_CREDIT', seat: 0, amount: 5_000, stack: 5_500, reason: 'chaos_rescue', capped: false }])
     const types = h.ofType('h', 'ROOM_EVENT').map((m) => m.event.type)
     expect(types.indexOf('CHAOS_CREDIT')).toBeLessThan(types.lastIndexOf('CHAOS_STATE'))
   })
@@ -345,11 +355,11 @@ describe('Chaos room: credits', () => {
     await h.room.startGame('h')
     await pickAll(h, ['h'])
     await playOut(h, folds)
-    expect(ofEvent(h, 'h', 'CHAOS_CREDIT')).toEqual([{ type: 'CHAOS_CREDIT', seat: 0, amount: 2_000, reason: 'chaos_rescue', capped: true }])
+    expect(ofEvent(h, 'h', 'CHAOS_CREDIT')).toEqual([{ type: 'CHAOS_CREDIT', seat: 0, amount: 2_000, stack: 2_500, reason: 'chaos_rescue', capped: true }])
     expect(h.room.players.get('h')!.stack).toBe(2_500)
   })
 
-  it('a credit that fails once is retried; one that fails twice is logged and changes no stack', async () => {
+  it('a credit that fails once is retried; one that fails twice is kept pending and settled before the seat is judged spent', async () => {
     let failures = 1
     const h = rescueTable({ failCredit: () => failures-- > 0 })
     await seat(h, ['h'])
@@ -358,16 +368,48 @@ describe('Chaos room: credits', () => {
     await playOut(h, folds)
     expect(h.room.players.get('h')!.stack).toBe(5_500)
 
+    // Twice: kept pending (logged), the stack not raised yet; a stand-up settles it before it cashes the stack out.
     failures = 2
     const g = rescueTable({ failCredit: () => failures-- > 0 })
     await seat(g, ['h'])
     await g.room.startGame('h')
     await pickAll(g, ['h'])
     await playOut(g, folds)
+    expect(g.logs.some((l) => l.level === 'error' && /chaos credit failed; pending/.test(l.msg))).toBe(true)
     expect(g.room.players.get('h')!.stack).toBe(500)
     expect(ofEvent(g, 'h', 'CHAOS_CREDIT')).toEqual([])
-    expect(g.logs.some((l) => l.level === 'error' && /chaos credit/.test(l.msg))).toBe(true)
-    expect(g.repos.entries.filter((e) => e.entry.reason.startsWith('chaos'))).toEqual([])
+    await g.room.standUp('h')
+    expect(ofEvent(g, 'h', 'CHAOS_CREDIT')).toEqual([{ type: 'CHAOS_CREDIT', seat: 0, amount: 5_000, stack: 5_500, reason: 'chaos_rescue', capped: false }])
+    expect(await g.repos.balances.get('h')).toBe(5_500)
+  })
+
+  it('a seat a hand left at 0 whose rescue is pending is settled before it is judged spent, and kept (sat out) when it fails again', async () => {
+    // 1.000 brought: the folded ante leaves 0. Twice: the stand-up check retries it once more and the seat stays, rescued.
+    let failures = 2
+    const g = rescueTable({ failCredit: () => failures-- > 0 }, 1_000)
+    await seat(g, ['h'])
+    await g.room.startGame('h')
+    await pickAll(g, ['h'])
+    await playOut(g, folds)
+    expect(g.room.players.get('h')!.seat).toBe(0)
+    expect(g.room.players.get('h')!.stack).toBe(5_000)
+    expect(ofEvent(g, 'h', 'CHAOS_CREDIT')).toEqual([{ type: 'CHAOS_CREDIT', seat: 0, amount: 5_000, stack: 5_000, reason: 'chaos_rescue', capped: false }])
+    expect(g.ofType('h', 'NOTIFICATION').some((m) => m.kind === 'STACK_SPENT')).toBe(false)
+
+    // Three times: still owed, nothing written, the seat kept at 0 (never cashed out as spent) and sat out of the next deal.
+    failures = 3
+    const k = rescueTable({ failCredit: () => failures-- > 0 }, 1_000)
+    await seat(k, ['h'])
+    await k.room.startGame('h')
+    await pickAll(k, ['h'])
+    await playOut(k, folds)
+    expect(k.room.players.get('h')!.seat).toBe(0)
+    expect(k.room.players.get('h')!.stack).toBe(0)
+    expect(ofEvent(k, 'h', 'CHAOS_CREDIT')).toEqual([])
+    expect(k.repos.entries.filter((e) => e.entry.reason.startsWith('chaos'))).toEqual([])
+    k.clock.advance(100)
+    await tick(k)
+    expect(k.room.players.get('h')!.sittingOut).toBe(true)
   })
 
   it('a cancelled hand settles no chaos', async () => {
