@@ -152,7 +152,61 @@
     "title": "Quản trị",
     "copyId": "Chép mã",
     "copied": "Đã chép",
-    "tabs": { "overview": "Tổng quan", "players": "Người chơi", "rooms": "Phòng", "gifts": "Quà tháng", "shop": "Cửa hàng", "actions": "Nhật ký" },
+    "tabs": { "overview": "Tổng quan", "players": "Người chơi", "rooms": "Phòng", "gifts": "Quà tháng", "shop": "Cửa hàng", "chaos": "Thẻ hỗn loạn", "actions": "Nhật ký" },
+    "chaos": {
+      "lead": "Thẻ và số liệu có hiệu lực ở lượt nặn bài kế tiếp, không cần khởi động lại. Trọng số 0 là thẻ không bao giờ xuất hiện; mỗi bậc phải còn ít nhất 3 thẻ để nặn. Mỗi lần lưu cần một lý do và vào Nhật ký.",
+      "error": "Không tải được cấu hình thẻ hỗn loạn",
+      "tierTitle": "{{tier}} · {{on}}/{{total}} thẻ đang bật",
+      "colCard": "Thẻ",
+      "colEnabled": "Bật",
+      "colWeight": "Trọng số",
+      "colFrom": "Từ ngày",
+      "colTo": "Đến ngày",
+      "colReset": "Theo file",
+      "stateOn": "Đang bật",
+      "stateOff": "Đang tắt",
+      "enabledOf": "Bật thẻ {{card}}",
+      "weightOf": "Trọng số của {{card}}",
+      "fromOf": "{{card}}: từ ngày",
+      "toOf": "{{card}}: đến ngày",
+      "reset": "Theo file",
+      "resetOf": "{{card}}: về theo file",
+      "invalid": "Trọng số là số nguyên từ 0 đến 100, và ngày kết thúc không được trước ngày bắt đầu.",
+      "invalidCards": "Kiểm tra: {{cards}}",
+      "save": "Lưu",
+      "saveTitle": "Lưu {{count}} thẻ",
+      "changed": "Đã sửa {{count}} thẻ",
+      "family": {
+        "swap": "Đổi bài",
+        "luck": "May mắn",
+        "peek": "Nhìn trộm",
+        "insurance": "Bảo hiểm",
+        "shield": "Khiên",
+        "rescue": "Cấp cứu",
+        "points": "Điểm hỗn loạn",
+        "debuff": "Phá bàn",
+        "crit": "Bạo kích",
+        "fortune": "Thần tài",
+        "level": "Cấp độ",
+        "extra": "Thêm lá",
+        "board": "Lá chung",
+        "rule": "Luật bàn",
+        "gambler": "Tay bạc"
+      },
+      "config": {
+        "title": "Số liệu hỗn loạn",
+        "weightSilver": "Tỉ lệ bậc Bạc (số nguyên từ 0)",
+        "weightGold": "Tỉ lệ bậc Vàng (số nguyên từ 0)",
+        "weightDiamond": "Tỉ lệ bậc Kim cương (số nguyên từ 0)",
+        "pointsThreshold": "Điểm hỗn loạn để nhận thẻ thưởng (1–100)",
+        "draftSeconds": "Thời gian nặn bài, giây (5–60)",
+        "dailyCap": "Trần điểm thưởng mỗi ngày, mỗi người (0–10.000.000)",
+        "dailyRescues": "Số lần Cấp cứu mỗi ngày (0–20)",
+        "invalid": "Mỗi ô là một số nguyên trong khoảng ghi bên trên, và ba tỉ lệ bậc không được cùng bằng 0.",
+        "save": "Lưu số liệu",
+        "saveTitle": "Lưu số liệu hỗn loạn"
+      }
+    },
     "shop": {
       "lead": "Giá, kệ tuần và quà chào mừng có hiệu lực ngay cho lần mua sau. Mỗi lần lưu cần một lý do và vào Nhật ký.",
       "error": "Không tải được cấu hình cửa hàng",
@@ -426,7 +480,9 @@
         "set_reputation_ranks": "Đổi ngưỡng bậc",
         "set_shop_prices": "Đổi giá cửa hàng",
         "set_shop_featured": "Xếp kệ tuần",
-        "set_welcome_choices": "Đổi quà chào mừng"
+        "set_welcome_choices": "Đổi quà chào mừng",
+        "set_chaos_rules": "Đổi thẻ hỗn loạn",
+        "set_chaos_config": "Đổi số liệu hỗn loạn"
       }
     },
     "done": {
@@ -448,7 +504,9 @@
       "shopFeatured": "Đã lưu kệ tuần.",
       "welcome": "Đã lưu quà chào mừng.",
       "reputationRules": "Đã lưu nguồn danh vọng.",
-      "reputationRanks": "Đã lưu ngưỡng bậc."
+      "reputationRanks": "Đã lưu ngưỡng bậc.",
+      "chaosRules": "Đã lưu {{count}} thẻ.",
+      "chaosConfig": "Đã lưu số liệu hỗn loạn."
     },
     "errors": {
       "INVALID_REASON": "Lý do phải dài 3–200 ký tự",
@@ -479,7 +537,9 @@
       "INVALID_RULES": "Nguồn danh vọng không hợp lệ: {{message}}",
       "INVALID_RANKS": "Ngưỡng bậc không hợp lệ: {{message}}",
       "INVALID_WEEK": "Tuần không hợp lệ.",
-      "WEEK_IN_PAST": "Tuần đã qua."
+      "WEEK_IN_PAST": "Tuần đã qua.",
+      "INVALID_CHAOS_RULES": "Thẻ không hợp lệ: {{message}}",
+      "INVALID_CHAOS_CONFIG": "Số liệu không hợp lệ: {{message}}"
     },
     "notice": {
       "points": "{{amount}} điểm — {{reason}}",

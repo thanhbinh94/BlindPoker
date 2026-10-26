@@ -392,6 +392,7 @@ describe('createApi — the GM routes', () => {
     ['gmRooms', [], '/api/gm/rooms'],
     ['gmRoom', ['r1'], '/api/gm/rooms/r1'],
     ['gmShop', [], '/api/gm/shop'],
+    ['gmChaos', [], '/api/gm/chaos'],
   ])('%s GETs %s with no CSRF header', async (method, args, path) => {
     const fetchImpl = ok({})
     await (apiOf(fetchImpl) as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>)[method]!(...(args as unknown[]))
@@ -407,6 +408,8 @@ describe('createApi — the GM routes', () => {
     ['gmSetWelcomeChoices', [['a', 'b', 'c'], 'quà'], '/api/gm/shop/welcome', { itemIds: ['a', 'b', 'c'], reason: 'quà' }],
     ['gmSetReputationRules', [{ daily_login: 15 }, 'nguồn'], '/api/gm/reputation/rules', { rules: { daily_login: 15 }, reason: 'nguồn' }],
     ['gmSetReputationRanks', [[{ rank: 1, threshold: 0 }], 'bậc'], '/api/gm/reputation/ranks', { ranks: [{ rank: 1, threshold: 0 }], reason: 'bậc' }],
+    ['gmSetChaosRules', [[{ cardId: 's_swap_one', clear: true }], 'về file'], '/api/gm/chaos/rules', { changes: [{ cardId: 's_swap_one', clear: true }], reason: 'về file' }],
+    ['gmSetChaosConfig', [{ pointsThreshold: 8 }, 'cân lại'], '/api/gm/chaos/config', { config: { pointsThreshold: 8 }, reason: 'cân lại' }],
   ])('%s PUTs %s with the CSRF header (Plan 27)', async (method, args, path, expected) => {
     const fetchImpl = ok({})
     await (apiOf(fetchImpl) as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>)[method]!(...(args as unknown[]))

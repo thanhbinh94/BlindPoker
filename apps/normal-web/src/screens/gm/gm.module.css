@@ -370,6 +370,50 @@ td.members {
   }
 }
 
+/* The chaos tab (Plan 37): a weight is at most 100, a date input is as wide as its own picker. */
+.weightInput {
+  width: 4.5rem;
+}
+
+.dateInput {
+  width: 8.75rem;
+  max-width: 100%;
+  padding-inline: var(--space-2);
+  font-size: 0.8125rem;
+}
+
+/* Six columns in a 46rem page: tight cell padding, and a name column that never narrows to a letter a line. */
+@media (min-width: 641px) {
+  .chaosTable th,
+  .chaosTable td {
+    padding-inline: var(--space-1);
+  }
+
+  .chaosTable td:first-child {
+    min-width: 9rem;
+  }
+}
+
+.configGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-3);
+}
+
+/* The 47 cards are a long page: their Save stays in reach while any of them is on screen. */
+.saveBar {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+}
+
 .check {
   width: 1.25rem;
   height: 1.25rem;
@@ -386,6 +430,14 @@ td.members {
    The kit pill is one unbroken row. The console's five tabs and the gift editor's four rules are ~460 and ~520 px of
    label at 375 px, so on a phone the pill wraps onto a second row and its buttons share each row (the element in
    the selector keeps it above the kit's own `.segment` / `.segBtn`, whichever sheet loads last). */
+/* Seven tabs in a 46rem pill: the kit's 16 px of padding makes every label wrap onto two lines, 12 px keeps each on one. */
+@media (min-width: 641px) {
+  div.wrapSeg button {
+    padding: 0 var(--space-3);
+    white-space: nowrap;
+  }
+}
+
 @media (max-width: 640px) {
   div.wrapSeg {
     display: flex;

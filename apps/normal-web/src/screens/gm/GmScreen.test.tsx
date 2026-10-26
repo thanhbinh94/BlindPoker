@@ -43,19 +43,20 @@ function setup(api: Stub = stubApi()) {
 }
 
 describe('GmScreen', () => {
-  it('has the six tabs, in order, on the overview first', async () => {
+  it('has the seven tabs, in order, on the overview first', async () => {
     setup()
 
     expect(screen.getByRole('heading', { name: viNormal.gm.title, level: 1 })).toBeInTheDocument()
     for (const name of Object.values(viNormal.gm.tabs)) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument()
     }
-    expect(screen.getAllByRole('button').slice(0, 6).map((tab) => tab.textContent)).toEqual([
+    expect(screen.getAllByRole('button').slice(0, 7).map((tab) => tab.textContent)).toEqual([
       'Tổng quan',
       'Người chơi',
       'Phòng',
       'Quà tháng',
       'Cửa hàng',
+      'Thẻ hỗn loạn',
       'Nhật ký',
     ])
     expect(screen.getByRole('button', { name: viNormal.gm.tabs.overview })).toHaveAttribute('aria-pressed', 'true')

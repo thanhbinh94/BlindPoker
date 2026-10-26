@@ -152,7 +152,61 @@
     "title": "Game master",
     "copyId": "Copy id",
     "copied": "Copied",
-    "tabs": { "overview": "Overview", "players": "Players", "rooms": "Rooms", "gifts": "Gift months", "shop": "Shop", "actions": "Log" },
+    "tabs": { "overview": "Overview", "players": "Players", "rooms": "Rooms", "gifts": "Gift months", "shop": "Shop", "chaos": "Chaos cards", "actions": "Log" },
+    "chaos": {
+      "lead": "Cards and numbers apply from the next draft, no restart. A weight of 0 means the card is never offered; every tier must keep at least 3 cards to draft from. Every save needs a reason and goes into the Log.",
+      "error": "Could not load the chaos card settings",
+      "tierTitle": "{{tier}} · {{on}}/{{total}} cards on",
+      "colCard": "Card",
+      "colEnabled": "On",
+      "colWeight": "Weight",
+      "colFrom": "From",
+      "colTo": "Until",
+      "colReset": "Use file",
+      "stateOn": "On now",
+      "stateOff": "Off now",
+      "enabledOf": "Turn on {{card}}",
+      "weightOf": "Weight of {{card}}",
+      "fromOf": "{{card}}: from date",
+      "toOf": "{{card}}: until date",
+      "reset": "Use file",
+      "resetOf": "{{card}}: back to the file",
+      "invalid": "A weight is a whole number from 0 to 100, and the end date cannot be before the start date.",
+      "invalidCards": "Check: {{cards}}",
+      "save": "Save",
+      "saveTitle": "Save {{count}} cards",
+      "changed": "{{count}} cards edited",
+      "family": {
+        "swap": "Swap",
+        "luck": "Luck",
+        "peek": "Peek",
+        "insurance": "Insurance",
+        "shield": "Shield",
+        "rescue": "Rescue",
+        "points": "Chaos points",
+        "debuff": "Table breaker",
+        "crit": "Critical",
+        "fortune": "Fortune",
+        "level": "Level up",
+        "extra": "Extra card",
+        "board": "Board",
+        "rule": "Table rule",
+        "gambler": "Gambler"
+      },
+      "config": {
+        "title": "Chaos numbers",
+        "weightSilver": "Silver tier odds (whole number from 0)",
+        "weightGold": "Gold tier odds (whole number from 0)",
+        "weightDiamond": "Diamond tier odds (whole number from 0)",
+        "pointsThreshold": "Chaos points for a bonus card (1–100)",
+        "draftSeconds": "Draft time, seconds (5–60)",
+        "dailyCap": "Daily cap of new points per player (0–10,000,000)",
+        "dailyRescues": "Rescues per day (0–20)",
+        "invalid": "Each box is a whole number in the range shown above, and the three tier odds cannot all be 0.",
+        "save": "Save numbers",
+        "saveTitle": "Save the chaos numbers"
+      }
+    },
     "shop": {
       "lead": "Prices, the week's shelf and the welcome gift apply from the next purchase. Every save needs a reason and goes into the Log.",
       "error": "Could not load the shop settings",
@@ -426,7 +480,9 @@
         "set_reputation_ranks": "Change rank thresholds",
         "set_shop_prices": "Change shop prices",
         "set_shop_featured": "Arrange the week's shelf",
-        "set_welcome_choices": "Change the welcome gift"
+        "set_welcome_choices": "Change the welcome gift",
+        "set_chaos_rules": "Change chaos cards",
+        "set_chaos_config": "Change chaos numbers"
       }
     },
     "done": {
@@ -448,7 +504,9 @@
       "shopFeatured": "Shelf saved.",
       "welcome": "Welcome gift saved.",
       "reputationRules": "Reputation sources saved.",
-      "reputationRanks": "Rank thresholds saved."
+      "reputationRanks": "Rank thresholds saved.",
+      "chaosRules": "{{count}} cards saved.",
+      "chaosConfig": "Chaos numbers saved."
     },
     "errors": {
       "INVALID_REASON": "The reason must be 3–200 characters",
@@ -479,7 +537,9 @@
       "INVALID_RULES": "Invalid reputation sources: {{message}}",
       "INVALID_RANKS": "Invalid rank thresholds: {{message}}",
       "INVALID_WEEK": "Invalid week.",
-      "WEEK_IN_PAST": "That week is over."
+      "WEEK_IN_PAST": "That week is over.",
+      "INVALID_CHAOS_RULES": "Invalid cards: {{message}}",
+      "INVALID_CHAOS_CONFIG": "Invalid numbers: {{message}}"
     },
     "notice": {
       "points": "{{amount}} points — {{reason}}",

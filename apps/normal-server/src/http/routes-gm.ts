@@ -54,6 +54,8 @@ const SERVICE_STATUS: Record<string, number> = {
   INVALID_WELCOME: 400,
   INVALID_RULES: 400,
   INVALID_RANKS: 400,
+  INVALID_CHAOS_RULES: 400,
+  INVALID_CHAOS_CONFIG: 400,
   INVALID_WEEK: 400,
   WEEK_IN_PAST: 409,
   FORBIDDEN: 403,
@@ -265,6 +267,21 @@ export function registerGmRoutes(app: FastifyInstance, deps: GmRouteDeps): void 
   app.put('/api/gm/reputation/ranks', gmOnly, async (req, reply) => {
     const reason = roomReason(req)
     return reply.send(await translated(() => deps.gm.setReputationRanks(actorOf(req), bodyOf(req).ranks, reason)))
+  })
+
+  // ---------- the chaos cards (Plan 37) ----------
+  // Same shape as the shop: the reason first, then the body to the service, which validates it before it writes.
+
+  app.get('/api/gm/chaos', gmOnly, async (_req, reply) => reply.send(await translated(() => deps.gm.chaos())))
+
+  app.put('/api/gm/chaos/rules', gmOnly, async (req, reply) => {
+    const reason = roomReason(req)
+    return reply.send(await translated(() => deps.gm.setChaosRules(actorOf(req), bodyOf(req).changes, reason)))
+  })
+
+  app.put('/api/gm/chaos/config', gmOnly, async (req, reply) => {
+    const reason = roomReason(req)
+    return reply.send(await translated(() => deps.gm.setChaosConfig(actorOf(req), bodyOf(req).config, reason)))
   })
 
   // ---------- rooms ----------

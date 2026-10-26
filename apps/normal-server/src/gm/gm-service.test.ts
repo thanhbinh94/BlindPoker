@@ -961,3 +961,69 @@ describe('GmService — gift schedule', () => {
     expect(rowsOf(await db.execute(sql`select 1 from gift_months`))).toEqual([])
   })
 })
+
+describe('GmService — chaos cards (Plan 37)', () => {
+  const logged = async (action: string) =>
+    rowsOf<{ id: number; action: string; target_player_id: string | null; reason: string; details: Record<string, unknown> | null }>(
+      await db.execute(sql`select id, action, target_player_id, reason, details from gm_actions where action = ${action} order by id`),
+    )
+  const silver = async () => (await gm.chaos()).cards.filter((c) => c.tier === 'silver')
+
+  it('chaos() lists the 47 cards with activeNow and the config as it stands', async () => {
+    const view = await gm.chaos()
+    expect(view.cards).toHaveLength(47)
+    expect(view.cards.every((c) => c.activeNow && c.rule === null)).toBe(true)
+    expect(view.config).toEqual(await h.app.services.chaos.config())
+  })
+
+  it('setChaosRules writes the rows, logs set_chaos_rules with the changes, and a clear hands the card back to the file', async () => {
+    const [a, b] = await silver()
+    const r = await gm.setChaosRules(actor(boss), [{ cardId: a!.id, enabled: true, weight: 40, startsAt: null, endsAt: null, junk: 'dropped' }, { cardId: b!.id, enabled: true, weight: 0, startsAt: null, endsAt: null }], 'thử trọng số')
+    expect((await gm.chaos()).cards.find((c) => c.id === a!.id)!.rule).toEqual({ enabled: true, weight: 40, startsAt: null, endsAt: null })
+    const [row] = await logged('set_chaos_rules')
+    expect(row).toMatchObject({ id: r.actionId, target_player_id: null, reason: 'thử trọng số' })
+    expect(row!.details).toEqual({ changes: [{ cardId: a!.id, enabled: true, weight: 40, startsAt: null, endsAt: null }, { cardId: b!.id, enabled: true, weight: 0, startsAt: null, endsAt: null }] })
+    expect(r.changed).toBe(2)
+
+    await gm.setChaosRules(actor(boss), [{ cardId: a!.id, clear: true }], 'về theo file')
+    expect((await gm.chaos()).cards.find((c) => c.id === a!.id)!.rule).toBeNull()
+    expect((await logged('set_chaos_rules'))[1]!.details).toEqual({ changes: [{ cardId: a!.id, clear: true }] })
+  })
+
+  it('only clear === true clears: clear:false with the fields is an ordinary rule, and clear:false alone is refused', async () => {
+    const [a] = await silver()
+    await gm.setChaosRules(actor(boss), [{ cardId: a!.id, clear: false, enabled: true, weight: 7, startsAt: null, endsAt: null }], 'không phải xóa')
+    expect((await gm.chaos()).cards.find((c) => c.id === a!.id)!.rule).toMatchObject({ weight: 7 })
+    await expect(gm.setChaosRules(actor(boss), [{ cardId: a!.id, clear: false }], 'thiếu trường')).rejects.toMatchObject({ code: 'INVALID_CHAOS_RULES' })
+    await expect(gm.setChaosRules(actor(boss), [{ cardId: a!.id, clear: 'true' }], 'chuỗi')).rejects.toMatchObject({ code: 'INVALID_CHAOS_RULES' })
+    expect(await logged('set_chaos_rules')).toHaveLength(1)
+  })
+
+  it('setChaosRules refuses a tier left with fewer than three cards, an unknown card, an empty list, a short reason and the CLI, and logs nothing for them', async () => {
+    const all = await silver()
+    const off = all.map((c) => ({ cardId: c.id, enabled: false, weight: 1, startsAt: null, endsAt: null }))
+    await expect(gm.setChaosRules(actor(boss), off, 'tắt hết bạc')).rejects.toMatchObject({ code: 'INVALID_CHAOS_RULES' })
+    // The refusal rolled the whole batch back.
+    expect((await gm.chaos()).cards.every((c) => c.rule === null)).toBe(true)
+    await expect(gm.setChaosRules(actor(boss), [{ cardId: 'no_such_card', enabled: true, weight: 1, startsAt: null, endsAt: null }], 'thẻ lạ')).rejects.toMatchObject({ code: 'INVALID_CHAOS_RULES' })
+    await expect(gm.setChaosRules(actor(boss), [], 'trống')).rejects.toMatchObject({ code: 'INVALID_CHAOS_RULES' })
+    await expect(gm.setChaosRules(actor(boss), 'x', 'không phải mảng')).rejects.toMatchObject({ code: 'INVALID_CHAOS_RULES' })
+    await expect(gm.setChaosRules(actor(boss), [{ cardId: all[0]!.id, clear: true }], 'no')).rejects.toMatchObject({ code: 'INVALID_REASON' })
+    await expect(gm.setChaosRules({ userId: null }, [{ cardId: all[0]!.id, clear: true }], 'từ CLI')).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(await logged('set_chaos_rules')).toEqual([])
+  })
+
+  it('setChaosConfig saves the five numbers and logs set_chaos_config; a bad number is refused with no log line', async () => {
+    const config = { tierWeights: { silver: 50, gold: 35, diamond: 15 }, pointsThreshold: 8, draftMs: 20_000, dailyCapPoints: 50_000, dailyRescues: 2 }
+    const r = await gm.setChaosConfig(actor(boss), { ...config, junk: 1 }, 'cân lại')
+    expect(await h.app.services.chaos.config()).toEqual(config)
+    expect(await logged('set_chaos_config')).toEqual([expect.objectContaining({ id: r.actionId, reason: 'cân lại', details: { config } })])
+
+    await expect(gm.setChaosConfig(actor(boss), { ...config, draftMs: 1 }, 'quá ngắn')).rejects.toMatchObject({ code: 'INVALID_CHAOS_CONFIG' })
+    await expect(gm.setChaosConfig(actor(boss), null, 'rỗng')).rejects.toMatchObject({ code: 'INVALID_CHAOS_CONFIG' })
+    await expect(gm.setChaosConfig(actor(boss), config, 'no')).rejects.toMatchObject({ code: 'INVALID_REASON' })
+    await expect(gm.setChaosConfig({ userId: null }, config, 'từ CLI')).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(await logged('set_chaos_config')).toHaveLength(1)
+    expect(await h.app.services.chaos.config()).toEqual(config)
+  })
+})
