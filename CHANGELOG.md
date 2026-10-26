@@ -9,7 +9,7 @@ below are the real history.
 
 ---
 
-## BP-38 — a table that goes back to waiting tells every player their "ready" is cleared, so "Chơi tiếp" then "Bắt đầu" no longer lights a Start the server refuses — merged `MERGE` (2026-10-26)
+## BP-38 — a table that goes back to waiting tells every player their "ready" is cleared, so "Chơi tiếp" then "Bắt đầu" no longer lights a Start the server refuses — merged `29cc1d0` (2026-10-27)
 
 The user's bug log, `docs/bug-log.md` §10 E6 (found 2026-10-23 while screenshotting BP-31, option (a) recommended there). Branch
 `bugfix/BP-38-ready-after-open`. Server only; no protocol change.
@@ -30,7 +30,10 @@ The user's bug log, `docs/bug-log.md` §10 E6 (found 2026-10-23 while screenshot
   are unchanged. server-kit 208 passed (was 206), ui-kit `src/client` + `src/screens` 227 passed.
 - **Docs.** `docs/bug-log.md` §10 (E6 fixed).
 - **Khác với spec / Deviations from the spec.** None.
-- **Gate.** Not run yet.
+- **Gate** (the branch with `main` merged in): typecheck and lint clean; unit — the full run timed out 24 tests in
+  ui-kit and normal-web while another program held the CPU (34 min instead of 7), then ui-kit 910/910 and normal-web
+  1,110 passed on a re-run with only the known GM-console route flake; `build:normal` ok; `build:lite` up to the Node 22
+  exe step; `avatar:check` 0 failures; e2e Normal 24/24; e2e Lite 4/4; ops 59/59.
 - **Deployed.** Not yet.
 - **Still open.** Nothing from this item.
 
