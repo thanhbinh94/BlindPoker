@@ -22,8 +22,8 @@ const toHeld = (def: ChaosCardDef, uid: number): HeldCard => ({
 /**
  * A seat receives a card (a draft pick, a bonus card, a Thần tài prize). "Now" cards act at once — Cấp độ turns into
  * its cards (spec §5.6, never another Cấp độ), Tích lũy adds its points — and the rest are held, under spec §3.4's
- * rule for duration cards of the same effect: a higher tier replaces the held one, the same tier adds its hands, a
- * lower tier is dropped. `received` lists every card that reached the seat, a Cấp độ first and then what it became; a
+ * rule for duration cards of the same effect: a higher tier replaces the held one, the same card adds its hands, another
+ * card of the same tier replaces it (with its own params), a lower tier is dropped. `received` lists every card that reached the seat, a Cấp độ first and then what it became; a
  * dropped card is not in it. The input seat is never changed.
  */
 export function receiveCard(
@@ -56,7 +56,11 @@ export function receiveCard(
       const old = cards[i]
       if (old) {
         if (TIER_RANK[d.tier] < TIER_RANK[old.tier]) return
-        cards[i] = TIER_RANK[d.tier] > TIER_RANK[old.tier] ? toHeld(d, nextUid()) : { ...old, handsLeft: (old.handsLeft ?? 0) + hands }
+        // Only the same card adds its hands; another card of the same effect and tier replaces the held one with its own
+        // params (ledger ruling, Plan 37 final wave): adding hands to the older card's params would stack a stronger card's
+        // reach onto a weaker one, or the other way round.
+        const same = TIER_RANK[d.tier] === TIER_RANK[old.tier] && old.cardId === d.id
+        cards[i] = same ? { ...old, handsLeft: (old.handsLeft ?? 0) + hands } : toHeld(d, nextUid())
         received.push(d)
         return
       }

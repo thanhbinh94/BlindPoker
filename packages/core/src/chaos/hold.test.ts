@@ -96,6 +96,16 @@ describe('receiveCard', () => {
     expect(seat.cards.map((c) => [c.cardId, c.handsLeft])).toEqual([['g_luck_3', 6]])
   })
 
+  it('another card of the same effect and tier replaces the held one with its own params: d_pick_3 then d_luck_5, and back', () => {
+    // Plan 37 final wave (ledger ruling): only the same card adds hands. Adding d_luck_5's five hands to d_pick_3's
+    // three sets would make a card stronger than either.
+    const luckOverPick = give(EMPTY_CHAOS_SEAT, ['d_pick_3', 'd_luck_5'])
+    expect(luckOverPick.cards.map((c) => [c.cardId, c.params, c.handsLeft])).toEqual([['d_luck_5', { sets: 2, hands: 5 }, 5]])
+    const pickOverLuck = give(EMPTY_CHAOS_SEAT, ['d_luck_5', 'd_pick_3'])
+    expect(pickOverLuck.cards.map((c) => [c.cardId, c.params, c.handsLeft])).toEqual([['d_pick_3', { sets: 3, hands: 1 }, 1]])
+    expect(pickOverLuck.cards[0]!.uid).toBe(101) // a new copy (the first card was 100), not the old one renamed
+  })
+
   it('keeps every copy of a one-shot card, and cards of different effects side by side', () => {
     const seat = give(EMPTY_CHAOS_SEAT, ['s_steal_one', 's_steal_one', 's_luck_1', 's_crit'])
     expect(seat.cards.map((c) => c.cardId)).toEqual(['s_steal_one', 's_steal_one', 's_luck_1', 's_crit'])

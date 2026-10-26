@@ -196,12 +196,32 @@ describe('setRules()', () => {
     await rejects(setRules(forNone.filter((id) => !keep.includes(id)).map((cardId) => ({ cardId, enabled: false, weight: 1, startsAt: null, endsAt: null }))), 'INVALID_CHAOS_RULES')
   })
 
-  it('judges the result at the time of the edit, so a window that has not started cannot hide a shortfall', async () => {
-    const off = SILVER.slice(2).map((cardId) => ({ cardId, enabled: false, weight: 1, startsAt: clock + 60_000, endsAt: null }))
-    await setRules(off) // not yet in force: all silver cards still on now
-    expect((await chaos.active()).cards.filter((c) => c.tier === 'silver')).toHaveLength(SILVER.length)
-    // The same rules once their window has opened would be a shortfall (the edit that opens them is the one refused).
-    await rejects(setRules(off.map((r) => ({ ...r, startsAt: clock }))), 'INVALID_CHAOS_RULES')
+  it('refuses a shortfall in force now and one a future window would open, and says from when', async () => {
+    const off = SILVER.slice(2).map((cardId) => ({ cardId, enabled: false, weight: 1, startsAt: clock, endsAt: null }))
+    await rejects(setRules(off), 'INVALID_CHAOS_RULES')
+    // A season that starts in a minute: nothing is short now, but it would be then.
+    const later = off.map((r) => ({ ...r, startsAt: clock + 60_000 }))
+    const err = await setRules(later).then(() => null, (e: unknown) => e as ServiceError)
+    expect(err?.code).toBe('INVALID_CHAOS_RULES')
+    expect(err?.message).toContain(new Date(clock + 60_000).toISOString())
+    expect(await db.select().from(chaosCardRules)).toEqual([])
+  })
+
+  it('refuses a shortfall that only opens when a window closes: a weight-up season that ends over cards the file has off', async () => {
+    // The file turns all but two silver cards off; a rule keeps a third on until a season ends in an hour.
+    const offInFile = new Set(SILVER.slice(2))
+    chaos = serviceOver(CHAOS_CARDS_SPEC.map((c) => (offInFile.has(c.id) ? { ...c, enabled: false } : c)))
+    const season = { cardId: SILVER[2]!, enabled: true, weight: 5, startsAt: null, endsAt: clock + 3_600_000 }
+    await rejects(setRules([season]), 'INVALID_CHAOS_RULES')
+    // Without an end it holds for good: accepted.
+    await setRules([{ ...season, endsAt: null }])
+    expect((await chaos.active()).cards.filter((c) => c.tier === 'silver')).toHaveLength(3)
+  })
+
+  it('accepts a future season that leaves every tier its three cards, and a window already over', async () => {
+    const off = SILVER.slice(3).map((cardId) => ({ cardId, enabled: false, weight: 1, startsAt: clock + 60_000, endsAt: clock + 120_000 }))
+    await setRules([...off, { cardId: SILVER[0]!, enabled: false, weight: 1, startsAt: clock - 20_000, endsAt: clock - 10_000 }])
+    expect(await db.select().from(chaosCardRules)).toHaveLength(off.length + 1)
   })
 
   it('covers every tier and mode in the check', () => {

@@ -399,6 +399,15 @@ describe('reveal effects', () => {
     expect(t.hole(1)).toEqual(parseCards('8h Ks'))
     expect(t.applied()[0]!.outcome).toBe('blocked')
   })
+  it('a mirror turns a reveal debuff back on its user: lowerHole redeals the user’s own highest card (M5)', () => {
+    const t = two([fx('s_lower')], undefined, undefined, { 1: { shield: 'mirror' } })
+    t.advanceAll()
+    expect(t.applied()[0]).toMatchObject({ seat: 0, effect: 'lowerHole', targets: [1], outcome: 'reflected' })
+    expect(t.hole(1)).toEqual(parseCards('8h Ks')) // the target is untouched
+    expect(t.hole(0)).toEqual(parseCards('2c Qh')) // the user's 7d went back, the next card came in
+    expect(t.showdown(0).rank).toBe(evaluate([...parseCards('2c Qh'), ...t.state.community]).rank)
+    t.assertMoney()
+  })
   it('reveal effects wait for a showdown', () => {
     const p = plan(2, { 0: { effects: [fx('s_steal_one'), fx('g_redeal_board_1')] } })
     const t = new Table({ chaos: p, deck: layout(['2c 7d', '8h Ks']), rules: { decisionMode: 'playOrFold' } })
@@ -450,6 +459,31 @@ describe('settlement', () => {
     const t = new Table({ chaos: p, stacks: [500, 5000, 5000], deck: layout(['Ac Ad', '7c 2d', 'Kc Kd'], '9h 8s 5h 4c Jd') })
     t.advanceAll()
     expect([t.stack(0), t.stack(1), t.stack(2)]).toEqual([1500, 5000, 4000])
+    t.assertMoney()
+  })
+  it('reverseRank with side pots: the weakest hand eligible for each pot wins it (M5)', () => {
+    // Seat 0 is all in for 500: a main pot of 1.500 for all three, a side pot of 1.000 for seats 1 and 2.
+    const deck = layout(['7c 2d', 'Ac Ad', 'Kc Kd'], '9h 8s 5h 4c Jd')
+    const plain = new Table({ chaos: plan(3, {}), stacks: [500, 5000, 5000], deck })
+    plain.advanceAll()
+    expect([plain.stack(0), plain.stack(1), plain.stack(2)]).toEqual([0, 6500, 4000])
+    const reversed = new Table({ chaos: plan(3, { 2: { effects: [fx('d_reverse')] } }), stacks: [500, 5000, 5000], deck })
+    reversed.advanceAll()
+    expect(reversed.state.result!.pots.map((p) => [p.amount, p.eligibleSeats, p.winners.map((w) => w.seat)])).toEqual([
+      [1500, [0, 1, 2], [0]], // the weakest of the three
+      [1000, [1, 2], [2]], // the weaker of the two it is for: the kings, not the aces
+    ])
+    expect([reversed.stack(0), reversed.stack(1), reversed.stack(2)]).toEqual([1500, 4000, 5000])
+    reversed.assertMoney()
+  })
+  it('insurance on a reversed hand pays the seat that loses by the reversed ranking — the best hand — and the books balance (M5)', () => {
+    const p = plan(3, { 0: { effects: [fx('g_insure_full')] }, 1: { effects: [fx('g_insure_full')] }, 2: { effects: [fx('d_reverse')] } })
+    const t = new Table({ chaos: p, deck: layout(['Ac Ad', '7c 2d', '8c 3d'], 'Kh 9s 5h 4c Js') })
+    t.advanceAll()
+    // Seat 1 holds the weakest hand and wins; seat 0's aces lose and get their 1.000 back; seat 1's insurance pays nothing.
+    expect(t.state.result!.payouts).toEqual([{ seat: 1, amount: 2000 }])
+    expect(t.applied().filter((e) => e.effect === 'refundStake').map((e) => [e.seat, e.amount])).toEqual([[0, 1000]])
+    expect([t.stack(0), t.stack(1), t.stack(2)]).toEqual([5000, 6000, 4000])
     t.assertMoney()
   })
   it('CHAOS_SUMMARY lists every card the hand used, for the whole table, just before SETTLEMENT', () => {

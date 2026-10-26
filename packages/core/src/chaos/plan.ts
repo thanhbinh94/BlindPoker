@@ -69,7 +69,12 @@ export function planHand(input: {
       if (card.effect === 'gambler') {
         gamblers++
       } else if (card.effect === 'shield' || card.effect === 'mirror') {
-        out.shield ??= { uid: card.uid, cardId: card.cardId, kind: card.effect, ...(card.handsLeft !== null ? { lasting: true as const } : {}) }
+        // One shield stands up per hand. A lasting one (a duration card) is preferred to a one-shot: it is not used up by
+        // what it stops, so the one-shot is kept for a later hand (Plan 37 final wave, M1). Otherwise the oldest held.
+        const lasting = card.handsLeft !== null
+        if (out.shield === null || (lasting && out.shield.lasting !== true)) {
+          out.shield = { uid: card.uid, cardId: card.cardId, kind: card.effect, ...(lasting ? { lasting: true as const } : {}) }
+        }
       } else if (card.timing !== 'wait' && card.timing !== 'now' && !(card.debuff && debuffFired) && !kinds.has(card.effect)) {
         fire(card)
       }

@@ -114,6 +114,15 @@ describe('planHand', () => {
     expect(effectsOf(plan({ 0: holding(['g_shield_3']), 1: EMPTY_CHAOS_SEAT }), 0).shield).toMatchObject({ cardId: 'g_shield_3', kind: 'shield' })
   })
 
+  it('prefers a lasting shield to an older one-shot, so the one-shot is kept for later (M1)', () => {
+    const lastingSecond = effectsOf(plan({ 0: holding(['s_shield', 'g_shield_3']), 1: EMPTY_CHAOS_SEAT }), 0).shield
+    expect(lastingSecond).toMatchObject({ cardId: 'g_shield_3', kind: 'shield', lasting: true })
+    const lastingFirst = effectsOf(plan({ 0: holding(['g_shield_3', 'd_mirror']), 1: EMPTY_CHAOS_SEAT }), 0).shield
+    expect(lastingFirst).toMatchObject({ cardId: 'g_shield_3', lasting: true })
+    // two one-shots: still the oldest
+    expect(effectsOf(plan({ 0: holding(['s_shield', 'd_mirror']), 1: EMPTY_CHAOS_SEAT }), 0).shield).toMatchObject({ cardId: 's_shield' })
+  })
+
   it('tells the table about a reversed hand and a blindfolded seat', () => {
     const r = plan({ 0: holding(['d_reverse']), 1: { ...EMPTY_CHAOS_SEAT, blindfoldedNextHand: true } })
     expect(r.plan.reverse).toBe(true)

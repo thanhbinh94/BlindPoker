@@ -219,9 +219,21 @@ export function createChaosService(deps: ChaosServiceDeps): ChaosService {
         }
         await tx.insert(chaosCardRules).values({ cardId: change.cardId, ...values }).onConflictDoUpdate({ target: chaosCardRules.cardId, set: values })
       }
-      // Judged on the rows as they now stand in this transaction, at the moment of the edit.
-      const short = tierShortfall(activeAt(catalogue, await readRules(tx), now()))
-      if (short !== null) throw new ServiceError('INVALID_CHAOS_RULES', short)
+      // Judged on the rows as they now stand in this transaction, at the moment of the edit and at every later moment a
+      // window opens or closes (ledger ruling, Plan 37 final wave): between two of those the active set cannot change, so
+      // no season edited today can leave a tier short next month either (spec §6.2).
+      const rules = await readRules(tx)
+      const at = now()
+      const moments = new Set<number>([at])
+      for (const rule of rules.values()) {
+        for (const edge of [rule.startsAt, rule.endsAt]) if (edge !== null && edge.getTime() > at) moments.add(edge.getTime())
+      }
+      for (const moment of [...moments].sort((a, b) => a - b)) {
+        const short = tierShortfall(activeAt(catalogue, rules, moment))
+        if (short === null) continue
+        const when = moment === at ? '' : ` from ${new Date(moment).toISOString()}`
+        throw new ServiceError('INVALID_CHAOS_RULES', `${short}${when}`)
+      }
     },
 
     async setConfig(tx, config, updatedBy) {
