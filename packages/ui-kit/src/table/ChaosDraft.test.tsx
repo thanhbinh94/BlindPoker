@@ -36,6 +36,13 @@ describe('ChaosDraft', () => {
     expect(screen.getByRole('timer')).toHaveTextContent('15')
   })
 
+  it('marks each card and its name for the ops pack, not by a hashed class (data-chaos-card, data-part="name")', () => {
+    mount()
+    const cards = within(screen.getByRole('group', { name: 'Ba thẻ để chọn' })).getAllByRole('button')
+    expect(cards.map((c) => c.getAttribute('data-chaos-card'))).toEqual(OFFER.cardIds)
+    expect(cards.map((c) => c.querySelector('[data-part="name"]')?.textContent)).toEqual(['Đổi bài', 'Khiên sắt', 'Cấp cứu vàng'])
+  })
+
   it('draws the ring against the window the GM set, not a fixed 15 s (M2)', () => {
     // 15 s left: a full circle of a 15 s draft, half of a 30 s one.
     const { unmount } = mount({ draft: draft({ totalMs: 15_000 }) })

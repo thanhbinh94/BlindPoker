@@ -85,12 +85,13 @@ export function ChaosDraft({ draft, serverNow, onPick, layout = 'ring', frame = 
                 type="button"
                 className={cx(s.draftCard, mine === cardId && s.draftCardChosen)}
                 data-tier={draft.tier}
+                data-chaos-card={cardId}
                 aria-current={mine === cardId ? 'true' : undefined}
                 aria-disabled={picked ? true : undefined}
                 onClick={() => pick(cardId)}
               >
                 <span className={s.draftCardTier}>{tierName}</span>
-                <span className={s.draftCardName}>{t(`chaos.cards.${cardId}.name`, { defaultValue: cardId })}</span>
+                <span className={s.draftCardName} data-part="name">{t(`chaos.cards.${cardId}.name`, { defaultValue: cardId })}</span>
                 <span className={s.draftCardDesc}>{t(`chaos.cards.${cardId}.desc`, { defaultValue: '' })}</span>
               </button>
             )

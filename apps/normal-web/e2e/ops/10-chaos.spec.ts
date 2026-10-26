@@ -61,7 +61,8 @@ async function readDraft(page: Page): Promise<Opened> {
   await expect(buttons, 'three cards on offer').toHaveCount(3)
   const title = (await draftPanel(page).getByRole('heading').innerText()).trim()
   expect(title).toMatch(/^Chọn một thẻ (Bạc|Vàng|Kim cương)$/)
-  const names = await buttons.evaluateAll((els) => els.map((el) => el.querySelector('[class*="_draftCardName_"]')?.textContent?.trim() ?? ''))
+  // The name's own part (`data-part="name"`): the button's accessible name also carries the tier and the line under it.
+  const names = await buttons.evaluateAll((els) => els.map((el) => el.querySelector('[data-part="name"]')?.textContent?.trim() ?? ''))
   expect(names.every((name) => name !== ''), `every card has a name (${names.join(' | ')})`).toBe(true)
   return { title, names }
 }
@@ -101,7 +102,15 @@ async function playOn(page: Page, seat: number, baseline: number, how: 'click' |
         if (run.hands > 0) run.drafts++
       }
       const first = draftCards(page).getByRole('button').first()
-      await (how === 'tap' ? first.tap({ timeout: 3_000 }) : first.click({ timeout: 3_000 })).catch(() => undefined)
+      // Once picked, the cards stay up (`aria-disabled`) until every seat has chosen: nothing more to press.
+      if ((await first.getAttribute('aria-disabled').catch(() => 'gone')) === null) {
+        try {
+          await (how === 'tap' ? first.tap({ timeout: 3_000 }) : first.click({ timeout: 3_000 }))
+        } catch (err) {
+          // The draft may close between the look and the press (its deadline); a draft still open that refused it is a failure.
+          if ((await draftCards(page).count()) > 0) throw err
+        }
+      }
     } else if ((await draftPanel(page).count()) === 0) {
       inDraft = false
     }
@@ -116,6 +125,8 @@ async function playOn(page: Page, seat: number, baseline: number, how: 'click' |
     }
     await page.waitForTimeout(250)
   }
+  // The count above is taken every few seconds: read once more, so "five hands before the second draft" is judged on the history as it stands.
+  run.hands = (await historyOf(page)).length - baseline
   return run
 }
 

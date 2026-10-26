@@ -525,7 +525,7 @@ dialog does not change height between Hold'em and Blind. `Badge` has a `chaos` t
 
 | Component | Props |
 | --- | --- |
-| `ChaosDraft` | `draft`, `serverNow`, `onPick`, `layout?`, `frame?`, `short?` — the panel: a `TurnTimer` ring on `deadlineAt` (`DRAFT_MS` 15 s), three real `<button>`s (tier chip, name, one line), focus on the first when the offer lands, one pick (a ref guards a double click), "Đã chọn — chờ người chơi khác" at once, and a refusal lets the player choose again. A spectator or a seat with no offer sees "Các tay chơi đang chọn thẻ". Stamps `data-layout`, `data-frame`, `data-short` |
+| `ChaosDraft` | `draft`, `serverNow`, `onPick`, `layout?`, `frame?`, `short?` — the panel: a `TurnTimer` ring on `deadlineAt` against `draft.totalMs` (the GM's `draftMs`, from `CHAOS_DRAFT`, the offer or the snapshot; 15 s when none says), each button stamped `data-chaos-card` and its name `data-part="name"`, three real `<button>`s (tier chip, name, one line), focus on the first when the offer lands, one pick (a ref guards a double click), "Đã chọn — chờ người chơi khác" at once, and a refusal lets the player choose again. A spectator or a seat with no offer sees "Các tay chơi đang chọn thẻ". Stamps `data-layout`, `data-frame`, `data-short` |
 | `ChaosCardIcon`, `ChaosCardRow` | `card` / `cards`, `summary?` — the 22 px tier-framed icon (`role="img"`, accessible name and `title` "Khiên gỗ (Bạc) · còn 2 ván", the card's first letter inside, hands left in the corner); at most `MAX_CHAOS_ICONS` (4), then "+N"; `summary` is one icon with the count, for a dense phone strip (seven or more opponents) |
 | `ChaosBanner`, `useChaosBanner` | the queue (`BANNER_MS` 900 ms per card, worked out in the render so no frame of the result card slips through) and a `role="status"` slot, always mounted: "A dùng X" / "A dùng X lên B, C" and "Bị chặn" / "Bị phản lại" / "Không có tác dụng" |
 
@@ -535,10 +535,16 @@ it is up; the previous hand's result card steps aside during a draft, and is hel
 `{ minRoom: 0, aboveHand: true }`, so it always stands just above the viewer's seat block and the highest card of the viewer's fan; the
 result card keeps its tiers. `PokerTable` takes `chaos` and `banner`: each `Seat` shows its icons (in `.tags`, and in `.stripLine` for the
 viewer's phone strip), "Bạo kích ×2!" / "×3!" beside the payout (from `CHAOS_CREDIT.multiplier`, held back while the result is pending),
-a "Bị che mắt" badge on the viewer's own blindfolded seat (inferred: chaos room, own seat, `cardCount > 0`, `holeCards === null`, hand
-not complete), and `CommunityCards` shows the viewer's peek face up in the first empty slots under "Nhìn trộm". The banner is rendered
-**inside the board's own box** (`.community`, `position: absolute; inset: 0`, centred, `pointer-events: none`), where nothing else
-draws text. `HandResult` prints "Thẻ đã dùng: Ann — Đổi lá, Nhìn trộm; Bob — Khiên gỗ (Bị chặn)" and a line per credit ("Ann: Bạo kích
+a "Bị che mắt" badge on the viewer's own blindfolded seat (`chaos.blindfolded` from a snapshot's hand view, else inferred: chaos
+room, own seat, `cardCount > 0`, `holeCards === null`, hand not complete), a "Mượn lá" card beside a seat's own at showdown
+(`ShowdownHand.borrowed`, tagged "Mượn", gold-edged when in the top seat's best five; `data-borrowed`), and `CommunityCards` shows the
+viewer's peek face up in the first empty slots under "Nhìn trộm". The banner is rendered **inside the board's own box**
+(`.community` + `.communityAnchor` — only a board that carries a banner is a positioned box — `position: absolute; inset: 0`,
+`pointer-events: none`), where nothing else draws text: centred over an empty board, and on the cards' feet, see-through, once board
+cards are up (`data-board="up"`; inside the board's box in the landscape frame). Its `note` prop is the quiet line the slot holds while
+no card is up — `RoomScreen` passes "Thế giới đảo ngược: bộ yếu nhất thắng" while `chaos.reverse` is on. The reducer keeps
+`chaos.reverse` (the public `CHAOS_APPLIED` or the snapshot's hand view) and `chaos.peek` across a reconnect, writes a re-dealt board
+(`CHAOS_APPLIED.community`, with `boardAt`), and writes `CHAOS_CREDIT.stack` to the roster and the finished hand's seat. `HandResult` prints "Thẻ đã dùng: Ann — Đổi lá, Nhìn trộm; Bob — Khiên gỗ (Bị chặn)" and a line per credit ("Ann: Bạo kích
 ×2 +6.000", "Cấp cứu +N · Đã chạm trần thẻ hôm nay"). All new motion (`.draft`, `.chaosBannerIn`, `.critShout`, the card hover) is in the
 "Motion off" block of `table.module.css`; the banner's slide class is only applied when not `prefers-reduced-motion`.
 

@@ -49,7 +49,7 @@ const INDEX = join(DIST, 'index.html')
  * one-row phone tray with its dock and menu branches, and the fan/strip markup took the entry to 140.3 KB gzip, 0.3 KB
  * over the 4 KB of headroom Plan 27 had left; the SRS's own budget (§24) is 500 KB. The locale-namespace split stays the
  * recorded way to win the headroom back.
- * 2026-10-26 (Plan 37, Task 8 ruling, for the lead to confirm at the gate): raised from 150 KB to 160 KB. The chaos table took
+ * 2026-10-26 (Plan 37, Task 8 ruling, accepted by the lead in the final review): raised from 150 KB to 160 KB. The chaos table took
  * the entry to 152.0 KB gzip (155,675 bytes): the 47 cards' names and descriptions in vi and en (`chaos.cards.*` in ui-kit's
  * `game.json`, which the entry imports like every other word of the table), the draft, banner and icon components, the
  * reducer's chaos state and the GM tab's strings. The split of the locale namespaces per lazy screen is still the recorded way

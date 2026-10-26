@@ -911,7 +911,7 @@ from "Điểm danh" as before.
 strings took the entry chunk to about 136 KB gzip of a 140 KB budget (under 4 KB of headroom), and the budget `MAX_ENTRY_GZIP` was raised from 130 to 140 KB
 (Ruling 13). BP-31's bet panel and phone tray took it to 140.3 KB, and the budget rose again to 150 KB (the SRS's own
 limit in §24 is 500 KB). Plan 37's chaos table (the 47 cards' vi and en texts, the draft, the banner, the icons and the GM tab)
-took it to 152.0 KB, and the budget rose to 160 KB (a Task 8 ruling for the lead to confirm at the gate).
+took it to 152.0 KB, and the budget rose to 160 KB (a Task 8 ruling, accepted in the final review).
 *Why it stays:* splitting namespaces per lazy screen is a change to the i18n bootstrap for about 10 KB.
 *Tracked:* `apps/normal-web/test/footprint.test.ts`.
 
@@ -1019,9 +1019,11 @@ full ops run of Plan 37 Task 8.
 **The chaos banner and the draft are opaque, and `expectNoTextOverlap` does not count text under an opaque box as overlapped.** The banner
 sits inside the board's own box where no other text is, and a CSS-text test pins that (`ChaosTable.test.tsx`), but nothing measures it in
 a browser. The draft panel stands above the viewer's seat on purpose; at 1440 × 900 its right edge covers the left half of the lower-right
-opponent's plate while it is open (15 s at most). The reveal banner also hides the middle community cards for about 0.9 s per card that fires.
-*Why it stays:* the panel is what the table waits on, and it goes away on the last pick; making the banner translucent is a visual call for the user.
-*Tracked:* `packages/ui-kit/src/table/ChaosBanner.tsx`, `table.module.css` (`.chaosBannerSlot`, `.draft`); Plan 37 Task 7 report.
+opponent's plate while it is open (15 s at most). Once board cards are face up the banner no longer hides them (final fix wave): it sits on
+their feet, see-through, so each card's corner index and pip stay in sight (inside the board on a phone on its side, where it covers the
+lower half of the small board cards for its 0.9 s).
+*Why it stays:* the panel is what the table waits on, and it goes away on the last pick. The ruled residual: the draft over a side plate at 1440 × 900.
+*Tracked:* `packages/ui-kit/src/table/ChaosBanner.tsx`, `table.module.css` (`.chaosBannerSlot`, `.community[data-board='up']`, `.draft`); Plan 37 Task 7 report and final fix wave.
 
 **The result card waits for the banner queue, about 0.9 s per card fired, with no upper bound.** A hand in which a dozen cards fire holds
 its result card for ten seconds or so (the next hand starts 5 s after the settlement and the draft hides the card).
@@ -1040,7 +1042,9 @@ drawable cards for mode playOrFold" prints with the server's raw tier and mode i
 *Tracked:* `apps/normal-web/src/screens/gm/ChaosTab.tsx`; `apps/normal-server/src/chaos/chaos-service.ts`.
 
 **A credit's replay protection lasts one server process.** `ledger_keys` are pruned at boot (as for every keyed write), so a chaos credit
-retried across a restart could be paid twice.
+retried across a restart could be paid twice. The other way round, a credit still pending in a room (its reply lost twice, kept to be
+retried after the next hand or before a cash-out) lives in the room's memory: a hard kill before it lands leaves its ledger rows with no
+stack behind them.
 *Why it stays:* the room that would retry is in the same process and does not survive a restart either; a hard kill loses the stack anyway.
 *Tracked:* `apps/normal-server/src/chaos/chaos-service.ts` (`credit`); `docs/normal-server.md` ("Poker hỗn loạn").
 

@@ -360,13 +360,18 @@ it. A win is a seat in any pot's winners; every other seat in the hand lost; a h
 `CHAOS_SUMMARY`.
 
 **Credits.** A human credit calls `port.credit` with the key `chaos:<roomId>:<handId>:<seat>:<uid>:<reason>`, retried once under the same key;
-a second failure is logged (`chaos credit failed`, with the key) and the stack is left alone. The room then adds `credited` to the stack,
-pushes the balance, and broadcasts `CHAOS_CREDIT { seat, reason, amount, capped, multiplier? }` before `CHAOS_STATE`. A credit cut to 0 is
+a second failure is logged (`chaos credit failed; pending`, with the key) and the credit is **kept pending** under its key
+(`ChaosTable.pending`, per player, oldest first): it may have landed. `settlePending` retries it after the next hand (before that
+hand's own credits), before the seat is judged spent (a rescue whose reply was lost keeps the seat), and at the top of `standUpNow` —
+a stand-up, Leave or kick it cannot settle is refused and the seat sits out with `cashOutPending`, retried after each hand. A replayed
+key answers with what it wrote, so the stack is raised once. The room then adds `credited` to the stack, pushes the balance, and
+broadcasts `CHAOS_CREDIT { seat, reason, amount, stack, capped, multiplier? }` before `CHAOS_STATE`; `stack` is the seat's stack
+after the credit, absolute, which the client writes to its roster. A credit cut to 0 is
 still broadcast, so the table can say "capped". A bot's credit goes on its virtual stack with no ledger row and `capped: false`. A seat that
 **stands up or leaves** loses its cards and points (`standUpNow` clears `p.chaos`).
 
 **Wire.** `ClientMessage` `CHAOS_PICK { offerId, cardId }` (`Room.pickChaos`: a stale, foreign or second pick is `CHAOS_NO_OFFER`, a card
-that was not offered is `ILLEGAL_ACTION`). Room events `CHAOS_DRAFT` (tier, deadline, the drafted seats), `CHAOS_PICKED`, `CHAOS_STATE`,
+that was not offered is `ILLEGAL_ACTION`). Room events `CHAOS_DRAFT` (tier, deadline, `draftMs` — the GM's window, for the client's ring — and the drafted seats), `CHAOS_PICKED`, `CHAOS_STATE`,
 `CHAOS_CREDIT`, `CHAOS_AWARDED`; the private `CHAOS_OFFER` notification (the viewer's three cards); `ROOM_SNAPSHOT.chaos` restores the
 viewer's draft after a reconnect; `RoomPlayerView.chaos` carries a seat's cards and points. Game events (from the engine): `CHAOS_APPLIED`,
 `CHAOS_PEEK`, `CHAOS_SUMMARY`.

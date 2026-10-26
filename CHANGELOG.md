@@ -47,7 +47,23 @@ cung cấp 3 loại thẻ ngẫu nhiên có thể làm thay đổi ván đấu",
   normal-server 838; ui-kit 893; normal-web 1,114 plus the history test — each as of the task that last touched it. The e2e:
   `apps/normal-web/e2e/ops/10-chaos.spec.ts`, **F-13** (desktop: badge, lobby ticket, a draft of three, icons, a hand that fires
   a card shows "Thẻ đã dùng" on its result card, in the API and on the profile, the draft again for the 6th hand), **F-13b**
-  `@mobile` and **F-13c** `@landscape` (the draft sheet and row fit, the result card fits, no text over text).
+  `@mobile` and **F-13c** `@landscape` (the draft sheet and row fit, the result card fits, no text over text). The entry chunk's
+  first-paint budget (`apps/normal-web/test/footprint.test.ts`) rises from 150 to 160 KB gzip: the 47 cards' vi and en texts,
+  the draft, the banner and the GM tab took it to 152.0 KB (Task 8 ruling, accepted in the final review).
+- **Final fix wave** (the whole-branch review's list, each item with a test that fails without it). A seat at 0 that Cấp cứu
+  rescues between hands now shows its new stack and is dealt in with chips: `CHAOS_CREDIT` carries the seat's absolute
+  `stack`, which the client writes to the roster and the finished hand. A board that "Chia lại bài chung" or "Bão" re-dealt is
+  drawn (`CHAOS_APPLIED.community` lands like a street). A card credit whose reply was lost twice is kept pending under its key
+  and paid once — after the next hand, before the seat is judged spent, before any stand-up, Leave or kick (which wait for it,
+  the seat frozen like a pending cash-out). A reconnect keeps the viewer's "Nhìn trộm", "Thế giới đảo ngược" and the blindfold
+  from the snapshot's hand view. Once board cards are up the banner sits on their feet, see-through, so it hides none of them
+  (inside the board on a phone on its side), and "Thế giới đảo ngược: bộ yếu nhất thắng" stays in the banner's slot all hand. A
+  "Mượn lá" card shows beside its seat's own at showdown, tagged "Mượn", gold-edged in the winning five. A second duration card
+  of the same tier replaces the held one (only the same card adds hands); a lasting shield stands before a one-shot; a GM edit
+  that would leave a tier short at any later window edge is refused; the draft ring runs on the GM's `draftMs` (now in
+  `CHAOS_DRAFT`, the offer and the snapshot); a board without a banner is not repositioned. New core tests: reversed ranking
+  with side pots, insurance on a reversed hand, a mirrored reveal debuff. The ops spec reads the card names by `data-part`, no
+  longer swallows a failed pick and reads the history once more after its loop.
 - **Docs.** `docs/player-guide.md` (§6a: drafts, tiers, points, the fences, the 47 cards in three tables, Thần tài's table),
   `docs/normal-server.md`, `docs/server-kit.md`, `docs/ui-kit.md`, `docs/normal-web.md`, `docs/known-limitations.md`,
   `docs/test-matrix.md` (four rows; the pin in `tooling/arch/acceptance-links.test.ts` and `CLAUDE.md` §3 are 4 higher),
@@ -71,18 +87,22 @@ cung cấp 3 loại thẻ ngẫu nhiên có thể làm thay đổi ván đấu",
   9. **A weight-0 card stays listed** (and "on") in the GM tab and is never drawn; the "at least three active" rule counts
      weight > 0.
   10. **The e2e retries hands until a card fires** (twelve at most) instead of a seeded server option.
+  11. **The banner over a face-up board sits on the cards' feet and is see-through** (spec §7 has it over the board): the
+      corner index and pip of every card stay in sight. On a phone on its side it stays inside the board's box, one compact line.
+  12. **"Thế giới đảo ngược" says so all hand**, as a quiet line in the banner's slot once its banner has played (spec §4: the
+      table is told from the deal), and after a reconnect too.
+  13. **A pending card credit holds a stand-up** until it lands (the seat sits out meanwhile), as a pending cash-out does.
 - **Gate.** Not run yet.
 - **Deployed.** Not yet.
 - **Still open.**
-  - Rulings made and not yet implemented: a **same-tier duration merge** adds hands only for the same card (a different card of
-    the same effect and tier replaces); a **chaos credit that fails twice** is kept as a pending credit and retried after the next
-    hand and before any cash-out; `setRules` checks "three active per tier" at every future window boundary too; the reveal
-    banner covers the middle community cards about 0.9 s per card that fires (translucent or off the board).
   - **The LAN host's Neon database needs migration 0007** (`run.ps1` without `-NoMigrate`): ask first. The VPS runs it at boot.
-  - What the user must see by hand: the English card copy; the icons and the draft on a real phone (iOS Safari, Firefox
-    Android); whether the draft panel hiding part of a side plate at 1440 × 900 is acceptable; card art.
+  - What the user must see by hand: the English card copy (and the new "reverseNote", "borrowed" strings); the icons, the draft,
+    the see-through banner on a face-up board and the "Mượn" card on a real phone (iOS Safari, Firefox Android); whether the
+    draft panel hiding part of a side plate at 1440 × 900 is acceptable; card art.
+  - Residuals kept (ruled): at 375 px a long name on the viewer's strip is cut with "…" beside a chaos icon; at 1440 × 900 the
+    draft panel covers part of a side plate during the draft (both in `docs/known-limitations.md`).
   - Everything in `docs/known-limitations.md` → "Poker hỗn loạn (Plan 37)", and the parked minors of each task (the ledger lists
-    them: `plan.ts` exposes the oldest shield, `afterHand`'s long loop, `ChaosTab.tsx` at 423 lines, `table.module.css` +500 lines
+    them: `afterHand`'s long loop, `ChaosTab.tsx` at 423 lines, `table.module.css` +500 lines
     to split into `chaos.module.css`, the focus not returning when the draft closes, among others).
 
 ---

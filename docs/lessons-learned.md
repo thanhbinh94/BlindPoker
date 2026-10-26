@@ -1402,16 +1402,37 @@ sau"). The rulings below are the SDD ledger's, in order.
   says freeze blocks a seat's cards for that hand; the cards keep their chance later. Costs if wrong: a frozen player at stack 0
   waits one more lost hand for the rescue.
 - Ruling 7: same-tier duration merge — only the same `cardId` adds hands; a different card of the same effect and tier replaces
-  the held one (new params, new hands) — prevents stacked super-cards; fix in the final wave. Costs if wrong: a player loses some
-  remaining hands of the older card.
+  the held one (new params, new hands) — prevents stacked super-cards; landed in the final wave (`hold.ts`). Costs if wrong: a
+  player loses some remaining hands of the older card.
 - Ruling 8: a debuff that lands but changes nothing (e.g. steal on a one-card hand) still counts as that seat's one debuff this
   hand — the card was played at it; simplest rule to explain. Costs if wrong: a seat dodges a second, real debuff that hand.
 - Ruling 9: a chaos credit that fails twice is not dropped — the final wave adds a per-seat pending credit (idempotent key) retried
-  after the next hand and before any cash-out, like `cashOutPending` — keeps conservation when a commit's reply is lost. Costs if
-  wrong: a little more room state.
+  after the next hand and before any cash-out, like `cashOutPending` — keeps conservation when a commit's reply is lost; landed in
+  the final wave (`ChaosTable.pending`). Costs if wrong: a little more room state.
 - Ruling 10: `setRules` checks "≥ 3 active per tier per mode" at now and at every future `starts_at`/`ends_at` boundary of the
-  edited rule set (final wave), and the misleading test name is fixed — spec §6.2 says a GM cannot save a breaking state. Costs
-  if wrong: a GM edit refused that the runtime fallback would have tolerated.
+  edited rule set (final wave), and the misleading test name is fixed — spec §6.2 says a GM cannot save a breaking state; landed
+  in the final wave. Costs if wrong: a GM edit refused that the runtime fallback would have tolerated.
+- Ruling 11: the entry chunk's first-paint budget rises from 150 to 160 KB gzip (152.0 KB after the chaos strings and client
+  state), with the reason in the test header — same precedent as Plan 27 and BP-31; accepted in the final review. Costs if wrong:
+  about 2 KB more first paint on a phone; splitting the locale namespaces is the alternative.
+- Ruling 12: residuals kept — the 375 px name cut on the viewer's strip with a chaos icon (ellipsis, no overlap) and the 1440 × 900
+  draft panel over a side plate (only during the draft) stay documented in known-limitations. Costs if wrong: a visible cut or
+  partial cover the user may want fixed later.
+- Ruling 13 (final wave): `CHAOS_CREDIT` carries the seat's absolute `stack` and the client writes it, rather than adding
+  `amount` — a client that never saw the base (a reconnect, a seat at 0 between hands) cannot get it wrong. Costs if wrong: none
+  beyond one number on the wire.
+- Ruling 14 (final wave): a pending credit is settled before the seat is judged spent (a rescue whose reply was lost keeps the
+  seat), and before any stand-up, Leave or kick; a stand-up it cannot settle is refused and the seat sits out with
+  `cashOutPending`, retried after each hand. Costs if wrong: a player whose port stays down cannot stand up until it answers.
+- Ruling 15 (final wave): once board cards are face up the banner sits on their feet (a third below them), see-through; on a
+  phone on its side it stays inside the board's box as one compact line, so it never reaches the viewer's hand. Costs if wrong: the
+  lower half of the small landscape board cards is covered for 0.9 s per card.
+- Ruling 16 (final wave): "Thế giới đảo ngược" is told all hand as a quiet line in the banner's own slot — a card that fires takes the
+  slot for its turn — and comes back from the snapshot's hand view after a reconnect; the blindfold is read from the hand view
+  when a snapshot gave one, else from the deal. Costs if wrong: one more line on the board.
+- Ruling 17 (final wave): one shield stands up per hand, a lasting (duration) one before a one-shot, so the one-shot is kept; the
+  draft ring's full circle is the GM's `draftMs`, sent in `CHAOS_DRAFT`, the offer and the snapshot (15 s when an offer from an
+  older server says nothing). Costs if wrong: none known.
 
 Decisions the tasks took where their brief left a choice (each is in its task's report and, where it differs from the spec, in
 the CHANGELOG's deviations): the deal-buff order (bestOfN before highCard and suited, because those two are guaranteed); a
@@ -1445,6 +1466,13 @@ deck reserve of 10 cards at the deal; a weight-0 card stays listed but is never 
 - **A test that a feature "fires" needs a bound, not a seed.** Which cards fire in a hand is the table's luck. F-13 plays up to
   twelve hands and fails with the count if no result card says "Thẻ đã dùng", instead of a seeded option in the production
   server; the history API (`chaosUsed`) is the second witness. It passed on the first two runs in about a minute.
+- **Send a state, not a change, to a client that may not have seen the base.** `CHAOS_CREDIT` said "+5,000" and the client kept
+  it in a list; the stack the next deal reads came from the roster, which nobody raised, so a seat Cấp cứu rescued at 0 posted from
+  0, went all in and was timed out. Unit tests on both sides passed: the server's said the stack rose, the client's said the credit
+  was listed. Only a test that feeds the client the server's own sequence (credit → deal → ante → decision) catches it.
+- **An event field the client ignores is a feature that does not exist.** `CHAOS_APPLIED.community` carried the re-dealt board
+  from the start; the reducer appended the event to a list and drew the old board, and neither `SHOWDOWN` nor `SETTLEMENT` carries
+  a board to correct it. When a protocol type gains a field, grep the reducer for it.
 - **Screenshot a fading panel after its animation, not during it.** The first F-13 pictures caught the draft at half opacity with
   the seats showing through (`settled(panel)` fixed it), and hid the one overlap worth knowing about.
 - **Doc-citation pins move with a new section.** Four matrix rows for Plan 37 meant `acceptance-links.test.ts` and `CLAUDE.md` §3
@@ -1456,9 +1484,9 @@ deck reserve of 10 cards at the deal; a weight-0 card stays listed but is never 
 
 ### Residuals
 
-See the CHANGELOG's "Still open" and `docs/known-limitations.md` → "Poker hỗn loạn (Plan 37)": the rulings still to land in the
-final wave (7, 9, 10 and the banner over the middle community cards), the LAN host's migration 0007, the English card copy, real
-phones, card art.
+See the CHANGELOG's "Still open" and `docs/known-limitations.md` → "Poker hỗn loạn (Plan 37)": the LAN host's migration 0007,
+the English card copy, real phones, card art, and the two ruled residuals (Ruling 12). Rulings 7, 9 and 10 and the banner over the
+board landed in the final wave.
 
 ## 5. Open items
 
