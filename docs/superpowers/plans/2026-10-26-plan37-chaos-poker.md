@@ -280,3 +280,86 @@ Layout rules: the draft is a centred panel over the felt at ≥ 768 px wide, a b
 - [ ] **Step 2:** Run `corepack pnpm --filter @bp/normal-web exec playwright test -c e2e/ops/ops.config.ts` (whole pack) and `corepack pnpm e2e:normal` → PASS (the create-room height check included).
 - [ ] **Step 3:** Write the docs; `corepack pnpm exec vitest run --root . tooling/arch` → PASS.
 - [ ] **Step 4: Commit** `test(e2e), docs: a chaos table played end to end on desktop, phone and landscape, and the player guide explains drafts, tiers, points and all 47 cards`
+
+---
+
+## Amendments (pre-flight 2026-10-26)
+
+An independent review checked the plan against the code. These amendments **override** the task text above where they
+differ. Execution order is **T1, T2, T3, T4, T6, T5, T7, T8** (T5's GM tab reads T6's card names).
+
+**Cross-cutting**
+- `fixtures.ts` is exported from `@bp/core` as `CHAOS_CARDS_SPEC`; Task 4 tests that `data/chaos-cards.json` deep-equals it.
+- GM weights apply to **every** random card draw (draft offers, bonus cards, Cấp độ, Thần tài prizes, Tay bạc rolls): pass
+  a `weights: ReadonlyMap<string, number>` into `receiveCard`, `planHand` and `afterHand` (weight 0 = never). Task 4's
+  "≥ 3 active per tier per mode" counts only cards with weight > 0. A tier left with fewer than 3 active cards (e.g. a date
+  window expired) drafts what exists and never throws; with 0 it falls back to the next lower tier.
+- The Thần tài table (spec §5.5) is encoded in each `fortune` card's `params` (e.g. `{ m2: 4, m4: 8, c4: 1, t4: 2, m6: 12, c6: 2, t6: 2 }` — multipliers, card counts, card tiers as 1/2/3), not hard-coded.
+
+**Task 1**
+- `afterHand` seats carry an explicit `outcome: 'win' | 'loss' | 'none'` (won a pot → win; folded, or in the hand without
+  winning a pot → loss; carry-over or cancelled → none) instead of deriving it from `net`. Streaks, points, Thần tài and
+  Cấp cứu use `outcome`; Bạo kích still pays (k−1) × `net` when `net > 0`. `ChaosCredit` gains `uid: number` (the card) and
+  `multiplier?: 2 | 3` (Bạo kích).
+- `afterHand` sets `frozenNextHand`/`blindfoldedNextHand` from the engine's final **marks** (Task 2: `state.chaos.marks`,
+  after shields/mirrors), passed in as `marks: { seat: number; kind: 'freeze' | 'blindfold' }[]`, not from the plan.
+- A seat frozen this hand receives its bonus cards at the end of its next unfrozen hand (they are queued, not lost).
+- `planHand` does **not** pick targets for reveal debuffs (`stealHole`, `lowerHole`, `swapHands`, `borrowHole`, `redealBoard`
+  needs none): it passes `targets: []` and the engine picks at reveal. Deal-time debuffs (`freeze`, `blindfold`) still get
+  targets from `planHand`, then go through the same shield/mirror/one-per-seat resolver in the engine.
+- `s_high_card` and `s_suited` are guaranteed (spec §5.1): the engine draws until it qualifies within the deck reserve.
+
+**Task 2**
+- Add `chaos?: ChaosHandPlan` to `CreateHandInput` and forward it in `createHand` (`packages/core/src/hand/engine.ts`), and
+  through `simulateHand`.
+- Deck reserve: a deal-time draw of `n` cards needs `remaining − n ≥ 10`; a reveal-time draw needs `remaining ≥ n`;
+  otherwise `fizzled`.
+- Deal-time debuffs (`freeze`, `blindfold`) resolve at deal through the same resolver as reveal debuffs (shield blocks,
+  mirror reflects, one debuff per seat per hand); final targets are stored in `state.chaos.marks`.
+- Reveal debuffs pick their target at reveal, at random (with the `rng` passed to `applyBlindCommand`) among unfolded
+  opponents not yet hit this hand; a holder who folded fires no reveal effect and keeps the card.
+- Deal-time buff `CHAOS_APPLIED` events are **private to their owner** (`filterEvent` turns them into nothing for others —
+  e.g. drop them for other viewers) and are re-emitted publicly at settlement as part of a `CHAOS_SUMMARY { used: { seat, cardId, effect, outcome }[] }` event (also a new `GameEvent` variant), which is what the result line and history use. Only `reverseRank` is public at deal.
+- On a squeeze table a blindfolded seat starts with `revealed: true`.
+
+**Task 3**
+- `onHandComplete`: skip all chaos work when the runner was cancelled; otherwise run `afterHand` and every credit **after**
+  `recordHand` and **before** the stand-up/leave loop (so a seat at stack 0 can be rescued before `standUpSpent`).
+- The draft is its own `Room` state (`draft: { … } | null`) that guards `startHand`/`startGame`: the draft check sits after
+  eligibility and before the sit-out loop; `startHand` returns `true` when a draft opens; status is `IN_GAME` with
+  `ROOM_STATUS{ nextHandAt: deadlineAt }`; at draft end `startHand` runs again with the draft check skipped once (seats that
+  became eligible during the draft play that hand undrafted and draft before their next one); `cancelTimers`/`close`/
+  `shutdown` cancel the draft timer; if the port's `catalogue()`/`config()` throws, log and deal without a draft.
+- Disconnected humans are picked for at once (random). Held `gambler` cards are dropped when the next cycle's draft opens.
+- Credit keys: `chaos:<roomId>:<handId>:<seat>:<uid>:<reason>`. A replayed key returns the amount already written under
+  that `refId` (the port looks it up); the room retries a failed credit once and logs a second failure (no stack change).
+- `createRoomHarness` gains `chaos?: true | { cards?; config?; capPoints?; rescues? }` building the memory port from the
+  harness repos; export `memory-chaos.ts` from `testing/index.ts` and `chaos-port.ts` from `src/index.ts`.
+- `HandSummary` gains `chaosUsed?: { seat: number; cardId: string; outcome: string }[]` (from `CHAOS_SUMMARY`).
+- `CHAOS_CREDIT` carries `multiplier?: 2 | 3`.
+- Test wording: "a draft at hand 5" = before the hand when `tableHands === 5`.
+
+**Task 4**
+- Migration 0007 also adds `games.chaos_used jsonb NULL`; `history-repo.recordHand` writes `summary.chaosUsed`; the history
+  read path returns it (UI in Task 8).
+- `apps/normal-web/src/screens/LedgerPanel.tsx` `REASONS` gains the four chaos reasons.
+- `resetDb` truncates `chaos_card_rules` and `chaos_config`.
+- `credit` replay returns the amount already written under the key.
+
+**Task 6**
+- `packages/ui-kit/src/i18n/locales/{vi,en}/common.json` gain `errors.CHAOS_UNAVAILABLE` and `errors.CHAOS_NO_OFFER`.
+- The `CHAOS_OFFER` notification is handled by the reducer without `notify()` (no toast).
+- With auto-play on, the client picks the first offered card at once (same pattern as the squeeze auto-REVEAL).
+- Screenshots at 1920×940, 1366×768, 375×812 of the create-room form with the chaos fields and of the room header with both
+  "Nặn bài" and "Hỗn loạn".
+
+**Task 5**
+- Screenshots of the seven-tab GM row at 375 px, 1366×768 and 1920×940.
+
+**Task 7**
+- Show "Bạo kích ×2!" / "×3!" on the winner's seat from `CHAOS_CREDIT.multiplier`.
+- Screenshots also cover a 4-card hand (`extraHole` on a 3-card table) in the normal and peel layouts, and a blindfolded own
+  seat.
+
+**Task 8**
+- The game history shows the "Thẻ đã dùng" line from `games.chaos_used`.
