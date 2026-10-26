@@ -54,6 +54,16 @@ describe('setup', () => {
     expect(t.state.phase).toBe('DECISION')
     expect(t.types()).toEqual(['HAND_STARTED', 'BLINDS_POSTED', 'POT_UPDATED', 'CARDS_DEALT', 'CARDS_DEALT', 'CARDS_DEALT', 'DECISION_PHASE'])
   })
+  it('a plain Blind hand has no chaos state and emits no chaos event, whatever the path to the end', () => {
+    for (const decisionMode of ['none', 'playOrFold'] as const) {
+      const t = new Table(rules({ decisionMode }), [5000, 5000, 5000])
+      if (decisionMode === 'playOrFold') { t.play(0); t.fold(1); t.play(2) }
+      t.advanceAll()
+      expect('chaos' in t.state).toBe(false)
+      expect(t.events.some((e) => e.type.startsWith('CHAOS_'))).toBe(false)
+      expect(t.state.result!.showdown!.every((h) => !('borrowed' in h))).toBe(true)
+    }
+  })
   it('deals any seat with points left and rejects only an empty one (plan 27 D1)', () => {
     expect(() => new Table(rules(), [5000, 1500])).not.toThrow()
     expect(() => new Table(rules(), [5000, 1])).not.toThrow()

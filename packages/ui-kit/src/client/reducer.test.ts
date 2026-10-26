@@ -31,7 +31,8 @@ function start(mode: 'holdem' | 'blind', rules: HoldemRules | BlindRules, stacks
 function feed(state: ClientState, events: GameEvent[], me: number | null, seqRef: { seq: number }): ClientState {
   for (const e of events) {
     seqRef.seq += 1
-    state = reduceClient(state, { type: 'server', msg: { t: 'GAME_EVENT', seq: seqRef.seq, event: filterEvent(e, me) }, now: 0 })
+    const seen = filterEvent(e, me)
+    if (seen !== null) state = reduceClient(state, { type: 'server', msg: { t: 'GAME_EVENT', seq: seqRef.seq, event: seen }, now: 0 })
   }
   return state
 }

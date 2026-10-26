@@ -2,7 +2,7 @@ import type { Rng } from '../cards/rng.js'
 import type { BlindRules } from '../hand/types.js'
 import { drawOffer, drawTier } from './draw.js'
 import { farmHandsOf, receiveCard, tierFromParam } from './hold.js'
-import type { ChaosCardDef, ChaosConfig, ChaosCredit, ChaosHandPlan, ChaosMode, ChaosSeat, ChaosTier, HeldCard } from './types.js'
+import type { ChaosCardDef, ChaosConfig, ChaosCredit, ChaosHandPlan, ChaosMark, ChaosMode, ChaosSeat, ChaosTier, HeldCard } from './types.js'
 
 export interface AfterHandSeat {
   seat: number
@@ -15,12 +15,6 @@ export interface AfterHandSeat {
   inHand: boolean
   /** Won a pot → win; folded, or in the hand without winning a pot → loss; carry-over or cancelled → none (spec §3.3). */
   outcome: 'win' | 'loss' | 'none'
-}
-
-/** A freeze or blindfold that landed this hand, after shields and mirrors (the engine's final marks). */
-export interface ChaosMark {
-  seat: number
-  kind: 'freeze' | 'blindfold'
 }
 
 export interface AfterHandResult {

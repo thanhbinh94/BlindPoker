@@ -66,9 +66,9 @@ export function evaluate5(cards: readonly Card[]): number {
   return encode(HandCategory.HIGH_CARD, ranks)
 }
 
-/** Best five-card hand from 5..8 cards. */
+/** Best five-card hand from 5..10 cards (10: a chaos hand of 4 hole cards, a borrowed one and the board). */
 export function evaluate(cards: readonly Card[]): HandEvaluation {
-  if (cards.length < 5 || cards.length > 8) throw new Error(`evaluate needs 5..8 cards, got ${cards.length}`)
+  if (cards.length < 5 || cards.length > 10) throw new Error(`evaluate needs 5..10 cards, got ${cards.length}`)
   let bestRank = -1
   let best: Card[] = []
   for (const combo of combinations(cards, 5)) {

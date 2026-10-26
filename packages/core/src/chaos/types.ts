@@ -1,3 +1,5 @@
+import type { Card } from '../cards/cards.js'
+
 /**
  * Poker hỗn loạn (spec 2026-10-26-chaos-poker-design): effect cards on a Blind table. Everything here is pure data;
  * the catalogue itself lives in data (spec §6.1), these types say what a card can be.
@@ -117,10 +119,57 @@ export interface ChaosHandPlan {
   seats: {
     seat: number
     effects: PlannedEffect[]
-    shield: { uid: number; cardId: string; kind: 'shield' | 'mirror' } | null
+    /** `lasting`: a duration shield (Khiên sắt) that blocks every debuff while it lasts; otherwise it is spent on one. */
+    shield: { uid: number; cardId: string; kind: 'shield' | 'mirror'; lasting?: true } | null
     blindfolded: boolean
   }[]
   reverse: boolean
+}
+
+/** A freeze or blindfold that landed this hand, after shields and mirrors (the engine's final marks). */
+export interface ChaosMark {
+  seat: number
+  kind: 'freeze' | 'blindfold'
+}
+
+/**
+ * What became of one card's effect in a hand: it acted; a shield stopped it (`blocked`); a mirror turned it back on its
+ * user (`reflected`); or it changed nothing — the deck reserve was short, its condition was not met, or its target had
+ * already taken a debuff this hand (`fizzled`).
+ */
+export type ChaosOutcome = 'applied' | 'blocked' | 'reflected' | 'fizzled'
+
+/** One line of "Thẻ đã dùng" (the `CHAOS_SUMMARY` event at settlement). */
+export interface ChaosUse {
+  seat: number
+  cardId: string
+  effect: ChaosEffectKind
+  outcome: ChaosOutcome
+}
+
+/**
+ * The engine's chaos bookkeeping for one Blind hand (`HandState.chaos`), server-side only. `applied ∪ blocked` are the
+ * held-card uids the hand used up (Task 3 passes them to `afterHand` as `consumed`); `marks` are the freezes and
+ * blindfolds that landed; `used` feeds `CHAOS_SUMMARY`.
+ */
+export interface ChaosHandState {
+  plan: ChaosHandPlan
+  /** Uids of the effects that fired (a debuff that fizzled on an already-hit seat counts: spec §3.5.4). */
+  applied: number[]
+  /** Uids of the debuffs a shield or mirror stopped, and of the one-shot shields and mirrors spent doing it. */
+  blocked: number[]
+  /** "Nhìn trộm": the board cards each seat saw, kept so a reconnect shows them again. */
+  peek: { seat: number; cards: Card[] }[]
+  freeFoldSeats: number[]
+  insured: { seat: number; percent: number }[]
+  /** "Mượn lá": a copy of an opponent's hole card the seat ranks with. */
+  borrowed: { seat: number; card: Card }[]
+  marks: ChaosMark[]
+  used: ChaosUse[]
+  /** Seats that took a debuff this hand (spec §3.5.4: one each). */
+  hit: number[]
+  /** Seats whose one-shot shield or mirror is spent this hand. */
+  shieldSpent: number[]
 }
 
 export type ChaosCreditReason = 'chaos_rescue' | 'chaos_crit' | 'chaos_fortune'

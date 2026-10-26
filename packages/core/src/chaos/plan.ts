@@ -69,7 +69,7 @@ export function planHand(input: {
       if (card.effect === 'gambler') {
         gamblers++
       } else if (card.effect === 'shield' || card.effect === 'mirror') {
-        out.shield ??= { uid: card.uid, cardId: card.cardId, kind: card.effect }
+        out.shield ??= { uid: card.uid, cardId: card.cardId, kind: card.effect, ...(card.handsLeft !== null ? { lasting: true as const } : {}) }
       } else if (card.timing !== 'wait' && card.timing !== 'now' && !(card.debuff && debuffFired) && !kinds.has(card.effect)) {
         fire(card)
       }
@@ -85,7 +85,7 @@ export function planHand(input: {
       if (!rolled) continue
       const uid = nextUid()
       if (rolled.effect === 'shield' || rolled.effect === 'mirror') {
-        out.shield = { uid, cardId: rolled.id, kind: rolled.effect }
+        out.shield = { uid, cardId: rolled.id, kind: rolled.effect, ...(rolled.params.hands ? { lasting: true as const } : {}) }
         continue
       }
       if (rolled.effect === 'chaosPoints') points += rolled.params.points ?? 0

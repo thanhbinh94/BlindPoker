@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { parseCards } from '../cards/cards.js'
 import { seededRng } from '../cards/rng.js'
 import { simulateHand } from '../hand/simulate.js'
-import type { BlindRules, HoldemRules } from '../hand/types.js'
+import type { BlindRules, HoldemRules, LegalActions } from '../hand/types.js'
+import type { HandView } from '../hand/view.js'
 import { chenScore } from './chen.js'
 import { createBotStrategy } from './strategy.js'
 
@@ -15,6 +16,34 @@ describe('chenScore', () => {
   it('scores three cards using the best pair plus bonuses', () => {
     expect(chenScore(parseCards('As Ah 2c'))).toBe(22)      // pair of aces + 2
     expect(chenScore(parseCards('7s 7h 7c'))).toBe(14)     // pair of 7s = 3.5 × 2 = 7, + 2 (pair) + 5 (trips)
+  })
+  it('scores a chaos "Thêm lá" hand of four on its first three cards', () => {
+    expect(chenScore(parseCards('As Ah 2c Kd'))).toBe(chenScore(parseCards('As Ah 2c')))
+  })
+})
+
+describe('bot on a chaos table', () => {
+  const rules: BlindRules = { mode: 'blind', holeCards: 3, decisionMode: 'playOrFold', fixedWager: 1000, tableFeeRate: 0.02 }
+  const view = (holeCards: ReturnType<typeof parseCards> | null): HandView => ({
+    handId: 'h', mode: 'blind', phase: 'DECISION', street: 'PREFLOP', community: [], pot: 2000, carryOverIn: 0, currentBet: 0,
+    minRaise: 0, button: 0, actingSeat: null, turnSeq: 1, mySeat: 0, legal: null, result: null,
+    seats: [0, 1].map((seat) => ({
+      seat, playerId: `p${seat}`, isBot: true, stack: 4000, betThisStreet: 1000, totalCommitted: 1000, folded: false, allIn: false,
+      cardCount: 3, holeCards: seat === 0 ? holeCards : null, hasDecided: false, decision: null, revealed: true,
+    })),
+  })
+  const legal: LegalActions = { seat: 0, kinds: ['play', 'fold'], callAmount: rules.fixedWager, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 }
+  it('decides on a four-card hand without throwing', () => {
+    const bot = createBotStrategy()
+    expect(['play', 'fold']).toContain(bot.decide(view(parseCards('As Ah 2c Kd')), legal, seededRng(1)).kind)
+  })
+  it('a blindfolded bot plays about half its hands', () => {
+    const bot = createBotStrategy()
+    const rng = seededRng(8)
+    let plays = 0
+    for (let i = 0; i < 1000; i++) if (bot.decide(view(null), legal, rng).kind === 'play') plays++
+    expect(plays).toBeGreaterThan(450)
+    expect(plays).toBeLessThan(550)
   })
 })
 

@@ -254,6 +254,11 @@ function applyHandEvent(state: ClientState, hand: ClientHand, event: GameEvent &
       return { ...state, deadlineAt: null, hand: { ...hand, phase: 'COMPLETE', legal: null, actingSeat: null } }
     case 'HAND_STARTED':
       return state
+    // Poker hỗn loạn: shown by the chaos table UI (Plan 37 Task 6); the hand itself does not change.
+    case 'CHAOS_APPLIED':
+    case 'CHAOS_PEEK':
+    case 'CHAOS_SUMMARY':
+      return state
   }
 }
 

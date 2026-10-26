@@ -194,6 +194,7 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
     for (const event of events) {
       seq += 1
       const seen = filterEvent(event, MY_SEAT)
+      if (seen === null) continue
       const timed = seen.type === 'TURN_CHANGED' || seen.type === 'DECISION_PHASE' || seen.type === 'SQUEEZE_PHASE'
       if (timed) deadlineAt = Date.now() + timerSec * 1000
       const framed = timed ? { ...seen, deadlineAt } : seen

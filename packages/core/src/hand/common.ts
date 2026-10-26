@@ -1,5 +1,5 @@
 import type { Card } from '../cards/cards.js'
-import { computePots, distributePots, tableFee } from '../betting/pots.js'
+import { computePots, distributePots, tableFee, type Pot } from '../betting/pots.js'
 import { evaluate } from '../evaluator/evaluator.js'
 import { EngineError, type GameEvent, type HandPlayer, type HandState, type ShowdownHand, type Street } from './types.js'
 
@@ -78,10 +78,29 @@ export function returnUncalled(state: HandState): { seat: number; amount: number
   return { seat: p.seat, amount }
 }
 
-export function settle(state: HandState, events: GameEvent[], opts: { showdown: boolean; feeCap?: number }): void {
+/**
+ * What a chaos hand changes in the settlement (Poker hỗn loạn; built by `chaos/engine.ts`, absent for a plain hand):
+ * a borrowed card a seat ranks with, the reversed ranking, a step after the ranks are known and before the pots are
+ * paid (insurance, which may move points from `pots` to stacks — its events follow `SHOWDOWN`), and events told just
+ * before `SETTLEMENT` (the summary).
+ */
+export interface SettleHooks {
+  reverse: boolean
+  borrowed(seat: number): Card | null
+  beforePayout(pots: Pot[], winners: ReadonlySet<number>): GameEvent[]
+  beforeSettlement(): GameEvent[]
+}
+
+export function settle(state: HandState, events: GameEvent[], opts: { showdown: boolean; feeCap?: number; hooks?: SettleHooks }): void {
+  const hooks = opts.hooks
   const uncalledReturned = returnUncalled(state)
   const pots = computePots(state.players.map((p) => ({ seat: p.seat, totalCommitted: p.totalCommitted, folded: p.folded })))
-  if (pots.length === 0) throw new EngineError('INVALID_SETUP', 'no pot to settle')
+  if (pots.length === 0) {
+    // Only a chaos hand gets here: every folder took its ante back ("Bỏ không mất") and the lone player's own points went
+    // back to it as uncalled, so all that is left to win is what carried in.
+    if (!hooks) throw new EngineError('INVALID_SETUP', 'no pot to settle')
+    pots.push({ amount: 0, eligibleSeats: unfolded(state).map((p) => p.seat) })
+  }
   pots[0]!.amount += state.carryOverIn
 
   const total = pots.reduce((a, p) => a + p.amount, 0)
@@ -93,16 +112,26 @@ export function settle(state: HandState, events: GameEvent[], opts: { showdown: 
   let showdown: ShowdownHand[] | null = null
   if (opts.showdown && live.length > 1) {
     showdown = live.map((p) => {
-      const cards = [...p.holeCards, ...state.community]
+      const borrowed = hooks?.borrowed(p.seat) ?? null
+      const cards = borrowed === null ? [...p.holeCards, ...state.community] : [...p.holeCards, ...state.community, borrowed]
       const ev = evaluate(cards)
-      rankBySeat.set(p.seat, ev.rank)
-      return { seat: p.seat, cards: p.holeCards.slice(), rank: ev.rank, category: ev.category, best: ev.best }
+      // "Thế giới đảo ngược": the weakest hand wins every pot it is in; the shown ranks stay the real ones.
+      rankBySeat.set(p.seat, hooks?.reverse ? -ev.rank : ev.rank)
+      const hand: ShowdownHand = { seat: p.seat, cards: p.holeCards.slice(), rank: ev.rank, category: ev.category, best: ev.best }
+      if (borrowed !== null) hand.borrowed = borrowed
+      return hand
     })
   } else {
     for (const p of live) rankBySeat.set(p.seat, 1)
   }
 
-  const results = distributePots(pots.filter((p) => p.amount > 0), rankBySeat, state.players.map((p) => p.seat), state.button)
+  const seatOrder = state.players.map((p) => p.seat)
+  let chaosEvents: GameEvent[] = []
+  if (hooks && showdown) {
+    const ranked = distributePots(pots.filter((p) => p.amount > 0), rankBySeat, seatOrder, state.button)
+    chaosEvents = hooks.beforePayout(pots, new Set(ranked.flatMap((r) => r.winners.map((w) => w.seat))))
+  }
+  const results = distributePots(pots.filter((p) => p.amount > 0), rankBySeat, seatOrder, state.button)
   if (results.some((r) => r.winners.length === 0)) throw new EngineError('INVALID_SETUP', 'no winners for a pot')
   const payoutBySeat = new Map<number, number>()
   for (const r of results) for (const w of r.winners) payoutBySeat.set(w.seat, (payoutBySeat.get(w.seat) ?? 0) + w.amount)
@@ -114,6 +143,7 @@ export function settle(state: HandState, events: GameEvent[], opts: { showdown: 
   state.phase = 'COMPLETE'
   state.actingSeat = null
   if (showdown) events.push({ type: 'SHOWDOWN', hands: showdown })
+  if (hooks) events.push(...chaosEvents, ...hooks.beforeSettlement())
   events.push({ type: 'SETTLEMENT', payouts, fee, pots: results, carryOverOut: 0, stacks, uncalledReturned })
   events.push({ type: 'HAND_COMPLETE' })
 }
@@ -143,11 +173,12 @@ export function cancelHand(state: HandState, events: GameEvent[], reason: string
   events.push({ type: 'HAND_COMPLETE' })
 }
 
-export function carryOverAll(state: HandState, events: GameEvent[]): void {
+export function carryOverAll(state: HandState, events: GameEvent[], hooks?: SettleHooks): void {
   const stacks = state.players.map((p) => ({ seat: p.seat, stack: p.stack }))
   state.result = { pots: [], fee: 0, payouts: [], stacks, showdown: null, carryOverOut: state.pot, uncalledReturned: null }
   state.phase = 'COMPLETE'
   state.actingSeat = null
+  if (hooks) events.push(...hooks.beforeSettlement())
   events.push({ type: 'SETTLEMENT', payouts: [], fee: 0, pots: [], carryOverOut: state.pot, stacks, uncalledReturned: null })
   events.push({ type: 'HAND_COMPLETE' })
 }

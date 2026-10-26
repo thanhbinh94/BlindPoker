@@ -798,7 +798,11 @@ export class Room {
       const isTurn = event.type === 'TURN_CHANGED' || event.type === 'DECISION_PHASE' || event.type === 'SQUEEZE_PHASE'
       if (isTurn) this.turnStartSeq = this.seq
       const outbound = isTurn && deadlineAt !== null ? { ...event, deadlineAt } : event
-      for (const p of this.connectedHumans()) this.deps.outbox.send(p.identity.playerId, { t: 'GAME_EVENT', seq: this.seq, event: filterEvent(outbound, p.seat) })
+      for (const p of this.connectedHumans()) {
+        // A private chaos event is not sent to the others at all; the skipped seq is harmless (clients only flag a seq going back).
+        const seen = filterEvent(outbound, p.seat)
+        if (seen !== null) this.deps.outbox.send(p.identity.playerId, { t: 'GAME_EVENT', seq: this.seq, event: seen })
+      }
     }
   }
 

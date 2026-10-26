@@ -1,5 +1,6 @@
 import type { Rng } from '../cards/rng.js'
 import { clockwiseFrom } from '../betting/pots.js'
+import type { ChaosHandPlan } from '../chaos/types.js'
 import { applyBlindCommand, blindLegalActions, createBlindHand } from './blind.js'
 import { applyHoldemCommand, createHoldemHand, holdemLegalActions } from './holdem.js'
 import { EngineError, type EngineResult, type HandCommand, type HandState, type LegalActions, type Ruleset, type SeatInput } from './types.js'
@@ -10,11 +11,16 @@ export interface CreateHandInput {
   seats: SeatInput[]
   button: number
   carryOverIn?: number
+  /** Poker hỗn loạn (Blind only): the effects this hand fires. */
+  chaos?: ChaosHandPlan
 }
 
 export function createHand(input: CreateHandInput, rng: Rng): EngineResult {
   if (input.rules.mode === 'holdem') return createHoldemHand({ handId: input.handId, rules: input.rules, seats: input.seats, button: input.button }, rng)
-  return createBlindHand({ handId: input.handId, rules: input.rules, seats: input.seats, button: input.button, carryOverIn: input.carryOverIn ?? 0 }, rng)
+  return createBlindHand({
+    handId: input.handId, rules: input.rules, seats: input.seats, button: input.button, carryOverIn: input.carryOverIn ?? 0,
+    ...(input.chaos ? { chaos: input.chaos } : {}),
+  }, rng)
 }
 
 export function applyCommand(state: HandState, cmd: HandCommand, rng: Rng): EngineResult {
