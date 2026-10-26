@@ -28,6 +28,7 @@ import { ServiceError } from '../errors.js'
 import type { AppEvent, AppEventBus } from '../events.js'
 import { UnknownPlayerError } from '../repos/index.js'
 import { isUuid } from '../repos/util.js'
+import { isChaosHand } from '../stats/chaos-hand.js'
 
 export type ReputationReason = 'hand_played' | 'hand_won' | 'daily_login' | 'achievement' | 'welcome' | 'newcomer_day' | 'gm_grant' | 'backfill'
 
@@ -249,13 +250,15 @@ export function createReputationService(deps: ReputationServiceDeps): Reputation
   async function onHandSettled(summary: HandSummary): Promise<void> {
     // The rule of `stats-service.ts`: a cancelled hand, or one nobody was paid for, is not a hand played.
     if (summary.cancelled || summary.settlementError !== undefined) return
+    // Plan 37: a Poker hỗn loạn hand is played, not won (as in the stats): `hand_played` only, never `hand_won`.
+    const chaos = isChaosHand(summary)
     for (const seat of summary.players) {
       // Bots have no reputation (and no `players` row).
       if (seat.isBot || !isUuid(seat.playerId)) continue
       // One seat's failure (a dropped connection, a lock timeout) must not starve the seats after it: nothing retries
       // a settled hand, so each seat is paid or logged on its own.
       try {
-        await paySeat(seat.playerId, seat.won, summary.handId)
+        await paySeat(seat.playerId, seat.won && !chaos, summary.handId)
       } catch (err) {
         deps.log.warn('reputation for a hand failed', { handId: summary.handId, playerId: seat.playerId, error: err instanceof Error ? err.message : String(err) })
       }

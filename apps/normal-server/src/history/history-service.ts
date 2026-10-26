@@ -52,6 +52,8 @@ export interface HistoryEntry {
   won: boolean
   bestCategory: HandCategory | null
   cancelled: boolean
+  /** Plan 37: the cards a chaos hand used ("Thẻ đã dùng"); absent for any other hand. */
+  chaosUsed?: { seat: number; cardId: string; outcome: string }[]
   /** Every seat, the reading player's own included, in seat order. */
   players: HistorySeat[]
 }
@@ -149,6 +151,7 @@ export function createHistoryService(deps: HistoryServiceDeps): HistoryService {
         won: h.won,
         bestCategory: h.bestCategory,
         cancelled: h.cancelled,
+        ...(h.chaosUsed === null ? {} : { chaosUsed: h.chaosUsed }),
         players: byHand.get(h.handId) ?? [],
       }))
     },

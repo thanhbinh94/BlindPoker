@@ -136,7 +136,7 @@ export const ledgerKeys = pgTable('ledger_keys', {
 })
 
 /** Everything a GM did (Plan 25). Append-only: no API updates or deletes a row. `actorUserId` null = the server CLI. */
-export const GM_ACTION_KINDS = ['grant_points', 'adjust_points', 'grant_item', 'grant_wardrobe', 'lock', 'unlock', 'kick', 'close_room', 'promote', 'demote', 'unlock_achievement', 'reset_checkin', 'set_gift_month', 'clear_gift_month', 'grant_reputation', 'set_reputation_rules', 'set_reputation_ranks', 'set_shop_prices', 'set_shop_featured', 'set_welcome_choices'] as const
+export const GM_ACTION_KINDS = ['grant_points', 'adjust_points', 'grant_item', 'grant_wardrobe', 'lock', 'unlock', 'kick', 'close_room', 'promote', 'demote', 'unlock_achievement', 'reset_checkin', 'set_gift_month', 'clear_gift_month', 'grant_reputation', 'set_reputation_rules', 'set_reputation_ranks', 'set_shop_prices', 'set_shop_featured', 'set_welcome_choices', 'set_chaos_rules', 'set_chaos_config'] as const
 export type GmActionKind = (typeof GM_ACTION_KINDS)[number]
 
 export const gmActions = pgTable('gm_actions', {
@@ -168,6 +168,8 @@ export const games = pgTable('games', {
   cancelled: boolean('cancelled').notNull().default(false),
   /** Set when settlement was refused: the hand is still recorded so an operator can reconcile it. */
   settlementError: text('settlement_error'),
+  /** Plan 37: the cards a chaos hand used (`HandSummary.chaosUsed`, "Thẻ đã dùng"); null for any other hand. */
+  chaosUsed: jsonb('chaos_used').$type<{ seat: number; cardId: string; outcome: string }[]>(),
 }, (t) => [
   index('games_room_started_idx').on(t.roomId, t.startedAt),
 ])
@@ -356,6 +358,31 @@ export const shopFeatured = pgTable('shop_featured', {
 
 /** Plan 27: the shop's small settings as key → JSON (today only `welcome_choices`, the three welcome outfits). */
 export const shopConfig = pgTable('shop_config', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').notNull(),
+  updatedBy: uuid('updated_by'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+/**
+ * Plan 37 (Poker hỗn loạn): a GM's rule for one chaos card. A card with no row (or outside its window) follows the file's
+ * `enabled` with weight 1. `weight` is the card's odds in every random draw (0 = never); `starts_at`/`ends_at` bound the
+ * rule (null = open), so a card can be switched on for an event week. No foreign key: the catalogue is a file.
+ */
+export const chaosCardRules = pgTable('chaos_card_rules', {
+  cardId: text('card_id').primaryKey(),
+  enabled: boolean('enabled').notNull(),
+  weight: integer('weight').notNull().default(1),
+  startsAt: timestamp('starts_at', { withTimezone: true }),
+  endsAt: timestamp('ends_at', { withTimezone: true }),
+  updatedBy: uuid('updated_by'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check('chaos_card_rules_weight_range', sql`${t.weight} BETWEEN 0 AND 100`),
+])
+
+/** Plan 37: chaos settings as key → JSON (today only `chaos`: tier weights, the points threshold, the draft time, the daily caps). */
+export const chaosConfig = pgTable('chaos_config', {
   key: text('key').primaryKey(),
   value: jsonb('value').notNull(),
   updatedBy: uuid('updated_by'),

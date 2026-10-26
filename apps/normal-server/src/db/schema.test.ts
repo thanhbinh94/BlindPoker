@@ -48,7 +48,7 @@ describe('schema', () => {
   it('applies the committed migrations, creating every table', async () => {
     const rows = rowsOf<{ table_name: string }>(await db.execute(sql`select table_name from information_schema.tables where table_schema = current_schema()`))
     const names = rows.map((r) => r.table_name)
-    for (const table of ['users', 'players', 'sessions', 'point_transactions', 'games', 'game_players', 'items', 'inventory', 'player_achievements', 'daily_logins', 'player_stats', 'avatar_outfits', 'ledger_keys']) {
+    for (const table of ['users', 'players', 'sessions', 'point_transactions', 'games', 'game_players', 'items', 'inventory', 'player_achievements', 'daily_logins', 'player_stats', 'avatar_outfits', 'ledger_keys', 'chaos_card_rules', 'chaos_config']) {
       expect(names, table).toContain(table)
     }
   })

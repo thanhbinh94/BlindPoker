@@ -724,6 +724,31 @@ describe('GmService — daily stats', () => {
     expect(await gmAt.dailyStats(30)).toHaveLength(30)
   })
 
+  it('a chaos card’s credit counts once: the three chaos sources are sources, chaos_to_table (the table transfer) is neither column', async () => {
+    const gmAt = createGmService(deps({ now: () => START })) // 2026-09-04 10:00 in Ho Chi Minh, 03:00 UTC
+    await stamp('starting_balance', '2026-08-28T10:00:00Z')
+    const before = await gmAt.dailyStats(7)
+    try {
+      // What `ChaosService.credit` writes: the source row and its paired transfer, per card that paid.
+      await db.execute(sql`insert into point_transactions (player_id, amount, reason, ref_id) values
+        (${me.playerId}, 40000, 'chaos_crit', 'k1'), (${me.playerId}, -40000, 'chaos_to_table', 'k1'),
+        (${me.playerId}, 5000, 'chaos_rescue', 'k2'), (${me.playerId}, -5000, 'chaos_to_table', 'k2'),
+        (${me.playerId}, 8000, 'chaos_fortune', 'k3'), (${me.playerId}, -8000, 'chaos_to_table', 'k3')`)
+      await db.execute(sql`update point_transactions set created_at = '2026-09-04T02:00:00Z'::timestamptz where reason like 'chaos_%'`)
+
+      const days = await gmAt.dailyStats(7)
+      expect(days[6]).toEqual({ day: '2026-09-04', sources: { chaos_crit: 40_000, chaos_rescue: 5_000, chaos_fortune: 8_000 }, sinks: {}, net: before[6]!.net + 53_000 })
+      expect(days[6]!.sources).not.toHaveProperty('chaos_to_table')
+      expect(days[6]!.sinks).not.toHaveProperty('chaos_to_table')
+
+      const o = await gmAt.overview()
+      expect(o.points24h.sources).toBe(53_000)
+      expect(o.points24h.sinks).toBe(0)
+    } finally {
+      await db.execute(sql`delete from point_transactions where reason like 'chaos_%'`)
+    }
+  })
+
   it('a shop purchase counts once: its sink row under sinks.shop, its player row (shop_purchase) in neither column', async () => {
     const gmAt = createGmService(deps({ now: () => START })) // 2026-09-04 10:00 in Ho Chi Minh, 03:00 UTC
     await stamp('starting_balance', '2026-08-28T10:00:00Z')

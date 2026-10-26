@@ -803,6 +803,22 @@ describe('the websocket, authenticated by the session cookie', () => {
   })
 })
 
+describe('Poker hỗn loạn', () => {
+  it('serves the 47 shipped cards through the service the game server was built with, and accepts a chaos table (the port is wired)', async () => {
+    const h = await harness()
+    expect((await h.app.services.chaos.active()).cards).toHaveLength(47)
+    expect(await h.app.services.chaos.config()).toMatchObject({ pointsThreshold: 10, dailyCapPoints: 100_000, dailyRescues: 3 })
+
+    const me = await h.register()
+    const client = await connect(await listen(h), { cookie: me.cookie })
+    await client.next('WELCOME')
+    client.send({ t: 'CREATE_ROOM', config: { ...BLIND_ROOM, blind: { ...BLIND_ROOM.blind!, chaosCycle: 5 } } })
+    // Not CHAOS_UNAVAILABLE, which is what a server without a port answers.
+    const snapshot = await client.next('ROOM_SNAPSHOT')
+    expect(snapshot.room.config.blind?.chaosCycle).toBe(5)
+  })
+})
+
 describe('a rename, and the next room', () => {
   it('seats the new name in the next room the player creates, without a reconnect (T7)', async () => {
     const h = await harness()
@@ -912,7 +928,7 @@ describe('a whole hand between two registered players', () => {
 
       // …and the balances are the whole ledger, read back: what they started with, plus anything an
       // achievement or a GM paid out (or took) on the way.
-      const credited = rowsOf<{ amount: string | number }>(await db.execute(sql`select amount from point_transactions where reason in ('achievement', 'gm_grant', 'gm_adjust', 'gm_achievement', 'gm_checkin_undo')`))
+      const credited = rowsOf<{ amount: string | number }>(await db.execute(sql`select amount from point_transactions where reason in ('achievement', 'gm_grant', 'gm_adjust', 'gm_achievement', 'gm_checkin_undo', 'chaos_rescue', 'chaos_crit', 'chaos_fortune')`))
       const rewards = credited.reduce((sum, row) => sum + Number(row.amount), 0)
       const balances = await Promise.all([alice, mai].map((p) => h.app.services.repos.balances.get(p.playerId)))
       expect(balances[0]! + balances[1]!).toBe(2 * ECONOMY.startingBalance + rewards)

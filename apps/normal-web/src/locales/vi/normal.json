@@ -583,6 +583,10 @@
       "gm_checkin_undo": "GM hoàn tác điểm danh",
       "shop_purchase": "Mua ở Cửa hàng",
       "shop": "Cửa hàng (bể)",
+      "chaos_rescue": "Thẻ cấp cứu",
+      "chaos_crit": "Thẻ bạo kích",
+      "chaos_fortune": "Thẻ thần tài",
+      "chaos_to_table": "Thẻ hỗn loạn lên bàn",
       "other": "Khác"
     }
   },

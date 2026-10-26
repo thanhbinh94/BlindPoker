@@ -24,6 +24,7 @@ import type { AppDb } from '../db/client.js'
 import { playerStats } from '../db/schema.js'
 import type { AppEvent, AppEventBus } from '../events.js'
 import { isUuid } from '../repos/util.js'
+import { isChaosHand } from './chaos-hand.js'
 import { zeroStats, type PlayerStats, type StatMetric } from './player-stats.js'
 
 export interface StatsService {
@@ -77,17 +78,21 @@ function atLeast(metric: StatMetric, value: number): SQL {
  */
 export function patchForHand(summary: HandSummary, seat: { net: number; won: boolean; bestCategory: number | null }): Patch {
   const patch: Patch = { gamesCompleted: inc('gamesCompleted') }
+  // Plan 37: a Poker hỗn loạn hand is played, not won. Cards bend its result, so it feeds no win count, record or streak,
+  // and a chaos hand neither extends a streak nor breaks one: the streaks simply skip it.
+  const chaos = isChaosHand(summary)
 
   if (summary.mode === 'holdem') {
     patch.handsPlayedHoldem = inc('handsPlayedHoldem')
     if (seat.won) patch.handsWonHoldem = inc('handsWonHoldem')
   } else {
     patch.handsPlayedBlind = inc('handsPlayedBlind')
-    if (seat.won) patch.handsWonBlind = inc('handsWonBlind')
+    if (seat.won && !chaos) patch.handsWonBlind = inc('handsWonBlind')
   }
 
   // "Played against a bot", counted once per hand however many bots were at the table.
   if (summary.players.some((p) => p.isBot)) patch.botHands = inc('botHands')
+  if (chaos) return patch
 
   if (seat.net > 0) patch.biggestWin = atLeast('biggestWin', seat.net)
   // §10.3: the best category ever *won* with. A monster hand that lost to a better one is not a

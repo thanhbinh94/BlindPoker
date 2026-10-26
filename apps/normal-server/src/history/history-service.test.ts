@@ -64,6 +64,19 @@ describe('botLabel', () => {
 })
 
 describe('listForPlayer', () => {
+  it('carries the cards a chaos hand used, and has no such field on any other hand', async () => {
+    const me = await seedPlayer('Bình')
+    const used = [{ seat: 0, cardId: 's_shield', outcome: 'blocked' }]
+    const seat = [{ playerId: me, seat: 0, isBot: false, net: 0, won: false, bestCategory: null }]
+    await repos.history.recordHand(summary({ handId: 'c1', mode: 'blind', chaosUsed: used, players: seat }))
+    await repos.history.recordHand(summary({ handId: 'p1', startedAt: START - MINUTE, endedAt: START, players: seat }))
+
+    const [chaos, plain] = await history.listForPlayer(me)
+    expect(chaos?.chaosUsed).toEqual(used)
+    expect(plain).toBeDefined()
+    expect('chaosUsed' in plain!).toBe(false)
+  })
+
   it('returns the reading player’s own result alongside every other seat, named', async () => {
     const me = await seedPlayer('Bình')
     const rival = await seedPlayer('Lan')

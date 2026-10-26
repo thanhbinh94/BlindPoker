@@ -54,6 +54,9 @@ import { createAchievementService, type AchievementService } from './achievement
 import { loadAchievements, type AchievementDef } from './achievements/definitions.js'
 import { createAuthService, type AuthService } from './auth/auth-service.js'
 import { readSessionCookie } from './auth/cookie.js'
+import { loadChaosCatalogue } from './chaos/chaos-catalogue.js'
+import { createChaosPort } from './chaos/chaos-port.js'
+import { createChaosService, type ChaosService } from './chaos/chaos-service.js'
 import type { Argon2Params } from './auth/password.js'
 import { createSessionService, type SessionService } from './auth/session-service.js'
 import type { NormalConfig } from './config.js'
@@ -227,6 +230,8 @@ export interface AppServices {
   shop: ShopService
   /** Plan 27: the welcome gift — one of three rare items, worn at once, with the first reputation (spec §4 C1). */
   welcome: WelcomeService
+  /** Plan 37: Poker hỗn loạn — the cards (`data/chaos-cards.json` and a GM's rules), the settings and the ledgered credit. */
+  chaos: ChaosService
   /** Old wardrobe ids, kept readable — see `inventory/aliases.ts`. */
   aliases: ReadonlyMap<string, string>
   manifest: AvatarManifest
@@ -278,6 +283,8 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
   // Checked against the catalogue it names, before anything is seeded: a bad schedule stops the boot here, with its
   // file and its problem in the message (spec 2026-10-12 §6). A month a GM set that no longer validates is warned about
   // and skipped instead (Plan 26): the file is the operator's, the rows are history.
+  // Plan 37: the chaos cards, checked at boot like the other catalogues — a bad file stops it with the file named.
+  const chaos = createChaosService({ db, catalogue: loadChaosCatalogue(), timezone: config.timezone, ...(deps.now ? { now: deps.now } : {}) })
   const gifts = await createGiftScheduleStore({ db, catalog, defaults: readDailyGiftsRaw(), timezone: config.timezone, log, ...(deps.now ? { now: deps.now } : {}) })
   // Before anything reads or grants an item: every reward is a foreign key into this table.
   await catalog.seed(db)
@@ -319,6 +326,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
       },
     },
     log,
+    chaos: createChaosPort(chaos),
     roomOptions: { reconnectWindowMs: config.reconnectWindowSec * 1000, ...deps.roomOptions },
     gatewayOptions: { allowedOrigins: config.allowedOrigins, ...deps.gatewayOptions },
     // The one place every domain event passes through, and therefore the one place a hand that was
@@ -547,7 +555,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
   return {
     fastify,
     game,
-    services: { bus, catalog, defs, gifts, repos, sessions, auth, inventory, outfits, stats, achievements, economy, history, gm, gmRooms, reputation, shop, welcome, aliases, manifest, bodies },
+    services: { bus, catalog, defs, gifts, repos, sessions, auth, inventory, outfits, stats, achievements, economy, history, gm, gmRooms, reputation, shop, welcome, chaos, aliases, manifest, bodies },
     close,
   }
 }
