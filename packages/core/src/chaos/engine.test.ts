@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cardToString, parseCards, type Card } from '../cards/cards.js'
+import { cardToString, parseCards, rankOf, suitOf, type Card } from '../cards/cards.js'
 import { seededRng, type Rng } from '../cards/rng.js'
 import { evaluate } from '../evaluator/evaluator.js'
 import { applyBlindCommand, createBlindHand } from '../hand/blind.js'
@@ -39,6 +39,19 @@ function layout(hands: string[], rest = ''): string {
   const out: Card[] = []
   for (let r = 0; r < cards[0]!.length; r++) for (const s of order) out.push(cards[s]![r]!)
   return [...out.map(cardToString), rest].join(' ').trim()
+}
+
+/**
+ * An 8-seat, 3-card deck top: seat 0 holds `seat0`, the 18 cards after the deal (all a deal-time draw may take above
+ * the 10-card reserve) are the first that pass `next`, and seats 1–7 hold the rest.
+ */
+function crowded(seat0: string, next: (c: Card) => boolean): string {
+  const mine = parseCards(seat0)
+  const pool = Array.from({ length: 52 }, (_, i) => i).filter((c) => !mine.includes(c))
+  const rest = pool.filter(next).slice(0, 18)
+  const others = pool.filter((c) => !rest.includes(c))
+  const hands = [seat0, ...Array.from({ length: 7 }, (_, i) => others.slice(i * 3, i * 3 + 3).map(cardToString).join(' '))]
+  return layout(hands, rest.map(cardToString).join(' '))
 }
 
 let uidSeq = 100
@@ -144,6 +157,27 @@ describe('deal-time effects', () => {
     const t = new Table({ chaos: plan(2, { 0: { effects: [fx('s_high_card'), fx('s_suited')] } }), deck: layout(['2c Kd', '7h 8h'], '5c Ac') })
     // highCard is already met by Kd; suited must not trade the K away for a low club: 5c is refused, Ac is kept.
     expect(t.hole(0)).toEqual(parseCards('2c Ac'))
+  })
+  it('a fizzled highCard or suited leaves the hole cards as dealt (the cards it drew stay burned)', () => {
+    const by = (cardId: string): ChaosHandPlan => plan(8, { 0: { effects: [fx(cardId)] } })
+    // 8 × 3 dealt, 28 left: 18 draws reach the 10-card reserve, and none of them qualifies.
+    const high = new Table({ chaos: by('s_high_card'), rules: { holeCards: 3 }, deck: crowded('2c 3c 4c', (c) => rankOf(c) < 8) })
+    expect(high.applied()[0]).toMatchObject({ effect: 'highCard', outcome: 'fizzled' })
+    expect(high.hole(0)).toEqual(parseCards('2c 3c 4c'))
+    expect(high.dealt(0).cards).toEqual(parseCards('2c 3c 4c'))
+    expect(high.state.deckIndex).toBe(42)
+    const suited = new Table({ chaos: by('s_suited'), rules: { holeCards: 3 }, deck: crowded('Kc 3d 4d', (c) => suitOf(c) !== 0) })
+    expect(suited.applied()[0]).toMatchObject({ effect: 'suited', outcome: 'fizzled' })
+    expect(suited.hole(0)).toEqual(parseCards('Kc 3d 4d'))
+    expect(suited.state.deckIndex).toBe(42)
+  })
+  it('highCard and suited together on a crowded deck never end with highCard applied and no card from T up', () => {
+    const p = plan(8, { 0: { effects: [fx('s_high_card'), fx('s_suited')] } })
+    // Kd keeps highCard; suited needs a club of T or higher in second place and the deck has none above the reserve.
+    const t = new Table({ chaos: p, rules: { holeCards: 3 }, deck: crowded('2c Kd 5h', (c) => !(suitOf(c) === 0 && rankOf(c) >= 8)) })
+    expect(t.applied().map((e) => [e.effect, e.outcome])).toEqual([['highCard', 'applied'], ['suited', 'fizzled']])
+    expect(t.hole(0)).toEqual(parseCards('2c Kd 5h'))
+    expect(Math.max(...t.hole(0).map(rankOf))).toBeGreaterThanOrEqual(8)
   })
   it('bestOfN keeps the strongest set by hole cards alone — pair first, then the top card — and burns the rest', () => {
     const pick = new Table({ chaos: plan(2, { 0: { effects: [fx('d_pick_3')] } }), deck: layout(['Kc 3d', '7h 8h'], 'Ah 2s 5h 5s') })

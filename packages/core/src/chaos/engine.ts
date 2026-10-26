@@ -98,7 +98,7 @@ const topRank = (cards: readonly Card[]): number => Math.max(...cards.map(rankOf
 const canDealAtDeal = (state: HandState, n: number): boolean => remaining(state) - n >= DEAL_RESERVE
 
 /** One deal-time buff on `p`; returns its outcome (`fizzled` when the reserve or its condition says no). */
-function dealBuff(state: HandState, p: HandPlayer, e: PlannedEffect, withHighCard: PlannedEffect | undefined): ChaosOutcome {
+function dealBuff(state: HandState, p: HandPlayer, e: PlannedEffect, keepTopRank: number | null): ChaosOutcome {
   const hole = p.holeCards
   switch (e.effect) {
     case 'swapLowest': {
@@ -125,21 +125,31 @@ function dealBuff(state: HandState, p: HandPlayer, e: PlannedEffect, withHighCar
       p.holeCards = best.slice()
       return 'applied'
     }
+    // The two guaranteed cards draw one card at a time. When the reserve runs out first, the hand goes back to what it
+    // was before the effect ("fizzled" changes nothing); the cards drawn on the way stay burned.
     case 'highCard': {
       const min = e.params.minRank ?? 0
-      while (topRank(p.holeCards) < min) {
-        if (!canDealAtDeal(state, 1)) return 'fizzled'
-        p.holeCards[lowestIndex(p.holeCards)] = dealCards(state, 1)[0]!
+      const before = hole.slice()
+      while (topRank(hole) < min) {
+        if (!canDealAtDeal(state, 1)) {
+          p.holeCards = before
+          return 'fizzled'
+        }
+        hole[lowestIndex(hole)] = dealCards(state, 1)[0]!
       }
       return 'applied'
     }
     case 'suited': {
       if (hole.length < 2) return 'fizzled'
-      // With "Chất bổ" in the same hand, a redraw is kept only if the hand still has its high card.
-      const min = withHighCard ? (withHighCard.params.minRank ?? 0) : -1
+      // When "Chất bổ" applied on this seat, a redraw is kept only if the hand still has its high card.
+      const min = keepTopRank ?? -1
+      const before = hole.slice()
       const ok = (): boolean => suitOf(hole[1]!) === suitOf(hole[0]!) && topRank(hole) >= min
       while (!ok()) {
-        if (!canDealAtDeal(state, 1)) return 'fizzled'
+        if (!canDealAtDeal(state, 1)) {
+          p.holeCards = before
+          return 'fizzled'
+        }
         hole[1] = dealCards(state, 1)[0]!
       }
       return 'applied'
@@ -165,10 +175,14 @@ export function applyDealEffects(state: HandState, events: GameEvent[]): void {
   if (!chaos) return
   for (const p of seatsClockwiseFrom(state, state.button)) {
     const effects = effectsOf(chaos, p.seat)
+    // The rank "Chất bổ" promised once it applied: "Đồng hoa" after it must not take that card away.
+    let keepTopRank: number | null = null
     for (const kind of DEAL_BUFFS) {
       const e = effects.find((x) => x.effect === kind)
       if (!e) continue
-      record(chaos, events, p.seat, e, [], dealBuff(state, p, e, effects.find((x) => x.effect === 'highCard')))
+      const outcome = dealBuff(state, p, e, keepTopRank)
+      if (kind === 'highCard' && outcome === 'applied') keepTopRank = e.params.minRank ?? 0
+      record(chaos, events, p.seat, e, [], outcome)
     }
     for (const e of effects) {
       if (!DEAL_DEBUFFS.has(e.effect)) continue
