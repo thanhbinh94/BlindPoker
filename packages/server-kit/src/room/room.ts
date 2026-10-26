@@ -963,8 +963,16 @@ export class Room {
   private toOpen(): void {
     this.status = 'OPEN'
     this.nextHandAt = null
-    for (const p of this.players.values()) if (!p.identity.isBot) p.ready = false
+    // Waiting again clears every human's ready flag; each one that was set is announced, or a client keeps showing
+    // "Hủy sẵn sàng" (and "8/8 ready") for a flag the server no longer holds, and Start answers NOT_ENOUGH_PLAYERS (E6).
+    const cleared: string[] = []
+    for (const p of this.players.values()) {
+      if (p.identity.isBot || !p.ready) continue
+      p.ready = false
+      cleared.push(p.identity.playerId)
+    }
     this.broadcastRoomEvent({ type: 'ROOM_STATUS', status: 'OPEN', nextHandAt: null })
+    for (const playerId of cleared) this.broadcastRoomEvent({ type: 'PLAYER_READY', playerId, ready: false })
     this.armCarryOverRelease()
     this.changed()
   }

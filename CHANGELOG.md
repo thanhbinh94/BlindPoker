@@ -9,6 +9,32 @@ below are the real history.
 
 ---
 
+## BP-38 — a table that goes back to waiting tells every player their "ready" is cleared, so "Chơi tiếp" then "Bắt đầu" no longer lights a Start the server refuses — merged `MERGE` (2026-10-26)
+
+The user's bug log, `docs/bug-log.md` §10 E6 (found 2026-10-23 while screenshotting BP-31, option (a) recommended there). Branch
+`bugfix/BP-38-ready-after-open`. Server only; no protocol change.
+
+- **What a player gets.** When the only human at a table sits out, the next hand would be bots only, so the table goes back to
+  waiting. Before, the player's screen kept "Hủy sẵn sàng" and, after "Chơi tiếp", "8/8 sẵn sàng" and a lit "Bắt đầu" that
+  the server answered with "Chưa đủ người chơi". Now the ready mark clears on the player's screen at the same moment it clears
+  on the server, so the button reads "Sẵn sàng" and Start stays dark until they ready up again. No points were ever at stake.
+- **Under it.** `Room.toOpen()` (`packages/server-kit/src/room/room.ts`) clears each human's ready flag as before, and now also
+  broadcasts the existing room event `PLAYER_READY { playerId, ready: false }` for each human whose flag was set (not for a
+  seat that was not ready, not for a bot), after `ROOM_STATUS OPEN`. The client reducer already handled the event. The
+  refusal itself already reaches the player as a toast (`Toasts` over `request.error`); a test now pins that.
+- **Tests.** `packages/server-kit/src/room/room-hands.test.ts` → two cases: "a table that goes back to waiting because only
+  bots are left tells every human their ready flag is cleared …" (the sit-out, the table back to OPEN, `PLAYER_READY false`
+  to the human, then sit in, ready, start and a hand is dealt) and "a table that goes back to waiting announces PLAYER_READY
+  false only for the humans who were ready". `packages/ui-kit/src/screens/RoomScreen.test.tsx` → "shows the server's refusal
+  of a Start as a toast". The rules pinned in `room-hands.test.ts` (ready is cleared when the table goes back to waiting)
+  are unchanged. server-kit 208 passed (was 206), ui-kit `src/client` + `src/screens` 227 passed.
+- **Docs.** `docs/bug-log.md` §10 (E6 fixed).
+- **Khác với spec / Deviations from the spec.** None.
+- **Gate.** Not run yet.
+- **Deployed.** Not yet.
+- **Still open.** Nothing from this item.
+
+
 ## Plan 37 — Poker hỗn loạn — merged `5fcbac4` (2026-10-26)
 
 The user, 2026-10-26: "chế độ chơi mới mang tên 'Poker hỗn loạn' lấy cảm hứng từ 'Aram hỗn loạn' … mỗi người chơi được

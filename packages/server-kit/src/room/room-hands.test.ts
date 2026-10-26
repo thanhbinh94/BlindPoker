@@ -131,6 +131,51 @@ describe('Blind hands', () => {
     expect(await h.repos.balances.get('h')).toBe(90_000) // the balances only moved at the buy-in
   })
 
+  it('a table that goes back to waiting because only bots are left tells every human their ready flag is cleared, so "Chơi tiếp" then "Sẵn sàng" then "Bắt đầu" deals (E6)', async () => {
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 2 } }, { players: [['h', 100_000]] })
+    await seatAndStart(h, ['h'])
+    await h.room.sitOut('h', true)
+    await playOut(h, () => ({ kind: 'fold' }))
+    expect(h.room.players.get('h')!.ready).toBe(true) // the hand on the table does not touch it
+    const readyEvents = () => h.ofType('h', 'ROOM_EVENT').map((m) => m.event).filter((e) => e.type === 'PLAYER_READY')
+    const before = readyEvents().length
+
+    // The only human sits out, so the next hand would be bots only: the table goes back to waiting.
+    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
+    await tick(h)
+    expect(h.room.status).toBe('OPEN')
+    expect(h.room.handActive).toBe(false)
+    expect(h.room.players.get('h')!.ready).toBe(false)
+    // ...and the client is told, or it keeps showing "Hủy sẵn sàng" for a flag the server no longer holds.
+    expect(readyEvents().slice(before)).toEqual([{ type: 'PLAYER_READY', playerId: 'h', ready: false }])
+
+    // A seat that was not ready has nothing to announce.
+    await h.room.sitOut('h', false)
+    expect(await code(h.room.startGame('h'))).toBe('NOT_ENOUGH_PLAYERS') // nobody is ready yet, as the client now shows
+    await h.room.setReady('h', true) // autoStart is off, so this only readies
+    await h.room.startGame('h')
+    expect(h.room.handActive).toBe(true)
+  })
+
+  it('a table that goes back to waiting announces PLAYER_READY false only for the humans who were ready', async () => {
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 2 } }, { players: [['h', 100_000], ['a', 100_000]] })
+    await h.room.join(h.identity('a'))
+    await h.room.sitDown('h', 0)
+    await h.room.sitDown('a', 1) // seated but never readied: the host starts with the bots and 'h'
+    await h.room.setReady('h', true)
+    await h.room.startGame('h')
+    await h.room.sitOut('h', true)
+    await h.room.sitOut('a', true)
+    await playOut(h, () => ({ kind: 'fold' }))
+    const cleared = () => h.ofType('h', 'ROOM_EVENT').map((m) => m.event).filter((e) => e.type === 'PLAYER_READY' && !e.ready)
+    const before = cleared().length
+
+    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
+    await tick(h)
+    expect(h.room.status).toBe('OPEN')
+    expect(cleared().slice(before)).toEqual([{ type: 'PLAYER_READY', playerId: 'h', ready: false }]) // not 'a', not a bot
+  })
+
   it('SIT_OUT plays the current hand out, skips the ones after it, and SIT_IN deals the player back in', async () => {
     const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 2 } }, { players: [['h', 100_000], ['a', 100_000]] })
     await seatAndStart(h, ['h', 'a'])

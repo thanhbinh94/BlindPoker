@@ -133,6 +133,16 @@ describe('RoomScreen', () => {
     expect(client.sitDown).toHaveBeenLastCalledWith(1, 10_000)
   })
 
+  it('shows the server\'s refusal of a Start as a toast (bug log §10 E6: "Not enough players")', async () => {
+    const client = fakeClient(makeState({ room: readyRoom }), {
+      startGame: vi.fn().mockResolvedValue({ t: 'ERROR', code: 'NOT_ENOUGH_PLAYERS', message: 'need at least 2 ready players', reqId: 'x' }),
+    })
+    wrap(client)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Start' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not enough players')
+  })
+
   it('keeps the buy-in dialog open on INSUFFICIENT_BALANCE and draws the refusal above its backdrop', async () => {
     // BP-29 (bug log §10 E5): the refusal is a toast, the dialog a portal at the end of <body>. jsdom does not stack by
     // z-index, so the order is read off the stylesheets the two elements actually carry.
