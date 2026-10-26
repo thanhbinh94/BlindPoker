@@ -1374,7 +1374,7 @@ The user asked for men's cuts of "các bộ váy". Two registry entries on body 
   `--base m --variant m`) needed no code: the ingest wrote the manifest's `variantOf` and `items.json`'s
   `variants.m`, and two count pins moved.
 
-## Plan 37 — Poker hỗn loạn (merged `MERGE`, 2026-10-26)
+## Plan 37 — Poker hỗn loạn (merged `5fcbac4`, 2026-10-26)
 
 Spec `docs/superpowers/specs/2026-10-26-chaos-poker-design.md` (the user's decisions are Q1–Q13); plan
 `docs/superpowers/plans/2026-10-26-plan37-chaos-poker.md`; branch `feature/BP-37-chaos-poker`. Eight tasks run in the order
@@ -1438,6 +1438,16 @@ Decisions the tasks took where their brief left a choice (each is in its task's 
 the CHANGELOG's deviations): the deal-buff order (bestOfN before highCard and suited, because those two are guaranteed); a
 deck reserve of 10 cards at the deal; a weight-0 card stays listed but is never drawn; `credit` claims its key even when cut to
 0; the banner is a text pill inside the board's own box; auto-play picks the first card on the client.
+
+Gate and final-wave rulings:
+- E-06 ("Theo mọi mức", Hold'em) failed once in the gate's ops run and passed on the `03-holdem` re-run with the two cases
+  that had not run: the known 150 ms polling flake, untouched by chaos. Costs if wrong: a Hold'em regression hidden behind it.
+- Parked after the final fix wave: on a sideways phone and the short tier the "Thế giới đảo ngược" note stays over the lower
+  half of the board cards all hand and is ellipsized (corner indices stay readable; the banner and result card name it);
+  the ops spec's `getAttribute('aria-disabled')` has no timeout; at shutdown a pending chaos credit the ledger still refuses
+  blocks that seat's cash-out (both are logged, and both writes fail together on one ledger).
+- The deploy runs migration 0007 on the VPS database and restarts with open rooms on the user's word ("auto deploy, bypass
+  toàn bộ kể cả có người đang chơi"); the LAN host (Neon) is not touched.
 
 ### Lessons
 

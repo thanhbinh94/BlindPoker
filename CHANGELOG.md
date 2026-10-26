@@ -9,7 +9,7 @@ below are the real history.
 
 ---
 
-## Plan 37 — Poker hỗn loạn — merged `MERGE` (2026-10-26)
+## Plan 37 — Poker hỗn loạn — merged `5fcbac4` (2026-10-26)
 
 The user, 2026-10-26: "chế độ chơi mới mang tên 'Poker hỗn loạn' lấy cảm hứng từ 'Aram hỗn loạn' … mỗi người chơi được
 cung cấp 3 loại thẻ ngẫu nhiên có thể làm thay đổi ván đấu", then "lập plan và triển khai luôn, sau đó auto deploy". Spec
@@ -92,7 +92,10 @@ cung cấp 3 loại thẻ ngẫu nhiên có thể làm thay đổi ván đấu",
   12. **"Thế giới đảo ngược" says so all hand**, as a quiet line in the banner's slot once its banner has played (spec §4: the
       table is told from the deal), and after a reconnect too.
   13. **A pending card credit holds a stand-up** until it lands (the seat sits out meanwhile), as a pending cash-out does.
-- **Gate.** Not run yet.
+- **Gate** (the branch's final tree, `main` unmoved): typecheck and lint clean; unit 3,825 passed, 14 skipped;
+  `build:normal` ok; `build:lite` up to the exe step, which needs Node 22 (this machine has 24); `avatar:check` 160 files,
+  2,080 checks, 0 failures; e2e Normal 24/24; e2e Lite 4/4; ops 56 passed with E-06 ("Theo mọi mức", Hold'em — the known
+  150 ms polling flake) failing once and its two later cases not run, then `03-holdem` re-run 6/6, so 59/59 cases green.
 - **Deployed.** Not yet.
 - **Still open.**
   - **The LAN host's Neon database needs migration 0007** (`run.ps1` without `-NoMigrate`): ask first. The VPS runs it at boot.
