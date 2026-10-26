@@ -294,7 +294,12 @@
     "cardsTab": "Chaos cards",
     "used": "Cards used",
     "points": "Chaos points",
-    "handsLeft": "{{count}} hands left",
+    "handsLeft_one": "{{count}} hand left",
+    "handsLeft_other": "{{count}} hands left",
+    "blindfolded": "Blindfolded",
+    "blindfoldedHint": "Your cards stay face down until the showdown",
+    "peek": "Peek",
+    "critShout": "Crit ×{{multiplier}}!",
     "tier": {
       "silver": "Silver",
       "gold": "Gold",
@@ -303,7 +308,12 @@
     "draft": {
       "title": "Pick a {{tier}} card",
       "picked": "Picked — waiting for the others",
-      "watching": "The players are picking cards"
+      "watching": "The players are picking cards",
+      "group": "Three cards to choose from"
+    },
+    "banner": {
+      "use": "{{name}} plays {{card}}",
+      "useOn": "{{name}} plays {{card}} on {{targets}}"
     },
     "outcome": {
       "applied": "Applied",

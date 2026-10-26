@@ -10,6 +10,8 @@ import { MenuButton, type MenuItem } from '../primitives/MenuButton.js'
 import { Modal } from '../primitives/Modal.js'
 import { cx } from '../primitives/cx.js'
 import { ActionBar } from '../table/ActionBar.js'
+import { ChaosBanner, useChaosBanner } from '../table/ChaosBanner.js'
+import { ChaosDraft } from '../table/ChaosDraft.js'
 import { HandResult } from '../table/HandResult.js'
 import { STACK_LAYOUT_QUERY, useRoomFrame, useStageTier, type RoomFrame } from '../table/frame.js'
 import { PokerTable, type TableLayout } from '../table/PokerTable.js'
@@ -105,7 +107,12 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
   // waits with it — the lines under the seats, the winner's glow, the board's gold edge and the faces' reaction — so
   // nothing on screen gives the result away before the card (the same fix wave, follow-up). The faces take the flag
   // themselves: their reaction counts from the end of the hold, so it shows for its full length.
-  const held = useRevealHold(hand)
+  const revealHeld = useRevealHold(hand)
+  // Poker hỗn loạn: the cards that fired this hand come up one at a time over the board, and a finished hand's result waits
+  // for the last of them — the table keeps it to itself the way it does for a card turning over. A restored hand replays none.
+  const draft = state.chaos.draft
+  const banner = useChaosBanner(state.chaos.applied, hand?.handId ?? null, hand?.restored ?? false)
+  const held = revealHeld || (hand?.phase === 'COMPLETE' && banner.item !== null)
   const expressionFor = useTableExpressions(state, client.serverNow, held)
   const onLeftRef = useRef(onLeft)
   onLeftRef.current = onLeft
@@ -152,12 +159,14 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
   // The result card sits over the felt, so it has to be closable: between hands a player may well want to look at
   // the table underneath it rather than at the receipt. Everything that follows the card — the seat clearance, the
   // close button, the countdown's place — follows this one, the card actually drawn.
-  const resultCard = finished !== null && finished.handId !== dismissedHandId && !held ? finished : null
+  // The draft has the felt to itself: the last hand's receipt would sit under it, and the draft is what the table waits on.
+  const resultCard = finished !== null && finished.handId !== dismissedHandId && !held && draft === null ? finished : null
   // The card's stage stops above the viewer's own seat when there is room for the card there (review round 2, R2-3),
   // measured again when the viewer takes a seat or leaves one under it. Up here, above the early return, because it is
   // a hook — and worked out from `resultCard` itself, so what is measured for and what is drawn cannot disagree.
   const stageRef = useRef<HTMLElement>(null)
-  const clearance = useSeatClearance(stageRef, resultCard !== null, me?.seat ?? null)
+  // The draft always stops above the viewer's seat, however little room that leaves: it scrolls inside, and the hand fan stays clear.
+  const clearance = useSeatClearance(stageRef, resultCard !== null || draft !== null, me?.seat ?? null, draft !== null ? { minRoom: 0, aboveHand: true } : undefined)
   // Also a hook, so also above the early return: the frame is what every landscape rule of the room keys on.
   const frame = useRoomFrame(frameOverride)
   const fullscreen = useFullscreenActive()
@@ -172,6 +181,9 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
   if (room === null) return null
 
   const holdem = room.config.holdem
+  const chaosTable = room.config.blind?.chaosCycle !== undefined
+  const seatName = (seat: number): string =>
+    room.players.find((p) => p.seat === seat)?.displayName ?? hand?.seats.find((x) => x.seat === seat)?.displayName ?? String(seat + 1)
   const seated = room.players.filter((p) => p.seat !== null)
   const canSit = me !== undefined && me.seat === null
   const isHost = me !== undefined && me.isHost
@@ -346,7 +358,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
         hand={hand}
         room={room}
         onAct={act}
-        disabled={request.busy || state.status !== 'open'}
+        disabled={request.busy || state.status !== 'open' || draft !== null}
         lang={lang}
         preAction={state.preAction?.kind ?? null}
         onPreAction={client.setPreAction}
@@ -406,6 +418,8 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
           // The short tier's felt has no free band under the board for it (BP-28, R2): the dock carries it there. The
           // stack's one-row footer has no room for it either, so it is the felt's last line there (BP-31 P4).
           note={(stack || (landscape && !short)) && waiting ? hint : null}
+          chaos={chaosTable ? state.chaos : null}
+          banner={chaosTable ? <ChaosBanner item={banner.item} index={banner.index} nameOf={seatName} /> : undefined}
         />
 
         {/* The result card is dealt onto the felt, so it keeps the felt's night palette in either theme. The countdown
@@ -421,7 +435,16 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
               onDismiss={() => setDismissedHandId(resultCard.handId)}
               countdown={nextHandText}
               frame={frame}
+              chaosCredits={state.chaos.credits}
             />
+          </div>
+        )}
+
+        {draft === null ? null : (
+          // The draft lies over the felt the way the result card does, stopped above the viewer's seat: a centred panel, a sheet
+          // at the foot of the stage on a phone held upright, a compact row on one held sideways.
+          <div className={s.overlay} data-surface="night" data-frame={frame} data-kind="draft" data-layout={stack ? 'stack' : undefined} style={overlayStyle}>
+            <ChaosDraft key={draft.deadlineAt} draft={draft} serverNow={client.serverNow} onPick={client.pickChaos} layout={stack ? 'stack' : 'ring'} frame={frame} short={short} />
           </div>
         )}
       </main>

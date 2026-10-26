@@ -1,11 +1,22 @@
 import {
+  CHAOS_CARDS_SPEC,
+  DEFAULT_CHAOS_CONFIG,
   ECONOMY,
+  EMPTY_CHAOS_SEAT,
+  afterHand,
   applyCommand,
   createBotStrategy,
   createHand,
+  drawOffer,
+  drawTier,
   filterEvent,
   legalActions,
+  planHand,
   playerView,
+  receiveCard,
+  toHeldCardView,
+  type ChaosHandPlan,
+  type ChaosSeat,
   type GameEvent,
   type HandState,
   type PlayerAction,
@@ -25,13 +36,16 @@ import type { GameClientApi } from '../src/client/useGameClient.js'
 /**
  * `blindS` and `blindBS` are Blind A and Blind B on a squeeze table (Plan 21): the viewer's cards come face down, to peel
  * or turn with "Lật" — in pure luck inside the `SQUEEZE` round, in play-or-fold before the choice.
+ * `blindC` is Poker hỗn loạn (Plan 37) on a play-or-fold table: before every hand the viewer is offered three cards of a drawn
+ * tier (15 s, the bots pick at once), then `planHand` / `afterHand` run the real chaos rules around the engine.
  */
-export type PlaygroundMode = 'holdem' | 'blindA' | 'blindB' | 'blindS' | 'blindBS'
+export type PlaygroundMode = 'holdem' | 'blindA' | 'blindB' | 'blindS' | 'blindBS' | 'blindC'
 
-export const PLAYGROUND_MODES: readonly PlaygroundMode[] = ['holdem', 'blindA', 'blindB', 'blindS', 'blindBS']
+export const PLAYGROUND_MODES: readonly PlaygroundMode[] = ['holdem', 'blindA', 'blindB', 'blindS', 'blindBS', 'blindC']
 
 const isSqueeze = (mode: PlaygroundMode): boolean => mode === 'blindS' || mode === 'blindBS'
-const isPlayOrFold = (mode: PlaygroundMode): boolean => mode === 'blindB' || mode === 'blindBS'
+const isPlayOrFold = (mode: PlaygroundMode): boolean => mode === 'blindB' || mode === 'blindBS' || mode === 'blindC'
+const isChaos = (mode: PlaygroundMode): boolean => mode === 'blindC'
 
 const MY_ID = 'me'
 const MY_SEAT = 0
@@ -66,6 +80,7 @@ const rulesFor = (mode: PlaygroundMode): Ruleset =>
         fixedWager: FIXED_WAGER,
         tableFeeRate: ECONOMY.tableFeeRate,
         ...(isSqueeze(mode) ? { squeeze: true } : {}),
+        ...(isChaos(mode) ? { chaosCycle: 5 as const } : {}),
       }
 
 /** A squeeze table's round is the server's fixed 20 s, whatever the room asked for (spec 2026-10-08 §4.2.1). */
@@ -88,6 +103,7 @@ const configFor = (mode: PlaygroundMode, seats: number): RoomSummary['config'] =
           fixedWager: FIXED_WAGER,
           botCount: seats - (mode === 'blindS' ? 2 : 1),
           ...(isSqueeze(mode) ? { squeeze: true } : {}),
+          ...(isChaos(mode) ? { chaosCycle: 5 as const } : {}),
         },
       }),
 })
@@ -147,6 +163,13 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
   /** No server here to skip a hand, but the tray's toggle is a real one: it flips my seat's status. */
   let sittingOut = false
   const stacks = new Map<number, number>(Array.from({ length: SEATS }, (_, i) => [i, START_STACK]))
+  // Poker hỗn loạn (`blindC`): each seat's cards and points as the server's room keeps them, the uid counter, and the open
+  // draft — the offer I may pick from, and the call that settles it (`null`: the 15 s ran out).
+  const chaosOn = isChaos(mode)
+  const blindRules = rules.mode === 'blind' ? rules : null
+  const held = new Map<number, ChaosSeat>(Array.from({ length: SEATS }, (_, i) => [i, EMPTY_CHAOS_SEAT]))
+  let nextUid = 1
+  let drafting: { offerId: string; cardIds: string[]; pick: (cardId: string | null) => void } | null = null
 
   // Everything up to the first `await` runs while `createMockClient` is still returning, so the caller's very first
   // render already sees a room and a dealt hand. Notifying before that point would be a setState during render.
@@ -173,6 +196,7 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
       sittingOut: seat === MY_SEAT && sittingOut,
       stack: stacks.get(seat) ?? 0,
       ready: true,
+      ...(chaosOn ? { chaos: { cards: (held.get(seat) ?? EMPTY_CHAOS_SEAT).cards.map(toHeldCardView), points: (held.get(seat) ?? EMPTY_CHAOS_SEAT).points } } : {}),
     }))
 
   const room = (nextHandAt: number | null): RoomView => ({
@@ -202,6 +226,93 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
     }
   }
 
+  const roomEvent = (event: Extract<ServerMessage, { t: 'ROOM_EVENT' }>['event']): void => push({ t: 'ROOM_EVENT', seq: (seq += 1), event })
+
+  /** Every seat's held cards and chaos points, as the server broadcasts them after a draft and after each hand. */
+  const sendChaosState = (): void =>
+    roomEvent({
+      type: 'CHAOS_STATE',
+      seats: Array.from({ length: SEATS }, (_, seat) => ({
+        seat,
+        cards: (held.get(seat) ?? EMPTY_CHAOS_SEAT).cards.map(toHeldCardView),
+        points: (held.get(seat) ?? EMPTY_CHAOS_SEAT).points,
+      })),
+    })
+
+  /**
+   * The draft before a hand (spec 2026-10-26 §3.2): one tier for the table, three cards for every seat. The bots pick at
+   * once; mine is the panel — a pick, or the 15 s running out, and then a moment for "waiting on the others".
+   */
+  async function runDraft(gen: number): Promise<void> {
+    const tier = drawTier(DEFAULT_CHAOS_CONFIG.tierWeights, RNG)
+    const deadlineAt = Date.now() + DEFAULT_CHAOS_CONFIG.draftMs
+    const offers = Array.from({ length: SEATS }, (_, seat) => ({ seat, cards: drawOffer(CHAOS_CARDS_SPEC, tier, 'playOrFold', RNG, 3) }))
+    const mine = offers[MY_SEAT]!.cards.map((c) => c.id)
+    const offerId = `o${handNo + 1}`
+    push({ t: 'NOTIFICATION', kind: 'CHAOS_OFFER', payload: { offerId, tier, cardIds: mine, deadlineAt } })
+    roomEvent({ type: 'CHAOS_DRAFT', tier, deadlineAt, seats: offers.map((o) => o.seat) })
+    const chosen = await new Promise<string | null>((resolve) => {
+      drafting = { offerId, cardIds: mine, pick: resolve }
+      timer = setTimeout(() => resolve(null), DEFAULT_CHAOS_CONFIG.draftMs)
+    })
+    drafting = null
+    if (timer !== null) clearTimeout(timer)
+    if (gen !== generation) return
+    if (chosen !== null) await sleep(1_200)
+    if (gen !== generation) return
+    for (const o of offers) {
+      const wanted = o.seat === MY_SEAT ? o.cards.find((c) => c.id === chosen) : undefined
+      const def = wanted ?? o.cards[RNG.int(o.cards.length)]
+      if (def === undefined) continue
+      const r = receiveCard(held.get(o.seat) ?? EMPTY_CHAOS_SEAT, def, () => nextUid++, CHAOS_CARDS_SPEC, 'playOrFold', RNG)
+      held.set(o.seat, r.seat)
+      roomEvent({ type: 'CHAOS_PICKED', seat: o.seat, cardIds: r.received.map((c) => c.id) })
+    }
+    sendChaosState()
+  }
+
+  /** After a finished hand: durations, streaks, points, bonus cards and the credits cards pay (they go straight onto the stack here). */
+  function settleChaos(hand: HandState, plan: ChaosHandPlan, before: ReadonlyMap<number, number>): void {
+    const result = hand.result
+    if (hand.chaos === undefined || result === null || blindRules === null) return
+    const carryOverOnly = result.pots.length === 0
+    const winners = new Set(result.pots.flatMap((pot) => pot.winners.map((w) => w.seat)))
+    const settled = afterHand({
+      rules: blindRules,
+      config: DEFAULT_CHAOS_CONFIG,
+      pool: CHAOS_CARDS_SPEC,
+      rng: RNG,
+      nextUid: () => nextUid++,
+      plan,
+      consumed: new Set([...hand.chaos.applied, ...hand.chaos.blocked]),
+      carryOverOnly,
+      marks: hand.chaos.marks,
+      seats: hand.players.map((hp) => ({
+        seat: hp.seat,
+        isBot: hp.isBot,
+        chaos: held.get(hp.seat) ?? EMPTY_CHAOS_SEAT,
+        stackAfter: hp.stack,
+        net: hp.stack - (before.get(hp.seat) ?? hp.stack),
+        inHand: true,
+        outcome: carryOverOnly ? ('none' as const) : winners.has(hp.seat) ? ('win' as const) : ('loss' as const),
+      })),
+    })
+    for (const [seat, c] of settled.seats) held.set(seat, c)
+    for (const credit of settled.credits) {
+      stacks.set(credit.seat, (stacks.get(credit.seat) ?? 0) + credit.amount)
+      roomEvent({
+        type: 'CHAOS_CREDIT',
+        seat: credit.seat,
+        amount: credit.amount,
+        reason: credit.reason,
+        capped: false,
+        ...(credit.multiplier === undefined ? {} : { multiplier: credit.multiplier }),
+      })
+    }
+    for (const a of settled.awarded) roomEvent({ type: 'CHAOS_AWARDED', seat: a.seat, cardIds: a.cards.map((c) => c.id) })
+    sendChaosState()
+  }
+
   /** Whoever the engine is waiting on: the acting seat while betting, the first undecided seat in a decision phase. */
   const pendingSeat = (hand: HandState): number =>
     hand.phase === 'DECISION' ? (hand.players.find((p) => p.decision === null)?.seat ?? MY_SEAT) : (hand.actingSeat ?? MY_SEAT)
@@ -213,6 +324,12 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
 
     push({ t: 'ROOM_SNAPSHOT', seq: (seq += 1), room: room(null), hand: null, deadlineAt: null })
 
+    if (chaosOn) {
+      await runDraft(gen)
+      if (gen !== generation) return
+    }
+    const before = new Map(stacks)
+
     handNo += 1
     const seats: SeatInput[] = Array.from({ length: SEATS }, (_, seat) => ({
       seat,
@@ -223,7 +340,19 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
 
     let hand: HandState
     let events: GameEvent[]
-    ;({ state: hand, events } = createHand({ handId: `h${handNo}`, rules, seats, button, carryOverIn: carryOver }, RNG))
+    let plan: ChaosHandPlan | undefined
+    if (chaosOn && blindRules !== null) {
+      const planned = planHand({
+        seats: seats.map((s) => ({ seat: s.seat, isBot: s.isBot, chaos: held.get(s.seat) ?? EMPTY_CHAOS_SEAT })),
+        rules: blindRules,
+        pool: CHAOS_CARDS_SPEC,
+        rng: RNG,
+        nextUid: () => nextUid++,
+      })
+      plan = planned.plan
+      for (const [seat, c] of planned.seats) held.set(seat, c)
+    }
+    ;({ state: hand, events } = createHand({ handId: `h${handNo}`, rules, seats, button, carryOverIn: carryOver, ...(plan ? { chaos: plan } : {}) }, RNG))
     emit(events)
 
     while (hand.phase !== 'COMPLETE') {
@@ -286,6 +415,7 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
     }
 
     for (const p of hand.players) stacks.set(p.seat, p.stack)
+    if (plan !== undefined) settleChaos(hand, plan, before)
     carryOver = hand.result?.carryOverOut ?? 0
     button = (button + 1) % SEATS
 
@@ -305,6 +435,7 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
   const start = (): void => {
     generation += 1
     if (timer !== null) clearTimeout(timer)
+    drafting?.pick(null)
     waiting = null
     revealing = null
     void runHand(generation)
@@ -350,8 +481,16 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
       }
       return ACK
     },
-    // The playground's tables deal no chaos cards (yet): nothing is on offer, so a pick is an ACK that changes nothing.
-    pickChaos: async () => ACK,
+    // `blindC`'s draft: the offer is mine to pick from until the 15 s run out; anywhere else nothing is on offer.
+    pickChaos: async (offerId, cardId) => {
+      if (drafting === null || drafting.offerId !== offerId || !drafting.cardIds.includes(cardId)) {
+        return { t: 'ERROR', code: 'CHAOS_NO_OFFER', message: 'no such offer', reqId: 'playground' }
+      }
+      drafting.pick(cardId)
+      // what `useGameClient` does on the ACK: the offer is picked now, not only when the draft ends
+      publish(reduceClient(state, { type: 'chaosPicked', offerId }))
+      return ACK
+    },
     setPreAction: (kind) => publish(reduceClient(state, { type: 'preAction', kind })),
     setAutoPlay: (on) => publish(reduceClient(state, { type: 'autoPlay', on })),
     resync: () => {},
@@ -369,6 +508,7 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
     nextHand: start,
     stop: () => {
       generation += 1
+      drafting?.pick(null)
       waiting = null
       revealing = null
       if (timer !== null) clearTimeout(timer)

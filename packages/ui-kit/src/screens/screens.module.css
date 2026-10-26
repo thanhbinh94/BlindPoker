@@ -153,6 +153,26 @@
   pointer-events: auto;
 }
 
+/* The chaos draft's overlay (Plan 37): the same stage as the result card's, stopped above the viewer's seat by the same
+   `--seat-clearance`. On a phone held upright the panel is a sheet standing on the clearance line: the overlay has no
+   padding of its own at the sides and foot, and the panel runs the stage's full width. Keyed on the overlay's own attributes,
+   after the base rules. */
+.overlay[data-kind='draft'] {
+  /* standing on the clearance line, just above the viewer's hand: the felt's top seats stay clear of the panel */
+  justify-content: flex-end;
+}
+
+.overlay[data-kind='draft'][data-layout='stack'] {
+  padding: var(--space-2) 0 var(--seat-clearance, 0px);
+  background-image: linear-gradient(180deg, transparent 0%, rgba(4, 7, 18, 0.5) 100%);
+}
+
+/* The landscape overlay stops 60 px short of the stage's foot for the corner dock, and the clearance is measured from the
+   foot: what it adds beyond those 60 px is what lifts the panel over the viewer's hand. */
+.overlay[data-kind='draft'][data-frame='landscape'] {
+  padding-bottom: max(var(--space-2), calc(var(--seat-clearance, 0px) - 60px));
+}
+
 /* The tray's copy of the countdown, once the result card has been waved off (the card prints its own). */
 .countdown {
   font-family: var(--font-display);

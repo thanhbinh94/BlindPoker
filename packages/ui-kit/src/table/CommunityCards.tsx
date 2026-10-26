@@ -12,6 +12,8 @@ export interface CommunityCardsProps {
   dealt?: boolean
   /** The hand the board belongs to: each hand's cards are new cards, dealt afresh in the same slots. */
   handId?: string | null
+  /** "Nhìn trộm": the next board cards, for this viewer alone, face up in the first empty slots with a tag over the first. */
+  peek?: CardId[]
 }
 
 const SLOTS = [0, 1, 2, 3, 4]
@@ -21,13 +23,22 @@ const SLOTS = [0, 1, 2, 3, 4]
  * three cards come in `BOARD_STAGGER_MS` apart, each sliding in while the one before it turns; the turn and the river
  * come alone. A board that was already out shows at once.
  */
-export function CommunityCards({ cards, highlight, dealt = false, handId = null }: CommunityCardsProps) {
+export function CommunityCards({ cards, highlight, dealt = false, handId = null, peek = [] }: CommunityCardsProps) {
   const { t } = useTranslation()
   return (
     <div className={s.community} role="group" aria-label={t('labels.community')}>
       {SLOTS.map((i) => {
         const card = cards[i]
-        if (card === undefined) return <span key={i} className={s.slot} aria-hidden="true" />
+        if (card === undefined) {
+          const seen = peek[i - cards.length]
+          if (seen === undefined) return <span key={i} className={s.slot} aria-hidden="true" />
+          return (
+            <span key={i} className={s.peekSlot} data-peek="">
+              <Card card={seen} size="lg" className={s.peeked} />
+              {i === cards.length ? <span className={s.peekTag}>{t('chaos.peek')}</span> : null}
+            </span>
+          )
+        }
         return (
           <Card
             key={`${handId}:${i}`}

@@ -15,6 +15,7 @@ import { declarationsOf } from '../theme/contrast.js'
 import TABLE_CSS from '../table/table.module.css?raw'
 import TOKENS_CSS from '../theme/tokens.css?raw'
 import { REVEAL_HOLD_MS } from './reveal-hold.js'
+import { clearanceFor } from './seat-clearance.js'
 import { RoomScreen } from './RoomScreen.js'
 import screens from './screens.module.css'
 import SCREENS_CSS from './screens.module.css?raw'
@@ -1622,6 +1623,142 @@ describe('RoomScreen', () => {
       } finally {
         window.matchMedia = original
       }
+    })
+  })
+})
+
+// Plan 37: the chaos draft, the cards' banner and the result card that waits for it.
+describe('RoomScreen on a Poker hỗn loạn table', () => {
+  const chaosRoom = makeRoom({
+    mode: 'blind',
+    config: {
+      name: 'T',
+      mode: 'blind',
+      maxPlayers: 4,
+      isPrivate: false,
+      turnTimerSec: 20,
+      autoStart: false,
+      hasPassword: false,
+      blind: { holeCards: 3, decisionMode: 'playOrFold', fixedWager: 1_000, botCount: 0, chaosCycle: 5 },
+    },
+    players: [
+      makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'IN_HAND', stack: 19_800 }),
+      makePlayer({ playerId: 'me', displayName: 'Mai', seat: 2, status: 'IN_HAND', stack: 20_400 }),
+    ],
+  })
+  const finished = makeHand({
+    mode: 'blind',
+    phase: 'COMPLETE',
+    mySeat: 2,
+    actingSeat: null,
+    community: [],
+    result: { payouts: [{ seat: 2, amount: 2_000 }], pots: [], fee: 0, showdown: null, carryOverOut: 0, uncalledReturned: null, cancelled: false, reason: null },
+  })
+  const offer = { offerId: 'o1', cardIds: ['s_swap_one', 's_shield', 's_peek_1'] }
+  const drafting = { tier: 'silver' as const, deadlineAt: 1_015_000, offer, picked: false }
+  const stateWith = (chaos: Partial<ClientState['chaos']>, hand: ClientHand | null = finished): ClientState =>
+    makeState({ room: chaosRoom, hand, chaos: { draft: null, seats: {}, applied: [], credits: [], awarded: [], peek: null, ...chaos } })
+  const PICK_A_SILVER = { name: 'Pick a Silver card' }
+
+  it('opens the draft over the felt, and a pick goes to the client', async () => {
+    const client = fakeClient(stateWith({ draft: drafting }))
+    wrap(client)
+    const panel = screen.getByRole('region', PICK_A_SILVER)
+    expect(panel.closest('main')).not.toBeNull()
+    expect(panel.parentElement).toHaveAttribute('data-kind', 'draft')
+    await userEvent.click(within(panel).getByRole('button', { name: /Wooden Shield/ }))
+    expect(client.pickChaos).toHaveBeenCalledTimes(1)
+    expect(client.pickChaos).toHaveBeenCalledWith('o1', 's_shield')
+  })
+
+  it('has no draft when none is open', () => {
+    wrap(fakeClient(stateWith({})))
+    expect(screen.queryByRole('region', { name: /Pick a/ })).toBeNull()
+  })
+
+  it('keeps the last hand’s result card off the felt while the draft is up, and brings it back after', () => {
+    const { view } = wrap(fakeClient(stateWith({})))
+    expect(screen.getByRole('heading', { name: 'Winner' })).toBeInTheDocument()
+    view.rerender(screenFor(fakeClient(stateWith({ draft: drafting }))))
+    expect(screen.queryByRole('heading', { name: 'Winner' })).toBeNull()
+    expect(screen.getByRole('region', PICK_A_SILVER)).toBeInTheDocument()
+    view.rerender(screenFor(fakeClient(stateWith({}))))
+    expect(screen.getByRole('heading', { name: 'Winner' })).toBeInTheDocument()
+  })
+
+  it('blocks the action tray while the draft is up', () => {
+    const live = makeHand({
+      mode: 'holdem',
+      mySeat: 2,
+      actingSeat: 2,
+      legal: { seat: 2, kinds: ['fold', 'call', 'allIn'], callAmount: 300, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 },
+    })
+    const { view } = wrap(fakeClient(stateWith({}, live)))
+    expect(screen.getByRole('button', { name: 'Fold' })).toBeEnabled()
+    view.rerender(screenFor(fakeClient(stateWith({ draft: drafting }, live))))
+    expect(screen.getByRole('button', { name: 'Fold' })).toBeDisabled()
+  })
+
+  it('draws the draft as a sheet in the stack layout and as a compact row in the landscape frame', () => {
+    const upright = render(
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <RoomScreen client={fakeClient(stateWith({ draft: drafting }))} lang="en" onLeft={vi.fn()} layout="stack" />
+      </I18nextProvider>,
+    )
+    expect(screen.getByRole('region', PICK_A_SILVER)).toHaveAttribute('data-layout', 'stack')
+    expect(screen.getByRole('region', PICK_A_SILVER).parentElement).toHaveAttribute('data-layout', 'stack')
+    upright.unmount()
+    render(
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <RoomScreen client={fakeClient(stateWith({ draft: drafting }))} lang="en" onLeft={vi.fn()} frame="landscape" />
+      </I18nextProvider>,
+    )
+    expect(screen.getByRole('region', PICK_A_SILVER)).toHaveAttribute('data-frame', 'landscape')
+  })
+
+  it('stops the draft above the viewer’s seat however little room that leaves', () => {
+    const stage = { top: 0, bottom: 300 } as DOMRect
+    const seatBox = { top: 120 } as DOMRect
+    expect(clearanceFor(stage, seatBox, null), 'the result card needs 216 px: not here').toBeNull()
+    expect(clearanceFor(stage, seatBox, null, 0), 'the draft takes what there is').toBe(188)
+  })
+
+  describe('the banner', () => {
+    beforeEach(() => vi.useFakeTimers())
+    afterEach(() => vi.useRealTimers())
+
+    const fired = [
+      { seat: 0, cardId: 's_swap_one', effect: 'swapLowest' as const, targets: [], outcome: 'applied' as const },
+      { seat: 2, cardId: 's_shield', effect: 'shield' as const, targets: [], outcome: 'applied' as const },
+    ]
+
+    it('shows the cards that fired over the board, one by one, and holds the result card until the last', () => {
+      wrap(fakeClient(stateWith({ applied: fired }, { ...finished, restored: false })))
+      const board = screen.getByRole('group', { name: 'Community cards' }).parentElement!
+      expect(within(board).getByText('Ann plays Card Swap')).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Winner' }), 'the result waits for the cards').toBeNull()
+      act(() => void vi.advanceTimersByTime(900))
+      expect(screen.getByText('Mai plays Wooden Shield')).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Winner' })).toBeNull()
+      act(() => void vi.advanceTimersByTime(900))
+      expect(screen.getByRole('heading', { name: 'Winner' })).toBeInTheDocument()
+    })
+
+    it('replays nothing for a hand rebuilt from a snapshot: the result card is up at once', () => {
+      wrap(fakeClient(stateWith({ applied: fired }, { ...finished, restored: true })))
+      expect(screen.getByRole('heading', { name: 'Winner' })).toBeInTheDocument()
+      expect(screen.queryByText('Ann plays Card Swap')).toBeNull()
+    })
+
+    it('puts the credits the cards paid on the result card', () => {
+      wrap(fakeClient(stateWith({ credits: [{ seat: 2, amount: 3_000, reason: 'chaos_rescue', capped: false }] })))
+      expect(screen.getByText('Bob: Rescue +3,000')).toBeInTheDocument()
+    })
+
+    it('has no banner region on a table without chaos', () => {
+      const plainRoom = makeRoom({ ...chaosRoom, config: { ...chaosRoom.config, blind: { ...chaosRoom.config.blind!, chaosCycle: undefined } } })
+      wrap(fakeClient(makeState({ room: plainRoom, hand: finished })))
+      expect(document.querySelector(`.${s.chaosBannerSlot}`)).toBeNull()
     })
   })
 })

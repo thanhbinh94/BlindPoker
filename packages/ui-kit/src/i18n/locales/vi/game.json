@@ -294,7 +294,12 @@
     "cardsTab": "Thẻ hỗn loạn",
     "used": "Thẻ đã dùng",
     "points": "Điểm hỗn loạn",
-    "handsLeft": "còn {{count}} ván",
+    "handsLeft_one": "còn {{count}} ván",
+    "handsLeft_other": "còn {{count}} ván",
+    "blindfolded": "Bị che mắt",
+    "blindfoldedHint": "Bài của bạn bị úp cho đến khi lật",
+    "peek": "Nhìn trộm",
+    "critShout": "Bạo kích ×{{multiplier}}!",
     "tier": {
       "silver": "Bạc",
       "gold": "Vàng",
@@ -303,7 +308,12 @@
     "draft": {
       "title": "Chọn một thẻ {{tier}}",
       "picked": "Đã chọn — chờ người chơi khác",
-      "watching": "Các tay chơi đang chọn thẻ"
+      "watching": "Các tay chơi đang chọn thẻ",
+      "group": "Ba thẻ để chọn"
+    },
+    "banner": {
+      "use": "{{name}} dùng {{card}}",
+      "useOn": "{{name}} dùng {{card}} lên {{targets}}"
     },
     "outcome": {
       "applied": "Đã áp",

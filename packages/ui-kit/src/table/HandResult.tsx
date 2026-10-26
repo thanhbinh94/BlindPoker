@@ -1,7 +1,7 @@
 import type { RoomView, ShowdownHand } from '@bp/core'
 import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { ClientHand } from '../client/types.js'
+import type { ClientChaosCredit, ClientHand } from '../client/types.js'
 import { formatPoints, handLabel, type Language } from '../i18n/index.js'
 import { Button } from '../primitives/Button.js'
 import { cx } from '../primitives/cx.js'
@@ -29,6 +29,12 @@ export interface HandResultProps {
    * hashed class, so the compact card of a phone held sideways keys its rules on the card's own attribute.
    */
   frame?: RoomFrame
+  /**
+   * Poker hỗn loạn: the points cards paid after this hand ("Cấp cứu +N", "Bạo kích ×2 +N", "Thần tài +N"), from
+   * `ClientState.chaos.credits`. They may land a moment after the card is up, so each prints in the footer as it arrives.
+   * The cards that acted are in `hand.result.chaosUsed`. Absent or empty, the card is as it was.
+   */
+  chaosCredits?: readonly ClientChaosCredit[]
 }
 
 /**
@@ -66,7 +72,7 @@ function useMoreBelow(ref: RefObject<HTMLElement>, key: unknown): boolean {
 }
 
 /** Showdown card: who won, with what, and for how much. Renders only for a completed hand that carries a result. */
-export function HandResult({ hand, room, myPlayerId, lang, onDismiss, countdown, frame = 'desktop' }: HandResultProps) {
+export function HandResult({ hand, room, myPlayerId, lang, onDismiss, countdown, frame = 'desktop', chaosCredits = [] }: HandResultProps) {
   const { t } = useTranslation()
   const titleId = useId()
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -93,6 +99,36 @@ export function HandResult({ hand, room, myPlayerId, lang, onDismiss, countdown,
   const uncalled = result.uncalledReturned
   const uncalledText =
     uncalled === null ? '' : `${t('labels.uncalledReturned')} ${nameOf(uncalled.seat)} ${formatPoints(uncalled.amount, lang)}`
+
+  // Poker hỗn loạn: "Thẻ đã dùng" — Name — card, card; Name — card — and then each credit a card paid. A card something
+  // stopped says so after its name. A hand that used none, and a table without chaos, print neither line.
+  const cardName = (cardId: string): string => t(`chaos.cards.${cardId}.name`, { defaultValue: cardId })
+  const usedBySeat = new Map<number, string[]>()
+  for (const u of result.chaosUsed ?? []) {
+    const name = u.outcome === 'applied' ? cardName(u.cardId) : `${cardName(u.cardId)} (${t(`chaos.outcome.${u.outcome}`, { defaultValue: u.outcome })})`
+    usedBySeat.set(u.seat, [...(usedBySeat.get(u.seat) ?? []), name])
+  }
+  const usedText =
+    usedBySeat.size === 0 ? null : `${t('chaos.used')}: ${[...usedBySeat].map(([seat, names]) => `${nameOf(seat)} — ${names.join(', ')}`).join('; ')}`
+  const creditLines = chaosCredits.map((c, i) => {
+    const paid = t(`chaos.credit.${c.reason}`, { amount: formatPoints(c.amount, lang), multiplier: c.multiplier ?? 2 })
+    return { key: `${i}:${c.seat}:${c.reason}`, text: `${nameOf(c.seat)}: ${paid}${c.capped ? ` · ${t('chaos.capped')}` : ''}` }
+  })
+
+  // One box for the chaos lines, so the card is no wider for them than its own rows: "Thẻ đã dùng" on a line of its own, the
+  // credits after it, and the box wraps at 34rem. It is the footer's — except on a phone held sideways, whose card has no height
+  // for a footer of four lines: there it ends the scrolling body, after the rows and the ledger.
+  const chaosBox =
+    usedText === null && creditLines.length === 0 ? null : (
+      <div className={s.resultChaosBox}>
+        {usedText === null ? null : <span className={cx(s.resultMeta, s.resultChaos)}>{usedText}</span>}
+        {creditLines.map((line) => (
+          <span key={line.key} className={cx(s.resultMeta, s.resultCredit)}>
+            {line.text}
+          </span>
+        ))}
+      </div>
+    )
 
   return (
     <div className={s.result} role="group" aria-labelledby={titleId} data-frame={frame}>
@@ -169,6 +205,7 @@ export function HandResult({ hand, room, myPlayerId, lang, onDismiss, countdown,
               })}
             </ul>
           ) : null}
+          {frame === 'landscape' ? chaosBox : null}
         </div>
       </div>
 
@@ -176,6 +213,7 @@ export function HandResult({ hand, room, myPlayerId, lang, onDismiss, countdown,
         {result.fee > 0 ? <span className={s.resultMeta}>{feeText}</span> : null}
         {result.carryOverOut > 0 ? <span className={s.resultMeta}>{carryText}</span> : null}
         {uncalled === null ? null : <span className={s.resultMeta}>{uncalledText}</span>}
+        {frame === 'landscape' ? null : chaosBox}
         {countdown === undefined || countdown === null ? null : <p className={s.resultNext}>{countdown}</p>}
       </div>
     </div>

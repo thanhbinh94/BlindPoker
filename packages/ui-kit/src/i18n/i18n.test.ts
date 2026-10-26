@@ -85,6 +85,23 @@ describe('chaos card copy', () => {
     expect(vi.chaos.used).toBe('Thẻ đã dùng')
   })
 
+  // The icon's tooltip counts hands: "1 hand left" in English, and the same plain "còn N ván" in Vietnamese at any count.
+  it('counts the hands a card has left in the right plural', () => {
+    const en = createI18n({ language: 'en', storage: null })
+    expect([0, 1, 2, 10].map((count) => en.t('game:chaos.handsLeft', { count }))).toEqual(['0 hands left', '1 hand left', '2 hands left', '10 hands left'])
+    const vn = createI18n({ language: 'vi', storage: null })
+    expect([1, 2].map((count) => vn.t('game:chaos.handsLeft', { count }))).toEqual(['còn 1 ván', 'còn 2 ván'])
+  })
+
+  it('has the chaos table strings the room draws: the blindfold, the peek, the Bạo kích shout, the banner', () => {
+    expect(vi.chaos.blindfolded).toBe('Bị che mắt')
+    expect(vi.chaos.peek).toBe('Nhìn trộm')
+    expect(vi.chaos.critShout).toBe('Bạo kích ×{{multiplier}}!')
+    expect(vi.chaos.draft.picked).toBe('Đã chọn — chờ người chơi khác')
+    expect(vi.chaos.banner.use).toContain('{{card}}')
+    expect(en.chaos.banner.useOn).toContain('{{targets}}')
+  })
+
   it('labels the chaos error codes in both languages', () => {
     for (const res of [viCommon, enCommon]) {
       expect(res.errors.CHAOS_UNAVAILABLE.trim()).not.toBe('')

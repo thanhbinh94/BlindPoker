@@ -10,8 +10,14 @@ export interface BadgeProps {
   children: ReactNode
   /** An extra class for a place the badge is laid out in (the room header's squeeze badge). */
   className?: string
+  /** A tooltip for a badge whose few words want a sentence behind them. */
+  title?: string
 }
 
-export function Badge({ tone, children, className }: BadgeProps) {
-  return <span className={cx(s.badge, s[tone], className)}>{children}</span>
+export function Badge({ tone, children, className, title }: BadgeProps) {
+  return (
+    <span className={cx(s.badge, s[tone], className)} title={title}>
+      {children}
+    </span>
+  )
 }

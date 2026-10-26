@@ -1,4 +1,8 @@
-import { parseWorstHash } from './scenarios.js'
+import { render, screen, within } from '@testing-library/react'
+import { createElement } from 'react'
+import { I18nextProvider } from 'react-i18next'
+import { createI18n } from '../src/i18n/index.js'
+import { WorstPage, parseWorstHash } from './scenarios.js'
 
 describe('parseWorstHash', () => {
   it('reads #worst/<state>/<seats>/<lang> with no frame and a short name', () => {
@@ -49,5 +53,63 @@ describe('parseWorstHash', () => {
   it('is null for any other hash', () => {
     expect(parseWorstHash('#peel')).toBeNull()
     expect(parseWorstHash('')).toBeNull()
+  })
+})
+
+// Plan 37: the chaos states are pages of their own, and each one renders the thing it exists to show.
+describe('the chaos worst-case pages', () => {
+  const draw = (hash: string) => {
+    const spec = parseWorstHash(hash)!
+    return render(createElement(I18nextProvider, { i18n: createI18n({ language: spec.lang, storage: null }) }, createElement(WorstPage, { spec })))
+  }
+
+  it('knows every chaos state by name', () => {
+    for (const state of ['chaosDraft', 'chaosReveal', 'chaosFour', 'chaosPeel', 'chaosBlind', 'chaosResult']) {
+      expect(parseWorstHash(`#worst/${state}/6/vi`)?.state, state).toBe(state)
+    }
+    expect(parseWorstHash('#worst/chaosDraft/6/vi')).toEqual({ state: 'chaosDraft', seats: 6, lang: 'vi', long: false, frame: null })
+  })
+
+  it('#worst/chaosDraft/6/vi: three Vàng cards to pick over the felt, and the last hand’s result card out of the way', () => {
+    draw('#worst/chaosDraft/6/vi')
+    const panel = screen.getByRole('region', { name: 'Chọn một thẻ Vàng' })
+    expect(within(panel).getAllByRole('button')).toHaveLength(3)
+    expect(within(panel).getByRole('timer')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Người thắng' })).toBeNull()
+    // the cards in the seats' lines, the viewer’s fan still on the table
+    expect(document.querySelectorAll('[data-chaos-cards]').length).toBeGreaterThan(3)
+    expect(document.querySelector('[data-me="true"] [class*="seatCards"]')!.children.length).toBe(3)
+  })
+
+  it('#worst/chaosReveal/6/vi: the banner is up over the board', () => {
+    draw('#worst/chaosReveal/6/vi')
+    
+    expect(document.querySelector('[data-outcome]')).toHaveTextContent('Bot 1 dùng Rút lá lẻ lên Nguyễn Thị Phương Anh')
+    expect(document.querySelector('[data-outcome]')).toHaveTextContent('Bị chặn')
+  })
+
+  it('#worst/chaosResult/6/vi: "Thẻ đã dùng", the credits, and the winner’s shout', () => {
+    draw('#worst/chaosResult/6/vi')
+    expect(screen.getByText(/^Thẻ đã dùng: Nguyễn Thị Phương Anh — Đổi bài, Nhìn trộm;/)).toBeInTheDocument()
+    expect(screen.getByText(/Bạo kích ×2 \+6\.000/)).toBeInTheDocument()
+    expect(screen.getByText('Bạo kích ×2!')).toBeInTheDocument()
+    expect(screen.getByText(/Đã chạm trần thẻ hôm nay/)).toBeInTheDocument()
+  })
+
+  it('#worst/chaosFour: four cards in my hand, and the peeked board cards in the ghost slots', () => {
+    draw('#worst/chaosFour/6/vi')
+    expect(document.querySelector('[data-me="true"] [class*="seatCards"]')!.children).toHaveLength(4)
+    expect(document.querySelectorAll('[data-peek]')).toHaveLength(3)
+    expect(within(document.querySelector<HTMLElement>('[data-me="true"]')!).getByText('+1')).toBeInTheDocument() // five cards in my row: four icons and "+1"
+  })
+
+  it('#worst/chaosPeel: four cards to peel on a squeeze table', () => {
+    draw('#worst/chaosPeel/6/vi')
+    expect(document.querySelector('[data-me="true"]')!.querySelectorAll('[data-peel]')).toHaveLength(4)
+  })
+
+  it('#worst/chaosBlind: three backs I cannot turn, and the word for it', () => {
+    draw('#worst/chaosBlind/6/vi')
+    expect(within(document.querySelector<HTMLElement>('[data-me="true"]')!).getByText('Bị che mắt')).toBeInTheDocument()
   })
 })
