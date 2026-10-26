@@ -54,6 +54,7 @@
     "bot": "Bot",
     "buyIn": "Buy-in",
     "carryOver": "Carry-over",
+    "chaosMode": "Chaos",
     "code": "Room code",
     "community": "Community cards",
     "dealer": "Dealer",
@@ -219,6 +220,10 @@
     "squeeze": "Squeeze",
     "squeezeHint": "Each round lasts up to 20 s, less once everyone has turned.",
     "squeezeTimer": "{{time}} · squeeze",
+    "chaos": "Chaos poker",
+    "chaosHint": "The table drafts cards on a cycle; cards swap hands, shield, or hit opponents for a few hands.",
+    "chaosCycle": "Card cycle",
+    "chaosCycleOption": "Card cycle: {{count}} hands",
     "submit": "Create room",
     "hint": {
       "name": "The room name must be 1–30 characters.",
@@ -282,6 +287,238 @@
     "min": "Min",
     "half": "½ pot",
     "pot": "Pot"
+  },
+  "chaos": {
+    "capped": "Daily card cap reached",
+    "cycle": "Card cycle",
+    "cardsTab": "Chaos cards",
+    "used": "Cards used",
+    "points": "Chaos points",
+    "handsLeft_one": "{{count}} hand left",
+    "handsLeft_other": "{{count}} hands left",
+    "blindfolded": "Blindfolded",
+    "blindfoldedHint": "Your cards stay face down until the showdown",
+    "peek": "Peek",
+    "reverseNote": "Upside-Down World: the weakest hand wins",
+    "borrowed": "Borrowed",
+    "borrowedHint": "A card borrowed from an opponent, ranked with this hand",
+    "critShout": "Crit ×{{multiplier}}!",
+    "tier": {
+      "silver": "Silver",
+      "gold": "Gold",
+      "diamond": "Diamond"
+    },
+    "draft": {
+      "title": "Pick a {{tier}} card",
+      "picked": "Picked — waiting for the others",
+      "watching": "The players are picking cards",
+      "group": "Three cards to choose from"
+    },
+    "banner": {
+      "use": "{{name}} plays {{card}}",
+      "useOn": "{{name}} plays {{card}} on {{targets}}"
+    },
+    "outcome": {
+      "applied": "Applied",
+      "blocked": "Blocked",
+      "reflected": "Reflected",
+      "fizzled": "Fizzled"
+    },
+    "credit": {
+      "chaos_rescue": "Rescue +{{amount}}",
+      "chaos_crit": "Crit ×{{multiplier}} +{{amount}}",
+      "chaos_fortune": "Fortune +{{amount}}"
+    },
+    "cards": {
+      "s_swap_one": {
+        "name": "Card Swap",
+        "desc": "Your lowest hole card is redealt, for 1 hand."
+      },
+      "s_luck_1": {
+        "name": "Small Lucky Charm",
+        "desc": "Two sets of hole cards are dealt and you keep the better one, for 1 hand."
+      },
+      "s_high_card": {
+        "name": "High Card Boost",
+        "desc": "Your hole cards are sure to include a 10 or higher, for 1 hand."
+      },
+      "s_suited": {
+        "name": "Suited",
+        "desc": "Your first two hole cards share a suit, for 1 hand."
+      },
+      "s_redeal_weak": {
+        "name": "Redeal a Weak Hand",
+        "desc": "With no pair and nothing J or higher, your hole cards are redealt once, for 1 hand."
+      },
+      "s_peek_1": {
+        "name": "Sneak Peek",
+        "desc": "See 1 community card before you play or fold, for 1 hand."
+      },
+      "s_free_fold": {
+        "name": "Free Fold",
+        "desc": "If you fold, your opening wager is refunded, for 1 hand."
+      },
+      "s_insure_half": {
+        "name": "Silver Insurance",
+        "desc": "If you lose, 50% of what you put in comes back, for 1 hand."
+      },
+      "s_shield": {
+        "name": "Wooden Shield",
+        "desc": "Blocks the next harmful card aimed at you."
+      },
+      "s_rescue": {
+        "name": "Silver Rescue",
+        "desc": "After a lost hand that leaves you under 2 wagers, you get 5 × the wager."
+      },
+      "s_charge": {
+        "name": "Charge Up",
+        "desc": "Gives you 3 chaos points at once."
+      },
+      "s_steal_one": {
+        "name": "Pluck a Card",
+        "desc": "At the reveal, 1 random opponent loses a hole card."
+      },
+      "s_lower": {
+        "name": "Lower a Card",
+        "desc": "At the reveal, the highest hole card of 1 random opponent is redealt."
+      },
+      "s_blindfold": {
+        "name": "Blindfold",
+        "desc": "1 random opponent cannot look at their hole cards next hand."
+      },
+      "s_freeze_one": {
+        "name": "Small Freeze",
+        "desc": "1 random opponent cannot use their cards next hand."
+      },
+      "s_crit": {
+        "name": "Silver Crit",
+        "desc": "When you win, a 20% chance to double your net win, for 3 hands."
+      },
+      "s_fortune": {
+        "name": "Silver Fortune",
+        "desc": "Waits; when you win right after losing 2 or more hands in a row you get a reward, bigger the longer the streak."
+      },
+      "s_level": {
+        "name": "Silver Level-Up",
+        "desc": "Turns at once into 1 random Gold card."
+      },
+      "g_swap_all": {
+        "name": "Full Swap",
+        "desc": "With no pair and nothing Q or higher, all your hole cards are redealt, for 1 hand."
+      },
+      "g_luck_3": {
+        "name": "Lucky Charm",
+        "desc": "Two sets of hole cards are dealt and you keep the better one, for 3 hands."
+      },
+      "g_extra_card": {
+        "name": "Extra Card",
+        "desc": "You get 1 more hole card, for 1 hand."
+      },
+      "g_peek_3": {
+        "name": "Gold Sneak Peek",
+        "desc": "See 3 community cards before you play or fold, for 1 hand."
+      },
+      "g_borrow": {
+        "name": "Borrow a Card",
+        "desc": "At the reveal, you also use 1 hole card of a random opponent; they keep it."
+      },
+      "g_insure_full": {
+        "name": "Gold Insurance",
+        "desc": "If you lose, everything you put in comes back, for 1 hand."
+      },
+      "g_shield_3": {
+        "name": "Iron Shield",
+        "desc": "Blocks every harmful card aimed at you, for 3 hands."
+      },
+      "g_rescue": {
+        "name": "Gold Rescue",
+        "desc": "After a lost hand that leaves you under 2 wagers, you get 10 × the wager."
+      },
+      "g_farm": {
+        "name": "Point Farm",
+        "desc": "Your chaos points are doubled, for 5 hands."
+      },
+      "g_steal_all": {
+        "name": "Pluck from Everyone",
+        "desc": "At the reveal, every opponent loses a hole card."
+      },
+      "g_redeal_board_1": {
+        "name": "Redeal a Board Card",
+        "desc": "1 random community card is redealt, for the whole table."
+      },
+      "g_freeze_all": {
+        "name": "Table Freeze",
+        "desc": "Every opponent cannot use their cards next hand."
+      },
+      "g_crit": {
+        "name": "Gold Crit",
+        "desc": "When you win, a 25% chance of ×2 and a 10% chance of ×3 on your net win, for 3 hands."
+      },
+      "g_fortune": {
+        "name": "Gold Fortune",
+        "desc": "Waits; when you win right after losing 2 or more hands in a row you get a reward, bigger the longer the streak."
+      },
+      "g_level": {
+        "name": "Gold Level-Up",
+        "desc": "Turns at once into 1 random Diamond card."
+      },
+      "d_pick_3": {
+        "name": "Pick a Hand",
+        "desc": "Three sets of hole cards are dealt and you keep the best one, for 1 hand."
+      },
+      "d_luck_5": {
+        "name": "Grand Lucky Charm",
+        "desc": "Two sets of hole cards are dealt and you keep the better one, for 5 hands."
+      },
+      "d_extra_card_3": {
+        "name": "Diamond Extra Card",
+        "desc": "You get 1 more hole card, for 3 hands."
+      },
+      "d_peek_5": {
+        "name": "Clairvoyance",
+        "desc": "See all 5 community cards before you play or fold, for 1 hand."
+      },
+      "d_insure_2": {
+        "name": "Diamond Insurance",
+        "desc": "If you lose, everything you put in comes back, for 2 hands."
+      },
+      "d_mirror": {
+        "name": "Mirror",
+        "desc": "Sends the next harmful card aimed at you back at whoever used it."
+      },
+      "d_rescue": {
+        "name": "Diamond Rescue",
+        "desc": "After a lost hand that leaves you under 2 wagers, you get 20 × the wager (within the daily cap)."
+      },
+      "d_swap_hands": {
+        "name": "Hand Trade",
+        "desc": "At the reveal, you trade all hole cards with 1 random opponent."
+      },
+      "d_storm": {
+        "name": "Board Storm",
+        "desc": "All 5 community cards are redealt, for the whole table."
+      },
+      "d_reverse": {
+        "name": "Upside-Down World",
+        "desc": "The weakest hand takes the pot this hand; the whole table is told from the deal."
+      },
+      "d_crit": {
+        "name": "Diamond Crit",
+        "desc": "When you win, a 30% chance of ×2 and a 15% chance of ×3 on your net win, for 3 hands."
+      },
+      "d_fortune": {
+        "name": "Diamond Fortune",
+        "desc": "Waits; when you win right after losing 2 or more hands in a row you get a reward, bigger the longer the streak."
+      },
+      "d_gambler": {
+        "name": "Gambler",
+        "desc": "Each hand applies the random effect of one Silver or Gold card, until the next draft."
+      },
+      "d_level": {
+        "name": "Diamond Level-Up",
+        "desc": "Turns at once into 2 random cards, each of a random tier from Silver to Diamond."
+      }
+    }
   },
   "avatar": {
     "turn": "Turn",

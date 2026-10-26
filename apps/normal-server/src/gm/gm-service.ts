@@ -15,10 +15,11 @@
  * 4. **Side effects only after the commit.** `BALANCE`, the `GM_NOTICE`, the session revocation, the room kick and
  *    the socket close all follow the transaction, so a rolled-back write never announces anything.
  */
-import { displayNameKey } from '@bp/core'
+import { displayNameKey, type ChaosConfig } from '@bp/core'
 import { consoleLogger, InsufficientBalanceError, type AdminRoomSummary, type GameServer, type Logger } from '@bp/server-kit'
 import { and, count, desc, eq, gt, isNotNull, like, lt, or, sql, type SQL } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
+import type { ChaosRuleChange, ChaosService, GmChaosCard } from '../chaos/chaos-service.js'
 import { unlockWithin } from '../achievements/achievement-service.js'
 import type { AchievementDef, AchievementReward } from '../achievements/definitions.js'
 import type { SessionService } from '../auth/session-service.js'
@@ -111,6 +112,9 @@ export const RANK_THRESHOLD_MAX = 1_000_000_000
 /** The current week and the eight after it (spec B4). */
 const FEATURED_WEEKS = 9
 
+/** What the Thẻ hỗn loạn tab shows: every catalogue card with its rule, and the chaos settings as they stand. */
+export interface GmChaosDto { cards: GmChaosCard[]; config: ChaosConfig }
+
 export interface GmActionRow {
   id: number
   at: number
@@ -197,6 +201,12 @@ export interface GmService {
   setReputationRanks(actor: GmActor, ranks: unknown, reason: string): Promise<{ actionId: number }>
   /** Adds 1..100 000 reputation to one account (spec A5: a GM only ever adds), announcing a rank-up after the commit. */
   grantReputation(actor: GmActor, playerId: string, amount: number, reason: string): Promise<{ actionId: number; reputation: number; rank: number }>
+  /** Plan 37: the Thẻ hỗn loạn tab — the 47 cards with their rules and whether each is drawn now, and the settings. */
+  chaos(): Promise<GmChaosDto>
+  /** Writes the changed cards' rules (a `clear: true` hands a card back to the file) in one transaction; refuses a tier left under three drawable cards. */
+  setChaosRules(actor: GmActor, changes: unknown, reason: string): Promise<{ actionId: number; changed: number }>
+  /** Replaces the chaos settings (tier weights, points threshold, draft time, daily cap, daily rescues). */
+  setChaosConfig(actor: GmActor, config: unknown, reason: string): Promise<{ actionId: number }>
 }
 
 /** The part of a live `Room` the service touches — narrow, so a test can hand in a stub. */
@@ -227,6 +237,8 @@ export interface GmServiceDeps {
   reputation?: ReputationService
   /** Plan 27: the shop's prices, shelves and welcome choices (the Cửa hàng tab). Optional for tests not about it. */
   shop?: ShopService
+  /** Plan 37: the chaos cards and settings (the Thẻ hỗn loạn tab). Optional for tests not about it. */
+  chaos?: ChaosService
   log?: Pick<Logger, 'warn'>
   now?: () => number
 }
@@ -234,8 +246,12 @@ export interface GmServiceDeps {
 /** The ledger reasons one daily claim writes, under the claim's shared `ref_id`. */
 const CLAIM_REASONS = sql`('daily_login', 'daily_item_fallback')`
 
-/** Sources: the reasons that create points. Transfers (buy-in, cash-out, settlement, refund) only move them. */
-const SOURCE_REASONS: ReadonlySet<string> = new Set(['starting_balance', 'daily_reward', 'daily_login', 'daily_item_fallback', 'relief', 'achievement', 'gm_grant', 'gm_adjust', 'gm_achievement', 'gm_checkin_undo'])
+/**
+ * Sources: the reasons that create points. Transfers (buy-in, cash-out, settlement, refund) only move them.
+ * Plan 37: the three chaos credits are sources; `chaos_to_table`, the paired row that sends them straight to a table
+ * stack, is neither a source nor a sink (it is a transfer, so it nets the credit out of the balance).
+ */
+const SOURCE_REASONS: ReadonlySet<string> = new Set(['starting_balance', 'daily_reward', 'daily_login', 'daily_item_fallback', 'relief', 'achievement', 'gm_grant', 'gm_adjust', 'gm_achievement', 'gm_checkin_undo', 'chaos_rescue', 'chaos_crit', 'chaos_fortune'])
 /**
  * Sinks: a sink row's reason is its kind (`SettlementMeta.kind`). `shop` is the sink half of a purchase; its player
  * half, `shop_purchase`, is a transfer and sits in neither set, so a purchase is counted once.
@@ -881,11 +897,46 @@ export function createGmService(deps: GmServiceDeps): GmService {
       if (result.grant.rankUp) reputation.announceRankUp(playerId, result.grant.rank)
       return { actionId: result.actionId, reputation: result.grant.reputation, rank: result.grant.rank }
     },
+
+    async chaos() {
+      const chaos = chaosOf()
+      const [cards, config] = await Promise.all([chaos.rules(now()), chaos.config()])
+      return { cards, config }
+    },
+
+    async setChaosRules(actor, changes, reason) {
+      const why = checkReason(reason)
+      const by = editorOf(actor)
+      if (!Array.isArray(changes) || changes.length === 0) throw new ServiceError('INVALID_CHAOS_RULES', 'a non-empty list of rule changes is expected')
+      // The service validates each change; the log keeps only the fields a change may carry, whatever else the body held.
+      const clean = (changes as unknown[]).map((c) => pickRuleChange(c))
+      const actionId = await deps.db.transaction(async (tx) => {
+        await chaosOf().setRules(tx, clean, by)
+        return logAction(tx, { actorUserId: actor.userId, action: 'set_chaos_rules', reason: why, details: { changes: clean } })
+      })
+      return { actionId, changed: clean.length }
+    },
+
+    async setChaosConfig(actor, config, reason) {
+      const why = checkReason(reason)
+      const by = editorOf(actor)
+      const clean = pickConfig(config)
+      const actionId = await deps.db.transaction(async (tx) => {
+        await chaosOf().setConfig(tx, clean, by)
+        return logAction(tx, { actorUserId: actor.userId, action: 'set_chaos_config', reason: why, details: { config: clean } })
+      })
+      return { actionId }
+    },
   }
 
   function shopOf(): ShopService {
     if (deps.shop === undefined) throw new Error('the GM service was built without the shop')
     return deps.shop
+  }
+
+  function chaosOf(): ChaosService {
+    if (deps.chaos === undefined) throw new Error('the GM service was built without chaos')
+    return deps.chaos
   }
 
   function repOf(): ReputationService {
@@ -915,4 +966,27 @@ function pickPriceChange(raw: unknown): ShopPriceChange {
   const out: Record<string, unknown> = { itemId: c.itemId }
   for (const key of ['pricePoints', 'minRank', 'enabled', 'salePrice'] as const) if (key in c) out[key] = c[key]
   return out as ShopPriceChange
+}
+
+/**
+ * The fields a chaos rule change may carry. Only `clear === true` clears (the service reads the presence of the key, so
+ * `clear: false` must not reach it); anything else is read as a whole rule, and the service refuses a missing field.
+ */
+function pickRuleChange(raw: unknown): ChaosRuleChange {
+  const c = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
+  if (c.clear === true) return { cardId: c.cardId as string, clear: true }
+  return { cardId: c.cardId, enabled: c.enabled, weight: c.weight, startsAt: c.startsAt, endsAt: c.endsAt } as ChaosRuleChange
+}
+
+/** The five chaos numbers as given (the service judges them); anything else in the body is dropped. */
+function pickConfig(raw: unknown): ChaosConfig {
+  const c = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
+  const tw = (typeof c.tierWeights === 'object' && c.tierWeights !== null ? c.tierWeights : undefined) as Record<string, unknown> | undefined
+  return {
+    tierWeights: tw === undefined ? undefined : { silver: tw.silver, gold: tw.gold, diamond: tw.diamond },
+    pointsThreshold: c.pointsThreshold,
+    draftMs: c.draftMs,
+    dailyCapPoints: c.dailyCapPoints,
+    dailyRescues: c.dailyRescues,
+  } as unknown as ChaosConfig
 }

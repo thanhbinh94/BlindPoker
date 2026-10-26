@@ -19,6 +19,11 @@ export interface CreateRoomFormProps {
   busy?: boolean
   initialMode?: RoomMode
   lang: Language
+  /**
+   * Whether this host deals chaos cards: offers "Poker hỗn loạn" on a Blind table. The Normal edition says yes; Lite has
+   * no chaos port, so it leaves this off and the option is not there.
+   */
+  chaosOffered?: boolean
 }
 
 const MODES: RoomMode[] = ['holdem', 'blind']
@@ -116,7 +121,7 @@ function RoomNameInput({ value, onChange, onRoll, rollLabel, disabled, ...rest }
  * server accepts; the raw draft still goes through `validateRoomConfig`, and it is the *validated* config
  * (defaults applied, name trimmed) that reaches `onSubmit`.
  */
-export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem', lang }: CreateRoomFormProps) {
+export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem', lang, chaosOffered = false }: CreateRoomFormProps) {
   const { t } = useTranslation()
   // The dialog opens with a name already in the field, drawn once in the form's language: the host may type over it, roll
   // another with the 🎲, or press "Create room" at once.
@@ -135,6 +140,8 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
   const [fixedWager, setFixedWager] = useState<number>(ECONOMY.blindWagerTiers[0])
   const [botCount, setBotCount] = useState(0)
   const [squeeze, setSqueeze] = useState(false)
+  const [chaos, setChaos] = useState(false)
+  const [chaosCycle, setChaosCycle] = useState<5 | 10>(ECONOMY.chaosCycles[0])
   const [error, setError] = useState<{ code: ErrorCode; hintKey: string | null } | null>(null)
 
   // Switching mode narrows the seat cap, the timer set and the bot ceiling: derive rather than reset,
@@ -148,6 +155,8 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
   // through Hold'em keeps it ticked, like the rest of the draft.
   const squeezing = mode === 'blind' && squeeze
   const bots = Math.min(botCount, maxPlayers - 1)
+  // The tick is Blind's own and the host's to offer; like the squeeze box it keeps its value through a trip to Hold'em.
+  const chaotic = mode === 'blind' && chaosOffered && chaos
 
   const submit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault()
@@ -162,7 +171,7 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
       autoStart,
       password: isPrivate && password !== '' ? password : undefined,
       holdem: mode === 'holdem' ? { ...tier, minBuyInBB, maxBuyInBB } : undefined,
-      blind: mode === 'blind' ? { holeCards, decisionMode, fixedWager, botCount: bots, squeeze } : undefined,
+      blind: mode === 'blind' ? { holeCards, decisionMode, fixedWager, botCount: bots, squeeze, ...(chaotic ? { chaosCycle } : {}) } : undefined,
     })
     if (!parsed.ok) {
       setError({ code: parsed.code, hintKey: hintKeyFor({ name, isPrivate, password, mode, minBuyInBB, maxBuyInBB, botCount: bots, maxPlayers }) })
@@ -233,7 +242,7 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
         {/* One box for both modes' fields, as tall as the taller of the two, so flipping the mode never moves the
             dialog's edge (No12; the heights are in lobby.module.css). */}
         <div className={cx(s.wide, s.modeBox)}>
-          <div className={cx(s.grid, s.modeFields)}>
+          <div className={cx(s.grid, s.modeFields, chaosOffered && s.modeFieldsChaos)}>
             {mode === 'holdem' ? (
               <HoldemFields
                 tierIndex={tierIndex}
@@ -258,6 +267,7 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
                 maxBots={maxPlayers - 1}
                 squeeze={squeeze}
                 onSqueeze={setSqueeze}
+                {...(chaosOffered ? { chaos: { on: chaos, onChange: setChaos, cycle: chaosCycle, onCycle: setChaosCycle } } : {})}
                 disabled={busy}
                 lang={lang}
               />
@@ -265,7 +275,10 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
           </div>
         </div>
 
-        <label className={cx(s.check, s.wide)}>
+        {/* Where chaos is offered the form is one row taller (the "Poker hỗn loạn" row), which on the user's 940 px screen
+            would push the last checkbox under the dialog's sticky footer; the two ticks share a row instead, which is the
+            row it costs. The grid's own `auto-fit` puts them back in one column on a phone. */}
+        <label className={cx(s.check, !chaosOffered && s.wide)}>
           <input
             className={s.checkbox}
             type="checkbox"
@@ -293,7 +306,7 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
           </span>
         ) : null}
 
-        <label className={cx(s.check, s.wide)}>
+        <label className={cx(s.check, !chaosOffered && s.wide)}>
           <input
             className={s.checkbox}
             type="checkbox"

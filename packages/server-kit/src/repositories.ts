@@ -36,6 +36,15 @@ export type TxReason =
    */
   | 'shop_purchase'
   | 'shop'
+  /**
+   * Plan 37 (Poker hỗn loạn): new points a chaos card paid — Cấp cứu, Bạo kích, Thần tài — each a source row (positive),
+   * paired with a `chaos_to_table` row (negative, a transfer like `buy_in`) under the same key: the points go straight
+   * onto the player's table stack, the balance is untouched.
+   */
+  | 'chaos_rescue'
+  | 'chaos_crit'
+  | 'chaos_fortune'
+  | 'chaos_to_table'
 
 export interface BalanceEntry {
   playerId: string
@@ -140,6 +149,8 @@ export interface HandSummary {
   /** Set when `BalanceRepository.apply` rejected: the hand is recorded anyway so operators can reconcile. */
   settlementError?: string
   players: HandSummaryPlayer[]
+  /** A chaos hand that was not cancelled: "Thẻ đã dùng", the engine's `CHAOS_SUMMARY` (Plan 37). */
+  chaosUsed?: { seat: number; cardId: string; outcome: string }[]
 }
 
 export interface GameHistoryRepository {

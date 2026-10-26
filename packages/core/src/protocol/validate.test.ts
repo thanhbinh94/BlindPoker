@@ -20,6 +20,22 @@ describe('validateRoomConfig', () => {
     const h = validateRoomConfig(holdem)
     if (h.ok) expect(roomConfigToRuleset(h.value)).toEqual({ mode: 'holdem', smallBlind: 100, bigBlind: 200, tableFeeRate: 0.02, tableFeeCapBB: 1 })
   })
+  it('a chaos cycle of 5 or 10 reaches the ruleset; absent, the ruleset has no chaosCycle key', () => {
+    for (const chaosCycle of [5, 10] as const) {
+      const r = validateRoomConfig({ ...blind, blind: { ...blind.blind, chaosCycle } })
+      expect(r.ok).toBe(true)
+      if (!r.ok) return
+      expect(r.value.blind!.chaosCycle).toBe(chaosCycle)
+      expect(roomConfigToRuleset(r.value)).toEqual({ mode: 'blind', holeCards: 3, decisionMode: 'playOrFold', fixedWager: 5000, tableFeeRate: 0, squeeze: false, chaosCycle })
+    }
+    const plain = validateRoomConfig(blind)
+    expect(plain.ok && Object.hasOwn(plain.value.blind!, 'chaosCycle')).toBe(false)
+    expect(ECONOMY.chaosCycles).toEqual([5, 10])
+  })
+  it.each([7, 0, '5', null, true])('refuses chaosCycle %j', (chaosCycle) => {
+    const r = validateRoomConfig({ ...blind, blind: { ...blind.blind, chaosCycle } })
+    expect(r).toMatchObject({ ok: false, code: 'INVALID_ROOM_CONFIG', message: expect.stringMatching(/chaosCycle/) })
+  })
   it('applies defaults for optional fields', () => {
     const r = validateRoomConfig({ name: 'x', mode: 'holdem', holdem: { smallBlind: 100, bigBlind: 200 } })
     expect(r.ok).toBe(true)
@@ -76,6 +92,10 @@ describe('parseClientMessage', () => {
     }
     expect(parseClientMessage({ t: 'PONG' })).toEqual({ ok: true, value: { t: 'PONG' } }) // absent stays absent
   })
+  it('parses a CHAOS_PICK with its offer and card', () => {
+    expect(parseClientMessage({ t: 'CHAOS_PICK', reqId: 'r1', offerId: 'o1', cardId: 's_rescue', extra: 1 }))
+      .toEqual({ ok: true, value: { t: 'CHAOS_PICK', reqId: 'r1', offerId: 'o1', cardId: 's_rescue' } })
+  })
   it('reports a rejected CREATE_ROOM config as INVALID_ROOM_CONFIG, not INVALID_MESSAGE', () => {
     const r = parseClientMessage({ t: 'CREATE_ROOM', config: {} })
     expect(r.ok).toBe(false)
@@ -92,6 +112,7 @@ describe('parseClientMessage', () => {
     [{ t: 'ACTION', reqId: 'r', baseSeq: 1, action: { kind: 'bet' } }],
     [{ t: 'ACTION', reqId: 'r', baseSeq: 1, action: { kind: 'bet', amount: 1.5 } }],
     [{ t: 'SIT_DOWN', seat: 'x' }], [{ t: 'READY' }], [{ t: 'JOIN_ROOM' }], [{ t: 'HELLO' }],
+    [{ t: 'CHAOS_PICK', offerId: 'o1' }], [{ t: 'CHAOS_PICK', cardId: 's_rescue' }], [{ t: 'CHAOS_PICK', offerId: '', cardId: 's_rescue' }],
   ])('rejects %j with INVALID_MESSAGE', (input) => {
     const r = parseClientMessage(input)
     expect(r.ok).toBe(false)

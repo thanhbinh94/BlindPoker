@@ -441,6 +441,13 @@ export interface PlayerStatsDto {
   bestLoginStreak: number
 }
 
+/** One card a chaos hand used: the seat that held it, the card's id, and how it ended (`applied`, `blocked`, `reflected` or `fizzled`). */
+export interface HistoryChaosUseDto {
+  seat: number
+  cardId: string
+  outcome: string
+}
+
 export interface HistorySeatDto {
   /**
    * The account that sat here, or `null` for a bot (and for a human whose account has since been deleted).
@@ -472,6 +479,11 @@ export interface HistoryEntryDto {
   bestCategory: number | null
   cancelled: boolean
   players: HistorySeatDto[]
+  /**
+   * Plan 37: the chaos cards this hand used ("Thẻ đã dùng"). Absent for a hand that used none, and for every hand of a
+   * table without chaos.
+   */
+  chaosUsed?: HistoryChaosUseDto[]
 }
 
 /** One row of `GET /api/me/ledger`. `createdAt` is epoch milliseconds. */
@@ -605,6 +617,43 @@ export interface GmPriceChangeDto {
   minRank?: number
   enabled?: boolean
 }
+
+export type ChaosTierDto = 'silver' | 'gold' | 'diamond'
+
+/** The chaos settings (Plan 37): what the Thẻ hỗn loạn tab edits in its last block. */
+export interface ChaosConfigDto {
+  tierWeights: Record<ChaosTierDto, number>
+  pointsThreshold: number
+  draftMs: number
+  dailyCapPoints: number
+  dailyRescues: number
+}
+
+/** One catalogue card on the Thẻ hỗn loạn tab: the file's facts, the GM's rule if any, and whether it is drawn now. */
+export interface GmChaosCardDto {
+  id: string
+  tier: ChaosTierDto
+  /** The card's family (`swap`, `luck`, `debuff` …): a label key, not a sentence. */
+  family: string
+  effect: string
+  modes: string[]
+  /** What the file says; applies with no rule, or outside the rule's window. */
+  fileEnabled: boolean
+  /** A rule's times are epoch ms of an economy-day start; `null` is open. */
+  rule: { enabled: boolean; weight: number; startsAt: number | null; endsAt: number | null } | null
+  activeNow: boolean
+}
+
+/** `GET /api/gm/chaos`. */
+export interface GmChaosDto {
+  cards: GmChaosCardDto[]
+  config: ChaosConfigDto
+}
+
+/** One edit of a card's rule: the whole rule, or `clear: true` to hand the card back to the file. */
+export type GmChaosRuleChangeDto =
+  | { cardId: string; enabled: boolean; weight: number; startsAt: number | null; endsAt: number | null }
+  | { cardId: string; clear: true }
 
 /** A room as the console lists it — `GET /api/gm/rooms` rows and `GET /api/gm/rooms/:id` alike. */
 export interface GmRoomDto {
@@ -846,6 +895,12 @@ export interface NormalApi {
   gmSetReputationRanks(ranks: RankThresholdDto[], reason: string): Promise<{ actionId: number }>
   /** Adds 1..100 000 reputation; there is no call that takes it away. */
   gmGrantReputation(playerId: string, amount: number, reason: string): Promise<{ actionId: number; reputation: number; rank: number }>
+  /** Plan 37: the 47 chaos cards with their rules, and the chaos settings. */
+  gmChaos(): Promise<GmChaosDto>
+  /** Writes the changed cards' rules under one reason; refused `INVALID_CHAOS_RULES` (e.g. a tier left under three cards). */
+  gmSetChaosRules(changes: GmChaosRuleChangeDto[], reason: string): Promise<{ actionId: number; changed: number }>
+  /** Replaces the chaos settings; refused `INVALID_CHAOS_CONFIG` for a number out of range. */
+  gmSetChaosConfig(config: ChaosConfigDto, reason: string): Promise<{ actionId: number }>
 }
 
 interface Call {
@@ -1026,6 +1081,10 @@ export function createApi(fetchImpl?: typeof fetch, base = ''): NormalApi {
     gmSetWelcomeChoices: (itemIds, reason) => call<{ actionId: number }>({ method: 'PUT', path: '/api/gm/shop/welcome', body: { itemIds, reason } }),
     gmSetReputationRules: (rules, reason) => call<{ actionId: number }>({ method: 'PUT', path: '/api/gm/reputation/rules', body: { rules, reason } }),
     gmSetReputationRanks: (ranks, reason) => call<{ actionId: number }>({ method: 'PUT', path: '/api/gm/reputation/ranks', body: { ranks, reason } }),
+    gmChaos: () => call<GmChaosDto>({ method: 'GET', path: '/api/gm/chaos' }),
+    gmSetChaosRules: (changes, reason) =>
+      call<{ actionId: number; changed: number }>({ method: 'PUT', path: '/api/gm/chaos/rules', body: { changes, reason } }),
+    gmSetChaosConfig: (config, reason) => call<{ actionId: number }>({ method: 'PUT', path: '/api/gm/chaos/config', body: { config, reason } }),
     gmGrantReputation: (playerId, amount, reason) =>
       call<{ actionId: number; reputation: number; rank: number }>({
         method: 'POST',

@@ -76,8 +76,8 @@ afterEach(async () => {
 describe('the guard', () => {
   it('answers 401 to nobody and 403 FORBIDDEN to a player on every /api/gm/ route the app serves', async () => {
     const routes = enumerateRoutes(h.app.fastify).filter((r) => r.path.startsWith('/api/gm/'))
-    // The twenty-nine `/api/gm/` labels `app.test.ts` pins in the exact surface: a route added there must be guarded here.
-    expect(routes).toHaveLength(29)
+    // The thirty-two `/api/gm/` labels `app.test.ts` pins in the exact surface: a route added there must be guarded here.
+    expect(routes).toHaveLength(32)
     for (const route of routes) {
       const url = route.path
         .replace(':id', route.path.startsWith('/api/gm/rooms/') ? 'some-room' : me.playerId)
@@ -286,6 +286,68 @@ describe('the shop and reputation (Plan 27 B4)', () => {
     expect([zero.statusCode, code(zero)]).toEqual([400, 'INVALID_AMOUNT'])
     const log = (await gmReq('GET', `/api/gm/actions?player=${me.playerId}`)).json().actions as { action: string; amount: number }[]
     expect(log[0]).toMatchObject({ action: 'grant_reputation', amount: 150 })
+  })
+})
+
+describe('the chaos cards (Plan 37)', () => {
+  interface ChaosBody {
+    cards: { id: string; tier: string; activeNow: boolean; rule: { weight: number } | null }[]
+    config: { tierWeights: { silver: number; gold: number; diamond: number }; pointsThreshold: number; draftMs: number; dailyCapPoints: number; dailyRescues: number }
+  }
+  const chaos = async (): Promise<ChaosBody> => (await gmReq('GET', '/api/gm/chaos')).json() as ChaosBody
+  const rule = (cardId: string, weight: number, enabled = true) => ({ cardId, enabled, weight, startsAt: null, endsAt: null })
+
+  it('GET /api/gm/chaos lists the 47 cards, each on now, with the settings', async () => {
+    const res = await gmReq('GET', '/api/gm/chaos')
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as ChaosBody
+    expect(body.cards).toHaveLength(47)
+    expect(body.cards.every((c) => c.activeNow && c.rule === null)).toBe(true)
+    expect(body.config.tierWeights).toEqual({ silver: 60, gold: 30, diamond: 10 })
+  })
+
+  it('a write without a reason is exactly 400 INVALID_REASON, before its body is looked at', async () => {
+    for (const url of ['/api/gm/chaos/rules', '/api/gm/chaos/config']) {
+      const res = await gmReq('PUT', url, { changes: [], config: {} })
+      expect([res.statusCode, code(res)], url).toEqual([400, 'INVALID_REASON'])
+    }
+    const short = await gmReq('PUT', '/api/gm/chaos/rules', { changes: [], reason: 'ab' })
+    expect(code(short)).toBe('INVALID_REASON')
+  })
+
+  it('PUT /api/gm/chaos/rules writes the rules and a set_chaos_rules audit row; a clear takes one back', async () => {
+    const [a] = (await chaos()).cards.filter((c) => c.tier === 'gold')
+    const res = await gmReq('PUT', '/api/gm/chaos/rules', { changes: [rule(a!.id, 25)], reason: 'trọng số mùa Tết' })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ actionId: expect.any(Number), changed: 1 })
+    expect((await chaos()).cards.find((c) => c.id === a!.id)!.rule).toMatchObject({ weight: 25 })
+    const audit = (await gmReq('GET', '/api/gm/actions')).json() as { actions: { action: string; reason: string; details: unknown }[] }
+    expect(audit.actions[0]).toMatchObject({ action: 'set_chaos_rules', reason: 'trọng số mùa Tết', details: { changes: [rule(a!.id, 25)] } })
+
+    const cleared = await gmReq('PUT', '/api/gm/chaos/rules', { changes: [{ cardId: a!.id, clear: true }], reason: 'về theo file' })
+    expect(cleared.statusCode).toBe(200)
+    expect((await chaos()).cards.find((c) => c.id === a!.id)!.rule).toBeNull()
+  })
+
+  it('refusing to leave a tier short is 400 INVALID_CHAOS_RULES and writes nothing', async () => {
+    const silver = (await chaos()).cards.filter((c) => c.tier === 'silver')
+    const res = await gmReq('PUT', '/api/gm/chaos/rules', { changes: silver.map((c) => rule(c.id, 1, false)), reason: 'tắt hết bạc' })
+    expect([res.statusCode, code(res)]).toEqual([400, 'INVALID_CHAOS_RULES'])
+    expect((await chaos()).cards.every((c) => c.rule === null)).toBe(true)
+    const none = await gmReq('PUT', '/api/gm/chaos/rules', { reason: 'không có thay đổi' })
+    expect([none.statusCode, code(none)]).toEqual([400, 'INVALID_CHAOS_RULES'])
+    const audit = (await gmReq('GET', '/api/gm/actions')).json() as { actions: { action: string }[] }
+    expect(audit.actions.some((a) => a.action === 'set_chaos_rules')).toBe(false)
+  })
+
+  it('PUT /api/gm/chaos/config saves the five numbers; a bad one is 400 INVALID_CHAOS_CONFIG', async () => {
+    const config = { tierWeights: { silver: 50, gold: 35, diamond: 15 }, pointsThreshold: 8, draftMs: 20_000, dailyCapPoints: 50_000, dailyRescues: 2 }
+    const res = await gmReq('PUT', '/api/gm/chaos/config', { config, reason: 'cân lại bậc thẻ' })
+    expect(res.statusCode).toBe(200)
+    expect((await chaos()).config).toEqual(config)
+    const bad = await gmReq('PUT', '/api/gm/chaos/config', { config: { ...config, dailyRescues: 99 }, reason: 'cấp cứu quá nhiều' })
+    expect([bad.statusCode, code(bad)]).toEqual([400, 'INVALID_CHAOS_CONFIG'])
+    expect((await chaos()).config).toEqual(config)
   })
 })
 

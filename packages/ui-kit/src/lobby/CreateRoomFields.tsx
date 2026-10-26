@@ -93,13 +93,18 @@ export interface BlindFieldsProps {
   maxBots: number
   squeeze: boolean
   onSqueeze: (on: boolean) => void
+  /**
+   * "Poker hỗn loạn" (Plan 37): the tick and the card cycle beside it. Absent where the host has no chaos (Lite), and
+   * then nothing about it is drawn.
+   */
+  chaos?: { on: boolean; onChange: (on: boolean) => void; cycle: 5 | 10; onCycle: (cycle: 5 | 10) => void }
   disabled: boolean
   lang: Language
 }
 
 /**
- * Blind Poker: how many face-down cards, whether players may fold, the fixed wager, the bot filler and whether the
- * cards are turned by hand ("Nặn bài", Plan 21).
+ * Blind Poker: how many face-down cards, whether players may fold, the fixed wager, the bot filler, whether the
+ * cards are turned by hand ("Nặn bài", Plan 21) and whether the table plays with chaos cards (Plan 37).
  */
 export function BlindFields({
   holeCards,
@@ -113,11 +118,13 @@ export function BlindFields({
   maxBots,
   squeeze,
   onSqueeze,
+  chaos,
   disabled,
   lang,
 }: BlindFieldsProps) {
   const { t } = useTranslation()
   const hintId = useId()
+  const chaosHintId = useId()
   const wagers = ECONOMY.blindWagerTiers.map((n) => ({ value: n, label: formatPoints(n, lang) }))
   const bots = Array.from({ length: maxBots + 1 }, (_, n) => ({ value: n, label: String(n) }))
 
@@ -179,6 +186,35 @@ export function BlindFields({
           {t('create.squeezeHint')}
         </span>
       </div>
+      {/* Poker hỗn loạn: one row under the others, the tick on the left and the cycle it applies to on the right (the select
+          is its own caption through `aria-label`, so the row stays one tap tall). Its height is in the modeFields reserve. */}
+      {chaos === undefined ? null : (
+        <div className={cx(s.wide, s.chaosRow)}>
+          <label className={s.check}>
+            <input
+              className={s.checkbox}
+              type="checkbox"
+              checked={chaos.on}
+              disabled={disabled}
+              aria-describedby={chaosHintId}
+              onChange={(event) => chaos.onChange(event.target.checked)}
+            />
+            {t('create.chaos')}
+          </label>
+          <span className={s.chaosCycle}>
+            <Select<5 | 10>
+              aria-label={t('create.chaosCycle')}
+              value={chaos.cycle}
+              options={ECONOMY.chaosCycles.map((n) => ({ value: n, label: t('create.chaosCycleOption', { count: n }) }))}
+              disabled={disabled || !chaos.on}
+              onChange={chaos.onCycle}
+            />
+          </span>
+          <span id={chaosHintId} className="visually-hidden">
+            {t('create.chaosHint')}
+          </span>
+        </div>
+      )}
     </>
   )
 }

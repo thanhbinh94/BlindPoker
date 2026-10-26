@@ -1,6 +1,8 @@
 import { createDeck } from '../cards/cards.js'
 import type { Rng } from '../cards/rng.js'
 import { shuffle } from '../cards/shuffle.js'
+import { applyDealEffects, applyRevealEffects, chaosSettleHooks, emitPeeks, initialChaosState, isBlindfolded, refundFreeFolds } from '../chaos/engine.js'
+import type { ChaosHandPlan } from '../chaos/types.js'
 import { ECONOMY } from '../constants/economy.js'
 import { cancelHand, carryOverAll, clone, commit, dealCards, getPlayer, revealNext, seatsClockwiseFrom, settle } from './common.js'
 import {
@@ -14,6 +16,8 @@ export interface CreateBlindInput {
   seats: SeatInput[]
   button: number
   carryOverIn: number
+  /** Poker hỗn loạn: the effects this hand fires (`planHand`). Absent, the hand is a plain Blind hand, event for event. */
+  chaos?: ChaosHandPlan
 }
 
 /**
@@ -47,7 +51,8 @@ export function createBlindHand(input: CreateBlindInput, rng: Rng): EngineResult
       seat: s.seat, playerId: s.playerId, isBot: s.isBot, stack: s.stack, holeCards: [], betThisStreet: 0,
       totalCommitted: 0, folded: false, allIn: false, hasActed: false, cannotRaise: false, decision: null, timedOut: false,
       // Squeeze mode waits only on humans: a bot has nothing to turn by hand (spec 2026-10-08 §4.2.3).
-      revealed: !squeeze || s.isBot,
+      // A blindfolded seat (Poker hỗn loạn) has nothing to turn either: its cards open at the showdown.
+      revealed: !squeeze || s.isBot || isBlindfolded(input.chaos, s.seat),
     })),
     deck: shuffle(createDeck(), rng),
     deckIndex: 0,
@@ -63,6 +68,7 @@ export function createBlindHand(input: CreateBlindInput, rng: Rng): EngineResult
     revealQueue: ['FLOP', 'TURN', 'RIVER'],
     result: null,
   }
+  if (input.chaos) state.chaos = initialChaosState(input.chaos)
   const events: GameEvent[] = [
     { type: 'HAND_STARTED', handId: state.handId, mode: 'blind', button: state.button, seats: state.players.map((p) => p.seat), carryOverIn: input.carryOverIn },
   ]
@@ -72,11 +78,14 @@ export function createBlindHand(input: CreateBlindInput, rng: Rng): EngineResult
 
   const order = seatsClockwiseFrom(state, state.button)
   for (let round = 0; round < input.rules.holeCards; round++) for (const p of order) p.holeCards.push(...dealCards(state, 1))
-  for (const p of state.players) events.push({ type: 'CARDS_DEALT', seat: p.seat, cards: p.holeCards.slice(), cardCount: p.holeCards.length })
+  applyDealEffects(state, events)
+  // A blindfolded seat is dealt face down even to itself.
+  for (const p of state.players) events.push({ type: 'CARDS_DEALT', seat: p.seat, cards: isBlindfolded(input.chaos, p.seat) ? [] : p.holeCards.slice(), cardCount: p.holeCards.length })
 
   if (state.phase === 'DECISION') {
     state.turnSeq += 1
     events.push({ type: 'DECISION_PHASE', seats: state.players.map((p) => p.seat), turnSeq: state.turnSeq })
+    emitPeeks(state, events)
     autoPlayAllIn(state, events)
   } else if (state.phase === 'SQUEEZE') {
     state.turnSeq += 1
@@ -113,7 +122,7 @@ function autoPlayAllIn(state: HandState, events: GameEvent[]): void {
   resolveDecisions(state, events)
 }
 
-export function applyBlindCommand(input: HandState, cmd: HandCommand, _rng: Rng): EngineResult {
+export function applyBlindCommand(input: HandState, cmd: HandCommand, rng: Rng): EngineResult {
   const state = clone(input)
   const events: GameEvent[] = []
   if (state.phase === 'COMPLETE') throw new EngineError('HAND_COMPLETE')
@@ -125,7 +134,10 @@ export function applyBlindCommand(input: HandState, cmd: HandCommand, _rng: Rng)
     case 'ADVANCE': {
       if (state.phase !== 'REVEAL') throw new EngineError('INVALID_COMMAND', 'ADVANCE only during REVEAL')
       revealNext(state, events)
-      if (state.revealQueue.length === 0) settle(state, events, { showdown: true })
+      if (state.revealQueue.length === 0) {
+        applyRevealEffects(state, events, rng)
+        settle(state, events, { showdown: true, hooks: chaosSettleHooks(state) })
+      }
       return { state, events }
     }
     case 'TIMEOUT': {
@@ -229,6 +241,7 @@ function resolveDecisions(state: HandState, events: GameEvent[]): void {
     if (x.decision === 'play') played.set(x.seat, commit(state, x, wager))
     else x.folded = true
   }
+  const freeFolds = refundFreeFolds(state) // "Bỏ không mất" takes its ante back before the dead excess is worked out
   returnDeadExcess(state)
   for (const x of state.players) {
     const amount = played.get(x.seat)
@@ -237,8 +250,10 @@ function resolveDecisions(state: HandState, events: GameEvent[]): void {
   }
   events.push({ type: 'POT_UPDATED', pot: state.pot })
   events.push({ type: 'DECISIONS_REVEALED', decisions: state.players.map((x) => ({ seat: x.seat, decision: x.decision! })) })
+  events.push(...freeFolds)
   const playing = state.players.filter((x) => !x.folded).length
-  if (playing === 0) carryOverAll(state, events)
-  else if (playing === 1) settle(state, events, { showdown: false })
+  const hooks = chaosSettleHooks(state)
+  if (playing === 0) carryOverAll(state, events, hooks)
+  else if (playing === 1) settle(state, events, { showdown: false, hooks })
   else state.phase = 'REVEAL'
 }

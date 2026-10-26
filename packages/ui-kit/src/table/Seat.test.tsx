@@ -648,3 +648,55 @@ function expectOnStackLine(rank: HTMLElement): void {
   expect(line!.querySelector(`.${s.seatStack}`), 'beside the figure').not.toBeNull()
   expect(rank.closest(`.${s.seatName}`), 'not on the name’s line').toBeNull()
 }
+
+// Plan 37: a chaos table's seat shows what it holds, says when the viewer's cards are down under a blindfold, and shouts a Bạo kích.
+describe('Seat on a Poker hỗn loạn table', () => {
+  const plain = (patch: Partial<SeatProps> = {}): SeatProps =>
+    props({ squeezeRoom: false, squeezeRound: false, squeezeDecides: false, deadlineAt: null, ...patch })
+  const held = (uid: number, cardId: string, tier: 'silver' | 'gold' | 'diamond', handsLeft: number | null = null) => ({ uid, cardId, tier, handsLeft })
+  const plate = (): HTMLElement => document.querySelector<HTMLElement>('[data-plate]')!
+  const icons = () => [...document.querySelectorAll<HTMLElement>(`.${s.tags} [role="img"][data-tier]`)]
+
+  it('draws the cards a seat holds as tier icons on the line under its plate', () => {
+    wrap(plain({ chaosCards: [held(1, 's_shield', 'silver', 2), held(2, 'g_rescue', 'gold')] }))
+    expect(icons().map((i) => i.getAttribute('data-tier'))).toEqual(['silver', 'gold'])
+    expect(screen.getByRole('img', { name: 'Khiên gỗ (Bạc) · còn 2 ván' })).toBeInTheDocument()
+  })
+
+  it('shows four icons and then "+N"', () => {
+    wrap(plain({ chaosCards: [1, 2, 3, 4, 5, 6].map((uid) => held(uid, 's_shield', 'silver')) }))
+    expect(icons()).toHaveLength(4)
+    expect(screen.getByText('+2')).toBeInTheDocument()
+  })
+
+  it('puts them on the viewer’s strip too, and draws none for a seat that holds none', () => {
+    const { unmount } = wrap(plain({ strip: true, chaosCards: [held(1, 'd_mirror', 'diamond')] }))
+    expect(plate().querySelector(`.${s.stripLine} [data-tier="diamond"]`)).not.toBeNull()
+    unmount()
+    wrap(plain({ chaosCards: [] }))
+    expect(document.querySelector('[data-chaos-cards]')).toBeNull()
+  })
+
+  it('says "Bị che mắt" when the viewer’s cards are down under a blindfold, on the ring and on the strip', () => {
+    const { unmount } = wrap(plain({ seat: makeSeat({ seat: 0, playerId: 'a', displayName: 'Ann', holeCards: null, cardCount: 3 }), blindfolded: true }))
+    expect(screen.getByText('Bị che mắt')).toHaveAttribute('title', 'Bài của bạn bị úp cho đến khi lật')
+    expect(document.querySelectorAll(`.${s.cardDown}`)).toHaveLength(3) // a back for each card, never a gap
+    unmount()
+    wrap(plain({ strip: true, blindfolded: true }))
+    expect(plate().querySelector(`.${s.stripLine}`)).toHaveTextContent('Bị che mắt')
+  })
+
+  it('shouts "Bạo kích ×2!" beside the payout of the seat that won with it, and only that seat', () => {
+    const { unmount } = wrap(plain({ winnerPayout: 6_000, showdownLabel: 'Đôi', critMultiplier: 2 }))
+    expect(screen.getByText('Bạo kích ×2!')).toBeInTheDocument()
+    unmount()
+    wrap(plain({ winnerPayout: null, critMultiplier: 3 }))
+    expect(screen.queryByText(/Bạo kích/)).toBeNull()
+  })
+
+  it('lists the new motion under reduced motion', () => {
+    const off = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(TABLE_CSS)?.[1] ?? ''
+    for (const name of ['draft', 'chaosBannerIn', 'critShout']) expect(off, name).toMatch(new RegExp(`\\.${name}\\b`))
+    expect(off).toMatch(/\.draftCard\s*\{\s*transition:\s*none/)
+  })
+})

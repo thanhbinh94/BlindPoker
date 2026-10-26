@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { seededRng } from '../cards/rng.js'
+import { CHAOS_CARDS_SPEC } from '../chaos/fixtures.js'
+import { receiveCard } from '../chaos/hold.js'
+import { planHand } from '../chaos/plan.js'
+import { EMPTY_CHAOS_SEAT, type ChaosSeat } from '../chaos/types.js'
 import { blindTableLimit } from './blind.js'
 import { applyCommand, createHand, legalActions, nextButton } from './engine.js'
 import { randomPolicy, simulateHand, type Policy } from './simulate.js'
@@ -10,7 +14,9 @@ const HOLDEM: HoldemRules = { mode: 'holdem', smallBlind: 50, bigBlind: 100, tab
 const BLIND_B: BlindRules = { mode: 'blind', holeCards: 2, decisionMode: 'playOrFold', fixedWager: 1000, tableFeeRate: 0.02 }
 const seats = (stacks: number[]) => stacks.map((stack, seat) => ({ seat, playerId: `p${seat}`, stack, isBot: false }))
 /** Checks when possible, otherwise calls: both players check down to a showdown. */
-const passive: Policy = (_v, legal) => ({ kind: legal.kinds.includes('check') ? 'check' : 'call' })
+/** See "byte-for-byte" below. */
+const GOLDEN_NON_CHAOS = 1_844_035_103
+const passive: Policy =(_v, legal) => ({ kind: legal.kinds.includes('check') ? 'check' : 'call' })
 
 describe('facade', () => {
   it('dispatches by mode', () => {
@@ -157,6 +163,71 @@ describe('simulation invariants', () => {
       expect(state.phase).toBe('COMPLETE')
       expect(state.players.every((p) => p.stack >= 0)).toBe(true)
     }
+  })
+  it('a Blind hand without chaos is byte-for-byte the engine before Poker hỗn loạn (seeded snapshot)', () => {
+    // FNV-1a over the JSON of 120 seeded Blind hands' events and final state, pinned from the engine as it was before
+    // Plan 37 (commit 363e93d). Any change to a non-chaos hand — an event, a field, a key order — moves this number.
+    const fnv = (s: string): number => {
+      let h = 0x811c9dc5
+      for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193) >>> 0
+      return h
+    }
+    const rng = seededRng(37)
+    const parts: string[] = []
+    for (let i = 0; i < 120; i++) {
+      const n = 2 + rng.int(7)
+      const rules: BlindRules = {
+        ...BLIND_B, holeCards: rng.int(2) === 0 ? 2 : 3, decisionMode: rng.int(2) === 0 ? 'none' : 'playOrFold',
+        ...(rng.int(3) === 0 ? { squeeze: true } : {}),
+      }
+      const stacks = Array.from({ length: n }, () => 1 + rng.int(blindTableLimit(rules)))
+      const { state, events } = simulateHand({ handId: `g${i}`, rules, seats: seats(stacks), button: rng.int(n), carryOverIn: rng.int(3) === 0 ? 1500 : 0 }, randomPolicy, rng)
+      parts.push(JSON.stringify({ events, state, views: state.players.map((p) => playerView(state, p.seat)) }))
+    }
+    expect(fnv(parts.join('\n'))).toBe(GOLDEN_NON_CHAOS)
+  })
+  it('500 seeded chaos hands, planned from the spec catalogue, keep every point (Σ stacks + fee + carry-over)', () => {
+    const rng = seededRng(3737)
+    let uid = 0
+    const nextUid = () => ++uid
+    const kinds = new Set<string>()
+    for (let i = 0; i < 500; i++) {
+      const n = 2 + rng.int(7)
+      const rules: BlindRules = {
+        ...BLIND_B, holeCards: rng.int(2) === 0 ? 2 : 3, decisionMode: rng.int(2) === 0 ? 'none' : 'playOrFold',
+        ...(rng.int(4) === 0 ? { squeeze: true } : {}),
+      }
+      const chaosSeats = Array.from({ length: n }, (_, seat) => {
+        let chaos: ChaosSeat = { ...EMPTY_CHAOS_SEAT, frozenNextHand: rng.int(10) === 0, blindfoldedNextHand: rng.int(8) === 0 }
+        const held = 1 + rng.int(5)
+        for (let k = 0; k < held; k++) {
+          const def = CHAOS_CARDS_SPEC[rng.int(CHAOS_CARDS_SPEC.length)]!
+          chaos = receiveCard(chaos, def, nextUid, CHAOS_CARDS_SPEC, rules.decisionMode, rng).seat
+        }
+        return { seat, isBot: false, chaos }
+      })
+      const { plan } = planHand({ seats: chaosSeats, rules, pool: CHAOS_CARDS_SPEC, rng, nextUid })
+      const stacks = Array.from({ length: n }, () => 1 + rng.int(blindTableLimit(rules)))
+      // simulateHand throws if Σ stacks + fee + carry-over ever differs from what went in.
+      const { state, events } = simulateHand(
+        { handId: `x${i}`, rules, seats: seats(stacks), button: rng.int(n), carryOverIn: rng.int(3) === 0 ? 1500 : 0, chaos: plan }, randomPolicy, rng,
+      )
+      expect(state.phase).toBe('COMPLETE')
+      expect(state.players.every((p) => p.stack >= 0)).toBe(true)
+      for (const e of events) if (e.type === 'CHAOS_APPLIED' && e.outcome !== 'fizzled') kinds.add(e.effect)
+      if (state.result!.showdown) for (const h of state.result!.showdown) expect(h.cards.length).toBeGreaterThan(0)
+    }
+    // The sample reaches every effect the engine applies.
+    expect([...kinds].sort()).toEqual([
+      'bestOfN', 'blindfold', 'borrowHole', 'extraHole', 'freeFold', 'freeze', 'highCard', 'lowerHole', 'redealBoard', 'redealWeak',
+      'refundStake', 'reverseRank', 'stealHole', 'suited', 'swapAll', 'swapHands', 'swapLowest',
+    ])
+  })
+  it('createHand forwards a chaos plan to a Blind hand', () => {
+    const chaos = { seats: [0, 1].map((seat) => ({ seat, effects: [], shield: null, blindfolded: seat === 0 })), reverse: false }
+    const { state, events } = createHand({ handId: 'c', rules: BLIND_B, seats: seats([5000, 5000]), button: 0, chaos }, seededRng(1))
+    expect(state.chaos?.plan).toEqual(chaos)
+    expect(events.find((e) => e.type === 'CARDS_DEALT' && e.seat === 0)).toMatchObject({ cards: [] })
   })
   it('a squeeze hand is stepped through by turning every unturned seat', () => {
     const rules: BlindRules = { ...BLIND_B, decisionMode: 'none', squeeze: true }

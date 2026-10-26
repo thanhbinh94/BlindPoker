@@ -1,4 +1,4 @@
-import type { RoomPlayerView } from '@bp/core'
+import type { Card as CardId, HeldCardView, RoomPlayerView } from '@bp/core'
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Chibi, type ChibiSubject, type Expression } from '../avatar2d/index.js'
@@ -7,6 +7,7 @@ import { formatPoints, type Language } from '../i18n/index.js'
 import { Badge, type BadgeTone } from '../primitives/Badge.js'
 import { cx } from '../primitives/cx.js'
 import { Card } from './Card.js'
+import { ChaosCardRow } from './ChaosCardIcon.js'
 import { SHOWDOWN_STAGGER_MS, dealStaggerMs } from './motion.js'
 import type { RoomFrame } from './frame.js'
 import { PeelCard } from './PeelCard.js'
@@ -170,6 +171,22 @@ export interface SeatProps {
    * and once more if the hand comes back from a snapshot that has my seat still unturned after I told it (`restored`).
    */
   onReveal?: () => void
+  /**
+   * Poker hỗn loạn: the chaos cards this seat holds (public), shown as small tier icons — four, then "+N" — on the line
+   * under the plate, or on the viewer's strip. Absent or empty, nothing is drawn.
+   */
+  chaosCards?: readonly HeldCardView[]
+  /** The viewer's own cards are face down because "Bịt mắt" hit them: the seat says so instead of leaving a bare back. */
+  blindfolded?: boolean
+  /** "Bạo kích ×2!" for the seat that won with it (2 or 3), drawn with its payout. */
+  critMultiplier?: 2 | 3 | null
+  /** The dense strip of opponents (seven or more, on a phone): the seat's cards are one icon with their number, not a row of them. */
+  chaosSummary?: boolean
+  /**
+   * "Mượn lá" at showdown: the opponent's card this seat also ranked with (a copy), drawn after its own cards with a "Mượn"
+   * tag on it; `highlighted` when it is one of the winning five (the board's gold edge). Absent or `null`: nothing.
+   */
+  borrowed?: { card: CardId; highlighted: boolean } | null
 }
 
 /** What a seat knows of its own cards in a squeeze round, for one hand (see `Seat`). */
@@ -219,6 +236,11 @@ export function Seat({
   squeezeDecides,
   restored = false,
   onReveal,
+  chaosCards = [],
+  blindfolded = false,
+  critMultiplier = null,
+  chaosSummary = false,
+  borrowed = null,
 }: SeatProps) {
   const { t } = useTranslation()
   const name = seat.displayName === '' ? (player?.displayName ?? '') : seat.displayName
@@ -330,11 +352,20 @@ export function Seat({
       </Badge>
     )
   const betChip = seat.betThisStreet > 0 ? <span className={s.bet}>{formatPoints(seat.betThisStreet, lang)}</span> : null
+  // Poker hỗn loạn: the cards the seat holds, and — for the viewer — the word for cards that are down because of one.
+  const chaosRow = chaosCards.length === 0 ? null : <ChaosCardRow cards={chaosCards} summary={chaosSummary} />
+  const blindBadge = blindfolded ? (
+    <Badge tone="chaos" title={t('chaos.blindfoldedHint')}>
+      {t('chaos.blindfolded')}
+    </Badge>
+  ) : null
+  const crit = critMultiplier !== null && winnerPayout !== null
   const result =
     showdownLabel === null && winnerPayout === null ? null : (
       <span className={s.seatResult}>
         {showdownLabel === null ? null : <span className={s.handTag}>{showdownLabel}</span>}
         {winnerPayout === null ? null : <span className={s.payout}>{payoutText}</span>}
+        {crit ? <span className={s.critShout}>{t('chaos.critShout', { multiplier: critMultiplier })}</span> : null}
       </span>
     )
   const stackFigure = <span className={s.seatStack}>{formatPoints(seat.stack, lang)}</span>
@@ -371,7 +402,7 @@ export function Seat({
         {faces.length > 0 ? (
           // The strip's fan (BP-31 R1): two or three cards splay from their feet; a hand to peel lies flat (`none`), since
           // the peel measures the drag across the card's own box.
-          <div className={s.seatCards} data-fan={strip ? (peeling ? 'none' : String(faces.length)) : undefined}>
+          <div className={s.seatCards} data-hand="" data-fan={strip ? (peeling ? 'none' : String(faces.length)) : undefined}>
             {faces.map((card, i) =>
               peeling && card !== null ? (
                 <PeelCard
@@ -395,6 +426,12 @@ export function Seat({
                   turnDelayMs={liftAfter + i * SHOWDOWN_STAGGER_MS}
                 />
               ),
+            )}
+            {borrowed === null ? null : (
+              <span className={s.borrowSlot} data-borrowed="" title={t('chaos.borrowedHint')}>
+                <Card card={borrowed.card} size={cardSize} highlighted={borrowed.highlighted} className={s.borrowedCard} />
+                <span className={s.borrowTag}>{t('chaos.borrowed')}</span>
+              </span>
             )}
             {/* The pill keeps its place for the whole hand and shows while a card is still to turn. It lies over the foot of the
                 cards, centred, and takes no row of its own (Plan 26, B6): a row cost a squeeze table's stage 11 px on a 375 px
@@ -434,7 +471,9 @@ export function Seat({
                 {seat.isBot ? null : stackFigure}
                 {rankLabel}
                 {hostBadge}
+                {blindBadge}
                 {stateBadge}
+                {chaosRow}
                 {betChip}
               </span>
               {result}
@@ -482,6 +521,7 @@ export function Seat({
               {t('labels.bot')}
             </Badge>
           ) : null}
+          {blindBadge}
           {stateBadge}
           {/* Squeeze mode (§4.2.6): who has turned, for the others to see whom the round still waits on. A seat that has
               decided has turned with it (§4.2.4): its "Đã chọn" says both, and keeps the line under the plate to one. */}
@@ -490,6 +530,7 @@ export function Seat({
               {t('labels.revealed')}
             </Badge>
           ) : null}
+          {chaosRow}
           {betChip}
         </div>
       )}

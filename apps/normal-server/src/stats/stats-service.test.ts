@@ -114,6 +114,37 @@ describe('HAND_SETTLED', () => {
     expect(await stats.get(playerId)).toMatchObject({ handsPlayedBlind: 1, handsWonBlind: 1, handsPlayedHoldem: 0, gamesCompleted: 1 })
   })
 
+  describe('a Poker hỗn loạn hand', () => {
+    const CHAOS: PublicRoomConfig = { ...CONFIG, mode: 'blind', blind: { holeCards: 2, decisionMode: 'playOrFold', fixedWager: 1_000, botCount: 0, chaosCycle: 5 } }
+    const PLAIN: PublicRoomConfig = { ...CHAOS, blind: { holeCards: 2, decisionMode: 'playOrFold', fixedWager: 1_000, botCount: 0 } }
+
+    it('is played and completed but never won: no win count, record or streak moves', async () => {
+      const winner = await seedPlayer()
+      const loser = await seedPlayer()
+      const bot = { playerId: 'bot:r:0', seat: 2, isBot: true, net: 0, won: false, bestCategory: null }
+      // The winner has a run going and the loser a loss run: a chaos hand neither extends nor breaks them.
+      await settle(hand({ mode: 'blind', config: PLAIN, players: [seat(winner, { net: 100, won: true }), seat(loser, { seat: 1, net: -100 })] }))
+      await settle(hand({ mode: 'blind', config: CHAOS, players: [seat(winner, { net: 9_000, won: true, bestCategory: HandCategory.FLUSH }), seat(loser, { seat: 1, net: -9_000 }), bot] }))
+
+      expect(await stats.get(winner)).toMatchObject({
+        handsPlayedBlind: 2, handsWonBlind: 1, gamesCompleted: 2, botHands: 1,
+        currentWinStreak: 1, bestWinStreak: 1, currentLoseStreak: 0, biggestWin: 100, bestHandRank: 0,
+      })
+      expect(await stats.get(loser)).toMatchObject({
+        handsPlayedBlind: 2, handsWonBlind: 0, gamesCompleted: 2, botHands: 1,
+        currentLoseStreak: 1, bestLoseStreak: 1, currentWinStreak: 0, biggestWin: 0,
+      })
+    })
+
+    it('leaves a lone chaos win with every win figure at zero, and a chaos loss out of the loss streaks', async () => {
+      const a = await seedPlayer()
+      const b = await seedPlayer()
+      await settle(hand({ mode: 'blind', config: CHAOS, players: [seat(a, { net: 5_000, won: true, bestCategory: HandCategory.FLUSH }), seat(b, { seat: 1, net: -5_000 })] }))
+      expect(await stats.get(a)).toEqual({ ...zeroStats(), handsPlayedBlind: 1, gamesCompleted: 1 })
+      expect(await stats.get(b)).toEqual({ ...zeroStats(), handsPlayedBlind: 1, gamesCompleted: 1 })
+    })
+  })
+
   it('ignores a cancelled hand entirely', async () => {
     const playerId = await seedPlayer()
     await settle(hand({ cancelled: true, players: [seat(playerId, { net: 500, won: true })] }))

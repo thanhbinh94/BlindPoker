@@ -20,6 +20,8 @@ export class RoomManager {
   create(host: PlayerIdentity, config: RoomConfig): Room {
     if (!this.accepting) throw new RoomError('SERVER_SHUTDOWN', 'server is shutting down')
     if (this.roomOf(host.playerId)) throw new RoomError('ALREADY_IN_ROOM')
+    // Poker hỗn loạn needs the edition's cards and ledger (a `ChaosPort`); Lite never wires one.
+    if (config.blind?.chaosCycle !== undefined && !this.deps.chaos) throw new RoomError('CHAOS_UNAVAILABLE', 'this server has no chaos cards')
     const roomId = newId()
     const code = newRoomCode((c) => this.byCode.has(c))
     const room = new Room({ roomId, code, config, host, deps: this.deps })

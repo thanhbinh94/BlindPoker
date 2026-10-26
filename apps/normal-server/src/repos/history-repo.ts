@@ -38,6 +38,8 @@ export interface GameRow {
   won: boolean
   /** The `HandCategory` rank shown down, or null when this seat never reached a showdown. */
   bestCategory: HandCategory | null
+  /** Plan 37: the cards a chaos hand used (`HandSummary.chaosUsed`), or null for any other hand. */
+  chaosUsed: { seat: number; cardId: string; outcome: string }[] | null
 }
 
 export interface NormalGameHistoryRepository extends GameHistoryRepository {
@@ -64,6 +66,7 @@ export function createHistoryRepository(db: AppDb): NormalGameHistoryRepository 
           fee: summary.fee,
           cancelled: summary.cancelled,
           settlementError: summary.settlementError ?? null,
+          chaosUsed: summary.chaosUsed ?? null,
         })
         if (summary.players.length > 0) {
           await tx.insert(gamePlayers).values(
@@ -95,6 +98,7 @@ export function createHistoryRepository(db: AppDb): NormalGameHistoryRepository 
           fee: games.fee,
           cancelled: games.cancelled,
           settlementError: games.settlementError,
+          chaosUsed: games.chaosUsed,
           seat: gamePlayers.seat,
           net: gamePlayers.net,
           won: gamePlayers.won,

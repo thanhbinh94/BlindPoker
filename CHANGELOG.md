@@ -9,6 +9,104 @@ below are the real history.
 
 ---
 
+## Plan 37 — Poker hỗn loạn — merged `MERGE` (2026-10-26)
+
+The user, 2026-10-26: "chế độ chơi mới mang tên 'Poker hỗn loạn' lấy cảm hứng từ 'Aram hỗn loạn' … mỗi người chơi được
+cung cấp 3 loại thẻ ngẫu nhiên có thể làm thay đổi ván đấu", then "lập plan và triển khai luôn, sau đó auto deploy". Spec
+`2026-10-26-chaos-poker-design.md` (the user's decisions are its Q1–Q13), plan `2026-10-26-plan37-chaos-poker.md`. Branch
+`feature/BP-37-chaos-poker`. Normal edition only.
+
+- **What a player gets.** A Blind Poker room can be created with **"Poker hỗn loạn"** and a **"Chu kỳ thẻ"** of 5 or 10 hands;
+  the lobby and the room header carry a violet **"Hỗn loạn"** badge. Before the first hand a seat plays, and then before every 5th
+  (or 10th) hand, the table **drafts**: a panel over the felt, above your hand, offers three cards of one tier (Bạc 60 % /
+  Vàng 30 % / Kim cương 10 %, one tier for the whole table) with a 15 s ring, and one click picks. The 47 cards (18 Bạc, 15
+  Vàng, 14 Kim cương) re-deal, swap, add, borrow and steal hole cards, peek at the board, refund a stake, shield or mirror a
+  debuff, blindfold or freeze a rival, re-deal the board, reverse the ranking, and pay: **Cấp cứu** tops a broke stack up,
+  **Bạo kích** multiplies a win, **Thần tài** rewards a win after a losing run. Every seat shows its cards as small tier-framed
+  icons; a banner plays each card that fires ("Bot 1 dùng Rút lá cả bàn lên Ann", "Bị chặn"); the result card gains **"Thẻ đã
+  dùng"** and what the cards paid, "Bạo kích ×2!" sits on the winner; the profile's "Ván gần đây" prints the same line.
+  Chaos points (+1 a win, +2 a loss, ×2 from the third of a streak) open a bonus card at 10. A GM has a seventh tab, **"Thẻ hỗn
+  loạn"**: each card on or off, weighted 0–100, dated for a season, and the numbers (tier odds, threshold, draft seconds, daily
+  cap, daily rescues), every save under a reason and in "Nhật ký".
+- **The fences.** A card never changes the wager and nobody loses more than they put in; refunds come out of the pot; only
+  Cấp cứu, Bạo kích and Thần tài make new points, each its own ledger row (`chaos_rescue`, `chaos_crit`, `chaos_fortune`, paired
+  with a `chaos_to_table` transfer so the balance does not move), inside **100,000 points and 3 rescues a day** per account. A
+  chaos hand counts only as a hand played (and for reputation as a hand played): no win, streak, best hand or biggest win, so no
+  achievement built on them.
+- **Under it.** `@bp/core` `chaos/` (pure: catalogue parser, draws, `receiveCard`, `planHand`, `afterHand`, the engine's
+  appliers in `chaos/engine.ts`, the reversed ranking and insurance in the settlement hooks; `CHAOS_CARDS_SPEC`, the 47 cards
+  as data); Blind engine `chaos` plan, events `CHAOS_APPLIED`, `CHAOS_PEEK`, `CHAOS_SUMMARY`; `filterEvent` may now return `null`.
+  Protocol: `blind.chaosCycle`, `CHAOS_PICK`, room events `CHAOS_DRAFT|PICKED|STATE|CREDIT|AWARDED`, notification `CHAOS_OFFER`,
+  `CHAOS_UNAVAILABLE`, `CHAOS_NO_OFFER`. server-kit `ChaosPort` and `room-chaos.ts` (the draft is its own room state). Normal
+  server: `data/chaos-cards.json`, `chaos/` (catalogue, service, port), migration **0007** (`chaos_card_rules`, `chaos_config`,
+  `games.chaos_used`), three GM routes, stats and reputation gating, a `Σ balances + Σ sinks` conservation test. ui-kit: client
+  `chaos` state, `pickChaos`, `ChaosDraft`, `ChaosCardIcon/Row`, `ChaosBanner`, tier tokens, the `blindC` playground mode. Web:
+  the GM tab, ledger labels, `HistoryEntryDto.chaosUsed`.
+- **Tests.** Core 318 (the chaos rules, the engine's appliers, a 500-hand simulation that keeps every point, and a
+  byte-for-byte golden proving a table without chaos plays exactly as before); server-kit 202 (18 chaos room tests and a 200-hand conservation test);
+  normal-server 838; ui-kit 893; normal-web 1,114 plus the history test — each as of the task that last touched it. The e2e:
+  `apps/normal-web/e2e/ops/10-chaos.spec.ts`, **F-13** (desktop: badge, lobby ticket, a draft of three, icons, a hand that fires
+  a card shows "Thẻ đã dùng" on its result card, in the API and on the profile, the draft again for the 6th hand), **F-13b**
+  `@mobile` and **F-13c** `@landscape` (the draft sheet and row fit, the result card fits, no text over text). The entry chunk's
+  first-paint budget (`apps/normal-web/test/footprint.test.ts`) rises from 150 to 160 KB gzip: the 47 cards' vi and en texts,
+  the draft, the banner and the GM tab took it to 152.0 KB (Task 8 ruling, accepted in the final review).
+- **Final fix wave** (the whole-branch review's list, each item with a test that fails without it). A seat at 0 that Cấp cứu
+  rescues between hands now shows its new stack and is dealt in with chips: `CHAOS_CREDIT` carries the seat's absolute
+  `stack`, which the client writes to the roster and the finished hand. A board that "Chia lại bài chung" or "Bão" re-dealt is
+  drawn (`CHAOS_APPLIED.community` lands like a street). A card credit whose reply was lost twice is kept pending under its key
+  and paid once — after the next hand, before the seat is judged spent, before any stand-up, Leave or kick (which wait for it,
+  the seat frozen like a pending cash-out). A reconnect keeps the viewer's "Nhìn trộm", "Thế giới đảo ngược" and the blindfold
+  from the snapshot's hand view. Once board cards are up the banner sits on their feet, see-through, so it hides none of them
+  (inside the board on a phone on its side), and "Thế giới đảo ngược: bộ yếu nhất thắng" stays in the banner's slot all hand. A
+  "Mượn lá" card shows beside its seat's own at showdown, tagged "Mượn", gold-edged in the winning five. A second duration card
+  of the same tier replaces the held one (only the same card adds hands); a lasting shield stands before a one-shot; a GM edit
+  that would leave a tier short at any later window edge is refused; the draft ring runs on the GM's `draftMs` (now in
+  `CHAOS_DRAFT`, the offer and the snapshot); a board without a banner is not repositioned. New core tests: reversed ranking
+  with side pots, insurance on a reversed hand, a mirrored reveal debuff. The ops spec reads the card names by `data-part`, no
+  longer swallows a failed pick and reads the history once more after its loop.
+- **Docs.** `docs/player-guide.md` (§6a: drafts, tiers, points, the fences, the 47 cards in three tables, Thần tài's table),
+  `docs/normal-server.md`, `docs/server-kit.md`, `docs/ui-kit.md`, `docs/normal-web.md`, `docs/known-limitations.md`,
+  `docs/test-matrix.md` (four rows; the pin in `tooling/arch/acceptance-links.test.ts` and `CLAUDE.md` §3 are 4 higher),
+  `docs/lessons-learned.md` (a Plan 37 section).
+- **Khác với spec / Deviations from the spec.**
+  1. **Deal-buff order within a seat** is swapLowest, redealWeak, swapAll, **bestOfN, highCard, suited**, extraHole: Chất bổ
+     and Đồng hoa are guaranteed (the engine draws until they hold, within the deck), so they run after the set is picked.
+  2. **A deck reserve** the spec does not state: a deal-time draw of n cards needs `remaining − n ≥ 10`, a reveal-time draw
+     needs `remaining ≥ n`; otherwise the effect `fizzled` (and a fizzled highCard or suited hands the cards back as dealt).
+  3. **Auto-play** picks the **first** offered card at once on the client (like the squeeze's auto-REVEAL); the server's
+     random pick covers a human who has not chosen at the deadline and a disconnected one at once.
+  4. **A frozen seat's bonus cards are queued** and handed over at the end of its next unfrozen hand (spec §3.5.6 says freeze
+     blocks receiving), and its wait cards (Cấp cứu, Thần tài, Bạo kích) do not fire in that hand and stay held.
+  5. **A debuff that lands but changes nothing** (a steal on a one-card hand) still counts as that seat's one debuff.
+  6. **Bot chen score on a 4-card hand** reads the first three cards (`HandView` has no `rules`), so a bot on a 2-card table
+     with Thêm lá scores all three.
+  7. **The banner is a text pill**, not an animation of the swapped cards (spec §3.6 says "kèm hiệu ứng lá bị đổi"); the
+     visual call is the user's.
+  8. **Deal-time effects are private to the owner and the targets** until the hand settles; only Thế giới đảo ngược is public
+     at the deal. `CHAOS_SUMMARY` makes the rest public at settlement.
+  9. **A weight-0 card stays listed** (and "on") in the GM tab and is never drawn; the "at least three active" rule counts
+     weight > 0.
+  10. **The e2e retries hands until a card fires** (twelve at most) instead of a seeded server option.
+  11. **The banner over a face-up board sits on the cards' feet and is see-through** (spec §7 has it over the board): the
+      corner index and pip of every card stay in sight. On a phone on its side it stays inside the board's box, one compact line.
+  12. **"Thế giới đảo ngược" says so all hand**, as a quiet line in the banner's slot once its banner has played (spec §4: the
+      table is told from the deal), and after a reconnect too.
+  13. **A pending card credit holds a stand-up** until it lands (the seat sits out meanwhile), as a pending cash-out does.
+- **Gate.** Not run yet.
+- **Deployed.** Not yet.
+- **Still open.**
+  - **The LAN host's Neon database needs migration 0007** (`run.ps1` without `-NoMigrate`): ask first. The VPS runs it at boot.
+  - What the user must see by hand: the English card copy (and the new "reverseNote", "borrowed" strings); the icons, the draft,
+    the see-through banner on a face-up board and the "Mượn" card on a real phone (iOS Safari, Firefox Android); whether the
+    draft panel hiding part of a side plate at 1440 × 900 is acceptable; card art.
+  - Residuals kept (ruled): at 375 px a long name on the viewer's strip is cut with "…" beside a chaos icon; at 1440 × 900 the
+    draft panel covers part of a side plate during the draft (both in `docs/known-limitations.md`).
+  - Everything in `docs/known-limitations.md` → "Poker hỗn loạn (Plan 37)", and the parked minors of each task (the ledger lists
+    them: `afterHand`'s long loop, `ChaosTab.tsx` at 423 lines, `table.module.css` +500 lines
+    to split into `chaos.module.css`, the focus not returning when the draft closes, among others).
+
+---
+
 ## BP-36 — the two dresses get a men's cut: a warlock's tunic and a men's áo dài — merged `ccf45f0` (2026-10-25)
 
 The user, 2026-10-25: "làm bản cắt dáng nam cho các bộ váy", after the wardrobe review found body m wearing the women's

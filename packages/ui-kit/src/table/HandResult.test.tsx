@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nextProvider } from 'react-i18next'
 import { HandCategory, parseCards, type RoomView } from '@bp/core'
@@ -358,5 +358,87 @@ describe('HandResult', () => {
       act(() => resized?.())
       expect(body).toHaveAttribute('data-more', 'true')
     })
+  })
+})
+
+// Plan 37: the card of a hand that used chaos cards lists them by seat, and the credits they paid.
+describe('HandResult on a Poker hỗn loạn table', () => {
+  const room = {
+    players: [
+      { playerId: 'a', displayName: 'Ann', seat: 0 },
+      { playerId: 'b', displayName: 'Bob', seat: 1 },
+    ],
+  } as unknown as RoomView
+  const handWith = (chaosUsed?: { seat: number; cardId: string; outcome: string }[]): ClientHand =>
+    ({
+      phase: 'COMPLETE',
+      mode: 'blind',
+      seats: [
+        { seat: 0, playerId: 'a', displayName: 'Ann' },
+        { seat: 1, playerId: 'b', displayName: 'Bob' },
+      ],
+      result: {
+        payouts: [{ seat: 1, amount: 9_000 }],
+        pots: [{ amount: 9_000, eligibleSeats: [0, 1], winners: [{ seat: 1, amount: 9_000 }] }],
+        fee: 0,
+        showdown: null,
+        carryOverOut: 0,
+        uncalledReturned: null,
+        cancelled: false,
+        reason: null,
+        ...(chaosUsed ? { chaosUsed } : {}),
+      },
+    }) as unknown as ClientHand
+  const draw = (hand: ClientHand, credits: Parameters<typeof HandResult>[0]['chaosCredits'] = []) =>
+    render(
+      <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+        <HandResult hand={hand} room={room} myPlayerId="a" lang="vi" chaosCredits={credits} />
+      </I18nextProvider>,
+    )
+  const meta = (): string[] => [...document.querySelectorAll(`.${s.resultMeta}`)].map((el) => el.textContent ?? '')
+
+  it('lists the cards that acted by seat on a "Thẻ đã dùng" line', () => {
+    draw(handWith([
+      { seat: 0, cardId: 's_swap_one', outcome: 'applied' },
+      { seat: 1, cardId: 's_shield', outcome: 'applied' },
+      { seat: 0, cardId: 's_peek_1', outcome: 'applied' },
+    ]))
+    expect(meta()).toEqual(['Thẻ đã dùng: Ann — Đổi lá, Nhìn trộm; Bob — Khiên gỗ'])
+  })
+
+  it('says after a card what stopped it', () => {
+    draw(handWith([{ seat: 0, cardId: 's_steal_one', outcome: 'reflected' }]))
+    expect(meta()).toEqual(['Thẻ đã dùng: Ann — Rút lá lẻ (Bị phản lại)'])
+  })
+
+  it('prints no such line for a hand that used none, or one a table without chaos played', () => {
+    draw(handWith([]))
+    expect(meta()).toEqual([])
+    cleanup()
+    draw(handWith(undefined))
+    expect(meta()).toEqual([])
+  })
+
+  it('keeps the chaos lines in the footer, and in the scrolling body on a phone held sideways, where the card has no height for them', () => {
+    const hand = handWith([{ seat: 0, cardId: 's_swap_one', outcome: 'applied' }])
+    const { unmount } = draw(hand)
+    expect(document.querySelector(`.${s.resultFoot} .${s.resultChaosBox}`)).not.toBeNull()
+    unmount()
+    render(
+      <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+        <HandResult hand={hand} room={room} myPlayerId="a" lang="vi" frame="landscape" />
+      </I18nextProvider>,
+    )
+    expect(document.querySelector(`.${s.resultBody} .${s.resultChaosBox}`)).toHaveTextContent('Thẻ đã dùng: Ann — Đổi lá')
+    expect(document.querySelector(`.${s.resultFoot} .${s.resultChaosBox}`)).toBeNull()
+  })
+
+  it('prints each credit a card paid: Cấp cứu, Bạo kích with its multiplier, Thần tài; and the daily cap', () => {
+    draw(handWith(), [
+      { seat: 0, amount: 10_000, reason: 'chaos_rescue', capped: false },
+      { seat: 1, amount: 12_000, reason: 'chaos_crit', capped: false, multiplier: 2 },
+      { seat: 1, amount: 0, reason: 'chaos_fortune', capped: true },
+    ])
+    expect(meta()).toEqual(['Ann: Cấp cứu +10.000', 'Bob: Bạo kích ×2 +12.000', 'Bob: Thần tài +0 · Đã chạm trần thẻ hôm nay'])
   })
 })

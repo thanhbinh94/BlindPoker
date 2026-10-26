@@ -19,8 +19,12 @@ function chen2(a: Card, b: Card): number {
   return Math.round(score)
 }
 
-/** Chen formula for two cards; extended heuristic for three. */
+/**
+ * Chen formula for two cards; extended heuristic for three. A chaos "Thêm lá" hand of four is scored on its first three
+ * (the extra card is dealt last), so a bot never reads more into it than a 3-card table allows.
+ */
 export function chenScore(cards: readonly Card[]): number {
+  if (cards.length > 3) return chenScore(cards.slice(0, 3))
   if (cards.length === 2) return chen2(cards[0]!, cards[1]!)
   if (cards.length !== 3) throw new Error('chenScore supports 2 or 3 cards')
   let best = -Infinity

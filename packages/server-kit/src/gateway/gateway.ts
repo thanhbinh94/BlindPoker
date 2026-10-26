@@ -385,6 +385,9 @@ export class Gateway {
         case 'REVEAL':
           await this.roomOf(playerId).reveal(playerId)
           break
+        case 'CHAOS_PICK':
+          await this.roomOf(playerId).pickChaos(playerId, msg.offerId, msg.cardId)
+          break
         case 'RESYNC':
           conn.send(this.roomOf(playerId).snapshot(playerId))
           break

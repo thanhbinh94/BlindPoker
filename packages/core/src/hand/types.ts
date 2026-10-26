@@ -1,5 +1,6 @@
 import type { Card } from '../cards/cards.js'
 import type { PotResult } from '../betting/pots.js'
+import type { ChaosEffectKind, ChaosHandState, ChaosOutcome, ChaosUse } from '../chaos/types.js'
 import type { HandCategory } from '../evaluator/evaluator.js'
 
 export interface HoldemRules {
@@ -22,6 +23,8 @@ export interface BlindRules {
    * the table waits — a `SQUEEZE` phase in pure luck, the 20 s decision round in play-or-fold. Absent means off.
    */
   squeeze?: boolean
+  /** Poker hỗn loạn (spec 2026-10-26): the table drafts chaos cards every this many hands. Absent means no chaos. */
+  chaosCycle?: 5 | 10
 }
 
 export type Ruleset = HoldemRules | BlindRules
@@ -93,6 +96,8 @@ export interface ShowdownHand {
   rank: number
   category: HandCategory
   best: Card[]
+  /** Poker hỗn loạn "Mượn lá": the opponent's card this seat also ranked with (a copy). */
+  borrowed?: Card
 }
 
 export interface HandResult {
@@ -133,6 +138,8 @@ export interface HandState {
   carryOverIn: number
   revealQueue: Street[]
   result: HandResult | null
+  /** Poker hỗn loạn: present only on a chaos table; absent, the hand is exactly a plain Blind hand. */
+  chaos?: ChaosHandState
 }
 
 export type GameEvent =
@@ -153,6 +160,12 @@ export type GameEvent =
   | { type: 'SETTLEMENT'; payouts: { seat: number; amount: number }[]; fee: number; pots: PotResult[]; carryOverOut: number; stacks: { seat: number; stack: number }[]; uncalledReturned: { seat: number; amount: number } | null }
   | { type: 'HAND_CANCELLED'; reason: string; refunds: { seat: number; amount: number }[]; carryOverOut: number }
   | { type: 'HAND_COMPLETE' }
+  /** A chaos card acted. Deal-time buffs and debuffs reach only their owner and targets (`filterEvent`); `reverseRank` and the rest are public. `amount`: a refund (freeFold, refundStake). */
+  | { type: 'CHAOS_APPLIED'; seat: number; cardId: string; effect: ChaosEffectKind; targets: number[]; outcome: ChaosOutcome; community?: Card[]; amount?: number }
+  /** "Nhìn trộm": the next board cards, for `seat` only (`filterEvent` blanks them for everyone else). */
+  | { type: 'CHAOS_PEEK'; seat: number; cards: Card[] }
+  /** Every card the hand used, public, just before `SETTLEMENT`. */
+  | { type: 'CHAOS_SUMMARY'; used: ChaosUse[] }
 
 export interface EngineResult {
   state: HandState

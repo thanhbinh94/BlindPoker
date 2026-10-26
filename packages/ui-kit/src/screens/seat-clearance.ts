@@ -22,13 +22,16 @@ export const MIN_CARD = 216
  * 3. neither (a short phone such as 375 × 812, where the seat is pinned under a short stage): `null`, and the card
  *    keeps the whole stage over the seat, closable as before.
  *
+ * `minRoom` is what the thing laid over the felt needs above the seat: the result card's `MIN_CARD` by default; the chaos
+ * draft passes 0, so it always stops above the seat's block and scrolls inside. `aboveHand` also counts the cards of the
+ * viewer's fan (`[data-hand]`), which may stand above the seat's own box: the draft never lies over them.
  * A spectator has no seat to clear (`null`). The answer is never negative: a seat laid out below the stage's foot has
  * nothing on screen to clear.
  */
-export function clearanceFor(stage: DOMRect, seat: DOMRect | null, plate: DOMRect | null): number | null {
+export function clearanceFor(stage: DOMRect, seat: Pick<DOMRect, 'top'> | null, plate: Pick<DOMRect, 'top'> | null, minRoom: number = MIN_CARD): number | null {
   if (seat === null) return null
-  if (seat.top - stage.top - CLEARANCE_GAP >= MIN_CARD) return Math.max(0, stage.bottom - seat.top + CLEARANCE_GAP)
-  if (plate !== null && plate.top - stage.top - CLEARANCE_GAP >= MIN_CARD) return Math.max(0, stage.bottom - plate.top + CLEARANCE_GAP)
+  if (seat.top - stage.top - CLEARANCE_GAP >= minRoom) return Math.max(0, stage.bottom - seat.top + CLEARANCE_GAP)
+  if (plate !== null && plate.top - stage.top - CLEARANCE_GAP >= minRoom) return Math.max(0, stage.bottom - plate.top + CLEARANCE_GAP)
   return null
 }
 
@@ -44,7 +47,12 @@ export function clearanceFor(stage: DOMRect, seat: DOMRect | null, plate: DOMRec
  * once per change. Not active, it observes nothing and returns `null`, and it forgets its last answer then, so the next
  * card starts from nothing rather than from the last hand's seat.
  */
-export function useSeatClearance(stageRef: RefObject<HTMLElement>, active: boolean, seat: number | null): number | null {
+export function useSeatClearance(
+  stageRef: RefObject<HTMLElement>,
+  active: boolean,
+  seat: number | null,
+  { minRoom = MIN_CARD, aboveHand = false }: { minRoom?: number; aboveHand?: boolean } = {},
+): number | null {
   const [clearance, setClearance] = useState<number | null>(null)
   useLayoutEffect(() => {
     const stage = stageRef.current
@@ -61,7 +69,14 @@ export function useSeatClearance(stageRef: RefObject<HTMLElement>, active: boole
         if (mine !== null) observer.observe(mine)
         watched = mine
       }
-      setClearance(clearanceFor(stage.getBoundingClientRect(), mine?.getBoundingClientRect() ?? null, plate?.getBoundingClientRect() ?? null))
+      let seatTop: Pick<DOMRect, 'top'> | null = mine?.getBoundingClientRect() ?? null
+      // The viewer's fan may stand above the seat's own box (the stack's strip splays its cards up from their feet): the draft
+      // wants to stop above the highest card, not above the box they overflow.
+      if (aboveHand && mine !== null && seatTop !== null) {
+        const tops = Array.from(mine.querySelectorAll('[data-hand] > *'), (card) => card.getBoundingClientRect().top)
+        seatTop = { top: Math.min(seatTop.top, ...tops) }
+      }
+      setClearance(clearanceFor(stage.getBoundingClientRect(), seatTop, plate?.getBoundingClientRect() ?? null, minRoom))
     }
     observer?.observe(stage)
     measure()
@@ -73,6 +88,6 @@ export function useSeatClearance(stageRef: RefObject<HTMLElement>, active: boole
       setClearance(null)
     }
     // `seat` is read by nothing above: its change is the moment to look for the seat again (drawn, moved or removed).
-  }, [stageRef, active, seat])
+  }, [stageRef, active, seat, minRoom, aboveHand])
   return active ? clearance : null
 }

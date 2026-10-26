@@ -310,6 +310,20 @@ describe('ReputationService — HAND_SETTLED', () => {
     expect(all).toHaveLength(3)
   })
 
+  it('pays hand_played and no hand_won for a Poker hỗn loạn hand, a winner included', async () => {
+    const winner = await seedPlayer()
+    const loser = await seedPlayer()
+    const chaos: PublicRoomConfig = { ...CONFIG, mode: 'blind', blind: { holeCards: 2, decisionMode: 'playOrFold', fixedWager: 1_000, botCount: 0, chaosCycle: 5 } }
+    const summary = hand([seat(winner, { won: true, net: 900 }), seat(loser, { seat: 1, net: -900 })], { mode: 'blind', config: chaos })
+    await settle(summary)
+    expect(await events(winner)).toEqual([{ delta: 1, reason: 'hand_played', refId: summary.handId }])
+    expect(await events(loser)).toEqual([{ delta: 1, reason: 'hand_played', refId: summary.handId }])
+    // The same table without cards still pays the winner.
+    const plain = hand([seat(winner, { won: true, net: 900 })], { mode: 'blind', config: { ...chaos, blind: { holeCards: 2, decisionMode: 'playOrFold', fixedWager: 1_000, botCount: 0 } } })
+    await settle(plain)
+    expect((await events(winner)).map((e) => e.reason)).toEqual(['hand_played', 'hand_played', 'hand_won'])
+  })
+
   it('pays nothing for a cancelled hand or one whose settlement failed', async () => {
     const p = await seedPlayer()
     await settle(hand([seat(p, { won: true, net: 100 })], { cancelled: true }))

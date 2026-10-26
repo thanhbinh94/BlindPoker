@@ -107,6 +107,19 @@ describe('history.recordHand', () => {
     ])
   })
 
+  it('keeps the cards a chaos hand used (Thẻ đã dùng), and null for any other hand', async () => {
+    const human = await seedPlayer()
+    const used = [{ seat: 0, cardId: 's_shield', outcome: 'blocked' }, { seat: 1, cardId: 'g_crit', outcome: 'applied' }]
+    await repos.history.recordHand(summary({ handId: 'chaos-1', mode: 'blind', chaosUsed: used, players: [{ playerId: human, seat: 0, isBot: false, net: 5, won: true, bestCategory: null }] }))
+    await repos.history.recordHand(summary({ handId: 'plain-1', startedAt: START - 1_000, players: [{ playerId: human, seat: 0, isBot: false, net: 5, won: true, bestCategory: null }] }))
+
+    const stored = await db.select({ id: games.id, chaosUsed: games.chaosUsed }).from(games).orderBy(asc(games.id))
+    expect(stored).toEqual([{ id: 'chaos-1', chaosUsed: used }, { id: 'plain-1', chaosUsed: null }])
+    // And the read path hands it back with the hand.
+    const rows = await repos.history.listForPlayer(human, 10)
+    expect(rows.map((r) => [r.handId, r.chaosUsed])).toEqual([['chaos-1', used], ['plain-1', null]])
+  })
+
   it('stores a cancelled hand, and the settlement error when there was one', async () => {
     const human = await seedPlayer()
     await repos.history.recordHand(

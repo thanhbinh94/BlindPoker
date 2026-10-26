@@ -16,6 +16,15 @@ describe('combinations', () => {
   })
 })
 
+describe('chaos hands (Poker hỗn loạn: up to 4 hole cards + a borrowed one + the board)', () => {
+  it('evaluate accepts 9 and 10 cards and still refuses 11', () => {
+    expect(cat('2c 5d 8h Js Kd 3c 3d 9s As')).toBe(HandCategory.PAIR)
+    expect(evaluate(parseCards('2c 5d 8h Js Kd 3c 3d 9s As Ah')).category).toBe(HandCategory.TWO_PAIR)
+    expect(cat('Th Jh Qh Kh Ah 2c 3d 4s 5c 7d')).toBe(HandCategory.ROYAL_FLUSH)
+    expect(() => evaluate(parseCards('2c 5d 8h Js Kd 3c 3d 9s As Ah 4h'))).toThrow(/5\.\.10/)
+  })
+})
+
 describe('categories', () => {
   it.each([
     ['As Ks Qs Js Ts', HandCategory.ROYAL_FLUSH],
@@ -82,9 +91,9 @@ describe('evaluate with 7 and 8 cards', () => {
     const r = evaluate(parseCards('2c 2d 2h 9s 9d 4c 7h Kd'))
     expect(r.category).toBe(HandCategory.FULL_HOUSE)
   })
-  it('rejects fewer than 5 or more than 8 cards', () => {
+  it('rejects fewer than 5 or more than 10 cards (10 since Poker hỗn loạn)', () => {
     expect(() => evaluate(parseCards('Ah Kh 2c 3d'))).toThrow()
-    expect(() => evaluate(parseCards('Ah Kh 2c 3d 4d 5d 6d 7d 8d'))).toThrow()
+    expect(() => evaluate(parseCards('Ah Kh 2c 3d 4d 5d 6d 7d 8d 9d Td'))).toThrow()
   })
   it('matches brute-force maximum over all 5-card subsets for random 7 and 8 card hands', () => {
     const rng = seededRng(99)

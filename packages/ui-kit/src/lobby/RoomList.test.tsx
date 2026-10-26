@@ -146,6 +146,24 @@ describe('RoomList', () => {
     })
   })
 
+  // Plan 37: a chaos table is told apart in the list before anyone joins it.
+  describe('the chaos badge', () => {
+    const chaosRoom = (chaosCycle?: 5 | 10): RoomSummary => ({
+      ...rooms[1]!,
+      config: { ...rooms[1]!.config, blind: { holeCards: 3, decisionMode: 'none', fixedWager: 5000, botCount: 1, ...(chaosCycle === undefined ? {} : { chaosCycle }) } },
+    })
+
+    it('marks a Blind room with a chaos cycle "Hỗn loạn" in the chaos tone', () => {
+      wrap(<RoomList rooms={[chaosRoom(5)]} onJoin={vi.fn()} lang="vi" />)
+      expect(screen.getByText('Hỗn loạn')).toHaveClass(badge.badge!, badge.chaos!)
+    })
+
+    it('puts nothing on a Blind room without one, nor on a Hold’em room', () => {
+      wrap(<RoomList rooms={[rooms[0]!, chaosRoom()]} onJoin={vi.fn()} lang="vi" />)
+      expect(screen.queryByText('Hỗn loạn')).toBeNull()
+    })
+  })
+
   it('shows an empty state', () => {
     wrap(<RoomList rooms={[]} onJoin={() => {}} lang="vi" />)
     expect(screen.getByText(/chưa có phòng/i)).toBeInTheDocument()

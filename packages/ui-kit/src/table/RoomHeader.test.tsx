@@ -8,7 +8,7 @@ import badge from '../primitives/primitives.module.css'
 import { RoomHeader } from './RoomHeader.js'
 import s from './table.module.css'
 
-const blindRoom = (squeeze?: boolean): RoomView => ({
+const blindRoom = (squeeze?: boolean, chaosCycle?: 5 | 10): RoomView => ({
   roomId: 'r',
   code: 'BBBBBB',
   name: 'Chiếu Bạc',
@@ -21,7 +21,7 @@ const blindRoom = (squeeze?: boolean): RoomView => ({
     turnTimerSec: squeeze === true ? 20 : 15,
     autoStart: true,
     hasPassword: false,
-    blind: { holeCards: 2, decisionMode: 'none', fixedWager: 5000, botCount: 1, ...(squeeze === undefined ? {} : { squeeze }) },
+    blind: { holeCards: 2, decisionMode: 'none', fixedWager: 5000, botCount: 1, ...(squeeze === undefined ? {} : { squeeze }), ...(chaosCycle === undefined ? {} : { chaosCycle }) },
   },
   playerCount: 2,
   maxPlayers: 4,
@@ -78,6 +78,38 @@ describe('RoomHeader', () => {
         expect(screen.queryByText('Nặn bài')).toBeNull()
         unmount()
       }
+    })
+  })
+
+  // Plan 37: a chaos table says so to whoever sits at it, beside "Nặn bài" when it is both.
+  describe('the chaos badge', () => {
+    it('marks a chaos table "Hỗn loạn" in the chaos tone, and shows it beside "Nặn bài" on a table that is both', () => {
+      wrap(blindRoom(true, 5))
+      expect(screen.getByText('Hỗn loạn')).toHaveClass(badge.badge!, badge.chaos!)
+      expect(screen.getByText('Nặn bài')).toBeInTheDocument()
+    })
+
+    it('puts nothing on a Blind table without a chaos cycle, nor on a Hold’em table', () => {
+      for (const room of [blindRoom(), blindRoom(true), holdemRoom]) {
+        const { unmount } = wrap(room)
+        expect(screen.queryByText('Hỗn loạn')).toBeNull()
+        unmount()
+      }
+    })
+
+    it('stays in the header on a phone: on the meta line, so the squeeze badge keeps its cell beside the name', () => {
+      const { container } = wrap(blindRoom(true, 10))
+      const chaos = within(container.querySelector('header')!).getByText('Hỗn loạn')
+      expect(chaos.closest(`.${s.metaFlow}`)).not.toBeNull()
+    })
+
+    it('is in the compact strip too', () => {
+      render(
+        <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+          <RoomHeader room={blindRoom(false, 5)} status="open" onLeave={vi.fn()} lang="vi" compact />
+        </I18nextProvider>,
+      )
+      expect(screen.getByText('Hỗn loạn')).toBeInTheDocument()
     })
   })
 

@@ -525,6 +525,7 @@ export function App({ api, socketFactory }: AppProps) {
             <LobbyScreen
               client={viewClient}
               lang={lang}
+              chaosOffered
               onEnteredRoom={() => navigate('/room')}
               // The face the player built, as the way into the wardrobe. Daily, Profile and the language switch
               // are the rail's, which is on screen above the lobby too (layout audit U2).

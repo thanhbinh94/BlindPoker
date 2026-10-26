@@ -5,6 +5,7 @@ import { createMemoryRepositories, type MemoryRepositories } from '../memory-rep
 import { Room } from '../room/room.js'
 import { DEFAULT_ROOM_OPTIONS, type RoomOptions } from '../room/types.js'
 import { ManualClock } from './manual-clock.js'
+import { createMemoryChaosPort, type MemoryChaosOptions } from './memory-chaos.js'
 
 export interface RoomHarness {
   room: Room
@@ -40,10 +41,15 @@ export const TEST_ROOM_OPTIONS: RoomOptions = {
 export function createRoomHarness(
   config: RoomConfig,
   /** `bot` replaces the real strategy, for a test that needs the bots to make one particular move. */
-  opts: { players?: [id: string, balance: number][]; options?: Partial<RoomOptions>; seed?: number; hostId?: string; bot?: BotStrategy } = {},
+  opts: {
+    players?: [id: string, balance: number][]; options?: Partial<RoomOptions>; seed?: number; hostId?: string; bot?: BotStrategy
+    /** A chaos port over the harness repos (`createMemoryChaosPort`), for a chaos table. */
+    chaos?: true | Omit<MemoryChaosOptions, 'repos'>
+  } = {},
 ): RoomHarness {
   const clock = new ManualClock()
   const repos = createMemoryRepositories()
+  const chaos = opts.chaos === undefined ? undefined : createMemoryChaosPort({ ...(opts.chaos === true ? {} : opts.chaos), repos })
   const sent = new Map<string, ServerMessage[]>()
   const domainEvents: DomainEvent[] = []
   const logs: HarnessLogLine[] = []
@@ -66,6 +72,7 @@ export function createRoomHarness(
       log,
       options: { ...TEST_ROOM_OPTIONS, ...opts.options },
       onDomainEvent: (e) => domainEvents.push(e),
+      ...(chaos ? { chaos } : {}),
     },
   })
   const ofType = <T extends ServerMessage['t']>(playerId: string, t: T) => (sent.get(playerId) ?? []).filter((m): m is Extract<ServerMessage, { t: T }> => m.t === t)

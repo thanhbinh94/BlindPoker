@@ -356,3 +356,98 @@ describe('CreateRoomForm', () => {
     })
   })
 })
+
+describe('the "Poker hỗn loạn" option', () => {
+  const wrapVi = (ui: React.ReactElement) =>
+    render(<I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>{ui}</I18nextProvider>)
+  const create = () => screen.getByRole('button', { name: /^tạo phòng/i })
+  /** The cycle select as a player finds it: by the words it shows, which carry the stable term "Chu kỳ thẻ". */
+  const cycleSelect = () => screen.getByDisplayValue(/^Chu kỳ thẻ: \d+ ván$/)
+
+  it('is not offered without chaosOffered (Lite, and any host that has no chaos)', () => {
+    wrapVi(<CreateRoomForm onSubmit={vi.fn()} lang="vi" initialMode="blind" />)
+    expect(screen.queryByLabelText('Poker hỗn loạn')).toBeNull()
+    expect(screen.queryByLabelText('Chu kỳ thẻ')).toBeNull()
+  })
+
+  it('is a checkbox beside a 5 / 10 hand cycle in Blind mode, unchecked to begin with, and not at a Hold’em table', async () => {
+    const user = userEvent.setup()
+    wrapVi(<CreateRoomForm onSubmit={vi.fn()} lang="vi" chaosOffered />)
+    expect(screen.queryByLabelText('Poker hỗn loạn')).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Blind Poker' }))
+    const box = screen.getByLabelText('Poker hỗn loạn')
+    expect(box).toHaveAttribute('type', 'checkbox')
+    expect(box).not.toBeChecked()
+    expect(box).toHaveAccessibleDescription(expect.stringContaining('thẻ'))
+    const cycle = cycleSelect()
+    expect(cycle).toHaveDisplayValue('Chu kỳ thẻ: 5 ván')
+    expect(cycle).toHaveAccessibleName('Chu kỳ thẻ')
+    expect(cycle).toHaveValue('5')
+    expect(cycle).toBeDisabled() // nothing to cycle until the table is chaotic
+    expect([...(cycle as HTMLSelectElement).options].map((o) => [o.value, o.text])).toEqual([['5', 'Chu kỳ thẻ: 5 ván'], ['10', 'Chu kỳ thẻ: 10 ván']])
+    await user.click(box)
+    expect(cycle).toBeEnabled()
+    await user.click(screen.getByRole('button', { name: "Texas Hold'em" }))
+    expect(screen.queryByLabelText('Poker hỗn loạn')).toBeNull()
+  })
+
+  it('submits blind.chaosCycle 5 by default and 10 when chosen', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    wrapVi(<CreateRoomForm onSubmit={onSubmit} lang="vi" initialMode="blind" chaosOffered />)
+    await user.click(screen.getByLabelText('Poker hỗn loạn'))
+    await user.click(create())
+    expect(onSubmit.mock.calls[0]![0]).toMatchObject({ mode: 'blind', blind: { chaosCycle: 5 } })
+    expect(validateRoomConfig(onSubmit.mock.calls[0]![0]).ok).toBe(true)
+
+    await user.selectOptions(cycleSelect(), '10')
+    await user.click(create())
+    expect(onSubmit.mock.calls[1]![0]).toMatchObject({ blind: { chaosCycle: 10 } })
+  })
+
+  it('omits chaosCycle when unchecked, however the cycle was set, and for a plain form', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    wrapVi(<CreateRoomForm onSubmit={onSubmit} lang="vi" initialMode="blind" chaosOffered />)
+    await user.click(create())
+    expect(Object.hasOwn(onSubmit.mock.calls[0]![0].blind, 'chaosCycle')).toBe(false)
+
+    await user.click(screen.getByLabelText('Poker hỗn loạn'))
+    await user.selectOptions(cycleSelect(), '10')
+    await user.click(screen.getByLabelText('Poker hỗn loạn'))
+    await user.click(create())
+    expect(Object.hasOwn(onSubmit.mock.calls[1]![0].blind, 'chaosCycle')).toBe(false)
+  })
+
+  it('never reaches a Hold’em config, ticked and then flipped, and a form without chaosOffered never sends it', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    wrapVi(<CreateRoomForm onSubmit={onSubmit} lang="vi" initialMode="blind" chaosOffered />)
+    await user.click(screen.getByLabelText('Poker hỗn loạn'))
+    await user.click(screen.getByRole('button', { name: "Texas Hold'em" }))
+    await user.click(create())
+    expect(onSubmit.mock.calls[0]![0].blind).toBeUndefined()
+  })
+
+  it('can be combined with Nặn bài (squeeze)', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    wrapVi(<CreateRoomForm onSubmit={onSubmit} lang="vi" initialMode="blind" chaosOffered />)
+    await user.click(screen.getByLabelText('Nặn bài'))
+    await user.click(screen.getByLabelText('Poker hỗn loạn'))
+    await user.click(create())
+    expect(onSubmit.mock.calls[0]![0]).toMatchObject({ blind: { squeeze: true, chaosCycle: 5 } })
+  })
+
+  it('is named in English too', async () => {
+    const user = userEvent.setup()
+    wrap(<CreateRoomForm onSubmit={vi.fn()} lang="en" initialMode="blind" chaosOffered />)
+    await user.click(screen.getByLabelText('Chaos poker'))
+    expect(screen.getByDisplayValue('Card cycle: 5 hands')).toBeEnabled()
+    expect(screen.getByLabelText('Card cycle')).toBeEnabled()
+  })
+
+  it('reserves a taller box for the mode fields when chaos is offered', () => {
+    expect(LOBBY_CSS).toMatch(/\.modeFieldsChaos\s*\{[^}]*min-height:\s*\d+(\.\d+)?rem/)
+  })
+})

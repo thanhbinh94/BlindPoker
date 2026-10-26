@@ -112,6 +112,16 @@ describe('authentication', () => {
 })
 
 describe('lobby and rooms', () => {
+  it('CREATE_ROOM with a chaos cycle on a server without a chaos port is CHAOS_UNAVAILABLE, and no room is made', async () => {
+    ts = await startTestServer()
+    const a = await connect('a')
+    const config = { ...BLIND_BOT, blind: { ...BLIND_BOT.blind!, chaosCycle: 5 as const } }
+    expect(await a.request({ t: 'CREATE_ROOM', reqId: rid(), config })).toMatchObject({ t: 'ERROR', code: 'CHAOS_UNAVAILABLE' })
+    expect(ts.server.rooms.size).toBe(0)
+    expect(await a.request({ t: 'CHAOS_PICK', reqId: rid(), offerId: 'o', cardId: 's_rescue' })).toMatchObject({ t: 'ERROR', code: 'NOT_IN_ROOM' })
+    expect(await a.request({ t: 'CREATE_ROOM', reqId: rid(), config: BLIND_BOT })).toMatchObject({ t: 'ACK' })
+  })
+
   it('lists public rooms live, joins by code, refuses wrong passwords and double rooms', async () => {
     ts = await startTestServer()
     const a = await connect('a')

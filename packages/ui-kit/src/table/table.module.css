@@ -297,6 +297,11 @@
   justify-content: center;
 }
 
+/* A chaos table's board anchors the banner's slot (`.chaosBannerSlot`); every other board is laid out as it always was. */
+.communityAnchor {
+  position: relative;
+}
+
 .slot {
   width: var(--card-lg, clamp(40px, 10.4vw, 62px));
   aspect-ratio: 60 / 84;
@@ -2859,6 +2864,574 @@
   inset: -7px -2px;
 }
 
+/* ---------------- Poker hỗn loạn (Plan 37) ---------------- */
+/* The three tiers share one set of handles: a thing that carries `data-tier` takes its frame (`--t-frame`) and its text
+   colour (`--t-ink`) from the tier tokens, which `data-surface='night'` pins for the felt in every theme. Bạc is the
+   default; the tier is also written in words wherever a frame is shown, so the colour never carries it alone. */
+.chaosIcon,
+.draft,
+.draftCard,
+.chaosBanner {
+  --t-frame: var(--tier-silver);
+  --t-ink: var(--tier-silver-ink);
+}
+
+:is(.chaosIcon, .draft, .draftCard, .chaosBanner)[data-tier='gold'] {
+  --t-frame: var(--tier-gold);
+  --t-ink: var(--tier-gold-ink);
+}
+
+:is(.chaosIcon, .draft, .draftCard, .chaosBanner)[data-tier='diamond'] {
+  --t-frame: var(--tier-diamond);
+  --t-ink: var(--tier-diamond-ink);
+}
+
+/* A seat's chaos cards, on the line under its plate (or on the viewer's strip): small tier-framed icons, four at most,
+   then "+N". The row is one flex item of `.tags` / `.stripLine` and keeps its width. */
+.chaosRow {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 5px;
+  padding-right: 4px;
+}
+
+.seat .tags > .chaosRow {
+  padding: 0 4px 0 0;
+  background: none;
+}
+
+.chaosIcon {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--t-frame);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--t-frame) 16%, #0a1220);
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--t-ink);
+}
+
+/* Vàng is framed twice, Kim cương glows: the tier reads in shape as well as in colour. */
+.chaosIcon[data-tier='gold'] {
+  box-shadow: inset 0 0 0 1.5px #0a1220, inset 0 0 0 2.5px color-mix(in srgb, var(--t-frame) 70%, transparent);
+}
+
+.chaosIcon[data-tier='diamond'] {
+  border-radius: 7px;
+  box-shadow: 0 0 7px color-mix(in srgb, var(--t-frame) 70%, transparent);
+}
+
+/* The hands a card has left, in the icon's corner. 11 px is the table's text floor on a phone. */
+.chaosLeft {
+  position: absolute;
+  right: -5px;
+  bottom: -6px;
+  min-width: 13px;
+  padding: 0 2px;
+  border: 1px solid var(--t-frame);
+  border-radius: 7px;
+  background: #0a1220;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--t-ink);
+}
+
+.chaosMore {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+
+/* The compact plates and the landscape lines draw them a size down, as they do their other tags. */
+.othersChip .chaosIcon,
+.ring[data-frame='landscape'] .chaosIcon {
+  width: 18px;
+  height: 18px;
+  font-size: 0.6875rem;
+}
+
+.ring[data-frame='landscape'][data-tier='short'] .chaosIcon {
+  width: 16px;
+  height: 16px;
+}
+
+.ring[data-frame='landscape'] .tags > .chaosRow {
+  padding: 0 4px 0 0;
+}
+
+.ring[data-frame='landscape'][data-tier='short'] .seat:not(.seatMe) .chaosRow {
+  gap: 4px;
+}
+
+.stripLine > .chaosRow {
+  padding-right: 4px;
+}
+
+/* "Bạo kích ×2!" on the seat that won with it: with the hand's name and the payout, which it arrives with. */
+.critShout {
+  font-family: var(--font-display);
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--rarity-epic);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--rarity-epic) 55%, transparent);
+  animation: riseUp 420ms var(--ease) backwards;
+}
+
+/* On the viewer's strip the shout and the payout keep their room and the hand's name gives with "…". */
+.meStrip .critShout {
+  flex: none;
+  font-size: 0.8125rem;
+}
+
+.meStrip .seatResult .handTag {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The draft. A centred panel over the felt; a sheet at the foot of the stage on a phone held upright
+   (`data-layout='stack'`), a compact row on one held sideways (`data-frame='landscape'`). `RoomScreen` stops the
+   overlay it lies in above the viewer's own seat, so the panel never covers the hand fan. */
+.draft {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(100%, 38rem);
+  max-height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--t-frame) 55%, transparent);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 40%),
+    var(--bg-elev);
+  box-shadow: var(--shadow-2), 0 0 34px color-mix(in srgb, var(--t-frame) 24%, transparent);
+  animation: riseUp 320ms var(--ease) backwards;
+}
+
+.draftHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.draftTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  color: var(--t-ink);
+}
+
+/* The turn timer is drawn for a seat's plate (absolute, centred on its left edge); here it fills its own box. */
+.draftTimer {
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  margin-right: var(--space-2);
+  margin-bottom: 6px;
+}
+
+.draftTimer > .timer {
+  left: 0;
+  top: 0;
+  transform: none;
+}
+
+.draftCards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+/* The tier chip and the name share a line and wrap apart when the card is too narrow for both; the text takes the rest. */
+.draftCard {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  align-items: center;
+  gap: 4px var(--space-2);
+  min-height: var(--tap, 44px);
+  padding: var(--space-3);
+  border: 2px solid var(--t-frame);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--t-frame) 10%, var(--bg));
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    transform 140ms var(--ease),
+    background-color 140ms var(--ease);
+}
+
+.draftCard:hover:not([aria-disabled='true']) {
+  background: color-mix(in srgb, var(--t-frame) 22%, var(--bg));
+  transform: translateY(-2px);
+}
+
+.draftCard:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.draftCard[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.draftCard.draftCardChosen {
+  opacity: 1;
+  background: color-mix(in srgb, var(--t-frame) 26%, var(--bg));
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--t-frame);
+}
+
+.draftCardTier {
+  padding: 0 var(--space-2);
+  border: 1px solid var(--t-frame);
+  border-radius: var(--radius-pill);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--t-ink);
+}
+
+.draftCardName {
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.draftCardDesc {
+  flex: 1 1 100%;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--ink-muted);
+}
+
+.draftWait {
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  color: var(--gold);
+}
+
+/* The sheet: the three cards one under another, a card a row — tier chip and name on one line, the text under it. */
+.draft[data-layout='stack'] {
+  width: 100%;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.draft[data-layout='stack'] .draftCards {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.draft[data-layout='stack'] .draftCard {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--space-2);
+  row-gap: 2px;
+  padding: var(--space-2) var(--space-3);
+}
+
+.draft[data-layout='stack'] .draftCardDesc {
+  grid-column: 1 / -1;
+}
+
+/* The compact row for a phone on its side: smaller type, the text held to three lines, no tier chip (the title says it). */
+.draft[data-frame='landscape'] {
+  width: min(100%, 44rem);
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+}
+
+.draft[data-frame='landscape'] .draftTitle {
+  font-size: 1rem;
+}
+
+.draft[data-frame='landscape'] .draftCards {
+  gap: var(--space-2);
+}
+
+.draft[data-frame='landscape'] .draftCard {
+  gap: 2px;
+  padding: var(--space-2);
+}
+
+.draft[data-frame='landscape'] .draftCardTier {
+  display: none;
+}
+
+.draft[data-frame='landscape'] .draftCardName {
+  font-size: 0.9375rem;
+}
+
+.draft[data-frame='landscape'] .draftCardDesc {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+.draft[data-frame='landscape'] .draftWait {
+  font-size: 0.8125rem;
+}
+
+/* The short tier's stage is about 255 px, 60 of them the dock's: the panel gives up padding, a size of type and the timer's ring. */
+.draft[data-short='true'] {
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+}
+
+.draft[data-short='true'] .draftTitle {
+  font-size: 0.9375rem;
+}
+
+.draft[data-short='true'] .draftTimer {
+  width: 28px;
+  height: 28px;
+  margin-bottom: 4px;
+}
+
+.draft[data-short='true'] .draftCard {
+  gap: 0 var(--space-2);
+  padding: var(--space-1) var(--space-2);
+}
+
+.draft[data-short='true'] .draftCardName {
+  font-size: 0.875rem;
+}
+
+.draft[data-short='true'] .draftCardDesc {
+  font-size: 0.6875rem;
+  line-height: 1.25;
+}
+
+/* The banner over the board: its slot is the board's own box (`.community`, which `CommunityCards` makes the slot's parent) and
+   the pill is centred in it, whichever way the layout lays the board out — above the pot's row, or beside it in the landscape
+   frame. Over the board there is always room: above it, on a short stage,
+   the top seat's lines reach into the band, and the viewer's seat and the tray are below. It takes no room of its own, so the
+   felt never moves. The live region is always there, empty, so the first card is read. */
+.chaosBannerSlot {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.chaosBanner {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0 var(--space-2);
+  max-width: 100%;
+  margin: 0;
+  padding: 4px var(--space-2);
+  border: 1.5px solid var(--t-frame);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--t-frame) 18%, #0a1220);
+  box-shadow: var(--shadow-2), 0 0 18px color-mix(in srgb, var(--t-frame) 35%, transparent);
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  text-align: center;
+  color: var(--ink);
+}
+
+/* One line: a long name gives with "…" (the title carries the whole line) rather than a second row taller than the board's
+   band on a short stage. */
+.chaosBannerText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chaosBannerOutcome {
+  flex: none;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  font-style: italic;
+  color: var(--t-ink);
+}
+
+/* Board cards face up — the reveal effects fire after the river — and the pill must not hide the middle ones (Plan 37
+   final wave, I3). It sits on their feet instead, a third of it hanging below them into the gap over the pot's row, and lets
+   them show through: each card's corner index and pip stay in sight above it. No seat or tray is near the board's foot. */
+.community[data-board='up'] .chaosBannerSlot {
+  align-items: flex-end;
+}
+
+.community[data-board='up'] :is(.chaosBanner, .chaosNote) {
+  transform: translateY(35%);
+}
+
+.community[data-board='up'] .chaosBanner {
+  background: color-mix(in srgb, var(--t-frame) 18%, rgb(10 18 32 / 0.7));
+}
+
+/* A phone on its side: the viewer's own cards come right under the board, so the pill stays inside the board's box —
+   one compact line on the lower half of the cards, their corner index above it — and never reaches the hand below. */
+.ring[data-frame='landscape'] .community[data-board='up'] :is(.chaosBanner, .chaosNote) {
+  transform: none;
+}
+
+.ring[data-frame='landscape'] .community[data-board='up'] .chaosBanner {
+  padding: 1px var(--space-2);
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+
+/* "Thế giới đảo ngược" all hand long, once its banner has had its turn: a quiet line in the banner's own slot, so the two
+   never stand on each other (a card that fires takes the slot for its turn). */
+.chaosNote {
+  max-width: 100%;
+  margin: 0;
+  padding: 1px var(--space-2);
+  overflow: hidden;
+  border: 1px dashed var(--tier-diamond);
+  border-radius: var(--radius-pill);
+  background: rgb(10 18 32 / 0.78);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--tier-diamond-ink);
+}
+
+.chaosBannerIn {
+  animation: chaosBannerIn 260ms var(--ease) backwards;
+}
+
+@keyframes chaosBannerIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+/* "Mượn lá" at showdown: the opponent's card the seat also ranked with, after its own cards, a little apart (the viewer's fan
+   included), dashed in gold with a "Mượn" tag on its foot — inside the card, so it never reaches the plate on either side. */
+.borrowSlot {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  margin-left: var(--space-1);
+}
+
+.mine [data-fan] > .borrowSlot {
+  margin-left: var(--space-1);
+}
+
+.borrowedCard {
+  outline: 1.5px dashed var(--tier-gold);
+  outline-offset: 1px;
+}
+
+.borrowTag {
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  z-index: 1;
+  padding: 0 4px;
+  transform: translateX(-50%);
+  border: 1px solid var(--tier-gold);
+  border-radius: var(--radius-pill);
+  background: #0a1220;
+  font-size: 0.625rem;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  color: var(--tier-gold-ink);
+}
+
+/* "Nhìn trộm": the next board cards, face up in the ghost slots they will land in, for this viewer alone. */
+.peekSlot {
+  position: relative;
+  display: inline-flex;
+}
+
+.peeked {
+  opacity: 0.78;
+  outline: 1.5px dashed var(--rarity-epic);
+  outline-offset: 1px;
+}
+
+.peekTag {
+  position: absolute;
+  left: 50%;
+  top: -9px;
+  z-index: 1;
+  padding: 0 var(--space-2);
+  transform: translateX(-50%);
+  border: 1px solid var(--rarity-epic);
+  border-radius: var(--radius-pill);
+  background: #0a1220;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--rarity-epic);
+}
+
+/* The chaos lines of the result card: "Thẻ đã dùng" by seat, then the credits cards paid. A whole row each. */
+.resultChaosBox {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  gap: 2px var(--space-3);
+  min-width: 0;
+  max-width: 34rem;
+}
+
+.resultChaos {
+  flex: 1 1 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.resultCredit {
+  color: var(--rarity-epic);
+}
+
+.result[data-frame='landscape'] .resultBody > .resultChaosBox {
+  flex: none;
+  max-width: none;
+}
+
+.result[data-frame='landscape'] .resultChaosBox .resultMeta {
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+}
+
 /* ---------------- Motion off ---------------- */
 @media (prefers-reduced-motion: reduce) {
   .card,
@@ -2870,8 +3443,19 @@
   .potValue,
   .payout,
   .result,
+  .draft,
+  .chaosBannerIn,
+  .critShout,
   .seatWin .plate {
     animation: none;
+  }
+
+  .draftCard {
+    transition: none;
+  }
+
+  .draftCard:hover:not([aria-disabled='true']) {
+    transform: none;
   }
 
   /* The peel's own motion is a script, which `PeelCard` jumps to its end; the band only fades. */

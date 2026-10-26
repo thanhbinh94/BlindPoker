@@ -1,4 +1,4 @@
-import type { BotStrategy, LegalActions, PlayerAction, RoomConfig } from '@bp/core'
+import { CHAOS_CARDS_SPEC, type BotStrategy, type LegalActions, type PlayerAction, type RoomConfig } from '@bp/core'
 import { describe, expect, it } from 'vitest'
 import type { BalanceEntry, SettlementMeta } from '../repositories.js'
 import { createRoomHarness, TEST_ROOM_OPTIONS, type RoomHarness } from '../testing/room-harness.js'
@@ -944,12 +944,18 @@ const folding: BotStrategy = { decide: () => ({ kind: 'fold' }) }
  * sink, the pot still carried and a carried pot whose release is not yet settled add up to nothing. Taken between
  * hands, and never while a cash-out is pending: its credit has landed and its seat still holds the stack, so the
  * two would be counted twice until the retry settles it.
+ *
+ * Chaos tables (Plan 37): the new points a card paid a human are a source row (`chaos_rescue|chaos_crit|chaos_fortune`)
+ * that the paired `chaos_to_table` row moved straight onto the stack, so they are taken back out here. A bot's credit
+ * lands on its virtual stack only, which the sum never counts (a bot is counted by its nets).
  */
+const CHAOS_SOURCES = new Set(['chaos_rescue', 'chaos_crit', 'chaos_fortune'])
 async function books(h: RoomHarness, humans: Record<string, number> = { h: 100_000 }): Promise<number> {
   let humanDelta = 0
   for (const [id, start] of Object.entries(humans)) humanDelta += (await h.repos.balances.get(id)) + (h.room.players.get(id)?.stack ?? 0) - start
   const botNet = h.repos.hands.flatMap((x) => x.players).filter((p) => p.isBot).reduce((s, p) => s + p.net, 0)
-  return humanDelta + botNet + h.repos.sinks.reduce((s, x) => s + x.fee, 0) + h.room.carryOverPot + (h.room.pendingRelease?.pot ?? 0)
+  const sources = h.repos.entries.filter((e) => CHAOS_SOURCES.has(e.entry.reason)).reduce((s, e) => s + e.entry.delta, 0)
+  return humanDelta + botNet + h.repos.sinks.reduce((s, x) => s + x.fee, 0) + h.room.carryOverPot + (h.room.pendingRelease?.pot ?? 0) - sources
 }
 
 describe('The last person out of a room that still seats bots (No3)', () => {
@@ -1868,6 +1874,119 @@ describe('Money conservation over many hands', () => {
     expect(h.repos.hands.every((x) => x.fee === 0)).toBe(true)
     expect(h.repos.sinks).toEqual([])
     expect(await books(h, { h: 1_000_000, a: 1_000_000 })).toBe(0)
+  })
+
+  it('200 chaos hands, drafts and card credits included, keep the books at 0', async () => {
+    // Plan 37: the spec's 47 cards, a draft every 5 hands (every human takes the first card offered), two bots. A card
+    // credit is a source row on the ledger and new points on a stack; books() takes the sources back out.
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, chaosCycle: 5 } }, { seed: 37, chaos: true, players: [['h', 1_000_000], ['a', 1_000_000]] })
+    const ids = ['h', 'a']
+    const pickAll = async () => {
+      for (const id of ids) {
+        const draft = h.room.snapshot(id).chaos?.draft
+        if (draft?.offer && !draft.picked) await h.room.pickChaos(id, draft.offer.offerId, draft.offer.cardIds[0]!)
+      }
+    }
+    for (const [i, id] of ids.entries()) {
+      if (id !== 'h') await h.room.join(h.identity(id))
+      await h.room.sitDown(id, i)
+      await h.room.setReady(id, true)
+    }
+    await h.room.startGame('h')
+    await pickAll()
+    let n = 0
+    const policy: Policy = (id, legal) => ({ kind: legal.kinds.includes('play') && (id === 'h' ? n % 3 !== 0 : n % 2 === 0) ? 'play' : 'fold' })
+    while (h.repos.hands.length < 200 && n++ < 400) {
+      await playOut(h, policy)
+      expect(await books(h, { h: 1_000_000, a: 1_000_000 })).toBe(0)
+      for (const [i, id] of ids.entries()) {
+        if (h.room.players.get(id)!.seat !== null) continue
+        await h.room.sitDown(id, i)
+        if (h.room.status === 'OPEN') await h.room.setReady(id, true)
+      }
+      if (h.room.status === 'OPEN') await h.room.startGame('h')
+      h.clock.advance(100)
+      await tick(h)
+      await pickAll()
+    }
+    expect(h.repos.hands).toHaveLength(200)
+    expect(h.repos.hands.every((x) => x.chaosUsed !== undefined)).toBe(true)
+    expect(h.repos.hands.some((x) => (x.chaosUsed?.length ?? 0) > 0)).toBe(true)
+    expect(h.ofType('h', 'ROOM_EVENT').filter((m) => m.event.type === 'CHAOS_DRAFT').length).toBeGreaterThanOrEqual(40)
+    // The run must actually pay: otherwise it proves nothing about the credits.
+    expect(h.repos.entries.some((e) => e.entry.reason === 'chaos_to_table')).toBe(true)
+    expect(await books(h, { h: 1_000_000, a: 1_000_000 })).toBe(0)
+  })
+
+  /**
+   * Plan 37 final wave (ledger ruling): a credit whose first write landed but whose reply was lost, and whose retry
+   * failed, is kept pending under its key — never dropped — and the stack is raised once when a later retry answers.
+   * Every card is a Cấp cứu Bạc; `h` brings 2.500, so one lost ante leaves 1.500 (under 2 wagers: rescued, still seated).
+   */
+  const RESCUE_ONLY = CHAOS_CARDS_SPEC.filter((c) => c.effect === 'rescue')
+  const pendingTable = (players: [string, number][] = [['h', 2_500]]) => {
+    let attempts = 0
+    // Attempt 1 writes and loses its reply; attempt 2 (the in-hand retry) fails outright; attempt 3 on answers.
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, chaosCycle: 5 } }, {
+      players,
+      chaos: { cards: RESCUE_ONLY, config: { tierWeights: { silver: 1, gold: 0, diamond: 0 } }, failCredit: () => ++attempts === 2, loseCreditReply: () => true },
+    })
+    return h
+  }
+  const startPending = async (h: RoomHarness) => {
+    await seatAndStart(h, ['h'])
+    const draft = h.room.snapshot('h').chaos!.draft!
+    await h.room.pickChaos('h', draft.offer!.offerId, draft.offer!.cardIds[0]!)
+    await tick(h)
+    await playOut(h, () => ({ kind: 'fold' }))
+  }
+  const credits = (h: RoomHarness) => h.ofType('h', 'ROOM_EVENT').map((m) => m.event).filter((e) => e.type === 'CHAOS_CREDIT')
+
+  it('a chaos credit that fails twice stays pending and lands once after the next hand: the stack is raised once, books 0', async () => {
+    const h = pendingTable()
+    await startPending(h)
+    expect(h.room.players.get('h')!.stack).toBe(1_500) // not raised yet
+    expect(h.repos.entries.filter((e) => e.entry.reason === 'chaos_rescue').map((e) => e.entry.delta)).toEqual([5_000]) // but it landed
+    expect(credits(h)).toEqual([])
+    expect(h.logs.some((l) => l.level === 'error' && /chaos credit failed; pending/.test(l.msg))).toBe(true)
+    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
+    await tick(h)
+    await playOut(h, () => ({ kind: 'fold' }))
+    expect(h.room.players.get('h')!.seat).toBe(0)
+    expect(h.room.players.get('h')!.stack).toBe(500 + 5_000)
+    expect(credits(h)).toEqual([{ type: 'CHAOS_CREDIT', seat: 0, amount: 5_000, stack: 5_500, reason: 'chaos_rescue', capped: false }])
+    expect(h.repos.entries.filter((e) => e.entry.reason === 'chaos_rescue')).toHaveLength(1) // the replay wrote nothing
+    expect(await books(h, { h: 2_500 })).toBe(0)
+  })
+
+  it('a pending chaos credit is settled before a stand-up cashes the stack out, and a stand-up it cannot settle keeps the seat frozen', async () => {
+    const h = pendingTable()
+    await startPending(h)
+    await h.room.standUp('h')
+    expect(h.room.players.get('h')!.seat).toBeNull()
+    expect(await h.repos.balances.get('h')).toBe(1_500 + 5_000) // the credit, then the cash-out of the raised stack
+    expect(credits(h)).toHaveLength(1)
+    expect(await books(h, { h: 2_500 })).toBe(0)
+
+    // The same, with a port that stays down: the stand-up is refused and the seat sits out with its stack until a retry.
+    let down = false
+    let attempts = 0
+    const g = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, chaosCycle: 5 } }, {
+      players: [['h', 2_500]],
+      chaos: { cards: RESCUE_ONLY, config: { tierWeights: { silver: 1, gold: 0, diamond: 0 } }, failCredit: () => down || ++attempts === 2, loseCreditReply: () => true },
+    })
+    await startPending(g)
+    down = true
+    await expect(g.room.standUp('h')).rejects.toThrow()
+    expect(g.room.players.get('h')!.seat).toBe(0)
+    expect(g.room.players.get('h')!.stack).toBe(1_500)
+    expect(g.room.players.get('h')!.cashOutPending).toBe(true)
+    expect(g.room.players.get('h')!.sittingOut).toBe(true)
+    down = false
+    await g.room.standUp('h')
+    expect(g.room.players.get('h')!.seat).toBeNull()
+    expect(await g.repos.balances.get('h')).toBe(6_500)
+    expect(await books(g, { h: 2_500 })).toBe(0)
   })
 })
 

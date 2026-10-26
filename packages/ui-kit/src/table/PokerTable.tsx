@@ -2,7 +2,7 @@ import type { Card as CardId, RoomPlayerView, RoomView, ShowdownHand } from '@bp
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { botChibi, type ChibiSubject, type Expression } from '../avatar2d/index.js'
-import type { ClientHand, ClientSeat } from '../client/types.js'
+import type { ClientChaos, ClientHand, ClientSeat } from '../client/types.js'
 import { handLabel, type Language } from '../i18n/index.js'
 import { cx } from '../primitives/cx.js'
 import { CommunityCards } from './CommunityCards.js'
@@ -69,6 +69,14 @@ export interface PokerTableProps {
    * tier's felt has no bare band for it, and `RoomScreen` puts it back in the dock there (BP-28, R2).
    */
   note?: ReactNode
+  /**
+   * Poker hỗn loạn (spec 2026-10-26): every seat's held cards, this hand's credits and the viewer's peek, from
+   * `ClientState.chaos`. Each seat draws its cards as icons, the winner of a Bạo kích says so, the peeked board cards sit
+   * face up in the ghost slots, and a viewer whose cards are down under a blindfold is told. Absent, the table is as it was.
+   */
+  chaos?: ClientChaos | null
+  /** The chaos banner (`ChaosBanner`): laid over the board's own box, centred, taking no room of its own. */
+  banner?: ReactNode
 }
 
 /* The ring needs roughly 310 px of stage to seat everyone around it; a short window gets the vertical layout for the
@@ -155,6 +163,8 @@ export function PokerTable({
   resultPending = false,
   onReveal,
   note,
+  chaos = null,
+  banner,
 }: PokerTableProps) {
   const { t } = useTranslation()
   const narrow = useMediaQuery(STACKED)
@@ -200,6 +210,14 @@ export function PokerTable({
   const squeezeRoom = hand !== null && hand.mode === 'blind' && room.config.blind?.squeeze === true
   const squeezeRound = squeezeRoom && (hand.phase === 'SQUEEZE' || hand.phase === 'DECISION')
   const squeezeDecides = squeezeRound && hand.phase === 'DECISION'
+
+  // A Bạo kích that paid shows on the winner's seat with the payout; held back with the rest of the result.
+  const crits = new Map<number, 2 | 3>()
+  for (const c of resultPending ? [] : (chaos?.credits ?? [])) if (c.reason === 'chaos_crit' && c.multiplier !== undefined) crits.set(c.seat, c.multiplier)
+  const chaosRoom = room.config.blind?.chaosCycle !== undefined
+  // The next board cards, while they are still to come: once any of them is on the board the peek has done its job.
+  const peeked = chaos?.peek?.cards ?? []
+  const peek = peeked.some((c) => community.includes(c)) ? [] : peeked
 
   const renderSeat = (index: number): ReactNode => {
     const player = seated.get(index)
@@ -278,6 +296,18 @@ export function PokerTable({
         squeezeDecides={squeezeDecides}
         restored={hand?.restored ?? false}
         onReveal={onReveal}
+        chaosCards={chaos?.seats[index]?.cards}
+        // Down because of a blindfold: what the snapshot's hand view said, else read off the deal — the viewer's own seat holds
+        // cards and was shown none — while the hand is on.
+        blindfolded={
+          chaosRoom && isMe && handSeat !== undefined && hand !== null && hand.phase !== 'COMPLETE' &&
+          (chaos?.blindfolded ?? (handSeat.holeCards === null && handSeat.cardCount > 0))
+        }
+        // "Mượn lá": the opponent's card this seat also ranked with, beside its own, gold-edged when it is in the winning five.
+        borrowed={hit?.borrowed === undefined ? null : { card: hit.borrowed, highlighted: index === topSeat && hit.best.includes(hit.borrowed) }}
+        critMultiplier={crits.get(index) ?? null}
+        // Seven opponents or more on a phone: a chip has no line to spare for a row of icons, so it gets the one with the count.
+        chaosSummary={mode === 'stack' && !isMe && order.length - (mySeat === null ? 0 : 1) > 6}
       />
     )
   }
@@ -289,7 +319,7 @@ export function PokerTable({
   // strip — finds no deck and fades in: a table that has just mounted shows its cards where they lie.
   const centre = (
     <div className={s.centre}>
-      <CommunityCards cards={community} highlight={highlight} dealt={boardDealt} handId={hand?.handId ?? null} />
+      <CommunityCards cards={community} highlight={highlight} dealt={boardDealt} handId={hand?.handId ?? null} peek={peek} banner={banner} />
       <div className={s.centreRow}>
         <Deck ref={deckRef} />
         {showPot ? (

@@ -326,6 +326,56 @@ for in the same breath (`applyAutoFolds`), so the round never waits on a seat wi
 a squeeze round is a no-op in the engine, never an error — except on a hand that is already `COMPLETE`, where the engine's
 common guard throws `HAND_COMPLETE`; `Room.reveal` never reaches it, since it returns first when the hand is over.
 
+### The chaos room (Plan 37, spec 2026-10-26)
+
+A Blind room created with `blind.chaosCycle` (5 or 10; `validateRoomConfig` refuses any other value, and an absent one leaves no
+key on the config or on the ruleset) is a chaos table. The cards' rules are pure code in `@bp/core` (`planHand`, `afterHand`,
+`receiveCard`, the engine's appliers); what the room adds is the draft, each seat's cards, the plan it feeds the engine and the payouts.
+The code is `room/room-chaos.ts` (`ChaosTable`, the helper `Room` holds) and a few hooks in `room.ts`.
+
+**The port.** `RoomDeps.chaos?: ChaosPort` (from `createGameServer({ chaos })`), three calls: `catalogue()` (the cards active now and
+the GM's draw weights, 0 = never), `config()` (`ChaosConfig`: tier weights, points threshold, draft ms, daily cap and rescues) and
+`credit({ playerId, roomId, amount, reason, key })` → `{ credited, capped }`. Without a port, `RoomManager.create` answers
+`ERROR{CHAOS_UNAVAILABLE}` to a chaos config (and `Room`'s constructor throws the same code), so Lite and any edition that passes none
+simply never has a chaos table. The catalogue is read at each draft and kept for the hands until the next one; if the port throws
+there, the room logs it and deals without a draft (the next hand tries again).
+
+**The draft.** Its own state on the room (`draft`), guarding `startHand`: after eligibility and before the sit-out loop, `startHand`
+opens one when a seat has not drafted this cycle (the first hand a seat plays, then when the table's hand count reaches 5k or 10k;
+"a draft at hand 5" means before the hand when `tableHands === 5`). The room is `IN_GAME` with `ROOM_STATUS { nextHandAt: deadlineAt }`
+while it is open, and `startHand` returns `true`. One tier is drawn for the whole table (`drawTier`) and each drafted seat gets three
+distinct cards of it (`drawOffer`, mode-safe: ✱ cards never on a pure-luck table). Bots and disconnected humans are picked for at once
+(random); a human has `draftMs` (15 s), then a random pick; a human with auto-play on is answered by the client at once. The draft ends
+on the last pick or the deadline: the cards are handed out (`CHAOS_PICKED` per seat, then `CHAOS_STATE` with every seat's cards and
+points) and `startHand(true)` deals, skipping a second draft. A seat that sat down during the draft plays that hand undrafted and
+drafts before its next; one that stands and sits again in the same cycle is not offered a second draft; a seat that leaves or stands
+mid-draft drops its offer and, if it was the last one waited on, ends the draft through the room queue (never from inside the stand-up).
+`cancelTimers` (so `close` and `shutdown`) cancels the draft's timer. A held Tay bạc is dropped when its holder drafts again.
+
+**The hand.** Just before the `HandRunner`, `planHand` (from the seats' `ChaosSeat`s) builds the `ChaosHandPlan` that goes into
+`CreateHandInput.chaos`. After the hand — **after `recordHand` and `HAND_SETTLED`, before the stand-up and leave loop**, so a seat
+at stack 0 can be rescued before `standUpSpent` — `settleHand` runs `afterHand` and pays every credit; a cancelled hand skips all of
+it. A win is a seat in any pot's winners; every other seat in the hand lost; a hand with no pot is a carry-over and counts for nobody.
+`net` is the stack change against `runner.stacksBefore` (refunds included). `HandSummary.chaosUsed` comes from the engine's
+`CHAOS_SUMMARY`.
+
+**Credits.** A human credit calls `port.credit` with the key `chaos:<roomId>:<handId>:<seat>:<uid>:<reason>`, retried once under the same key;
+a second failure is logged (`chaos credit failed; pending`, with the key) and the credit is **kept pending** under its key
+(`ChaosTable.pending`, per player, oldest first): it may have landed. `settlePending` retries it after the next hand (before that
+hand's own credits), before the seat is judged spent (a rescue whose reply was lost keeps the seat), and at the top of `standUpNow` —
+a stand-up, Leave or kick it cannot settle is refused and the seat sits out with `cashOutPending`, retried after each hand. A replayed
+key answers with what it wrote, so the stack is raised once. The room then adds `credited` to the stack, pushes the balance, and
+broadcasts `CHAOS_CREDIT { seat, reason, amount, stack, capped, multiplier? }` before `CHAOS_STATE`; `stack` is the seat's stack
+after the credit, absolute, which the client writes to its roster. A credit cut to 0 is
+still broadcast, so the table can say "capped". A bot's credit goes on its virtual stack with no ledger row and `capped: false`. A seat that
+**stands up or leaves** loses its cards and points (`standUpNow` clears `p.chaos`).
+
+**Wire.** `ClientMessage` `CHAOS_PICK { offerId, cardId }` (`Room.pickChaos`: a stale, foreign or second pick is `CHAOS_NO_OFFER`, a card
+that was not offered is `ILLEGAL_ACTION`). Room events `CHAOS_DRAFT` (tier, deadline, `draftMs` — the GM's window, for the client's ring — and the drafted seats), `CHAOS_PICKED`, `CHAOS_STATE`,
+`CHAOS_CREDIT`, `CHAOS_AWARDED`; the private `CHAOS_OFFER` notification (the viewer's three cards); `ROOM_SNAPSHOT.chaos` restores the
+viewer's draft after a reconnect; `RoomPlayerView.chaos` carries a seat's cards and points. Game events (from the engine): `CHAOS_APPLIED`,
+`CHAOS_PEEK`, `CHAOS_SUMMARY`.
+
 ### Sitting out (spec §11.3)
 
 `SIT_OUT` keeps the seat and asks to be skipped; `SIT_IN` takes it back.
@@ -422,7 +472,12 @@ changed the public origin out from under `Host`.
   `GAME_EVENT`s go through `filterEvent(event, viewerSeat)` so hole cards
   belonging to other seats are stripped (only `cardCount` survives); `Room`
   sends to each connected human individually via the `Outbox`, and only to
-  seats currently in the hand for turn-scoped events.
+  seats currently in the hand for turn-scoped events. Since Plan 37
+  `filterEvent` returns `GameEvent | null`: `null` means "this viewer gets
+  nothing" (a deal-time `CHAOS_APPLIED` that is not theirs and does not
+  target them), and `Room` skips the send. The viewer's `seq` then jumps
+  forward by one, which the client's gap check (backward only) ignores. A
+  `CHAOS_PEEK` that is not the viewer's goes out with `cards: []`.
 
 ## Reconnecting and frame order
 
@@ -537,6 +592,15 @@ for integration tests:
   (no gateway, no sockets) against a `ManualClock` and in-memory
   repositories, capturing every outbound message per player. Fastest way to
   drive room/hand logic deterministically in unit tests.
+  With `chaos: true | { cards?, config?, capPoints?, rescues? }` the
+  harness also builds an in-memory `ChaosPort` (`createMemoryChaosPort`,
+  exported from `testing/`) over the same repositories: a credit writes
+  the `[+reason, −chaos_to_table]` pair under its key, a replayed key
+  returns the amount already written, `capPoints` and `rescues` stand in
+  for the economy-day cap, and `weights`, `failReads` and `failCredit`
+  are test hooks. Bots-only drafts finish at once; to play a human's
+  draft call `room.pickChaos(playerId, offerId, cardId)` with the ids
+  from its `CHAOS_OFFER`.
 - **`ManualClock`** — a `Clock` whose time only advances on `advance(ms)`,
   firing any due timers (in schedule order) as it passes them. Lets tests
   fast-forward through `handIntervalMs`, reconnect windows, and turn timers

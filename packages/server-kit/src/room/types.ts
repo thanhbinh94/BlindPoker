@@ -1,4 +1,5 @@
-import type { BotStrategy, ErrorCode, GameMode, PlayerIdentity, Rng, ServerMessage } from '@bp/core'
+import type { BotStrategy, ChaosSeat, ErrorCode, GameMode, PlayerIdentity, Rng, ServerMessage } from '@bp/core'
+import type { ChaosPort } from '../chaos-port.js'
 import type { DomainEvent } from '../domain-events.js'
 import type { Clock } from '../infra/clock.js'
 import type { Logger } from '../infra/logger.js'
@@ -45,6 +46,8 @@ export interface RoomPlayer {
    */
   pendingBuyIn?: { sitId: string; amount: number; refunding?: boolean }
   cosmetics?: unknown
+  /** A chaos table: the seat's cards, points and streak (spec §3.4). Lost when the player leaves the seat. */
+  chaos?: ChaosSeat
 }
 
 /** A room as the GM screen lists it (Plan 25): what the lobby summary hides, and no cards. */
@@ -110,6 +113,8 @@ export interface RoomDeps {
   log: Logger
   options: RoomOptions
   onDomainEvent?: (e: DomainEvent) => void
+  /** Poker hỗn loạn: without it, a chaos table is refused (`CHAOS_UNAVAILABLE`). */
+  chaos?: ChaosPort
 }
 
 export class RoomError extends Error {

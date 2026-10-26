@@ -1,5 +1,7 @@
 import type { Card as CardId } from '@bp/core'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { cx } from '../primitives/cx.js'
 import { Card } from './Card.js'
 import { BOARD_STAGGER_MS } from './motion.js'
 import s from './table.module.css'
@@ -12,6 +14,14 @@ export interface CommunityCardsProps {
   dealt?: boolean
   /** The hand the board belongs to: each hand's cards are new cards, dealt afresh in the same slots. */
   handId?: string | null
+  /** "Nhìn trộm": the next board cards, for this viewer alone, face up in the first empty slots with a tag over the first. */
+  peek?: CardId[]
+  /**
+   * The chaos banner's slot: laid over the board's own box, taking no room. The board is its anchor only when it is given
+   * (a plain table's board is laid out as it always was). Over an empty board it is centred; once board cards are face up
+   * it sits on their feet, see-through, so the cards it lies on still read (`data-board`).
+   */
+  banner?: ReactNode
 }
 
 const SLOTS = [0, 1, 2, 3, 4]
@@ -21,13 +31,27 @@ const SLOTS = [0, 1, 2, 3, 4]
  * three cards come in `BOARD_STAGGER_MS` apart, each sliding in while the one before it turns; the turn and the river
  * come alone. A board that was already out shows at once.
  */
-export function CommunityCards({ cards, highlight, dealt = false, handId = null }: CommunityCardsProps) {
+export function CommunityCards({ cards, highlight, dealt = false, handId = null, peek = [], banner }: CommunityCardsProps) {
   const { t } = useTranslation()
   return (
-    <div className={s.community} role="group" aria-label={t('labels.community')}>
+    <div
+      className={cx(s.community, banner !== undefined && s.communityAnchor)}
+      role="group"
+      aria-label={t('labels.community')}
+      data-board={banner !== undefined && cards.length > 0 ? 'up' : undefined}
+    >
       {SLOTS.map((i) => {
         const card = cards[i]
-        if (card === undefined) return <span key={i} className={s.slot} aria-hidden="true" />
+        if (card === undefined) {
+          const seen = peek[i - cards.length]
+          if (seen === undefined) return <span key={i} className={s.slot} aria-hidden="true" />
+          return (
+            <span key={i} className={s.peekSlot} data-peek="">
+              <Card card={seen} size="lg" className={s.peeked} />
+              {i === cards.length ? <span className={s.peekTag}>{t('chaos.peek')}</span> : null}
+            </span>
+          )
+        }
         return (
           <Card
             key={`${handId}:${i}`}
@@ -39,6 +63,7 @@ export function CommunityCards({ cards, highlight, dealt = false, handId = null 
           />
         )
       })}
+      {banner}
     </div>
   )
 }

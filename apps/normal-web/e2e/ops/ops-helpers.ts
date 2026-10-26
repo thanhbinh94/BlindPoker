@@ -181,6 +181,8 @@ export interface HistoryHand {
   mode: string
   net: number
   cancelled: boolean
+  /** Plan 37: the chaos cards the hand used; absent for a hand that used none. */
+  chaosUsed?: { seat: number; cardId: string; outcome: string }[]
   players: { playerId: string | null; label: string; seat: number; isBot: boolean; net: number; won: boolean }[]
 }
 
@@ -255,6 +257,8 @@ export interface BlindRoomOptions {
   timer?: '10 giây' | '15 giây' | '30 giây'
   /** A squeeze table ("Nặn bài"): the cards are turned by hand, over a 20 s round that ends when everyone has turned. */
   squeeze?: boolean
+  /** Plan 37, "Poker hỗn loạn": the cards are drafted every 5 or 10 hands ("Chu kỳ thẻ"). Normal only. */
+  chaos?: 5 | 10
   password?: string
   autoStart?: boolean
 }
@@ -269,6 +273,10 @@ export async function createBlind(page: Page, o: BlindRoomOptions): Promise<stri
   await dialog.getByLabel('Số lá mỗi người').selectOption({ label: `${o.cards ?? 2} lá` })
   await dialog.getByLabel('Cách chơi').selectOption({ label: o.mode ?? 'Chơi hoặc bỏ' })
   if (o.squeeze === true) await dialog.getByLabel('Nặn bài', { exact: true }).check()
+  if (o.chaos !== undefined) {
+    await dialog.getByLabel('Poker hỗn loạn', { exact: true }).check()
+    await dialog.getByLabel('Chu kỳ thẻ', { exact: true }).selectOption({ label: `Chu kỳ thẻ: ${o.chaos} ván` })
+  }
   await dialog.getByLabel('Mức cược cố định').selectOption({ label: o.wager ?? '1.000' })
   await dialog.getByLabel('Số lượng bot').selectOption({ label: String(o.bots) })
   if (o.password !== undefined) {
