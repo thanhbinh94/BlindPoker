@@ -58,11 +58,14 @@ export type WorstState = 'waiting' | 'turn' | 'result' | 'blindS' | 'blindP' | '
  *   next board cards in the ghost slots.
  * - `chaosPeel`: a squeeze table, my four cards face down to peel (the peel layout with a card more).
  * - `chaosBlind`: "Che mắt" on me — my three cards are backs I cannot turn, with the word "Bị che mắt" on my seat.
- * - `chaosResult`: the hand over — the result card with its "Thẻ đã dùng" line and the credits, and "Bạo kích ×2!" on the winner.
+ * - `chaosResult`: the hand over — the result card with its "Thẻ đã dùng" line and the credits, "Bạo kích ×2!" on the winner, and
+ *   the "Mượn lá" card the viewer ranked with beside their own cards, tagged "Mượn" and gold-edged in the winning five.
+ * - `chaosBoard`: after the river, the five board cards face up and the reveal cards firing — the banner sits on the cards'
+ *   feet, see-through, so it hides none of them — and "Thế giới đảo ngược" on: once the queue has run, its quiet line stays.
  */
-export type ChaosState = 'chaosDraft' | 'chaosReveal' | 'chaosFour' | 'chaosPeel' | 'chaosBlind' | 'chaosResult'
+export type ChaosState = 'chaosDraft' | 'chaosReveal' | 'chaosFour' | 'chaosPeel' | 'chaosBlind' | 'chaosResult' | 'chaosBoard'
 
-const CHAOS_STATES: readonly ChaosState[] = ['chaosDraft', 'chaosReveal', 'chaosFour', 'chaosPeel', 'chaosBlind', 'chaosResult']
+const CHAOS_STATES: readonly ChaosState[] = ['chaosDraft', 'chaosReveal', 'chaosFour', 'chaosPeel', 'chaosBlind', 'chaosResult', 'chaosBoard']
 const isChaos = (state: WorstState): state is ChaosState => (CHAOS_STATES as readonly string[]).includes(state)
 
 /** `/short`: the box the room is laid out in, the user's 855 × 319 phone (bug log §10, E1/E2). */
@@ -257,7 +260,7 @@ function chaosSeat(i: number, state: ChaosState, long: boolean): ClientSeat {
     cardCount: count,
     holeCards: shown ? cards(count === 4 && !mine ? `${own} ${FOURTH}` : own) : null,
     ...(state === 'chaosPeel' ? { revealed: turned } : {}),
-    hasDecided: !mine && (state === 'chaosReveal' || state === 'chaosFour' || state === 'chaosBlind'),
+    hasDecided: state === 'chaosBoard' || (!mine && (state === 'chaosReveal' || state === 'chaosFour' || state === 'chaosBlind')),
     decision: null,
     lastAction: null,
     timedOut: false,
@@ -335,19 +338,19 @@ function chaosHand(n: number, state: ChaosState, long: boolean): ClientHand {
   const base: ClientHand = {
     handId: `worst-${state}`,
     mode: 'blind',
-    phase: over ? 'COMPLETE' : state === 'chaosPeel' ? 'SQUEEZE' : 'DECISION',
-    community: over ? cards('Ac Kc 9h 4h 3d') : [],
+    phase: over ? 'COMPLETE' : state === 'chaosPeel' ? 'SQUEEZE' : state === 'chaosBoard' ? 'REVEAL' : 'DECISION',
+    community: over || state === 'chaosBoard' ? cards('Ac Kc 9h 4h 3d') : [],
     pot: over ? 0 : n * BLIND_WAGER,
     carryOverIn: 0,
     button: Math.min(3, n - 1),
     actingSeat: null,
     seats: all.map((i) => chaosSeat(i, state, long)),
     mySeat: 0,
-    legal: over || state === 'chaosPeel' ? null : { seat: 0, kinds: ['play', 'fold'], callAmount: BLIND_WAGER, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 },
+    legal: over || state === 'chaosPeel' || state === 'chaosBoard' ? null : { seat: 0, kinds: ['play', 'fold'], callAmount: BLIND_WAGER, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 },
     result: null,
     potPulse: 1,
     // The banner plays for a live hand; every other state is a snapshot, which replays nothing.
-    restored: state !== 'chaosReveal',
+    restored: state !== 'chaosReveal' && state !== 'chaosBoard',
     dealtAt: null,
     boardAt: null,
     showdownAt: null,
@@ -360,7 +363,8 @@ function chaosHand(n: number, state: ChaosState, long: boolean): ClientHand {
       payouts: [{ seat: 0, amount: win }],
       pots: [{ amount: win, eligibleSeats: all, winners: [{ seat: 0, amount: win }] }],
       fee: 100,
-      showdown: all.map((i) => ({ seat: i, cards: cards(HANDS[i]!.hole), rank: 9 - i, category: HANDS[i]!.category, best: cards(HANDS[i]!.best) })),
+      // "Mượn lá": the viewer ranked with a copy of a Q of hearts, one of their winning five.
+      showdown: all.map((i) => ({ seat: i, cards: cards(HANDS[i]!.hole), rank: 9 - i, category: HANDS[i]!.category, best: cards(HANDS[i]!.best), ...(i === 0 && state === 'chaosResult' ? { borrowed: cards('Qh')[0]! } : {}) })),
       carryOverOut: 0,
       uncalledReturned: null,
       cancelled: false,
@@ -408,6 +412,17 @@ function chaosState(n: number, state: ChaosState, now: number): ClientChaos {
     }
   }
   if (state === 'chaosFour') return { ...chaos, peek: { seat: 0, cards: cards('Ad Kd 2c') } }
+  if (state === 'chaosBoard') {
+    return {
+      ...chaos,
+      reverse: true,
+      applied: [
+        { seat: 2, cardId: 'd_reverse', effect: 'reverseRank', targets: [], outcome: 'applied' },
+        { seat: 1, cardId: 's_steal_one', effect: 'stealHole', targets: [0], outcome: 'blocked' },
+        { seat: 0, cardId: 'g_borrow', effect: 'borrowHole', targets: [1], outcome: 'applied' },
+      ],
+    }
+  }
   if (state === 'chaosResult') {
     return {
       ...chaos,

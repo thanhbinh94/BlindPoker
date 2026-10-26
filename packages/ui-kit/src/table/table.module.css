@@ -292,10 +292,14 @@
 
 /* ---------------- Community ---------------- */
 .community {
-  position: relative;
   display: flex;
   gap: var(--space-2);
   justify-content: center;
+}
+
+/* A chaos table's board anchors the banner's slot (`.chaosBannerSlot`); every other board is laid out as it always was. */
+.communityAnchor {
+  position: relative;
 }
 
 .slot {
@@ -3278,6 +3282,51 @@
   color: var(--t-ink);
 }
 
+/* Board cards face up — the reveal effects fire after the river — and the pill must not hide the middle ones (Plan 37
+   final wave, I3). It sits on their feet instead, a third of it hanging below them into the gap over the pot's row, and lets
+   them show through: each card's corner index and pip stay in sight above it. No seat or tray is near the board's foot. */
+.community[data-board='up'] .chaosBannerSlot {
+  align-items: flex-end;
+}
+
+.community[data-board='up'] :is(.chaosBanner, .chaosNote) {
+  transform: translateY(35%);
+}
+
+.community[data-board='up'] .chaosBanner {
+  background: color-mix(in srgb, var(--t-frame) 18%, rgb(10 18 32 / 0.7));
+}
+
+/* A phone on its side: the viewer's own cards come right under the board, so the pill stays inside the board's box —
+   one compact line on the lower half of the cards, their corner index above it — and never reaches the hand below. */
+.ring[data-frame='landscape'] .community[data-board='up'] :is(.chaosBanner, .chaosNote) {
+  transform: none;
+}
+
+.ring[data-frame='landscape'] .community[data-board='up'] .chaosBanner {
+  padding: 1px var(--space-2);
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+
+/* "Thế giới đảo ngược" all hand long, once its banner has had its turn: a quiet line in the banner's own slot, so the two
+   never stand on each other (a card that fires takes the slot for its turn). */
+.chaosNote {
+  max-width: 100%;
+  margin: 0;
+  padding: 1px var(--space-2);
+  overflow: hidden;
+  border: 1px dashed var(--tier-diamond);
+  border-radius: var(--radius-pill);
+  background: rgb(10 18 32 / 0.78);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--tier-diamond-ink);
+}
+
 .chaosBannerIn {
   animation: chaosBannerIn 260ms var(--ease) backwards;
 }
@@ -3287,6 +3336,41 @@
     opacity: 0;
     transform: translateY(-10px);
   }
+}
+
+/* "Mượn lá" at showdown: the opponent's card the seat also ranked with, after its own cards, a little apart (the viewer's fan
+   included), dashed in gold with a "Mượn" tag on its foot — inside the card, so it never reaches the plate on either side. */
+.borrowSlot {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  margin-left: var(--space-1);
+}
+
+.mine [data-fan] > .borrowSlot {
+  margin-left: var(--space-1);
+}
+
+.borrowedCard {
+  outline: 1.5px dashed var(--tier-gold);
+  outline-offset: 1px;
+}
+
+.borrowTag {
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  z-index: 1;
+  padding: 0 4px;
+  transform: translateX(-50%);
+  border: 1px solid var(--tier-gold);
+  border-radius: var(--radius-pill);
+  background: #0a1220;
+  font-size: 0.625rem;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  color: var(--tier-gold-ink);
 }
 
 /* "Nhìn trộm": the next board cards, face up in the ghost slots they will land in, for this viewer alone. */

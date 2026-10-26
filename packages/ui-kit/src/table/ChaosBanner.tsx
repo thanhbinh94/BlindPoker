@@ -47,6 +47,11 @@ export interface ChaosBannerProps {
   index?: number
   /** A seat's display name. */
   nameOf: (seat: number) => string
+  /**
+   * A quiet line the slot holds while no card is up ("Thế giới đảo ngược" for the rest of the hand): a card that fires
+   * takes its place for its turn, so the two never stand on each other. `null` or absent: nothing.
+   */
+  note?: string | null
 }
 
 /**
@@ -54,7 +59,7 @@ export interface ChaosBannerProps {
  * (`Bị chặn`, `Bị phản lại`, `Không có tác dụng`). A live region, so a screen reader hears each one as it comes; under
  * `prefers-reduced-motion` it shows in place with no slide, and only the item changes.
  */
-export function ChaosBanner({ item, index = 0, nameOf }: ChaosBannerProps) {
+export function ChaosBanner({ item, index = 0, nameOf, note = null }: ChaosBannerProps) {
   const { t } = useTranslation()
   const reduce = useMediaQuery('(prefers-reduced-motion: reduce)')
   let line = ''
@@ -70,7 +75,13 @@ export function ChaosBanner({ item, index = 0, nameOf }: ChaosBannerProps) {
   }
   return (
     <div className={s.chaosBannerSlot} role="status">
-      {item === null ? null : (
+      {item === null ? (
+        note === null ? null : (
+          <p className={s.chaosNote} data-chaos-note="" title={note}>
+            {note}
+          </p>
+        )
+      ) : (
         <p
           // A new item is a new element, so the slide plays for each; without motion it is the same line in place.
           key={index}

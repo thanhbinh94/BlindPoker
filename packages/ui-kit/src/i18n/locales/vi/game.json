@@ -299,6 +299,9 @@
     "blindfolded": "Bị che mắt",
     "blindfoldedHint": "Bài của bạn bị úp cho đến khi lật",
     "peek": "Nhìn trộm",
+    "reverseNote": "Thế giới đảo ngược: bộ yếu nhất thắng",
+    "borrowed": "Mượn",
+    "borrowedHint": "Lá mượn của đối thủ, cùng tính bài",
     "critShout": "Bạo kích ×{{multiplier}}!",
     "tier": {
       "silver": "Bạc",

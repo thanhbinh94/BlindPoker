@@ -1,7 +1,8 @@
-import { parseCards } from '@bp/core'
+import { parseCards, type ServerMessage } from '@bp/core'
 import { render, screen, within } from '@testing-library/react'
 import { I18nextProvider } from 'react-i18next'
 import { describe, expect, it } from 'vitest'
+import { initialClientState, reduceClient } from '../client/reducer.js'
 import { initialChaos, type ClientChaos, type ClientHand } from '../client/types.js'
 import { createI18n } from '../i18n/index.js'
 import { makeHand, makePlayer, makeRoom, makeSeat } from '../test-fixtures.js'
@@ -135,6 +136,66 @@ describe('PokerTable on a Poker hỗn loạn table', () => {
     const board = screen.getByRole('group', { name: 'Bài chung' })
     expect(screen.getByTestId('banner').parentElement).toBe(board)
     expect(board).toHaveClass(s.community!)
+    expect(board).toHaveClass(s.communityAnchor!)
+    expect(board).not.toHaveAttribute('data-board') // an empty board: the banner is centred on the ghosts
+  })
+
+  it('anchors only a board that carries a banner: a table without chaos lays its board out as before (M4)', () => {
+    draw(handOf({ community: parseCards('Ah Kd 2c') }), null)
+    const board = screen.getByRole('group', { name: 'Bài chung' })
+    expect(board).toHaveClass(s.community!)
+    expect(board).not.toHaveClass(s.communityAnchor!)
+    expect(board).not.toHaveAttribute('data-board')
+  })
+
+  it('moves the banner onto the cards’ feet once board cards are face up, so it hides none of them (I3)', () => {
+    draw(handOf({ phase: 'REVEAL', community: parseCards('Ah Kd 2c 7s 9h') }), chaos(), { banner: <p data-testid="banner">cờ</p> })
+    expect(screen.getByRole('group', { name: 'Bài chung' })).toHaveAttribute('data-board', 'up')
+  })
+
+  it('reads the blindfold from the snapshot when it has one: shown cards then are not "down", and a view that says so is', () => {
+    const { unmount } = draw(handOf({}, { holeCards: null }), chaos({ blindfolded: false }))
+    expect(screen.queryByText('Bị che mắt')).toBeNull()
+    unmount()
+    draw(handOf({ restored: true }, { holeCards: null }), chaos({ blindfolded: true }))
+    expect(within(seatBox(0)).getByText('Bị che mắt')).toBeInTheDocument()
+  })
+
+  it('draws a board a chaos card re-dealt, straight from the reducer (C2)', () => {
+    type Msg = ServerMessage
+    const feed = (st: typeof initialClientState, msg: Msg) => reduceClient(st, { type: 'server', msg, now: 1 })
+    let st = feed(initialClientState, { t: 'WELCOME', playerId: 'a', displayName: 'Ann', balance: 0, serverTime: 0 })
+    st = feed(st, { t: 'ROOM_SNAPSHOT', seq: 1, room, hand: null, deadlineAt: null })
+    st = feed(st, { t: 'GAME_EVENT', seq: 2, event: { type: 'HAND_STARTED', handId: 'h1', mode: 'blind', button: 0, seats: [0, 2], carryOverIn: 0 } })
+    st = feed(st, { t: 'GAME_EVENT', seq: 3, event: { type: 'COMMUNITY_REVEALED', street: 'RIVER', cards: parseCards('2c 3d 4h 5s 7c'), community: parseCards('2c 3d 4h 5s 7c') } })
+    st = feed(st, { t: 'GAME_EVENT', seq: 4, event: { type: 'CHAOS_APPLIED', seat: 2, cardId: 'g_redeal_board', effect: 'redealBoard', targets: [], outcome: 'applied', community: parseCards('Ah Kh Qh Jh Th') } })
+    draw(st.hand, st.chaos)
+    const board = screen.getByRole('group', { name: 'Bài chung' })
+    expect([...board.querySelectorAll('[data-card]')].map((c) => c.getAttribute('data-card'))).toEqual(['Ah', 'Kh', 'Qh', 'Jh', 'Th'])
+  })
+
+  it('draws a "Mượn lá" card beside the seat’s own at showdown with its tag, gold-edged when it is in the winning five (I4)', () => {
+    const [ah, kh, qh, jh, th] = parseCards('Ah Kh Qh Jh Th')
+    const done = handOf({
+      phase: 'COMPLETE',
+      community: [kh!, qh!, jh!, parseCards('2c')[0]!, parseCards('3d')[0]!],
+      result: {
+        payouts: [{ seat: 2, amount: 6_000 }], pots: [], fee: 0, carryOverOut: 0, uncalledReturned: null, cancelled: false, reason: null,
+        showdown: [
+          { seat: 2, cards: [th!, parseCards('4s')[0]!, parseCards('5s')[0]!], rank: 9_000_000, category: 9, best: [ah!, kh!, qh!, jh!, th!], borrowed: ah! },
+          { seat: 0, cards: parseCards('Qs Qd 7c'), rank: 1, category: 1, best: parseCards('Qs Qd Kh Jh 7c') },
+        ],
+      },
+    })
+    const { unmount } = draw(done, chaos())
+    const slot = seatBox(2).querySelector('[data-borrowed]')!
+    expect(slot).toHaveTextContent('Mượn')
+    expect(slot.querySelector('[data-card]')).toHaveAttribute('data-card', 'Ah')
+    expect(slot.querySelector(`.${s.cardHi}`)).not.toBeNull()
+    expect(seatBox(0).querySelector('[data-borrowed]')).toBeNull()
+    unmount()
+    draw(done, chaos(), { resultPending: true })
+    expect(document.querySelector('[data-borrowed]')).toBeNull() // held back with the rest of the result
   })
 })
 
@@ -173,6 +234,15 @@ describe('the chaos banner’s slot in the stylesheet', () => {
     expect(slot).toMatch(/position:\s*absolute/)
     expect(slot).toMatch(/inset:\s*0/)
     expect(slot).toMatch(/pointer-events:\s*none/)
-    expect(/\.community\s*\{([^}]*)\}/.exec(css)?.[1]).toMatch(/position:\s*relative/)
+    expect(/\.communityAnchor\s*\{([^}]*)\}/.exec(css)?.[1]).toMatch(/position:\s*relative/)
+    // a plain table's board is not repositioned (spec §7: a table without chaos is unchanged)
+    expect(/\.community\s*\{([^}]*)\}/.exec(css)?.[1]).not.toMatch(/position/)
+  })
+
+  it('puts the pill on the cards’ feet, see-through, once board cards are up, and keeps it inside the board on a phone on its side (I3)', async () => {
+    const css = (await import('./table.module.css?raw')).default.replace(/\r\n/g, '\n')
+    expect(/\.community\[data-board='up'\] \.chaosBannerSlot\s*\{([^}]*)\}/.exec(css)?.[1]).toMatch(/align-items:\s*flex-end/)
+    expect(/\.community\[data-board='up'\] \.chaosBanner\s*\{([^}]*)\}/.exec(css)?.[1]).toMatch(/rgb\(10 18 32 \/ 0\.7\)/)
+    expect(/\.ring\[data-frame='landscape'\] \.community\[data-board='up'\] :is\(\.chaosBanner, \.chaosNote\)\s*\{([^}]*)\}/.exec(css)?.[1]).toMatch(/transform:\s*none/)
   })
 })

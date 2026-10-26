@@ -1,4 +1,4 @@
-import type { HeldCardView, RoomPlayerView } from '@bp/core'
+import type { Card as CardId, HeldCardView, RoomPlayerView } from '@bp/core'
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Chibi, type ChibiSubject, type Expression } from '../avatar2d/index.js'
@@ -182,6 +182,11 @@ export interface SeatProps {
   critMultiplier?: 2 | 3 | null
   /** The dense strip of opponents (seven or more, on a phone): the seat's cards are one icon with their number, not a row of them. */
   chaosSummary?: boolean
+  /**
+   * "Mượn lá" at showdown: the opponent's card this seat also ranked with (a copy), drawn after its own cards with a "Mượn"
+   * tag on it; `highlighted` when it is one of the winning five (the board's gold edge). Absent or `null`: nothing.
+   */
+  borrowed?: { card: CardId; highlighted: boolean } | null
 }
 
 /** What a seat knows of its own cards in a squeeze round, for one hand (see `Seat`). */
@@ -235,6 +240,7 @@ export function Seat({
   blindfolded = false,
   critMultiplier = null,
   chaosSummary = false,
+  borrowed = null,
 }: SeatProps) {
   const { t } = useTranslation()
   const name = seat.displayName === '' ? (player?.displayName ?? '') : seat.displayName
@@ -420,6 +426,12 @@ export function Seat({
                   turnDelayMs={liftAfter + i * SHOWDOWN_STAGGER_MS}
                 />
               ),
+            )}
+            {borrowed === null ? null : (
+              <span className={s.borrowSlot} data-borrowed="" title={t('chaos.borrowedHint')}>
+                <Card card={borrowed.card} size={cardSize} highlighted={borrowed.highlighted} className={s.borrowedCard} />
+                <span className={s.borrowTag}>{t('chaos.borrowed')}</span>
+              </span>
             )}
             {/* The pill keeps its place for the whole hand and shows while a card is still to turn. It lies over the foot of the
                 cards, centred, and takes no row of its own (Plan 26, B6): a row cost a squeeze table's stage 11 px on a 375 px

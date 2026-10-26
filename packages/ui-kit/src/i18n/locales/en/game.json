@@ -299,6 +299,9 @@
     "blindfolded": "Blindfolded",
     "blindfoldedHint": "Your cards stay face down until the showdown",
     "peek": "Peek",
+    "reverseNote": "Upside-Down World: the weakest hand wins",
+    "borrowed": "Borrowed",
+    "borrowedHint": "A card borrowed from an opponent, ranked with this hand",
     "critShout": "Crit ×{{multiplier}}!",
     "tier": {
       "silver": "Silver",

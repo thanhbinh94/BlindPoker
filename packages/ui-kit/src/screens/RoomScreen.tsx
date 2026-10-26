@@ -419,7 +419,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
           // stack's one-row footer has no room for it either, so it is the felt's last line there (BP-31 P4).
           note={(stack || (landscape && !short)) && waiting ? hint : null}
           chaos={chaosTable ? state.chaos : null}
-          banner={chaosTable ? <ChaosBanner item={banner.item} index={banner.index} nameOf={seatName} /> : undefined}
+          banner={chaosTable ? <ChaosBanner item={banner.item} index={banner.index} nameOf={seatName} note={state.chaos.reverse && hand !== null ? t('chaos.reverseNote') : null} /> : undefined}
         />
 
         {/* The result card is dealt onto the felt, so it keeps the felt's night palette in either theme. The countdown

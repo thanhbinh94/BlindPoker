@@ -1755,6 +1755,23 @@ describe('RoomScreen on a Poker hỗn loạn table', () => {
       expect(screen.getByText('Bob: Rescue +3,000')).toBeInTheDocument()
     })
 
+    it('keeps saying the ranking is reversed all hand long, after a reconnect too, and gives the slot to a card while it fires', () => {
+      // Plan 37 final wave (I2): the snapshot's hand view brings `reverse` back; the note is the banner slot's quiet line.
+      const live = { ...finished, phase: 'REVEAL' as const, result: null, restored: true }
+      const restored = wrap(fakeClient(stateWith({ reverse: true, applied: fired }, live)))
+      expect(within(screen.getByRole('group', { name: 'Community cards' })).getByText('Upside-Down World: the weakest hand wins')).toBeInTheDocument()
+      restored.view.unmount()
+      const { view } = wrap(fakeClient(stateWith({ reverse: true, applied: fired }, { ...live, restored: false })))
+      const board = screen.getByRole('group', { name: 'Community cards' })
+      expect(within(board).getByText('Ann plays Card Swap')).toBeInTheDocument()
+      expect(within(board).queryByText('Upside-Down World: the weakest hand wins'), 'one line at a time').toBeNull()
+      act(() => void vi.advanceTimersByTime(900))
+      act(() => void vi.advanceTimersByTime(900))
+      expect(within(board).getByText('Upside-Down World: the weakest hand wins')).toBeInTheDocument()
+      view.rerender(screenFor(fakeClient(stateWith({ reverse: false }, live))))
+      expect(screen.queryByText(/Upside-Down World/)).toBeNull()
+    })
+
     it('has no banner region on a table without chaos', () => {
       const plainRoom = makeRoom({ ...chaosRoom, config: { ...chaosRoom.config, blind: { ...chaosRoom.config.blind!, chaosCycle: undefined } } })
       wrap(fakeClient(makeState({ room: plainRoom, hand: finished })))

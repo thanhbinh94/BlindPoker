@@ -39,7 +39,8 @@ describe('the playground’s chaos table', () => {
     const state = mock.api.state
     expect(state.chaos.draft).toBeNull()
     expect(Object.keys(state.chaos.seats)).toHaveLength(4)
-    expect(Object.values(state.chaos.seats).every((s) => s.cards.length >= 1)).toBe(true)
+    // A "Tích lũy" (chaosPoints) is a card that holds nothing: it adds its points. The draw is `Math.random`, so either may come.
+    expect(Object.values(state.chaos.seats).every((s) => s.cards.length >= 1 || s.points > 0)).toBe(true)
     expect(state.hand).not.toBeNull()
   })
 

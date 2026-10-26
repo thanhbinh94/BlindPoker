@@ -64,7 +64,7 @@ describe('the chaos worst-case pages', () => {
   }
 
   it('knows every chaos state by name', () => {
-    for (const state of ['chaosDraft', 'chaosReveal', 'chaosFour', 'chaosPeel', 'chaosBlind', 'chaosResult']) {
+    for (const state of ['chaosDraft', 'chaosReveal', 'chaosFour', 'chaosPeel', 'chaosBlind', 'chaosResult', 'chaosBoard']) {
       expect(parseWorstHash(`#worst/${state}/6/vi`)?.state, state).toBe(state)
     }
     expect(parseWorstHash('#worst/chaosDraft/6/vi')).toEqual({ state: 'chaosDraft', seats: 6, lang: 'vi', long: false, frame: null })
@@ -88,12 +88,21 @@ describe('the chaos worst-case pages', () => {
     expect(document.querySelector('[data-outcome]')).toHaveTextContent('Bị chặn')
   })
 
+  it('#worst/chaosBoard/6/vi: five board cards up, the banner on their feet, and "Thế giới đảo ngược" on', () => {
+    draw('#worst/chaosBoard/6/vi')
+    const board = screen.getByRole('group', { name: 'Bài chung' })
+    expect(board).toHaveAttribute('data-board', 'up')
+    expect(board.querySelectorAll('[data-card]')).toHaveLength(5)
+    expect(within(board).getByText(/dùng Thế giới đảo ngược/)).toBeInTheDocument()
+  })
+
   it('#worst/chaosResult/6/vi: "Thẻ đã dùng", the credits, and the winner’s shout', () => {
     draw('#worst/chaosResult/6/vi')
     expect(screen.getByText(/^Thẻ đã dùng: Nguyễn Thị Phương Anh — Đổi bài, Nhìn trộm;/)).toBeInTheDocument()
     expect(screen.getByText(/Bạo kích ×2 \+6\.000/)).toBeInTheDocument()
     expect(screen.getByText('Bạo kích ×2!')).toBeInTheDocument()
     expect(screen.getByText(/Đã chạm trần thẻ hôm nay/)).toBeInTheDocument()
+    expect(document.querySelector('[data-me="true"] [data-borrowed]')).toHaveTextContent('Mượn')
   })
 
   it('#worst/chaosFour: four cards in my hand, and the peeked board cards in the ghost slots', () => {

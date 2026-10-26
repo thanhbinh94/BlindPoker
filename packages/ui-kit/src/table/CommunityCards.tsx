@@ -1,6 +1,7 @@
 import type { Card as CardId } from '@bp/core'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { cx } from '../primitives/cx.js'
 import { Card } from './Card.js'
 import { BOARD_STAGGER_MS } from './motion.js'
 import s from './table.module.css'
@@ -15,7 +16,11 @@ export interface CommunityCardsProps {
   handId?: string | null
   /** "Nhìn trộm": the next board cards, for this viewer alone, face up in the first empty slots with a tag over the first. */
   peek?: CardId[]
-  /** The chaos banner's slot: laid over the board's own box, centred, taking no room. */
+  /**
+   * The chaos banner's slot: laid over the board's own box, taking no room. The board is its anchor only when it is given
+   * (a plain table's board is laid out as it always was). Over an empty board it is centred; once board cards are face up
+   * it sits on their feet, see-through, so the cards it lies on still read (`data-board`).
+   */
   banner?: ReactNode
 }
 
@@ -29,7 +34,12 @@ const SLOTS = [0, 1, 2, 3, 4]
 export function CommunityCards({ cards, highlight, dealt = false, handId = null, peek = [], banner }: CommunityCardsProps) {
   const { t } = useTranslation()
   return (
-    <div className={s.community} role="group" aria-label={t('labels.community')}>
+    <div
+      className={cx(s.community, banner !== undefined && s.communityAnchor)}
+      role="group"
+      aria-label={t('labels.community')}
+      data-board={banner !== undefined && cards.length > 0 ? 'up' : undefined}
+    >
       {SLOTS.map((i) => {
         const card = cards[i]
         if (card === undefined) {

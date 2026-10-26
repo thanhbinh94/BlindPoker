@@ -297,8 +297,14 @@ export function PokerTable({
         restored={hand?.restored ?? false}
         onReveal={onReveal}
         chaosCards={chaos?.seats[index]?.cards}
-        // Down because of a blindfold, not for want of a card: the viewer's own seat holds cards, is shown none, and the hand is on.
-        blindfolded={chaosRoom && isMe && handSeat !== undefined && handSeat.holeCards === null && handSeat.cardCount > 0 && hand !== null && hand.phase !== 'COMPLETE'}
+        // Down because of a blindfold: what the snapshot's hand view said, else read off the deal — the viewer's own seat holds
+        // cards and was shown none — while the hand is on.
+        blindfolded={
+          chaosRoom && isMe && handSeat !== undefined && hand !== null && hand.phase !== 'COMPLETE' &&
+          (chaos?.blindfolded ?? (handSeat.holeCards === null && handSeat.cardCount > 0))
+        }
+        // "Mượn lá": the opponent's card this seat also ranked with, beside its own, gold-edged when it is in the winning five.
+        borrowed={hit?.borrowed === undefined ? null : { card: hit.borrowed, highlighted: index === topSeat && hit.best.includes(hit.borrowed) }}
         critMultiplier={crits.get(index) ?? null}
         // Seven opponents or more on a phone: a chip has no line to spare for a row of icons, so it gets the one with the count.
         chaosSummary={mode === 'stack' && !isMe && order.length - (mySeat === null ? 0 : 1) > 6}
