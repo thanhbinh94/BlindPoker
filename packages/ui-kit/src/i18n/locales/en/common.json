@@ -25,7 +25,8 @@
     "SERVER_SHUTDOWN": "Server is shutting down",
     "INTERNAL": "Something went wrong — please try again",
     "CHAOS_UNAVAILABLE": "This server has no chaos poker yet",
-    "CHAOS_NO_OFFER": "There is no card left to pick"
+    "CHAOS_NO_OFFER": "There is no card left to pick",
+    "CHAOS_CANNOT_USE": "That card can't be played right now"
   },
   "language": {
     "vi": "Tiếng Việt",

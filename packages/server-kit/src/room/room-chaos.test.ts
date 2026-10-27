@@ -732,6 +732,22 @@ describe('Chaos room: the result time and "Bỏ qua" (BP-39)', () => {
     expect(h.room.handActive).toBe(false)
   })
 
+  it('the snapshot carries the tally of a running wait, with the viewer\'s own press, and nothing outside a wait', async () => {
+    const h = table()
+    await seat(h, ['h', 'a'])
+    await h.room.startGame('h')
+    await pickAll(h, ['h', 'a'])
+    expect(h.room.snapshot('h').resultSkips).toBeUndefined() // a hand in play
+    await playOut(h)
+    expect(h.room.snapshot('h').resultSkips).toEqual({ skipped: 0, total: 2, mine: false })
+    await h.room.skipResult('h')
+    expect(h.room.snapshot('h').resultSkips).toEqual({ skipped: 1, total: 2, mine: true })
+    expect(h.room.snapshot('a').resultSkips).toEqual({ skipped: 1, total: 2, mine: false })
+    expect(h.room.snapshot(null).resultSkips).toEqual({ skipped: 1, total: 2, mine: false }) // a spectator
+    await h.room.skipResult('a') // everyone pressed: the next hand is in play
+    expect(h.room.snapshot('h').resultSkips).toBeUndefined()
+  })
+
   it('a voter who disconnects after the other pressed "Bỏ qua" lets the hand start at once (Review Focus 3)', async () => {
     const h = table()
     await toResult(h)

@@ -25,7 +25,8 @@
     "SERVER_SHUTDOWN": "Máy chủ sắp tắt",
     "INTERNAL": "Đã xảy ra lỗi, vui lòng thử lại",
     "CHAOS_UNAVAILABLE": "Máy chủ này chưa có Poker hỗn loạn",
-    "CHAOS_NO_OFFER": "Không còn thẻ nào để chọn"
+    "CHAOS_NO_OFFER": "Không còn thẻ nào để chọn",
+    "CHAOS_CANNOT_USE": "Chưa dùng được thẻ này lúc này"
   },
   "language": {
     "vi": "Tiếng Việt",

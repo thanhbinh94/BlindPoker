@@ -106,6 +106,7 @@ describe('chaos card copy', () => {
     for (const res of [viCommon, enCommon]) {
       expect(res.errors.CHAOS_UNAVAILABLE.trim()).not.toBe('')
       expect(res.errors.CHAOS_NO_OFFER.trim()).not.toBe('')
+      expect(res.errors.CHAOS_CANNOT_USE.trim()).not.toBe('')
     }
   })
 })

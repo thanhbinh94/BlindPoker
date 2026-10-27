@@ -1,5 +1,5 @@
 import type {
-  Card, ChaosCreditReason, ChaosEffectKind, ChaosOutcome, ChaosTier, Decision, ErrorCode, GameMode, HeldCardView, LegalActions, PlayerAction,
+  Card, ChaosBonusPayload, ChaosCreditReason, ChaosEffectKind, ChaosOutcome, ChaosTier, Decision, ErrorCode, GameMode, HeldCardView, LegalActions, PlayerAction,
   RoomSummary, RoomView, ServerMessage, ShowdownHand,
 } from '@bp/core'
 import type { PreActionKind } from './preaction.js'
@@ -57,7 +57,7 @@ export interface ClientHandResult {
    * Poker hỗn loạn: the cards the hand used, in the order they acted ("Thẻ đã dùng"), from the public `CHAOS_SUMMARY`
    * just before `SETTLEMENT`. Absent on a hand that used none and on a table without chaos.
    */
-  chaosUsed?: { seat: number; cardId: string; outcome: string }[]
+  chaosUsed?: { seat: number; cardId: string; outcome: string; targets: number[] }[]
 }
 
 export interface ClientHand {
@@ -126,8 +126,8 @@ export interface ClientChaosCredit {
 /** Poker hỗn loạn (spec 2026-10-26): everything the client keeps about the chaos cards. Empty on a table without them. */
 export interface ClientChaos {
   draft: ClientChaosDraft | null
-  /** Every seat's held cards and chaos points (public). */
-  seats: Record<number, { cards: HeldCardView[]; points: number }>
+  /** Every seat's held cards, chaos points and how many bonus cards wait in its hand (public; which cards stays the owner's). */
+  seats: Record<number, { cards: HeldCardView[]; points: number; bonusCount: number }>
   /** This hand's `CHAOS_APPLIED`, in order; cleared when the next hand starts. */
   applied: AppliedChaosView[]
   /** The credits cards paid after the last hand; cleared when the next hand starts. */
@@ -147,9 +147,24 @@ export interface ClientChaos {
    * was shown none of). Cleared to `null` when the next hand starts.
    */
   blindfolded: boolean | null
+  /**
+   * The viewer's own bonus hand (BP-39): the cards waiting to be played, and the one pressed and not yet fired. From the
+   * owner's `CHAOS_BONUS` notification and a snapshot; empty for a spectator and on every other table.
+   */
+  bonus: ChaosBonusPayload
 }
 
-export const initialChaos: ClientChaos = { draft: null, seats: {}, applied: [], credits: [], awarded: [], peek: null, reverse: false, blindfolded: null }
+export const initialChaos: ClientChaos = { draft: null, seats: {}, applied: [], credits: [], awarded: [], peek: null, reverse: false, blindfolded: null, bonus: { cards: [], armed: null } }
+
+/**
+ * A chaos table's result wait, as "Bỏ qua" counts it: how many of the `total` voters pressed it, and whether I did.
+ * `null` outside a wait (cleared when a hand or a draft starts, and on leaving).
+ */
+export interface ClientResultSkips {
+  skipped: number
+  total: number
+  mine: boolean
+}
 
 export interface ClientError {
   code: ErrorCode
@@ -209,6 +224,8 @@ export interface ClientState {
    */
   autoPlay: boolean
   chaos: ClientChaos
+  /** Poker hỗn loạn: the "Bỏ qua" count of the running result wait, or `null` when none runs. */
+  resultSkips: ClientResultSkips | null
 }
 
 export type ClientAction =
@@ -222,6 +239,8 @@ export type ClientAction =
   | { type: 'autoPlay'; on: boolean }
   /** The server acknowledged my `CHAOS_PICK`: the offer is picked now, not only when the draft ends. */
   | { type: 'chaosPicked'; offerId: string }
+  /** The server acknowledged my `RESULT_SKIP`: the count shows I pressed it. */
+  | { type: 'resultSkipped' }
   /**
    * The account's display name changed (the app's own rename succeeded): `me` takes the new name at once. `me`
    * came from `WELCOME` and would otherwise keep the old name until the next one, and the lobby bar reads it.
@@ -257,4 +276,5 @@ export const initialClientState: ClientState = {
   preAction: null,
   autoPlay: false,
   chaos: initialChaos,
+  resultSkips: null,
 }

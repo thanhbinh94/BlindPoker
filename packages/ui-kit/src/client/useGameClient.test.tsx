@@ -352,4 +352,60 @@ describe('useGameClient Poker hỗn loạn', () => {
     act(() => sock().receive({ t: 'ROOM_EVENT', seq: 8, event: { type: 'CHAOS_DRAFT', tier: 'silver', draftMs: 15_000, deadlineAt: OFFER.deadlineAt, seats: [1] } }))
     expect(picks(sock)).toHaveLength(0)
   })
+
+  // ---- BP-39: playing a bonus card, and "Bỏ qua" ----
+  const sentOf = (sock: () => FakeSocket, t: string) => sock().sent.filter((m) => (m as { t: string }).t === t)
+  const waitBegins = (sock: () => FakeSocket, seq = 8, skipped = 0) =>
+    act(() => sock().receive({ t: 'ROOM_EVENT', seq, event: { type: 'RESULT_SKIPS', skipped, total: 2 } }))
+
+  it('playBonus sends CHAOS_USE with the card and a request id', () => {
+    const { result, sock } = atTheDraft()
+    act(() => { result.current.playBonus(21).catch(() => undefined) })
+    expect(sock().sent.at(-1)).toMatchObject({ t: 'CHAOS_USE', uid: 21, reqId: expect.any(String) })
+  })
+
+  it('skipResult sends RESULT_SKIP and shows my press only once the server acknowledges', async () => {
+    const { result, sock } = atTheDraft()
+    waitBegins(sock)
+    let p!: Promise<{ t: string }>
+    act(() => { p = result.current.skipResult() })
+    const sent = sock().sent.at(-1) as { t: string; reqId: string }
+    expect(sent).toMatchObject({ t: 'RESULT_SKIP', reqId: expect.any(String) })
+    expect(result.current.state.resultSkips).toEqual({ skipped: 0, total: 2, mine: false })
+    act(() => sock().receive({ t: 'ACK', reqId: sent.reqId }))
+    await act(async () => { await expect(p).resolves.toMatchObject({ t: 'ACK' }) })
+    expect(result.current.state.resultSkips).toEqual({ skipped: 0, total: 2, mine: true })
+  })
+
+  it('auto-play skips the result wait once, and not when the press is already mine', async () => {
+    const { result, sock } = atTheDraft()
+    act(() => result.current.setAutoPlay(true))
+    expect(sentOf(sock, 'RESULT_SKIP')).toHaveLength(0) // no wait yet
+    waitBegins(sock)
+    expect(sentOf(sock, 'RESULT_SKIP')).toHaveLength(1)
+    const sent = sock().sent.at(-1) as { reqId: string }
+    act(() => sock().receive({ t: 'ACK', reqId: sent.reqId }))
+    await act(async () => { await Promise.resolve() })
+    waitBegins(sock, 9, 1) // another seat pressed: the count moves, my press stands
+    expect(sentOf(sock, 'RESULT_SKIP')).toHaveLength(1)
+  })
+
+  it('without auto-play the player presses "Bỏ qua" themselves', () => {
+    const { sock } = atTheDraft()
+    waitBegins(sock)
+    expect(sentOf(sock, 'RESULT_SKIP')).toHaveLength(0)
+  })
+
+  it('auto-play sends the skip again after a reconnect whose snapshot says it was lost, and not for a snapshot that is no reconnect', () => {
+    const { result, sock } = atTheDraft()
+    act(() => result.current.setAutoPlay(true))
+    waitBegins(sock)
+    expect(sentOf(sock, 'RESULT_SKIP')).toHaveLength(1)
+    const snapshot = { t: 'ROOM_SNAPSHOT' as const, seq: 20, room: chaosRoom, hand: null, deadlineAt: null, resultSkips: { skipped: 0, total: 2, mine: false } }
+    act(() => sock().receive(snapshot))
+    expect(sentOf(sock, 'RESULT_SKIP')).toHaveLength(1) // the room was never unconfirmed: roomReturns did not move
+    act(() => sock().receive({ t: 'WELCOME', playerId: 'a', displayName: 'A', balance: 100, serverTime: Date.now() }))
+    act(() => sock().receive({ ...snapshot, seq: 21 }))
+    expect(sentOf(sock, 'RESULT_SKIP')).toHaveLength(2)
+  })
 })

@@ -188,6 +188,10 @@ export class Room {
     const hand = this.runner && !this.runner.isComplete ? playerView(this.runner.state, seat) : null
     const snapshot: Snapshot = { t: 'ROOM_SNAPSHOT', seq: this.seq, room: this.view(), hand, deadlineAt: hand ? this.deadlineAt : null }
     if (this.chaos) snapshot.chaos = this.chaos.snapshotFor(viewer === undefined ? null : viewerId)
+    // The "Bỏ qua" tally of a running result wait, or a reconnect and a late joiner would lose the count (BP-39).
+    if (this.resultTally && this.inResultWait()) {
+      snapshot.resultSkips = { ...this.resultTally, mine: viewerId !== null && this.resultSkips.has(viewerId) }
+    }
     return snapshot
   }
 

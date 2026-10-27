@@ -1,4 +1,4 @@
-import type { GameEvent, HandView, LegalActions, RoomEvent, RoomView, ServerMessage } from '@bp/core'
+import type { GameEvent, HandView, HeldCardView, LegalActions, RoomEvent, RoomView, ServerMessage } from '@bp/core'
 import { initialChaos, initialClientState } from './types.js'
 import type { ClientAction, ClientChaos, ClientHand, ClientHandResult, ClientSeat, ClientState } from './types.js'
 
@@ -80,7 +80,8 @@ function startHand(state: ClientState, event: Extract<GameEvent, { type: 'HAND_S
   }
   // A new hand closes whatever the last one left: a draft that every seat finished at once is over, and the banner,
   // the credits and the peek were that hand's. The seats' cards stay.
-  return { ...state, hand, deadlineAt: null, preAction: null, chaos: { ...state.chaos, draft: null, applied: [], credits: [], awarded: [], peek: null, reverse: false, blindfolded: null } }
+  // The result wait (and its "Bỏ qua" count) is over with the deal. The bonus hand stays: it belongs to the player.
+  return { ...state, hand, deadlineAt: null, preAction: null, resultSkips: null, chaos: { ...state.chaos, draft: null, applied: [], credits: [], awarded: [], peek: null, reverse: false, blindfolded: null } }
 }
 
 /**
@@ -94,7 +95,7 @@ function settle(state: ClientState, hand: ClientHand, event: Extract<GameEvent, 
   const stacks = new Map(event.stacks.map((s) => [s.seat, s.stack]))
   const uncalled = event.uncalledReturned
   // The public summary is what the result line shows; a hand that never sent one falls back to what this viewer saw fire.
-  const chaosUsed = hand.result?.chaosUsed ?? (state.chaos.applied.length > 0 ? state.chaos.applied.map((a) => ({ seat: a.seat, cardId: a.cardId, outcome: a.outcome })) : undefined)
+  const chaosUsed = hand.result?.chaosUsed ?? (state.chaos.applied.length > 0 ? state.chaos.applied.map((a) => ({ seat: a.seat, cardId: a.cardId, outcome: a.outcome, targets: a.targets })) : undefined)
   const seats = hand.seats.map((s) => {
     const stack = stacks.get(s.seat)
     const mine = uncalled?.seat === s.seat
@@ -272,7 +273,7 @@ function applyHandEvent(state: ClientState, hand: ClientHand, event: GameEvent &
       if (event.seat !== hand.mySeat) return state
       return { ...state, chaos: { ...state.chaos, peek: { seat: event.seat, cards: event.cards.slice() } } }
     case 'CHAOS_SUMMARY':
-      return withHand(state, hand, { result: { ...(hand.result ?? NO_RESULT), chaosUsed: event.used.map((u) => ({ seat: u.seat, cardId: u.cardId, outcome: u.outcome })) } })
+      return withHand(state, hand, { result: { ...(hand.result ?? NO_RESULT), chaosUsed: event.used.map((u) => ({ seat: u.seat, cardId: u.cardId, outcome: u.outcome, targets: u.targets })) } })
   }
 }
 
@@ -331,7 +332,7 @@ function applyRoomEvent(room: RoomView, event: RoomEvent): RoomView {
     case 'CHAOS_PICKED':
     case 'CHAOS_STATE':
     case 'CHAOS_AWARDED':
-    case 'RESULT_SKIPS': // Task 6 keeps the count in client state
+    case 'RESULT_SKIPS': // the count lives in `ClientState.resultSkips`
       return room
   }
 }
@@ -349,7 +350,7 @@ function applyChaosRoomEvent(chaos: ClientChaos, event: RoomEvent, mySeat: numbe
       return chaos.draft && event.seat === mySeat ? { ...chaos, draft: { ...chaos.draft, picked: true } } : chaos
     // Sent after a draft and after each hand: a draft is over by then.
     case 'CHAOS_STATE':
-      return { ...chaos, draft: null, seats: Object.fromEntries(event.seats.map((s) => [s.seat, { cards: s.cards, points: s.points }])) }
+      return { ...chaos, draft: null, seats: Object.fromEntries(event.seats.map((s) => [s.seat, { cards: s.cards, points: s.points, bonusCount: s.bonusCount }])) }
     case 'CHAOS_CREDIT': {
       const { type: _type, stack: _stack, ...credit } = event
       return { ...chaos, credits: [...chaos.credits, credit] }
@@ -358,7 +359,7 @@ function applyChaosRoomEvent(chaos: ClientChaos, event: RoomEvent, mySeat: numbe
       return { ...chaos, awarded: [...chaos.awarded, { seat: event.seat, cardIds: event.cardIds }] }
     // `PLAYER_SAT` carries no `chaos` field: a new seat starts with nothing, and says so until `CHAOS_STATE`.
     case 'PLAYER_SAT':
-      return { ...chaos, seats: { ...chaos.seats, [event.seat]: chaos.seats[event.seat] ?? { cards: [], points: 0 } } }
+      return { ...chaos, seats: { ...chaos.seats, [event.seat]: chaos.seats[event.seat] ?? { cards: [], points: 0, bonusCount: 0 } } }
     case 'PLAYER_STOOD':
       return dropSeat(chaos, event.seat)
     case 'PLAYER_LEFT': {
@@ -377,16 +378,52 @@ function dropSeat(chaos: ClientChaos, seat: number): ClientChaos {
 }
 
 /** The seats' chaos cards as a snapshot's roster carries them; a chaos table gives every seated player an entry. */
-function chaosFromSnapshot(room: RoomView, draft: ClientChaos['draft'], hand: HandView | null): ClientChaos {
+function chaosFromSnapshot(room: RoomView, draft: ClientChaos['draft'], hand: HandView | null, bonus: ClientChaos['bonus'] | undefined): ClientChaos {
   const table = room.config.blind?.chaosCycle !== undefined
   const seats: ClientChaos['seats'] = {}
-  for (const p of room.players) if (p.seat !== null && (p.chaos || table)) seats[p.seat] = { cards: p.chaos?.cards ?? [], points: p.chaos?.points ?? 0 }
+  for (const p of room.players) {
+    if (p.seat !== null && (p.chaos || table)) seats[p.seat] = { cards: p.chaos?.cards ?? [], points: p.chaos?.points ?? 0, bonusCount: p.chaos?.bonusCount ?? 0 }
+  }
   // The hand view carries what the event stream had built up: the viewer's peek, the reversed ranking and a blindfold.
   const view = hand?.chaos
   const mine = hand?.mySeat ?? null
   const peek = view !== undefined && view.peek.length > 0 && mine !== null ? { seat: mine, cards: view.peek.slice() } : null
-  return { ...initialChaos, seats, draft, peek, reverse: view?.reverse ?? false, blindfolded: view === undefined ? null : view.blindfolded }
+  return { ...initialChaos, seats, draft, peek, reverse: view?.reverse ?? false, blindfolded: view === undefined ? null : view.blindfolded, bonus: bonus ?? initialChaos.bonus }
 }
+
+/** `NOTIFICATION { kind: 'CHAOS_BONUS' }`: this player's bonus hand and the armed card. Anything malformed is ignored. */
+function applyChaosBonus(chaos: ClientChaos, payload: unknown): ClientChaos {
+  const p = payload as { cards?: unknown; armed?: unknown } | null
+  if (!p || !Array.isArray(p.cards)) return chaos
+  let armed: ClientChaos['bonus']['armed'] = null
+  if (p.armed !== null && p.armed !== undefined) {
+    const a = p.armed as { uid?: unknown; cardId?: unknown; hand?: unknown }
+    if (typeof a.uid !== 'number' || typeof a.cardId !== 'string' || (a.hand !== 'this' && a.hand !== 'next')) return chaos
+    armed = { uid: a.uid, cardId: a.cardId, hand: a.hand }
+  }
+  return { ...chaos, bonus: { cards: p.cards as HeldCardView[], armed } }
+}
+
+/**
+ * The "Bỏ qua" count after a room event. `RESULT_SKIPS` sets it (my own press is kept while the count stays above zero; a
+ * wait that starts afresh has nobody's); a draft, or a status that names no next hand, ends the wait.
+ */
+function skipsAfter(skips: ClientState['resultSkips'], event: RoomEvent): ClientState['resultSkips'] {
+  switch (event.type) {
+    case 'RESULT_SKIPS':
+      return { skipped: event.skipped, total: event.total, mine: skips !== null && skips.mine && event.skipped > 0 }
+    case 'CHAOS_DRAFT':
+      return null
+    case 'ROOM_STATUS':
+      return event.nextHandAt === null ? null : skips
+    default:
+      return skips
+  }
+}
+
+/** The "Bỏ qua" count a snapshot carried, or `null` when no result wait runs. */
+const skipsFromSnapshot = (s: Extract<ServerMessage, { t: 'ROOM_SNAPSHOT' }>['resultSkips']): ClientState['resultSkips'] =>
+  s === undefined ? null : { skipped: s.skipped, total: s.total, mine: s.mine === true }
 
 /** The server's default draft window (`DEFAULT_CHAOS_CONFIG.draftMs`), for a draft whose length a frame did not carry. */
 const DEFAULT_DRAFT_MS = 15_000
@@ -457,7 +494,8 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
         roomStale: false,
         roomReturns: state.roomStale ? state.roomReturns + 1 : state.roomReturns,
         hand: msg.hand ? handFromView(msg.hand, msg.room) : null,
-        chaos: chaosFromSnapshot(msg.room, draftFromSnapshot(msg.chaos?.draft ?? null), msg.hand),
+        chaos: chaosFromSnapshot(msg.room, draftFromSnapshot(msg.chaos?.draft ?? null), msg.hand, msg.chaos?.bonus),
+        resultSkips: skipsFromSnapshot(msg.resultSkips),
         seq: msg.seq,
         deadlineAt: msg.deadlineAt,
         resyncNeeded: false,
@@ -466,8 +504,10 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
     case 'BALANCE':
       return { ...state, balance: msg.balance }
     case 'NOTIFICATION':
-      // The offer is a draft's business, not a slip to dismiss.
-      return msg.kind === 'CHAOS_OFFER' ? { ...state, chaos: applyChaosOffer(state.chaos, msg.payload) } : notify(state, msg.kind, msg.payload, now)
+      // The offer is a draft's business and the bonus hand is the player's own: neither is a slip to dismiss.
+      if (msg.kind === 'CHAOS_OFFER') return { ...state, chaos: applyChaosOffer(state.chaos, msg.payload) }
+      if (msg.kind === 'CHAOS_BONUS') return { ...state, chaos: applyChaosBonus(state.chaos, msg.payload) }
+      return notify(state, msg.kind, msg.payload, now)
     case 'ERROR': {
       // The other answer the reconnect probe can get: the server has no room for us. That is news to the state,
       // not to the player — silence it while the room was unconfirmed, or when there was no room to lose.
@@ -478,7 +518,7 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
           room: null,
           roomStale: false,
           hand: null,
-          chaos: initialChaos,
+          chaos: initialChaos, resultSkips: null,
           seq: 0,
           deadlineAt: null,
           preAction: null,
@@ -498,7 +538,7 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
     case 'ROOM_EVENT': {
       const resyncNeeded = state.resyncNeeded || state.room === null || gap(state, msg.seq)
       if (msg.event.type === 'ROOM_CLOSED') {
-        return { ...notify(state, 'ROOM_CLOSED', { reason: msg.event.reason }, now), room: null, hand: null, chaos: initialChaos, seq: msg.seq, resyncNeeded, preAction: null, autoPlay: false }
+        return { ...notify(state, 'ROOM_CLOSED', { reason: msg.event.reason }, now), room: null, hand: null, chaos: initialChaos, resultSkips: null, seq: msg.seq, resyncNeeded, preAction: null, autoPlay: false }
       }
       const event = msg.event
       // Standing, leaving or sitting out ends the seat's standing preferences with it.
@@ -507,7 +547,7 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
       // when the hand ended. The room is gone for this client exactly as after a leave it asked for: the room screen
       // hands over to the app (`onLeft`). A kick also brings its own KICKED notification; that stays a toast only.
       if (mine && event.type === 'PLAYER_LEFT') {
-        return { ...state, room: null, hand: null, chaos: initialChaos, seq: msg.seq, deadlineAt: null, preAction: null, autoPlay: false }
+        return { ...state, room: null, hand: null, chaos: initialChaos, resultSkips: null, seq: msg.seq, deadlineAt: null, preAction: null, autoPlay: false }
       }
       const myPlayer = state.me !== null ? state.room?.players.find((p) => p.playerId === state.me!.playerId) : undefined
       const stopsAutoPlay = mine && (event.type === 'PLAYER_STOOD' || (event.type === 'PLAYER_SIT_OUT' && event.sittingOut))
@@ -518,6 +558,7 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
         hand: credited ? { ...state.hand!, seats: mapSeat(state.hand!, event.seat, (x) => ({ ...x, stack: event.stack })) } : state.hand,
         room: state.room ? applyRoomEvent(state.room, event) : null,
         chaos: applyChaosRoomEvent(state.chaos, event, myPlayer?.seat ?? null, (id) => state.room?.players.find((p) => p.playerId === id)?.seat ?? null),
+        resultSkips: skipsAfter(state.resultSkips, event),
         seq: msg.seq,
         resyncNeeded,
         autoPlay: stopsAutoPlay ? false : state.autoPlay,
@@ -542,7 +583,7 @@ export function reduceClient(state: ClientState, action: ClientAction): ClientSt
     case 'resyncSent':
       return { ...state, resyncNeeded: false }
     case 'leftRoom':
-      return { ...state, room: null, hand: null, chaos: initialChaos, preAction: null, autoPlay: false }
+      return { ...state, room: null, hand: null, chaos: initialChaos, resultSkips: null, preAction: null, autoPlay: false }
     case 'preAction':
       // A tick needs a hand to belong to; outside one there is nothing it could mean.
       return { ...state, preAction: action.kind === null || state.hand === null ? null : { kind: action.kind, handId: state.hand.handId } }
@@ -552,6 +593,8 @@ export function reduceClient(state: ClientState, action: ClientAction): ClientSt
       const draft = state.chaos.draft
       return draft?.offer?.offerId === action.offerId ? { ...state, chaos: { ...state.chaos, draft: { ...draft, picked: true } } } : state
     }
+    case 'resultSkipped':
+      return state.resultSkips === null || state.resultSkips.mine ? state : { ...state, resultSkips: { ...state.resultSkips, mine: true } }
     case 'renamed':
       // Only `me`. The room the player is in (if any) seated them under the name they entered it with, for
       // everyone at the table, and keeps it; the server hands the new name to the player's live connection

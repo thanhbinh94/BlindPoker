@@ -58,8 +58,8 @@ describe('PokerTable on a Poker hỗn loạn table', () => {
       handOf(),
       chaos({
         seats: {
-          0: { cards: [{ uid: 1, cardId: 's_shield', tier: 'silver', handsLeft: null }], points: 3 },
-          2: { cards: [{ uid: 2, cardId: 'g_swap_all', tier: 'gold', handsLeft: null }, { uid: 3, cardId: 'd_mirror', tier: 'diamond', handsLeft: 2 }], points: 0 },
+          0: { cards: [{ uid: 1, cardId: 's_shield', tier: 'silver', handsLeft: null }], points: 3, bonusCount: 0 },
+          2: { cards: [{ uid: 2, cardId: 'g_swap_all', tier: 'gold', handsLeft: null }, { uid: 3, cardId: 'd_mirror', tier: 'diamond', handsLeft: 2 }], points: 0, bonusCount: 0 },
         },
       }),
     )
@@ -206,7 +206,7 @@ describe('PokerTable on a crowded Poker hỗn loạn phone table', () => {
     playerCount: 9,
     players: Array.from({ length: 9 }, (_, seat) => makePlayer({ playerId: seat === 0 ? 'a' : `p${seat}`, displayName: seat === 0 ? 'Ann' : `P${seat}`, seat, status: 'IN_HAND', stack: 20_000 })),
   })
-  const held = { cards: [1, 2, 3].map((uid) => ({ uid, cardId: 's_shield', tier: 'silver' as const, handsLeft: null })), points: 0 }
+  const held = { cards: [1, 2, 3].map((uid) => ({ uid, cardId: 's_shield', tier: 'silver' as const, handsLeft: null })), points: 0, bonusCount: 0 }
   const drawNine = (layout: 'stack' | 'ring') =>
     render(
       <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>

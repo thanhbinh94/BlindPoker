@@ -163,6 +163,16 @@ export interface ChaosSnapshot {
   bonus?: ChaosBonusPayload
 }
 
+/**
+ * `ROOM_SNAPSHOT.resultSkips`, present only while a chaos table's result wait runs: the "Bỏ qua" tally as `RESULT_SKIPS`
+ * says it, plus whether the viewer has pressed it (so a reconnect or a late joiner does not lose the count).
+ */
+export interface ResultSkipsSnapshot {
+  skipped: number
+  total: number
+  mine?: boolean
+}
+
 /** Every client message may carry a `reqId`; the server echoes it on `ACK` / `ERROR`. `ACTION` requires one. */
 export type ClientMessage =
   | { t: 'HELLO'; reqId?: string; sessionToken: string }
@@ -194,7 +204,7 @@ export type ClientMessage =
 export type ServerMessage =
   | { t: 'WELCOME'; playerId: string; displayName: string; balance: number; serverTime: number }
   | { t: 'ROOM_LIST'; rooms: RoomSummary[] }
-  | { t: 'ROOM_SNAPSHOT'; seq: number; room: RoomView; hand: HandView | null; deadlineAt: number | null; chaos?: ChaosSnapshot }
+  | { t: 'ROOM_SNAPSHOT'; seq: number; room: RoomView; hand: HandView | null; deadlineAt: number | null; chaos?: ChaosSnapshot; resultSkips?: ResultSkipsSnapshot }
   | { t: 'GAME_EVENT'; seq: number; event: GameEvent & { deadlineAt?: number } }
   | { t: 'ROOM_EVENT'; seq: number; event: RoomEvent }
   | { t: 'BALANCE'; balance: number }

@@ -121,4 +121,28 @@ describe('the chaos worst-case pages', () => {
     draw('#worst/chaosBlind/6/vi')
     expect(within(document.querySelector<HTMLElement>('[data-me="true"]')!).getByText('Bị che mắt')).toBeInTheDocument()
   })
+  // BP-39: the pages Tasks 8-11 take their screenshots from.
+  it('knows the bonus pages by name', () => {
+    expect(parseWorstHash('#worst/chaosBonus/6/vi')?.state).toBe('chaosBonus')
+    expect(parseWorstHash('#worst/chaosBurst/8/en')?.state).toBe('chaosBurst')
+  })
+
+  it('#worst/chaosBurst/8/vi: all eight seats fired a card, in one "Thẻ đã dùng" line, with the next hand counted down', () => {
+    draw('#worst/chaosBurst/8/vi')
+    const line = screen.getByText(/^Thẻ đã dùng: /)
+    expect(line.textContent!.split('; ')).toHaveLength(8)
+    expect(line).toHaveTextContent('Bot 1 — Rút lá lẻ (Bị chặn)')
+    expect(document.body.textContent).toMatch(/Ván tiếp theo sau [0-9]+ giây/)
+  })
+
+  it('#worst/chaosBurst with fewer seats lets only those seats fire', () => {
+    draw('#worst/chaosBurst/4/vi')
+    expect(screen.getByText(/^Thẻ đã dùng: /).textContent!.split('; ')).toHaveLength(4)
+  })
+
+  it('#worst/chaosBonus/6/vi: my decision with a full bonus hand behind it', () => {
+    draw('#worst/chaosBonus/6/vi')
+    expect(screen.getByRole('button', { name: /^Chơi/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Bỏ bài' })).toBeInTheDocument()
+  })
 })
