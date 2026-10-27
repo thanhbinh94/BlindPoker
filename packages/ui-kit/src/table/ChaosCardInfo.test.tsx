@@ -20,7 +20,8 @@ const draw = (props: Omit<ChaosCardInfoProps, 'children'> & { children?: React.R
   )
 
 const trigger = () => screen.getByRole('button')
-const tip = () => screen.queryByRole('tooltip')
+/** The popup: a tooltip, or — holding a button — a non-modal dialog (P2). */
+const tip = () => screen.queryByRole('tooltip') ?? screen.queryByRole('dialog')
 /** A tap as Chrome on a phone delivers it: the button takes the focus after the finger lifts, then the click (`detail` 1). */
 const tap = (el: HTMLElement) => {
   fireEvent.pointerDown(el, { pointerType: 'touch' })
@@ -207,6 +208,27 @@ describe('ChaosCardInfo', () => {
   describe('with a step to take (the bonus hand’s "Dùng", BP-39)', () => {
     const card = () => screen.getByRole('button', { name: /Khiên gỗ/ })
     const use = () => screen.getByRole('button', { name: 'Dùng' })
+
+    it('is a non-modal dialog named by its card while it holds the button, its trigger saying so; read-only it stays a tooltip (P2)', () => {
+      const { unmount } = draw({ cardId: 's_shield', action: { kind: 'button', label: 'Dùng', onPress: vi.fn() } })
+      expect(card()).toHaveAttribute('aria-haspopup', 'dialog')
+      expect(card()).toHaveAttribute('aria-expanded', 'false')
+      tap(card())
+      const dialog = screen.getByRole('dialog', { name: 'Khiên gỗ' })
+      expect(dialog).not.toHaveAttribute('aria-modal', 'true')
+      expect(dialog).toContainElement(use())
+      expect(screen.queryByRole('tooltip')).toBeNull()
+      expect(card()).toHaveAttribute('aria-expanded', 'true')
+      expect(card()).toHaveAttribute('aria-controls', dialog.id)
+      expect(card()).not.toHaveAttribute('aria-describedby')
+      unmount()
+
+      draw({ cardId: 's_shield', action: { kind: 'status', label: 'Đã đặt dùng · ván sau' } })
+      expect(card()).not.toHaveAttribute('aria-haspopup')
+      tap(card())
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(card()).toHaveAttribute('aria-describedby', screen.getByRole('tooltip').id)
+    })
 
     it('offers the button under the description, in a separate step from the tap that opened it', () => {
       const onPress = vi.fn()

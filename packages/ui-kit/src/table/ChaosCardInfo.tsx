@@ -214,11 +214,15 @@ export function ChaosCardInfo(props: ChaosCardInfoProps) {
       ? ''
       : `${nameOf(first.cardId)} (${t(`chaos.tier.${tierOf(first.cardId)}`)})${leftOf(first.handsLeft) === null ? '' : `${SEP}${leftOf(first.handsLeft)}`}`)
 
+  // A popup that holds a button ("Dùng") is a small non-modal dialog named by its card (P2): a tooltip may hold no control.
+  // A read-only popup ("Đã đặt dùng", or no step at all) stays a tooltip that describes its trigger.
+  const asDialog = action?.kind === 'button'
   const tip = isOpen ? (
     <div
       ref={tipRef}
       id={tipId}
-      role="tooltip"
+      role={asDialog ? 'dialog' : 'tooltip'}
+      aria-label={asDialog && first !== undefined ? nameOf(first.cardId) : undefined}
       className={s.cardInfo}
       data-surface="night"
       data-side={place?.side}
@@ -297,7 +301,9 @@ export function ChaosCardInfo(props: ChaosCardInfoProps) {
         className={cx(s.cardInfoTrigger, className)}
         aria-label={label}
         aria-expanded={isOpen}
-        aria-describedby={isOpen ? tipId : undefined}
+        aria-haspopup={asDialog ? 'dialog' : undefined}
+        aria-controls={isOpen && asDialog ? tipId : undefined}
+        aria-describedby={isOpen && !asDialog ? tipId : undefined}
         onPointerDown={() => {
           pressing.current = true
         }}

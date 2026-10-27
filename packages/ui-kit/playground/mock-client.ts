@@ -69,7 +69,8 @@ const STEP_MS = 900
 const NEXT_HAND_MS = 6_000
 
 const ACK: AckOrError = { t: 'ACK', reqId: 'playground' }
-const RNG: Rng = { int: (max) => Math.floor(Math.random() * max) }
+/** The page's dealer: `Math.random`. A test passes a seeded one (`createMockClient`'s `rng`) so its draws repeat (P1). */
+const RANDOM: Rng = { int: (max) => Math.floor(Math.random() * max) }
 
 const rulesFor = (mode: PlaygroundMode): Ruleset =>
   mode === 'holdem'
@@ -141,7 +142,8 @@ export interface MockClient {
  * round's deadline, and turns what is still down then. So the
  * playground exercises the same reducer, the same views and the same hole-card hiding as production.
  */
-export function createMockClient(mode: PlaygroundMode, seatCount: number, onChange: (state: ClientState) => void): MockClient {
+export function createMockClient(mode: PlaygroundMode, seatCount: number, onChange: (state: ClientState) => void, rng: Rng = RANDOM): MockClient {
+  const RNG = rng
   const SEATS = seatCount
   const rules = rulesFor(mode)
   const bot = createBotStrategy()
@@ -535,7 +537,9 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
       const r = chaosOn ? armBonus(mine, uid, { phase: 'between' }) : { error: 'NO_CARD' as const }
       if ('error' in r) return { t: 'ERROR', code: 'CHAOS_CANNOT_USE', message: r.error, reqId: 'playground' }
       held.set(MY_SEAT, r.seat)
-      sendChaosState() // the table's count, and my own bonus hand with the pressed card
+      // My own bonus hand only (P9): the server tells the table nothing when a card is pressed — the count already holds the
+      // armed card — and a CHAOS_STATE here would close an open draft panel in the client.
+      sendBonus()
       return ACK
     },
     skipResult: async () => {

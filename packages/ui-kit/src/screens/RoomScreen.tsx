@@ -13,7 +13,7 @@ import { ActionBar } from '../table/ActionBar.js'
 import { BonusHand } from '../table/BonusHand.js'
 import { ChaosDraft } from '../table/ChaosDraft.js'
 import { ChaosToasts } from '../table/ChaosToasts.js'
-import { HandResult } from '../table/HandResult.js'
+import { HandResult, ResultSkipControl, type ResultSkip } from '../table/HandResult.js'
 import { STACK_LAYOUT_QUERY, useRoomFrame, useStageTier, type RoomFrame } from '../table/frame.js'
 import { PokerTable, type TableLayout } from '../table/PokerTable.js'
 import { RankLabel } from '../table/RankLabel.js'
@@ -300,7 +300,29 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
       </Button>
     ) : null
   const readyLine = waiting ? <span className={s.readyCount}>{t('room.readyCount', { ready: readyCount, total: seated.length })}</span> : null
-  const countdownLine = countdownHere ? <p className={s.countdown}>{nextHandText}</p> : null
+  // "Bỏ qua" (spec §3.3): the tally for everyone at a chaos table while the result wait runs, the button for a voter — the
+  // server's own rule: seated, connected and not sitting out (nor asked to: the view's `sittingOut` carries both). A seat
+  // sitting out is not counted, so a button there would read "Đã bỏ qua" while the count stayed put (M1).
+  // Not through `request`, which would grey the tray for a press the tray did not make; a refusal (the wait just ended) is
+  // silent, as the server's is.
+  const skips = state.resultSkips
+  const voter = mySeated && me.connected && !sittingOut
+  const skip: ResultSkip | null =
+    !chaosTable || skips === null
+      ? null
+      : { ...skips, ...(voter ? { onSkip: () => client.skipResult().catch(() => undefined) } : {}) }
+  // A desktop result card closed with "Đóng" takes its "Bỏ qua" with it: the control stays here, beside the countdown, while
+  // the wait runs (M2). The phone's strip has no "Đóng", so this is the card's case only.
+  const countdownLine = countdownHere ? (
+    <p className={s.countdown}>
+      {nextHandText}
+      {skip !== null && !resultStrip ? (
+        <span className={s.countdownSkip}>
+          <ResultSkipControl skip={skip} handId={finished?.handId ?? ''} />
+        </span>
+      ) : null}
+    </p>
+  ) : null
   const startButton =
     waiting && isHost ? (
       <Button variant="gold" disabled={request.busy || !canStart} onClick={() => void request.run(() => client.startGame())}>
@@ -360,14 +382,6 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
     }
   }
   const leave = (): void => void request.run(() => client.leaveRoom())
-  // "Bỏ qua" (spec §3.3): the tally for everyone at a chaos table while the result wait runs, the button for a seated player.
-  // Not through `request`, which would grey the tray for a press the tray did not make; a refusal (the wait just ended) is
-  // silent, as the server's is.
-  const skips = state.resultSkips
-  const skip =
-    !chaosTable || skips === null
-      ? null
-      : { ...skips, ...(mySeated ? { onSkip: () => client.skipResult().catch(() => undefined) } : {}) }
   /**
    * The bonus hand's window (spec 2026-10-27 §3.4, the server's own rule mirrored): a seated player at a chaos table with
    * nothing pressed yet, between hands — the result wait, the draft, the room waiting — or in this hand's play-or-fold round
@@ -452,6 +466,8 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
           layout={stack ? 'stack' : landscape ? 'landscape' : 'desktop'}
           reverseNote={state.chaos.reverse && hand !== null ? t('chaos.reverseNote') : null}
           resultOpen={resultCard !== null}
+          // Upright, seven seats or more put the opponents in three rows: the band holds two toasts there (I2).
+          crowded={room.config.maxPlayers > 6}
         />
       ) : null}
 

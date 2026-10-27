@@ -222,6 +222,48 @@ describe('ChaosToasts', () => {
     for (const el of document.querySelectorAll('[data-chaos-toast]')) expect(el).not.toHaveClass(s.chaosToastIn!)
   })
 
+  it('holds two toasts upright at a table of seven seats or more, the rest under "+N" (I2)', () => {
+    const { unmount } = mount({ applied: FIVE, crowded: true })
+    expect(cards()).toHaveLength(2)
+    expect(more()).toHaveTextContent('+3 thẻ khác')
+    unmount()
+    const { unmount: again } = mount({ applied: FIVE, crowded: true, reverseNote: 'Thế giới đảo ngược: bộ yếu nhất thắng' })
+    expect(cards(), 'the pinned note takes one of the two places').toHaveLength(1)
+    again()
+    mount({ applied: FIVE, crowded: true, layout: 'desktop' })
+    expect(cards(), 'a desktop is not crowded by it').toHaveLength(3)
+  })
+
+  it('reads out what is added and nothing more: the live region is not atomic, and the opened list is not in it (P3c)', () => {
+    mount({ applied: FIVE })
+    const region = screen.getByRole('status')
+    expect(region).toHaveAttribute('aria-atomic', 'false')
+    expect(region).toHaveAttribute('aria-relevant', 'additions')
+    fireEvent.click(more()!)
+    expect(screen.getByRole('list', { name: 'Các thẻ đã dùng ván này' })).toHaveAttribute('aria-live', 'off')
+  })
+
+  it('closes the opened list when a reconnect rebuilds the hand shorter (P3d)', () => {
+    const { again } = mount({ applied: FIVE })
+    fireEvent.click(more()!)
+    expect(screen.getByRole('list')).toBeInTheDocument()
+    again({ applied: FIVE.slice(0, 2), restored: true })
+    expect(screen.queryByRole('list')).toBeNull()
+    again({ applied: FIVE, restored: true })
+    expect(screen.queryByRole('list'), 'nor does it come back with the cards that follow').toBeNull()
+  })
+
+  it('drops the last hand’s timers at the next hand (P3e)', () => {
+    const { again } = mount({ applied: FIVE })
+    expect(vi.getTimerCount()).toBeGreaterThan(0)
+    again({ applied: [], handId: 'h2' })
+    expect(vi.getTimerCount()).toBe(0)
+    again({ applied: [applied(1, 's_shield')], handId: 'h2' })
+    expect(vi.getTimerCount()).toBe(1)
+    advance(TOAST_MS)
+    expect(cards()).toHaveLength(0)
+  })
+
   it('frames each toast in its card’s tier', () => {
     mount({ applied: [applied(0, 'd_mirror'), applied(1, 'g_swap_all')] })
     expect(cards().map((el) => el.getAttribute('data-tier'))).toEqual(['diamond', 'gold'])
@@ -245,6 +287,18 @@ describe('the toast band in the stylesheet', () => {
   it('lays the toasts in one row on a phone on its side, out of the stage', () => {
     expect(rule(".chaosToastBand[data-layout='landscape']")).toMatch(/position:\s*absolute/)
     expect(rule(".chaosToastBand[data-layout='landscape'] .chaosToasts")).toMatch(/flex-direction:\s*row/)
+  })
+
+  it('gives the header’s facts line up while the result strip is open, and closes the band to the seats (I2)', () => {
+    expect(rule("[data-result-strip='open'] .header .metaFlow")).toMatch(/display:\s*none/)
+    expect(rule(".chaosToastBand[data-layout='stack']:not([data-empty])")).toMatch(/margin-bottom:\s*calc\(var\(--space-1\) - var\(--space-3\)\)/)
+    // a chaos table's facts line, below 480 px: no head-count; below 400 px: 11 px type
+    expect(css).toMatch(/@media \(max-width: 480px\) \{[^@]*\.metaFlow\[data-chaos\] \.players \{\s*display: none;/)
+    expect(css).toMatch(/@media \(max-width: 400px\) \{[^@]*\.metaFlow\[data-chaos\] > \* \{\s*font-size: 0\.6875rem;/)
+  })
+
+  it('hides what the landscape band covers in the compact header while it shows, so nothing peeks past it (P3b)', () => {
+    expect(rule(".headerCompact:has(+ .chaosToastBand[data-layout='landscape']:not([data-empty])) > :not(.conn, .headRight)")).toMatch(/visibility:\s*hidden/)
   })
 
   it('wraps a toast rather than cutting it with "…"', () => {

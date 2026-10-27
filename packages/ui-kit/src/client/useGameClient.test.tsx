@@ -390,6 +390,24 @@ describe('useGameClient Poker hỗn loạn', () => {
     expect(sentOf(sock, 'RESULT_SKIP')).toHaveLength(1)
   })
 
+  it('auto-play sends a refused skip once more in that wait, at the next count, and never a third time (M7)', async () => {
+    const { result, sock } = atTheDraft()
+    act(() => result.current.setAutoPlay(true))
+    waitBegins(sock)
+    const refuse = async (): Promise<void> => {
+      const sent = sock().sent.at(-1) as { reqId: string }
+      act(() => sock().receive({ t: 'ERROR', reqId: sent.reqId, code: 'ILLEGAL_ACTION', message: 'busy' }))
+      await act(async () => { await Promise.resolve() })
+    }
+    await refuse()
+    expect(sentOf(sock, 'RESULT_SKIP')).toHaveLength(1) // nothing new until the count moves
+    waitBegins(sock, 9, 1)
+    expect(sentOf(sock, 'RESULT_SKIP')).toHaveLength(2)
+    await refuse()
+    waitBegins(sock, 10, 0)
+    expect(sentOf(sock, 'RESULT_SKIP')).toHaveLength(2)
+  })
+
   it('without auto-play the player presses "Bỏ qua" themselves', () => {
     const { sock } = atTheDraft()
     waitBegins(sock)

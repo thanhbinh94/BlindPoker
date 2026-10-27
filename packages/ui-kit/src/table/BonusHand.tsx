@@ -32,13 +32,14 @@ interface Shown {
   cardId: string
   tier: ChaosTier
   handsLeft: number | null
-  armed: boolean
+  /** The hand a pressed card applies to (`armed.hand`), `null` for a card still in the hand. */
+  armed: 'this' | 'next' | null
 }
 
 /**
  * The viewer's bonus hand (BP-39, spec 2026-10-27 §3.4): up to three cards waiting to be played. A tap on one opens its
  * `ChaosCardInfo` — name, tier, the whole text — with "Dùng" under it: the second step that plays it, so the tap that reads
- * a card never plays it. The card pressed and not yet fired stays in the hand marked "Đã đặt dùng" until it fires (the server
+ * a card never plays it. The card pressed and not yet fired stays in the hand marked "Đã đặt dùng · ván này" (or "· ván sau") until it fires (the server
  * then takes it away), and while it waits the others' "Dùng" is greyed. Nothing at all while the hand is empty.
  *
  * Only the viewer sees which cards these are; the other seats see a count on this seat (`Seat`'s badge).
@@ -64,8 +65,8 @@ export function BonusHand({ bonus, canUse, onUse, layout }: BonusHandProps) {
   const shown: Shown[] = [
     ...(bonus.armed === null
       ? []
-      : [{ uid: bonus.armed.uid, cardId: bonus.armed.cardId, tier: TIER_BY_ID.get(bonus.armed.cardId) ?? tierOfCardId(bonus.armed.cardId), handsLeft: null, armed: true }]),
-    ...bonus.cards.map((c: HeldCardView) => ({ uid: c.uid, cardId: c.cardId, tier: c.tier, handsLeft: c.handsLeft, armed: false })),
+      : [{ uid: bonus.armed.uid, cardId: bonus.armed.cardId, tier: TIER_BY_ID.get(bonus.armed.cardId) ?? tierOfCardId(bonus.armed.cardId), handsLeft: null, armed: bonus.armed.hand }]),
+    ...bonus.cards.map((c: HeldCardView) => ({ uid: c.uid, cardId: c.cardId, tier: c.tier, handsLeft: c.handsLeft, armed: null })),
   ]
   if (shown.length === 0) return null
 
@@ -109,19 +110,21 @@ export function BonusHand({ bonus, canUse, onUse, layout }: BonusHandProps) {
         {shown.map((card) => {
           const name = t(`chaos.cards.${card.cardId}.name`, { defaultValue: card.cardId })
           const left = card.handsLeft === null ? null : t('chaos.handsLeft', { count: card.handsLeft })
-          const label = `${name} (${t(`chaos.tier.${card.tier}`)})${left === null ? '' : ` · ${left}`}${card.armed ? ` · ${t('chaos.bonus.armed')}` : ''}`
-          const action: ChaosCardInfoAction = card.armed
-            ? { kind: 'status', label: t('chaos.bonus.armed') }
+          // When a pressed card applies (M3): "Đã đặt dùng · ván này" for this hand's reveal, "· ván sau" for the next hand.
+          const armedText = card.armed === null ? null : t(`chaos.bonus.armed.${card.armed}`)
+          const label = `${name} (${t(`chaos.tier.${card.tier}`)})${left === null ? '' : ` · ${left}`}${armedText === null ? '' : ` · ${armedText}`}`
+          const action: ChaosCardInfoAction = armedText !== null
+            ? { kind: 'status', label: armedText }
             : { kind: 'button', label: t('chaos.bonus.use'), disabled: !usable, onPress: () => play(card.uid) }
           return (
             <ChaosCardInfo key={card.uid} cardId={card.cardId} handsLeft={card.handsLeft} label={label} action={action} className={s.bonusTrigger}>
-              <span className={s.bonusCard} data-tier={card.tier} data-armed={card.armed ? 'true' : undefined} data-uid={card.uid}>
+              <span className={s.bonusCard} data-tier={card.tier} data-armed={card.armed === null ? undefined : 'true'} data-uid={card.uid}>
                 <span className={s.chaosIcon} data-tier={card.tier} aria-hidden="true">
                   <span className={s.chaosGlyph}>{name.trim().slice(0, 1).toUpperCase()}</span>
-                  {card.armed ? <span className={s.bonusArmedMark}>{ARMED_MARK}</span> : null}
+                  {card.armed === null ? null : <span className={s.bonusArmedMark}>{ARMED_MARK}</span>}
                 </span>
                 <span className={s.bonusName} aria-hidden="true">
-                  {card.armed ? t('chaos.bonus.armed') : name}
+                  {armedText ?? name}
                 </span>
               </span>
             </ChaosCardInfo>

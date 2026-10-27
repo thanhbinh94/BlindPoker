@@ -185,6 +185,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* "Bỏ qua" beside the countdown once the desktop result card is closed (BP-39 M2). */
+.countdownSkip {
+  display: inline-flex;
+  margin-left: var(--space-3);
+  vertical-align: middle;
+  font-family: var(--font-body);
+}
+
 .banner {
   display: flex;
   align-items: center;

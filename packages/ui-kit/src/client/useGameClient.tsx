@@ -174,8 +174,11 @@ export function useGameClient(opts: UseGameClientOptions): GameClientApi {
   }, [request])
 
   // Auto-play skips the result wait, once per wait: keyed on the hand it follows and the reconnect it was sent after, so a
-  // press lost with the socket is sent again (the snapshot says `mine: false`) and a re-render never sends it twice.
+  // press lost with the socket is sent again (the snapshot says `mine: false`) and a re-render never sends it twice. A press
+  // the server refuses (or a request that fails) frees the key once (M7): the next change of the count in that wait sends it
+  // again, and a second refusal is final for that wait.
   const skippedFor = useRef<string | null>(null)
+  const retriedFor = useRef<string | null>(null)
   const skips = state.resultSkips
   const lastHandId = state.hand?.handId ?? ''
   useEffect(() => {
@@ -183,7 +186,12 @@ export function useGameClient(opts: UseGameClientOptions): GameClientApi {
     const key = `${lastHandId}#${returns}`
     if (skippedFor.current === key) return
     skippedFor.current = key
-    skipResult().catch(() => undefined)
+    const refused = (): void => {
+      if (retriedFor.current === key || skippedFor.current !== key) return
+      retriedFor.current = key
+      skippedFor.current = null
+    }
+    skipResult().then((r) => (r.t === 'ACK' ? undefined : refused()), refused)
   }, [autoPlay, skips, lastHandId, returns, skipResult])
 
   const playBonus = useCallback((uid: number) => request({ t: 'CHAOS_USE', uid }), [request])

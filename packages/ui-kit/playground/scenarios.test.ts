@@ -167,6 +167,6 @@ describe('the chaos worst-case pages', () => {
     draw('#worst/chaosArmed/6/vi')
     const cards = within(screen.getByRole('group', { name: 'Thẻ thưởng' })).getAllByRole('button')
     expect(cards).toHaveLength(3)
-    expect(cards[0]).toHaveAccessibleName('Chia lại lá chung (Vàng) · Đã đặt dùng')
+    expect(cards[0]).toHaveAccessibleName('Chia lại lá chung (Vàng) · Đã đặt dùng · ván này')
   })
 })

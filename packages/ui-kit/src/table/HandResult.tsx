@@ -207,7 +207,7 @@ export function HandResult({
     )
 
   // "Bỏ qua" (spec §3.3): the tally for everyone, the button for a seated player.
-  const skipBlock = skip === null ? null : <SkipControl skip={skip} handId={hand.handId} />
+  const skipBlock = skip === null ? null : <ResultSkipControl skip={skip} handId={hand.handId} />
 
   if (variant === 'strip') {
     // Winners first, then the viewer; the rest fold into "+N người" (spec §3.2): the strip must leave the felt its height on a
@@ -350,9 +350,11 @@ export function HandResult({
  * "Bỏ qua" (spec §3.3): the tally for everyone, the button for a seated player. Its name is exactly "Bỏ qua" — never a word the
  * tray's "Bỏ bài" shares a locator with — and "Đã bỏ qua", down for good, once pressed. While the press is out the button is
  * down too (a double tap sends one request); a refusal gives it back. `aria-live="off"`: on the card it sits in the head,
- * inside the live region, and a press elsewhere at the table must not have the receipt read out again.
+ * inside the live region, and a press elsewhere at the table must not have the receipt read out again. A wait with nobody to
+ * count (`total` 0: every seat is a bot, away or sitting out) shows no "0/0" (M8). Exported for the room's countdown line,
+ * where it stays once the desktop card is closed (M2).
  */
-function SkipControl({ skip, handId }: { skip: ResultSkip; handId: string }) {
+export function ResultSkipControl({ skip, handId }: { skip: ResultSkip; handId: string }) {
   const { t } = useTranslation()
   /** The hand whose press is out: a new hand's button is never down for the last one's request. */
   const [pendingFor, setPendingFor] = useState<string | null>(null)
@@ -366,9 +368,10 @@ function SkipControl({ skip, handId }: { skip: ResultSkip; handId: string }) {
     const done = (): void => setPendingFor((was) => (was === handId ? null : was))
     void Promise.resolve(sent).then(done, done)
   }
+  if (skip.total === 0 && onSkip === undefined) return null
   return (
     <span className={s.resultSkip} aria-live="off">
-      <span className={s.resultSkipCount}>{t('chaos.result.skipCount', { done: skip.skipped, total: skip.total })}</span>
+      {skip.total === 0 ? null : <span className={s.resultSkipCount}>{t('chaos.result.skipCount', { done: skip.skipped, total: skip.total })}</span>}
       {onSkip === undefined ? null : (
         <Button variant={skip.mine ? 'ghost' : 'primary'} size="sm" disabled={skip.mine || pending} onClick={press}>
           {t(skip.mine ? 'chaos.result.skipped' : 'chaos.result.skip')}

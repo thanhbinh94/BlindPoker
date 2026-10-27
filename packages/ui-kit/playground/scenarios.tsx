@@ -69,7 +69,7 @@ export type WorstState = 'waiting' | 'turn' | 'result' | 'blindS' | 'blindP' | '
  * - `chaosBurst`: the hand over, and every one of up to eight seats fired a card ("Thẻ đã dùng" at its longest, eight
  *   toasts in one batch with the settlement: as many as the band holds, the rest under "+N thẻ khác", the result open beside
  *   them), the result wait running with "Bỏ qua" at 3 of 5 and not pressed by me, one bonus card in my hand.
- * - `chaosArmed`: `chaosBonus` after I pressed "Dùng" on the board re-deal: it waits marked "Đã đặt dùng" for this hand's
+ * - `chaosArmed`: `chaosBonus` after I pressed "Dùng" on the board re-deal: it waits marked "Đã đặt dùng · ván này" for this hand's
  *   reveal, the other two cards still in my hand with their "Dùng" greyed.
  */
 export type ChaosState = 'chaosDraft' | 'chaosReveal' | 'chaosFour' | 'chaosPeel' | 'chaosBlind' | 'chaosResult' | 'chaosBoard' | 'chaosBonus' | 'chaosBurst' | 'chaosArmed'

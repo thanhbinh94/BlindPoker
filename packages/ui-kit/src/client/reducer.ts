@@ -391,17 +391,27 @@ function chaosFromSnapshot(room: RoomView, draft: ClientChaos['draft'], hand: Ha
   return { ...initialChaos, seats, draft, peek, reverse: view?.reverse ?? false, blindfolded: view === undefined ? null : view.blindfolded, bonus: bonus ?? initialChaos.bonus }
 }
 
-/** `NOTIFICATION { kind: 'CHAOS_BONUS' }`: this player's bonus hand and the armed card. Anything malformed is ignored. */
+const TIERS: ReadonlySet<unknown> = new Set(['silver', 'gold', 'diamond'])
+/** One card of a `CHAOS_BONUS` payload as `HeldCardView` says it is: a numeric uid, a card id, a known tier, hands or null. */
+const isHeldCardView = (c: unknown): c is HeldCardView => {
+  const v = c as { uid?: unknown; cardId?: unknown; tier?: unknown; handsLeft?: unknown } | null
+  return (
+    typeof v === 'object' && v !== null && typeof v.uid === 'number' && typeof v.cardId === 'string' && TIERS.has(v.tier) &&
+    (v.handsLeft === null || typeof v.handsLeft === 'number')
+  )
+}
+
+/** `NOTIFICATION { kind: 'CHAOS_BONUS' }`: this player's bonus hand and the armed card. Anything malformed is ignored (P9). */
 function applyChaosBonus(chaos: ClientChaos, payload: unknown): ClientChaos {
   const p = payload as { cards?: unknown; armed?: unknown } | null
-  if (!p || !Array.isArray(p.cards)) return chaos
+  if (!p || !Array.isArray(p.cards) || !p.cards.every(isHeldCardView)) return chaos
   let armed: ClientChaos['bonus']['armed'] = null
   if (p.armed !== null && p.armed !== undefined) {
     const a = p.armed as { uid?: unknown; cardId?: unknown; hand?: unknown }
     if (typeof a.uid !== 'number' || typeof a.cardId !== 'string' || (a.hand !== 'this' && a.hand !== 'next')) return chaos
     armed = { uid: a.uid, cardId: a.cardId, hand: a.hand }
   }
-  return { ...chaos, bonus: { cards: p.cards as HeldCardView[], armed } }
+  return { ...chaos, bonus: { cards: p.cards.slice(), armed } }
 }
 
 /**
@@ -518,7 +528,8 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
           room: null,
           roomStale: false,
           hand: null,
-          chaos: initialChaos, resultSkips: null,
+          chaos: initialChaos,
+          resultSkips: null,
           seq: 0,
           deadlineAt: null,
           preAction: null,

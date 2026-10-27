@@ -15,6 +15,11 @@ export type ChaosToastLayout = 'stack' | 'landscape' | 'desktop'
 /** How many toasts the band shows at once, the reverse note included; the rest of a batch goes under "+N thẻ khác". */
 export const TOAST_CAP: Readonly<Record<ChaosToastLayout, number>> = { stack: 3, desktop: 3, landscape: 2 }
 /**
+ * A phone held upright at a table of seven seats or more (`crowded`): the opponents take three rows, and at 360 × 780 the felt
+ * has room for two rows of toasts, not three (BP-39 final wave, I2). The rest go under "+N thẻ khác" as ever.
+ */
+export const CROWDED_STACK_CAP = 2
+/**
  * A phone on its side narrower than this (667 × 375, 640 × 360) has under 400 px of header between the connection pill and
  * the menu: two toasts there would each run to four lines and reach the seats, so it shows one.
  */
@@ -33,6 +38,8 @@ export interface ChaosToastsProps {
   reverseNote: string | null
   /** The result is open: cards that arrive now go straight under "+N", so the band never grows over the result's time. */
   resultOpen: boolean
+  /** A table of seven seats or more: upright, the band holds `CROWDED_STACK_CAP` toasts. */
+  crowded?: boolean
 }
 
 interface Toast {
@@ -98,7 +105,7 @@ function fill(template: string, slots: Record<string, ReactNode>): ReactNode[] {
  * A live region, so a screen reader hears each toast. A hand rebuilt from a snapshot replays nothing. Under
  * `prefers-reduced-motion` a toast shows in place, with no slide.
  */
-export function ChaosToasts({ applied, handId, restored, nameOf, layout, reverseNote, resultOpen }: ChaosToastsProps) {
+export function ChaosToasts({ applied, handId, restored, nameOf, layout, reverseNote, resultOpen, crowded = false }: ChaosToastsProps) {
   const { t } = useTranslation()
   const reduce = useMediaQuery('(prefers-reduced-motion: reduce)')
   const narrow = useMediaQuery(NARROW_LANDSCAPE_QUERY)
@@ -115,12 +122,15 @@ export function ChaosToasts({ applied, handId, restored, nameOf, layout, reverse
 
   // Worked out in the render that brings the cards, so a toast shows in the same frame as the card's effect on the table.
   let current = band
+  // A new hand, or the same hand rebuilt shorter (a reconnect's snapshot): the band starts afresh, its list closed (P3d).
+  const reset = band.handId !== handId || applied.length < band.seen
   if (band.handId !== handId) current = fresh(handId, restored ? applied.length : 0, band.batch)
   else if (applied.length < band.seen) current = fresh(handId, applied.length, band.batch)
-  const slots = (layout === 'landscape' && narrow ? 1 : TOAST_CAP[layout]) - (reverseNote === null ? 0 : 1)
+  const cap = layout === 'landscape' && narrow ? 1 : layout === 'stack' && crowded ? CROWDED_STACK_CAP : TOAST_CAP[layout]
+  const slots = cap - (reverseNote === null ? 0 : 1)
   if (applied.length > current.seen) current = arrive(current, applied.length, slots, resultWasOpen.current)
   if (current !== band) setBand(current)
-  if (band.handId !== handId && listOpen) setListOpen(false)
+  if (reset && listOpen) setListOpen(false)
 
   useEffect(() => {
     resultWasOpen.current = resultOpen
@@ -147,6 +157,19 @@ export function ChaosToasts({ applied, handId, restored, nameOf, layout, reverse
       )
     }
   }, [liveKey])
+  // A new hand drops the last one's timers (P3e): their batches left with the band. It runs after the effect above, so a
+  // batch the new hand brought in the same render keeps the timer that effect has just started.
+  const timedHand = useRef(handId)
+  useEffect(() => {
+    if (timedHand.current === handId) return
+    timedHand.current = handId
+    const kept = new Set(current.toasts.map((x) => x.batch).concat(current.moreBatch === null ? [] : [current.moreBatch]))
+    for (const [batch, timer] of timers.current) {
+      if (kept.has(batch)) continue
+      clearTimeout(timer)
+      timers.current.delete(batch)
+    }
+  })
   useEffect(() => {
     const all = timers.current
     return () => {
@@ -239,7 +262,8 @@ export function ChaosToasts({ applied, handId, restored, nameOf, layout, reverse
 
   return (
     <div className={s.chaosToastBand} data-chaos-toasts="" data-layout={layout} data-empty={empty ? 'true' : undefined} data-list-open={listOpen && moreShown ? 'true' : undefined} data-surface="night">
-      <div className={s.chaosToasts} role="status">
+      {/* A live region that reads out what is added, never the whole band again (P3c). */}
+      <div className={s.chaosToasts} role="status" aria-atomic="false" aria-relevant="additions">
         {reverseNote === null ? null : (
           <p className={cx(s.chaosToast, s.chaosToastNote)} data-chaos-toast="" data-chaos-note="" data-pinned="true">
             {reverseNote}
@@ -258,7 +282,8 @@ export function ChaosToasts({ applied, handId, restored, nameOf, layout, reverse
               {t('chaos.toast.more', { count: current.more.length })}
             </button>
             {listOpen ? (
-              <ol id={listId} className={s.chaosToastList} aria-label={t('chaos.toast.all')}>
+              // The list the player opened is not news: `aria-live="off"` keeps it out of the live region around it (P3c).
+              <ol id={listId} className={s.chaosToastList} aria-label={t('chaos.toast.all')} aria-live="off">
                 {applied.map((item, i) => (
                   <li key={i} data-tier={tierOfCardId(item.cardId)} data-outcome={item.outcome}>
                     {lineOf(item)}

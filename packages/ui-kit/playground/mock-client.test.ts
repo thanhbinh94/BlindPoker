@@ -1,3 +1,4 @@
+import { seededRng } from '@bp/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMockClient, type MockClient } from './mock-client.js'
 
@@ -11,8 +12,9 @@ describe('the playground’s chaos table', () => {
     vi.useRealTimers()
   })
 
-  const open = (): MockClient => {
-    client = createMockClient('blindC', 4, () => {})
+  /** `seed`: deal from a seeded rng, so a test that needs the hand to run its course sees the same hand every time (P1). */
+  const open = (seed?: number): MockClient => {
+    client = createMockClient('blindC', 4, () => {}, seed === undefined ? undefined : seededRng(seed))
     return client
   }
   const flush = async (ms: number): Promise<void> => {
@@ -73,7 +75,7 @@ describe('the playground’s chaos table', () => {
   })
 
   it('the result wait counts my "Bỏ qua" and deals the next hand at once', async () => {
-    const mock = open()
+    const mock = open(7)
     await flush(0)
     await flush(15_100) // the draft runs out and the hand is dealt
     await mock.api.act({ kind: 'fold' })

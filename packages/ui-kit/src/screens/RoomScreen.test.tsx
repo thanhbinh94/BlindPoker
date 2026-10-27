@@ -1812,6 +1812,35 @@ describe('RoomScreen on a Poker hỗn loạn table', () => {
       expect(screen.queryByRole('button', { name: 'Bỏ qua' })).toBeNull()
     })
 
+    it('gives the button only to a voter: a seat sitting out, or one whose connection dropped, sees the count alone (M1)', () => {
+      for (const patch of [{ sittingOut: true }, { connected: false }]) {
+        const room = makeRoom({ ...chaosRoom, players: [chaosRoom.players[0]!, { ...chaosRoom.players[1]!, ...patch }] })
+        drawAt(makeState({ ...stateWith({}), room, resultSkips: skips }), { layout: 'stack' })
+        expect(screen.getByText('Bỏ qua 1/3')).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /Bỏ qua/ }), JSON.stringify(patch)).toBeNull()
+        cleanup()
+      }
+    })
+
+    it('shows no "0/0" for a wait with nobody to count (M8)', () => {
+      const room = makeRoom({ ...chaosRoom, players: [chaosRoom.players[0]!, { ...chaosRoom.players[1]!, sittingOut: true }] })
+      drawAt(makeState({ ...stateWith({}), room, resultSkips: { skipped: 0, total: 0, mine: false } }), { layout: 'stack' })
+      expect(result()).toBeInTheDocument()
+      expect(screen.queryByText(/Bỏ qua/)).toBeNull()
+    })
+
+    it('keeps "Bỏ qua" and its count beside the countdown once the desktop card is closed (M2)', async () => {
+      const room = makeRoom({ ...chaosRoom, nextHandAt: Date.now() + 8_000 })
+      const client = drawAt(makeState({ ...stateWith({}), room, resultSkips: skips }))
+      await userEvent.click(within(result()).getByRole('button', { name: 'Đóng' }))
+      expect(screen.queryByRole('group', { name: 'Người thắng' })).toBeNull()
+      const controls = screen.getByRole('group', { name: 'Điều khiển bàn' })
+      expect(within(controls).getByText(/Ván tiếp theo sau/)).toBeInTheDocument()
+      expect(within(controls).getByText('Bỏ qua 1/3')).toBeInTheDocument()
+      await userEvent.click(within(controls).getByRole('button', { name: 'Bỏ qua' }))
+      expect(client.skipResult).toHaveBeenCalledTimes(1)
+    })
+
     it('shows no skip while no result wait runs', () => {
       drawAt(stateWith({}), { layout: 'stack' })
       expect(result()).toHaveClass(s.strip!)
@@ -1966,6 +1995,12 @@ describe('RoomScreen on a Poker hỗn loạn table', () => {
       drawAt(makeState({ ...stateWith({ bonus }), resultSkips: { skipped: 0, total: 2, mine: false } }), { layout: 'stack' })
       expect(document.querySelector(`.${screens.room}`)).toHaveAttribute('data-result-strip', 'open')
       expect(handGroup()).not.toBeNull()
+      expect(usable()).toBe(true)
+    })
+
+    it('keeps "Dùng" open while a draft is up between hands (P8)', () => {
+      drawAt(stateWith({ bonus, draft: drafting }))
+      expect(screen.getByRole('region', { name: /Chọn một thẻ/ })).toBeInTheDocument()
       expect(usable()).toBe(true)
     })
 

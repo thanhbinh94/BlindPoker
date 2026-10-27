@@ -40,6 +40,8 @@ const tap = (el: HTMLElement) => {
   fireEvent.click(el, { detail: 1 })
 }
 const dungButton = () => screen.queryByRole('button', { name: 'Dùng' })
+/** A card's popup: a dialog named by the card while it offers "Dùng", a tooltip when it only says the card is set (P2). */
+const popup = () => screen.queryByRole('dialog') ?? screen.getByRole('tooltip')
 
 afterEach(() => vi.useRealTimers())
 
@@ -64,14 +66,14 @@ describe('BonusHand', () => {
   it('opens a card’s description on a tap, and only "Dùng" — the second step — plays it', async () => {
     const { onUse } = mount()
     tap(cards()[1]!)
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Chia lại lá chung')
+    expect(screen.getByRole('dialog', { name: 'Chia lại lá chung' })).toHaveTextContent('Chia lại lá chung')
     expect(onUse).not.toHaveBeenCalled()
     await act(async () => {
       fireEvent.click(dungButton()!, { detail: 1 })
     })
     expect(onUse).toHaveBeenCalledTimes(1)
     expect(onUse).toHaveBeenCalledWith(902)
-    expect(screen.queryByRole('tooltip'), 'the popup closes with the press').toBeNull()
+    expect(screen.queryByRole('dialog'), 'the popup closes with the press').toBeNull()
   })
 
   it('sends one request however fast the next press comes, until the answer is in', async () => {
@@ -87,16 +89,16 @@ describe('BonusHand', () => {
     await act(async () => answer(ACK))
   })
 
-  it('marks the pressed card "Đã đặt dùng" — for this hand or the next — and greys the others’ "Dùng"', () => {
-    for (const when of ['this', 'next'] as const) {
+  it('marks the pressed card "Đã đặt dùng" with the hand it applies to — this one or the next (M3) — and greys the others’ "Dùng"', () => {
+    for (const [when, words] of [['this', 'Đã đặt dùng · ván này'], ['next', 'Đã đặt dùng · ván sau']] as const) {
       const { unmount } = mount({ bonus: { cards: [HAND.cards[0]!, HAND.cards[2]!], armed: { uid: 902, cardId: 'g_redeal_board_1', hand: when } } })
       expect(cards()).toHaveLength(3)
       const armed = cards()[0]!
-      expect(armed).toHaveAccessibleName('Chia lại lá chung (Vàng) · Đã đặt dùng')
-      expect(armed).toHaveTextContent('Đã đặt dùng')
+      expect(armed).toHaveAccessibleName(`Chia lại lá chung (Vàng) · ${words}`)
+      expect(armed).toHaveTextContent(words)
       expect(armed.querySelector('[data-armed="true"]')).not.toBeNull()
       tap(armed)
-      expect(screen.getByRole('tooltip')).toHaveTextContent('Đã đặt dùng')
+      expect(screen.getByRole('tooltip')).toHaveTextContent(words)
       expect(dungButton()).toBeNull()
       tap(cards()[1]!)
       expect(dungButton()).toBeDisabled()
@@ -107,7 +109,7 @@ describe('BonusHand', () => {
   it('keeps every card readable but greys "Dùng" outside the window (canUse false)', () => {
     const { onUse } = mount({ canUse: false })
     tap(cards()[0]!)
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Rút lá lẻ')
+    expect(popup()).toHaveTextContent('Rút lá lẻ')
     expect(dungButton()).toBeDisabled()
     fireEvent.click(dungButton()!)
     expect(onUse).not.toHaveBeenCalled()
@@ -116,7 +118,7 @@ describe('BonusHand', () => {
   it('shows the hand when only the pressed card is left', () => {
     mount({ bonus: { cards: [], armed: { uid: 903, cardId: 'd_insure_2', hand: 'next' } } })
     expect(cards()).toHaveLength(1)
-    expect(cards()[0]).toHaveAccessibleName('Bảo hiểm kim cương (Kim cương) · Đã đặt dùng')
+    expect(cards()[0]).toHaveAccessibleName('Bảo hiểm kim cương (Kim cương) · Đã đặt dùng · ván sau')
   })
 
   it('writes a refusal in the hand itself for a few seconds (A14), then lets the card be pressed again', async () => {
@@ -148,7 +150,7 @@ describe('BonusHand', () => {
   it('speaks English', () => {
     mount({ bonus: { cards: [HAND.cards[0]!], armed: { uid: 902, cardId: 'g_redeal_board_1', hand: 'this' } } }, 'en')
     const group = screen.getByRole('group', { name: 'Bonus cards' })
-    expect(group).toHaveTextContent('Set to play')
+    expect(group).toHaveTextContent('Set to play · this hand')
     tap(within(group).getAllByRole('button')[1]!)
     expect(screen.getByRole('button', { name: 'Use' }), 'one is set already').toBeDisabled()
   })

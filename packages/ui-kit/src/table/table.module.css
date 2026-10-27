@@ -2798,6 +2798,24 @@
   .headerSqueeze .players {
     display: none;
   }
+
+  /* A chaos table's line is the longest — four badges, and "Hạn mức Không giới hạn" (BP-39) — and it ran to four rows at
+     360 px, about 100 px, which an eight-seat felt could not give (I2): the head-count goes the same way, and below 400 px
+     the line drops to 11 px, so the badges share one row and the code and the stakes the next. */
+  .metaFlow[data-chaos] .players {
+    display: none;
+  }
+}
+
+@media (max-width: 400px) {
+  .metaFlow[data-chaos] {
+    gap: 4px;
+  }
+
+  .metaFlow[data-chaos],
+  .metaFlow[data-chaos] > * {
+    font-size: 0.6875rem;
+  }
 }
 
 /* A phone on its side (Plan 26, B2): the identity bar is one 32 px strip, so the felt keeps the height. The connection,
@@ -3190,8 +3208,8 @@
 /* The bonus hand (BP-39, spec 2026-10-27 §3.4): the viewer's up to three bonus cards, each a tier-framed pill — the card's
    initial in its icon, then its name, cut with "…" before the row gives — that opens its popup with "Dùng". It carries
    `data-surface='night'`, so it reads the felt's palette on the page in either theme. `RoomScreen` places it by layout:
-   the controls' row under the felt on a desktop, a row of the column above the result strip and the tray when upright,
-   and the left corner over "Tự động chơi" when sideways. It is never part of the viewer's own seat, which the upright
+   the controls' row under the felt on a desktop, a column of icons in the felt's left edge when upright (`PokerTable`'s
+   `feltCorner`: a 360 × 780 stage has no row to spare), and the left corner over "Tự động chơi" when sideways. It is never part of the viewer's own seat, which the upright
    result strip hides, since the result wait is the main time to play a card. */
 .bonusHand {
   position: relative;
@@ -3679,11 +3697,31 @@
   margin-top: calc(-1 * var(--space-3));
 }
 
+/* Standing, the band keeps 4 px to the seats below rather than the column's 12: the 8 px are what three two-line toasts
+   beside the result strip lacked on a six-seat felt at 360 × 780 (I2). */
+.chaosToastBand[data-layout='stack']:not([data-empty]) {
+  margin-bottom: calc(var(--space-1) - var(--space-3));
+}
+
 /* While toasts are up, the header's facts line (the badges, the code, the stakes, the head count: the same all hand) steps
    aside and the band takes its place under the name's row: on a 360 × 780 phone with eight seats the felt has no height to
    give, and three one-line toasts cost about what that line gives back. It comes back with the last toast. */
 .header:has(+ .chaosToastBand[data-layout='stack']:not([data-empty])) .metaFlow {
   display: none;
+}
+
+/* The same line steps aside while the chaos result strip is open (BP-39 final wave, I2): at 360 × 780 it wraps to three rows
+   (the badges, "Mức cược · Hạn mức Không giới hạn", the head count), about 100 px, and with a winner's payout row the felt ran
+   18–19 px past the stage. The strip leaves with the hand, and the line comes back with the next deal. */
+[data-result-strip='open'] .header .metaFlow {
+  display: none;
+}
+
+/* On a phone on its side the band lies over the compact header's middle: what it covers — the room's name, the badges, the
+   code, the stakes — steps aside while it shows, so no sliver of it peeks past the toasts (P3b). The connection pill and the
+   buttons on the right stay. */
+.headerCompact:has(+ .chaosToastBand[data-layout='landscape']:not([data-empty])) > :not(.conn, .headRight) {
+  visibility: hidden;
 }
 
 /* Each toast a line of its own, except the last before "+N", which shares its row with the pill: one row less to take
@@ -3695,6 +3733,10 @@
 .chaosToastBand[data-layout='stack'] .chaosToast {
   flex: 1 1 100%;
   min-width: 0;
+  /* A pixel less of padding and a tighter line than the base toast: three two-line toasts beside the result strip fit a
+     six-seat felt at 360 × 780 (I2). */
+  padding-block: 2px;
+  line-height: 1.2;
 }
 
 .chaosToastBand[data-layout='stack'] .chaosToast:has(+ .chaosToastMore) {

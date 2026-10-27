@@ -949,7 +949,13 @@ describe('Poker hỗn loạn', () => {
 
   it('ignores a malformed CHAOS_BONUS', () => {
     const s = bonusNote(inChaosRoom(), BONUS)
-    for (const bad of [null, {}, { cards: 'x' }, { cards: [], armed: { uid: 'x', cardId: 'a', hand: 'next' } }, { cards: [], armed: { uid: 1, cardId: 'a', hand: 'later' } }]) {
+    const good = card(21, 's_steal_one')
+    for (const bad of [
+      null, {}, { cards: 'x' }, { cards: [], armed: { uid: 'x', cardId: 'a', hand: 'next' } }, { cards: [], armed: { uid: 1, cardId: 'a', hand: 'later' } },
+      // a card that is not a card (P9): no uid number, no card id, an unknown tier, hands that are not a number or null
+      { cards: [null], armed: null }, { cards: [{ ...good, uid: '21' }], armed: null }, { cards: [{ ...good, cardId: 7 }], armed: null },
+      { cards: [{ ...good, tier: 'bronze' }], armed: null }, { cards: [{ ...good, handsLeft: 'two' }], armed: null },
+    ]) {
       expect(bonusNote(s, bad).chaos.bonus).toEqual(BONUS)
     }
   })
