@@ -391,6 +391,9 @@ export class Gateway {
         case 'CHAOS_USE':
           await this.roomOf(playerId).useChaosBonus(playerId, msg.uid)
           break
+        case 'RESULT_SKIP':
+          await this.roomOf(playerId).skipResult(playerId)
+          break
         case 'RESYNC':
           conn.send(this.roomOf(playerId).snapshot(playerId))
           break

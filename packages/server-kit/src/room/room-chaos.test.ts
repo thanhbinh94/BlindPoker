@@ -1,5 +1,5 @@
 import {
-  CHAOS_CARDS_SPEC, EMPTY_CHAOS_SEAT, toHeld, type ChaosBonusPayload, type ChaosCardDef, type ChaosSeat, type GameEvent, type LegalActions,
+  CHAOS_CARDS_SPEC, DEFAULT_CHAOS_CONFIG, EMPTY_CHAOS_SEAT, toHeld, type ChaosBonusPayload, type ChaosCardDef, type ChaosSeat, type GameEvent, type LegalActions,
   type PlayerAction, type RoomConfig, type RoomEvent, type ServerMessage,
 } from '@bp/core'
 import { describe, expect, it } from 'vitest'
@@ -309,7 +309,13 @@ describe('Chaos room: the draft', () => {
     expect(h.logs.some((l) => l.level === 'error' && /chaos/.test(l.msg))).toBe(true)
     await playOut(h)
     down = false
-    h.clock.advance(100)
+    // The port was down at the settlement too, so the result stays up for the default result time (10 s), logged.
+    expect(h.room.nextHandAt).toBe(h.clock.now() + DEFAULT_CHAOS_CONFIG.resultMs)
+    expect(h.logs.some((l) => l.level === 'error' && l.msg.startsWith('chaos result time unread'))).toBe(true)
+    h.clock.advance(DEFAULT_CHAOS_CONFIG.resultMs - 1)
+    await tick(h)
+    expect(ofEvent(h, 'h', 'CHAOS_DRAFT')).toEqual([])
+    h.clock.advance(1)
     await tick(h)
     expect(ofEvent(h, 'h', 'CHAOS_DRAFT')).toHaveLength(1) // nobody was drafted, so the next hand drafts
   })
@@ -645,5 +651,164 @@ describe('Chaos room: credits', () => {
     expect(h.repos.hands[0]!.chaosUsed).toBeUndefined()
     expect(h.repos.entries.filter((e) => e.entry.reason.startsWith('chaos'))).toEqual([])
     expect(held!.cards).toHaveLength(1)
+  })
+})
+
+describe('Chaos room: the result time and "Bỏ qua" (BP-39)', () => {
+  /** Two humans `h` and `a` (seats 0, 1) and one bot (the last seat), every card a Cấp cứu Bạc, a 10 s result time. */
+  const ONE_BOT: RoomConfig = { ...CHAOS, blind: { ...CHAOS.blind!, botCount: 1 } }
+  const RESULT_MS = 10_000
+  const table = (resultMs = RESULT_MS, players?: [string, number][]) =>
+    createRoomHarness({ ...ONE_BOT, maxPlayers: players && players.length > 3 ? players.length + 1 : ONE_BOT.maxPlayers }, { chaos: { cards: RESCUE_ONLY, config: { ...SILVER_ONLY, resultMs } }, ...(players ? { players } : {}) })
+  const skips = (h: RoomHarness, id = 'h') => ofEvent(h, id, 'RESULT_SKIPS').map((e) => [e.skipped, e.total])
+  /** Seats `h` and `a`, drafts, plays the first hand out: the result wait has begun. */
+  async function toResult(h: RoomHarness): Promise<void> {
+    await seat(h, ['h', 'a'])
+    await h.room.startGame('h')
+    await pickAll(h, ['h', 'a'])
+    await playOut(h)
+  }
+
+  it('the next deal waits the result time the port gives (7 s), and a plain Blind table keeps its hand interval (5 s)', async () => {
+    const h = table(7_000)
+    await toResult(h)
+    expect(h.room.nextHandAt).toBe(h.clock.now() + 7_000)
+    expect(ofEvent(h, 'h', 'ROOM_STATUS').at(-1)).toEqual({ type: 'ROOM_STATUS', status: 'IN_GAME', nextHandAt: h.clock.now() + 7_000 })
+    h.clock.advance(6_999)
+    await tick(h)
+    expect(h.room.handActive).toBe(false)
+    h.clock.advance(1)
+    await tick(h)
+    expect(h.room.handActive).toBe(true)
+
+    const { blind } = CHAOS
+    const plain = createRoomHarness({ ...CHAOS, blind: { holeCards: blind!.holeCards, decisionMode: blind!.decisionMode, fixedWager: blind!.fixedWager, botCount: 2 } }, { options: { handIntervalMs: 5_000 } })
+    await seat(plain, ['h', 'a'])
+    await plain.room.startGame('h')
+    await playOut(plain)
+    expect(plain.room.nextHandAt).toBe(plain.clock.now() + 5_000)
+    expect(skips(plain)).toEqual([]) // no vote at a plain table
+    await plain.room.skipResult('h') // ignored, no error
+    expect(plain.room.handActive).toBe(false)
+    plain.clock.advance(5_000)
+    await tick(plain)
+    expect(plain.room.handActive).toBe(true)
+  })
+
+  it('two humans and a bot: the wait starts at 0/2, one "Bỏ qua" says 1/2 and keeps the timer, the second deals at once', async () => {
+    const h = table()
+    await toResult(h)
+    const at = h.room.nextHandAt
+    expect(skips(h)).toEqual([[0, 2]])
+    expect(skips(h, 'a')).toEqual([[0, 2]])
+    await h.room.skipResult('h')
+    expect(skips(h)).toEqual([[0, 2], [1, 2]])
+    expect(h.room.handActive).toBe(false)
+    expect(h.room.nextHandAt).toBe(at)
+    await h.room.skipResult('h') // a second press counts nothing and says nothing
+    expect(skips(h)).toEqual([[0, 2], [1, 2]])
+    await h.room.skipResult('a')
+    expect(skips(h)).toEqual([[0, 2], [1, 2], [2, 2]])
+    expect(h.room.handActive).toBe(true)
+    expect(h.room.nextHandAt).toBeNull()
+    expect(ofEvent(h, 'a', 'ROOM_STATUS').at(-1)).toEqual({ type: 'ROOM_STATUS', status: 'IN_GAME', nextHandAt: null })
+    // The cancelled timer deals nothing more, and a press during the hand is ignored.
+    await h.room.skipResult('h')
+    h.clock.advance(RESULT_MS)
+    await tick(h)
+    expect(h.room.tableHands).toBe(2)
+    expect(skips(h)).toHaveLength(3)
+  })
+
+  it('each wait counts afresh: a press in one wait does not carry into the next', async () => {
+    const h = table()
+    await toResult(h)
+    await h.room.skipResult('h')
+    await h.room.skipResult('a')
+    await playOut(h)
+    expect(skips(h).at(-1)).toEqual([0, 2])
+    await h.room.skipResult('a')
+    expect(skips(h).at(-1)).toEqual([1, 2])
+    expect(h.room.handActive).toBe(false)
+  })
+
+  it('a voter who disconnects after the other pressed "Bỏ qua" lets the hand start at once (Review Focus 3)', async () => {
+    const h = table()
+    await toResult(h)
+    await h.room.skipResult('h')
+    expect(h.room.handActive).toBe(false)
+    await h.room.onDisconnect('a')
+    expect(skips(h).at(-1)).toEqual([1, 1])
+    expect(h.room.handActive).toBe(true)
+  })
+
+  it('the count follows the table: a seat taken raises it, a sit-out lowers it, a sit-in and a reconnect raise it, a stand-up and a Leave lower it (Review Focus 3)', async () => {
+    const h = table(RESULT_MS, [['h', 100_000], ['a', 100_000], ['b', 100_000], ['c', 100_000]])
+    await h.room.join(h.identity('b'))
+    await h.room.join(h.identity('c'))
+    await toResult(h)
+    expect(skips(h).at(-1)).toEqual([0, 2])
+    await h.room.sitDown('b', 2) // a human who sits down during the wait is counted
+    expect(skips(h).at(-1)).toEqual([0, 3])
+    await h.room.skipResult('c') // a spectator is not
+    expect(skips(h).at(-1)).toEqual([0, 3])
+    await h.room.skipResult('h')
+    expect(skips(h).at(-1)).toEqual([1, 3])
+    await h.room.sitOut('b', true)
+    expect(skips(h).at(-1)).toEqual([1, 2])
+    await h.room.skipResult('b') // a seat sitting out is not counted
+    expect(skips(h).at(-1)).toEqual([1, 2])
+    await h.room.sitOut('b', false)
+    expect(skips(h).at(-1)).toEqual([1, 3])
+    await h.room.onDisconnect('b')
+    expect(skips(h).at(-1)).toEqual([1, 2])
+    await h.room.onReconnect('b')
+    expect(skips(h).at(-1)).toEqual([1, 3])
+    await h.room.standUp('b')
+    expect(skips(h).at(-1)).toEqual([1, 2])
+    expect(h.room.handActive).toBe(false)
+    await h.room.leave('a') // the last voter still waited on leaves: everyone left has pressed it
+    expect(skips(h).at(-1)).toEqual([1, 1])
+    expect(h.room.handActive).toBe(true)
+  })
+
+  it('a kick of the voter still waited on starts the hand', async () => {
+    const h = table()
+    await toResult(h)
+    await h.room.skipResult('h')
+    await h.room.kick('h', 'a')
+    expect(skips(h).at(-1)).toEqual([1, 1])
+    expect(h.room.handActive).toBe(true)
+  })
+
+  it('"Bỏ qua" outside the result wait is ignored without an error: before the first deal, in the draft, during a hand', async () => {
+    const h = table()
+    await seat(h, ['h', 'a'])
+    expect(await code(h.room.skipResult('h'))).toBeNull()
+    await h.room.startGame('h')
+    expect(h.room.snapshot(null).chaos?.draft).not.toBeNull()
+    expect(await code(h.room.skipResult('h'))).toBeNull()
+    expect(await code(h.room.skipResult('a'))).toBeNull()
+    expect(h.room.snapshot(null).chaos?.draft).not.toBeNull() // the draft still waits for its picks
+    await pickAll(h, ['h', 'a'])
+    expect(h.room.handActive).toBe(true)
+    expect(await code(h.room.skipResult('h'))).toBeNull()
+    expect(skips(h)).toEqual([])
+    expect(await code(h.room.skipResult('nobody'))).toBe('NOT_IN_ROOM')
+  })
+
+  it('a chaos sit-down brings the whole balance; a plain Blind table still brings its limit', async () => {
+    const h = table(RESULT_MS, [['h', 5_000_000], ['a', 100_000]])
+    await h.room.sitDown('h', 0)
+    expect(h.room.players.get('h')!.stack).toBe(5_000_000)
+    expect(await h.repos.balances.get('h')).toBe(0)
+    expect(ofEvent(h, 'h', 'PLAYER_SAT').at(-1)).toMatchObject({ playerId: 'h', stack: 5_000_000 })
+    expect(h.last('h', 'BALANCE')).toEqual({ t: 'BALANCE', balance: 0 })
+
+    const { blind } = CHAOS
+    const plain = createRoomHarness({ ...CHAOS, blind: { holeCards: blind!.holeCards, decisionMode: blind!.decisionMode, fixedWager: blind!.fixedWager, botCount: 2 } }, { players: [['h', 5_000_000]] })
+    await plain.room.sitDown('h', 0)
+    expect(plain.room.players.get('h')!.stack).toBe(10_000)
+    expect(await plain.repos.balances.get('h')).toBe(4_990_000)
   })
 })

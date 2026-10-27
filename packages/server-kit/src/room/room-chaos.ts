@@ -169,6 +169,21 @@ export class ChaosTable {
     this.broadcastState()
   }
 
+  /**
+   * How long the result of a hand stays up before the next deal (BP-39, spec 2026-10-27 §3.3): read from the port after
+   * each hand, so a GM change takes effect from the next one. A port that cannot answer gives the default (logged).
+   */
+  async resultMs(): Promise<number> {
+    try {
+      const ms = (await this.port.config()).resultMs
+      if (Number.isFinite(ms) && ms > 0) return ms
+      this.host.deps.log.error('chaos result time invalid; the default is used', { roomId: this.host.roomId, resultMs: ms })
+    } catch (err) {
+      this.host.deps.log.error('chaos result time unread: the chaos port did not answer', { roomId: this.host.roomId, err: String(err) })
+    }
+    return DEFAULT_CHAOS_CONFIG.resultMs
+  }
+
   /** The effects this hand fires, for the seats dealt in; each seat's chaos becomes what `planHand` returns. Counts the hand. */
   planHand(eligible: readonly RoomPlayer[]): ChaosHandPlan {
     // A card played for this hand now names it (`armed.hand: 'this'`), or joined the held cards: its owner is told.
