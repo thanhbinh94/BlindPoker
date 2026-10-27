@@ -3,6 +3,7 @@ import type { Rng } from '../cards/rng.js'
 import type { Pot } from '../betting/pots.js'
 import { dealCards, getPlayer, seatsClockwiseFrom, type SettleHooks } from '../hand/common.js'
 import type { GameEvent, HandPlayer, HandState } from '../hand/types.js'
+import { MID_HAND_EFFECTS } from './bonus.js'
 import type { ChaosEffectKind, ChaosHandPlan, ChaosHandState, ChaosOutcome, PlannedEffect } from './types.js'
 
 /**
@@ -44,6 +45,27 @@ export function initialChaosState(plan: ChaosHandPlan): ChaosHandState {
     hit: [],
     shieldSpent: [],
   }
+}
+
+/**
+ * A bonus card played during the play/fold choice for this hand's reveal (BP-39, spec 2026-10-27 §3.4): its effect joins
+ * `seat`'s plan, in place on the live state, so the reveal fires it and settlement sees it among the seat's fired cards
+ * (a held Bạo kích reads the same list). When the seat plans a reveal debuff and this one is a debuff, the planned one
+ * leaves this hand's plan (its card stays held: its uid is never applied) and the played one takes its place — the
+ * pressed debuff fires first. `armBonus` guarantees the rest, which this checks: the effect is a one-shot reveal card,
+ * the seat is in the hand, it has fired no deal-time debuff and plans no effect of the same kind.
+ */
+export function addRevealEffect(state: HandState, seat: number, effect: PlannedEffect): void {
+  const chaos = state.chaos
+  const planSeat = chaos?.plan.seats.find((s) => s.seat === seat)
+  if (!chaos || !planSeat) throw new Error(`addRevealEffect: seat ${seat} is not in this chaos hand`)
+  if (!MID_HAND_EFFECTS.has(effect.effect)) throw new Error(`addRevealEffect: ${effect.cardId} cannot be played mid-hand`)
+  if (planSeat.effects.some((e) => e.effect === effect.effect)) throw new Error(`addRevealEffect: seat ${seat} already plans ${effect.effect}`)
+  if (effect.debuff) {
+    if (planSeat.effects.some((e) => e.debuff && e.timing === 'deal')) throw new Error(`addRevealEffect: seat ${seat} fired a deal-time debuff`)
+    planSeat.effects = planSeat.effects.filter((e) => !e.debuff)
+  }
+  planSeat.effects.push({ ...effect, targets: effect.targets.slice() })
 }
 
 /** Blindfolded this hand ("Che mắt" landed last hand): the seat does not see its own cards until the showdown. */

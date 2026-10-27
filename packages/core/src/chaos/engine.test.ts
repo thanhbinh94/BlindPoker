@@ -5,6 +5,7 @@ import { evaluate } from '../evaluator/evaluator.js'
 import { applyBlindCommand, createBlindHand } from '../hand/blind.js'
 import type { BlindRules, GameEvent, HandCommand, HandState } from '../hand/types.js'
 import { filterEvent, playerView } from '../hand/view.js'
+import { addRevealEffect } from './engine.js'
 import { CHAOS_CARDS_SPEC } from './fixtures.js'
 import type { ChaosHandPlan, PlannedEffect } from './types.js'
 
@@ -422,6 +423,62 @@ describe('reveal effects', () => {
     t.fold(0); t.play(1); t.play(2); t.advanceAll()
     expect(t.applied()).toEqual([])
     expect(t.state.chaos!.applied).not.toContain(p.seats[0]!.effects[0]!.uid)
+  })
+})
+
+describe('a bonus card played mid-hand (BP-39)', () => {
+  const choice = (by: Record<number, SeatPlan> = {}) =>
+    new Table({ chaos: plan(2, by), deck: layout(['2c 7d', '8h Ks'], 'Kd 9s 5h 4c 3s Qh Qc Qd Th Tc'), rules: { decisionMode: 'playOrFold' } })
+
+  it('joins the live plan during the choice and fires at the reveal under its own uid', () => {
+    const t = choice()
+    expect(t.state.phase).toBe('DECISION')
+    const steal = fx('s_steal_one')
+    addRevealEffect(t.state, 0, steal)
+    t.play(0); t.play(1); t.advanceAll()
+    expect(t.hole(1)).toEqual(parseCards('8h'))
+    expect(t.applied()).toEqual([{ type: 'CHAOS_APPLIED', seat: 0, cardId: 's_steal_one', effect: 'stealHole', targets: [1], outcome: 'applied' }])
+    expect(t.state.chaos!.applied).toEqual([steal.uid])
+    // settlement reads the seat's fired cards from the plan: the played card is there
+    expect(t.state.chaos!.plan.seats[0]!.effects.map((e) => e.uid)).toEqual([steal.uid])
+    t.assertMoney()
+  })
+
+  it('takes the place of a planned draft debuff, which stays held: only the played one fires', () => {
+    const draft = fx('s_lower')
+    const crit = fx('g_crit')
+    const t = choice({ 0: { effects: [draft, crit] } })
+    const steal = fx('s_steal_one')
+    addRevealEffect(t.state, 0, steal)
+    expect(t.state.chaos!.plan.seats[0]!.effects.map((e) => e.cardId)).toEqual(['g_crit', 's_steal_one'])
+    t.play(0); t.play(1); t.advanceAll()
+    expect(t.applied().map((e) => e.cardId)).toEqual(['s_steal_one'])
+    expect(t.state.chaos!.applied).toContain(steal.uid)
+    expect(t.state.chaos!.applied).not.toContain(draft.uid)
+  })
+
+  it('a non-debuff card joins beside a planned debuff', () => {
+    const draft = fx('s_lower')
+    const t = choice({ 0: { effects: [draft] } })
+    addRevealEffect(t.state, 0, fx('g_redeal_board_1'))
+    t.play(0); t.play(1); t.advanceAll()
+    expect(t.applied().map((e) => [e.cardId, e.outcome])).toEqual([['s_lower', 'applied'], ['g_redeal_board_1', 'applied']])
+  })
+
+  it('goes back unfired when its owner folds', () => {
+    const t = new Table({ chaos: plan(3, {}), deck: layout(['2c 7d', '8h Ks', 'As Ad'], BOARD), rules: { decisionMode: 'playOrFold' } })
+    const steal = fx('s_steal_one')
+    addRevealEffect(t.state, 0, steal)
+    t.fold(0); t.play(1); t.play(2); t.advanceAll()
+    expect(t.applied()).toEqual([])
+    expect(t.state.chaos!.applied).not.toContain(steal.uid)
+  })
+
+  it('refuses what armBonus never sends: a card that is not a one-shot reveal card, a repeated effect, a seat that fired a deal debuff', () => {
+    expect(() => addRevealEffect(choice().state, 0, fx('g_insure_full'))).toThrow()
+    expect(() => addRevealEffect(choice().state, 5, fx('s_steal_one'))).toThrow()
+    expect(() => addRevealEffect(choice({ 0: { effects: [fx('g_steal_all')] } }).state, 0, fx('s_steal_one'))).toThrow()
+    expect(() => addRevealEffect(choice({ 0: { effects: [fx('s_freeze_one', [1])] } }).state, 0, fx('s_lower'))).toThrow()
   })
 })
 
