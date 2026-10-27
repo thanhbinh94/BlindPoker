@@ -9,7 +9,7 @@ import { dayKey, nextDayStartMs } from '../economy/daily-rules.js'
 import { ServiceError } from '../errors.js'
 import { UnknownPlayerError } from '../repos/balance-repo.js'
 import { createChaosPort } from './chaos-port.js'
-import { createChaosService, type ChaosService } from './chaos-service.js'
+import { CONFIG_CACHE_MS, createChaosService, type ChaosService } from './chaos-service.js'
 
 const TZ = 'Asia/Ho_Chi_Minh'
 const GM = '00000000-0000-4000-8000-0000000000aa'
@@ -274,7 +274,29 @@ describe('config()/setConfig()', () => {
     expect((await chaos.config()).resultMs).toBe(10_000) // a stored row from before BP-39 has no result time
     expect(await chaos.config()).toEqual({ ...DEFAULT_CHAOS_CONFIG, pointsThreshold: 20, tierWeights: { silver: 60, gold: 7, diamond: 10 } })
     await db.update(chaosConfig).set({ value: 'garbage' }).where(eq(chaosConfig.key, 'chaos'))
+    clock += CONFIG_CACHE_MS // a row edited by hand is seen once the cache runs out
     expect(await chaos.config()).toEqual(DEFAULT_CHAOS_CONFIG)
+  })
+
+  it('keeps what it read for a while, so the rooms\' reads after every hand do not each hit the database; a save drops it at once (M5)', async () => {
+    let reads = 0
+    const counting = createChaosService({
+      db: new Proxy(db, { get: (t, k, r) => (k === 'select' ? (reads++, Reflect.get(t, k, r)) : Reflect.get(t, k, r)) }),
+      catalogue: CHAOS_CARDS_SPEC, timezone: TZ, now: () => clock,
+    })
+    expect(await counting.config()).toEqual(DEFAULT_CHAOS_CONFIG)
+    expect(await counting.config()).toEqual(DEFAULT_CHAOS_CONFIG)
+    expect(reads).toBe(1)
+    // A hand edit waits out the cache.
+    await db.insert(chaosConfig).values({ key: 'chaos', value: { ...GOOD, pointsThreshold: 30 } })
+    expect((await counting.config()).pointsThreshold).toBe(DEFAULT_CHAOS_CONFIG.pointsThreshold)
+    clock += CONFIG_CACHE_MS
+    expect((await counting.config()).pointsThreshold).toBe(30)
+    expect(reads).toBe(2)
+    // A GM's save is seen by the very next read.
+    await db.transaction((tx) => counting.setConfig(tx, GOOD, GM))
+    expect(await counting.config()).toEqual(GOOD)
+    expect(reads).toBe(3)
   })
 })
 
