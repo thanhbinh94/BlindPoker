@@ -56,6 +56,11 @@ export interface ChaosService {
   active(nowMs?: number): Promise<{ cards: ChaosCardDef[]; weights: Map<string, number> }>
   /** The settings, kept for `CONFIG_CACHE_MS` after a read; `setConfig` drops them at once. */
   config(): Promise<ChaosConfig>
+  /**
+   * Drops the kept settings. The caller of `setConfig` calls it once its transaction has committed: a read between the
+   * write and the commit still sees the old row, and would otherwise keep it for `CONFIG_CACHE_MS`.
+   */
+  forgetConfig(): void
   rules(nowMs?: number): Promise<GmChaosCard[]>
   /** Throws `ServiceError('INVALID_CHAOS_RULES')`. Meant to run inside the caller's transaction, which rolls back with it. */
   setRules(tx: AppTx, changes: readonly ChaosRuleChange[], updatedBy: string): Promise<void>
@@ -209,6 +214,8 @@ export function createChaosService(deps: ChaosServiceDeps): ChaosService {
       if (gen === generation) cached = { value: copy(value), at }
       return value
     },
+
+    forgetConfig: dropConfig,
 
     async rules(nowMs = now()) {
       const rules = await readRules(db)

@@ -925,6 +925,7 @@ export function createGmService(deps: GmServiceDeps): GmService {
         await chaosOf().setConfig(tx, clean, by)
         return logAction(tx, { actorUserId: actor.userId, action: 'set_chaos_config', reason: why, details: { config: clean } })
       })
+      chaosOf().forgetConfig()
       return { actionId }
     },
   }

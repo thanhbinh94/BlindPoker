@@ -298,6 +298,15 @@ describe('config()/setConfig()', () => {
     expect(await counting.config()).toEqual(GOOD)
     expect(reads).toBe(3)
   })
+
+  it('forgetConfig drops what a read between the save and its commit kept, so the committed settings are seen at once', async () => {
+    expect(await chaos.config()).toEqual(DEFAULT_CHAOS_CONFIG)
+    // The row lands as the commit would land it, after the cache took the old settings.
+    await db.insert(chaosConfig).values({ key: 'chaos', value: { ...GOOD } })
+    expect(await chaos.config()).toEqual(DEFAULT_CHAOS_CONFIG)
+    chaos.forgetConfig()
+    expect(await chaos.config()).toEqual(GOOD)
+  })
 })
 
 describe('credit()', () => {

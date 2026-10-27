@@ -493,7 +493,7 @@ describe('a bonus card played mid-hand (BP-39)', () => {
     expect(t.state.chaos!.recorded).toEqual([])
   })
 
-  it('refuses what armBonus never sends:a card that is not a one-shot reveal card, a repeated effect, a seat that fired a deal debuff', () => {
+  it('refuses what armBonus never sends: a card that is not a one-shot reveal card, a repeated effect, a seat that fired a deal debuff', () => {
     expect(() => addRevealEffect(choice().state, 0, fx('g_insure_full'))).toThrow()
     expect(() => addRevealEffect(choice().state, 5, fx('s_steal_one'))).toThrow()
     expect(() => addRevealEffect(choice({ 0: { effects: [fx('g_steal_all')] } }).state, 0, fx('s_steal_one'))).toThrow()
