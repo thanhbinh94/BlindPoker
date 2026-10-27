@@ -91,7 +91,7 @@ function changeOf(card: GmChaosCardDto, draft: Draft): GmChaosRuleChangeDto | nu
 }
 
 /**
- * The Thẻ hỗn loạn tab (Plan 37, spec §6): every card of the catalogue in its tier, then the five chaos numbers.
+ * The Thẻ hỗn loạn tab (Plan 37, spec §6): every card of the catalogue in its tier, then the chaos numbers.
  * Cards and numbers are saved apart, each with a reason; once the server takes one, the tab is read again and a line
  * says what happened. Each editor is keyed on the part of the reply it edits, so a reload that changed it starts it
  * afresh from the server's values and one that did not leaves the other's unsaved edits alone.
@@ -301,6 +301,7 @@ function CardsEditor({ api, cards, onDone }: CardsEditorProps) {
 /** The server's bounds (`chaos-service.ts`, `LIMITS`), checked here so the box says so first. */
 const POINTS_THRESHOLD: readonly [number, number] = [1, 100]
 const DRAFT_SECONDS: readonly [number, number] = [5, 60]
+const RESULT_SECONDS: readonly [number, number] = [5, 15]
 const DAILY_CAP: readonly [number, number] = [0, 10_000_000]
 const DAILY_RESCUES: readonly [number, number] = [0, 20]
 
@@ -310,6 +311,7 @@ interface ConfigText {
   diamond: string
   pointsThreshold: string
   draftSeconds: string
+  resultSeconds: string
   dailyCapPoints: string
   dailyRescues: string
 }
@@ -320,6 +322,7 @@ const textOf = (config: ChaosConfigDto): ConfigText => ({
   diamond: String(config.tierWeights.diamond),
   pointsThreshold: String(config.pointsThreshold),
   draftSeconds: String(config.draftMs / 1000),
+  resultSeconds: String(config.resultMs / 1000),
   dailyCapPoints: String(config.dailyCapPoints),
   dailyRescues: String(config.dailyRescues),
 })
@@ -335,14 +338,15 @@ function configOf(text: ConfigText, was: ChaosConfigDto): ChaosConfigDto | null 
   const diamond = parseWhole(text.diamond, Number.MAX_SAFE_INTEGER)
   const pointsThreshold = within(text.pointsThreshold, POINTS_THRESHOLD)
   const seconds = within(text.draftSeconds, DRAFT_SECONDS)
+  const resultSeconds = within(text.resultSeconds, RESULT_SECONDS)
   const dailyCapPoints = within(text.dailyCapPoints, DAILY_CAP)
   const dailyRescues = within(text.dailyRescues, DAILY_RESCUES)
   // A draft time the server holds in odd milliseconds shows as "7.5": left alone, it is kept as it is.
   const draftMs = text.draftSeconds === textOf(was).draftSeconds ? was.draftMs : seconds === null ? null : seconds * 1000
-  if (silver === null || gold === null || diamond === null || pointsThreshold === null || draftMs === null || dailyCapPoints === null || dailyRescues === null) return null
+  const resultMs = text.resultSeconds === textOf(was).resultSeconds ? was.resultMs : resultSeconds === null ? null : resultSeconds * 1000
+  if (silver === null || gold === null || diamond === null || pointsThreshold === null || draftMs === null || resultMs === null || dailyCapPoints === null || dailyRescues === null) return null
   if (silver + gold + diamond <= 0) return null
-  // No box for the result time yet (Task 5): the loaded value travels with every save.
-  return { tierWeights: { silver, gold, diamond }, pointsThreshold, draftMs, resultMs: was.resultMs, dailyCapPoints, dailyRescues }
+  return { tierWeights: { silver, gold, diamond }, pointsThreshold, draftMs, resultMs, dailyCapPoints, dailyRescues }
 }
 
 interface ConfigEditorProps {
@@ -353,7 +357,7 @@ interface ConfigEditorProps {
 
 type ConfigField = keyof ConfigText
 
-/** Block "Số liệu hỗn loạn": the tier odds, the points for a bonus card, the draft time and the daily limits. */
+/** Block "Số liệu hỗn loạn": the tier odds, the points for a bonus card, the draft and result times and the daily limits. */
 function ConfigEditor({ api, config, onDone }: ConfigEditorProps) {
   const { t } = useTranslation('normal')
   const [text, setText] = useState<ConfigText>(() => textOf(config))
@@ -374,6 +378,7 @@ function ConfigEditor({ api, config, onDone }: ConfigEditorProps) {
     { key: 'diamond', label: t('gm.chaos.config.weightDiamond') },
     { key: 'pointsThreshold', label: t('gm.chaos.config.pointsThreshold') },
     { key: 'draftSeconds', label: t('gm.chaos.config.draftSeconds') },
+    { key: 'resultSeconds', label: t('gm.chaos.config.resultSeconds') },
     { key: 'dailyCapPoints', label: t('gm.chaos.config.dailyCap') },
     { key: 'dailyRescues', label: t('gm.chaos.config.dailyRescues') },
   ]

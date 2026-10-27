@@ -234,7 +234,7 @@ describe('ChaosTab', () => {
     expect(api.gmSetChaosRules).not.toHaveBeenCalled()
   })
 
-  it('edits the five numbers, sends them whole (the draft time in milliseconds) and reads the tab again', async () => {
+  it('edits the numbers, sends them whole (the draft and result times in milliseconds) and reads the tab again', async () => {
     const user = userEvent.setup()
     const { api } = setup()
     const config = await section(c.config.title)
@@ -248,6 +248,9 @@ describe('ChaosTab', () => {
     await user.type(pick(c.config.weightDiamond), '20')
     await user.clear(pick(c.config.draftSeconds))
     await user.type(pick(c.config.draftSeconds), '25')
+    expect(pick(c.config.resultSeconds)).toHaveValue('10')
+    await user.clear(pick(c.config.resultSeconds))
+    await user.type(pick(c.config.resultSeconds), '7')
     await user.clear(pick(c.config.dailyRescues))
     await user.type(pick(c.config.dailyRescues), '1')
 
@@ -255,7 +258,7 @@ describe('ChaosTab', () => {
     await confirmWithReason('cân lại thẻ hỗn loạn')
 
     expect(api.gmSetChaosConfig).toHaveBeenCalledWith(
-      { tierWeights: { silver: 60, gold: 30, diamond: 20 }, pointsThreshold: 10, draftMs: 25_000, resultMs: 10_000, dailyCapPoints: 100_000, dailyRescues: 1 },
+      { tierWeights: { silver: 60, gold: 30, diamond: 20 }, pointsThreshold: 10, draftMs: 25_000, resultMs: 7_000, dailyCapPoints: 100_000, dailyRescues: 1 },
       'cân lại thẻ hỗn loạn',
     )
     expect(await screen.findByText(t.done.chaosConfig)).toBeInTheDocument()
@@ -282,6 +285,29 @@ describe('ChaosTab', () => {
     }
     expect(config.getByRole('alert')).toBeInTheDocument()
     expect(config.getByRole('button', { name: c.config.save })).toBeDisabled()
+  })
+
+  it('refuses a result time under 5 or over 15 seconds, and a fraction, before anything is sent', async () => {
+    const user = userEvent.setup()
+    const { api } = setup()
+    const config = await section(c.config.title)
+    const box = config.getByLabelText(c.config.resultSeconds)
+    const save = config.getByRole('button', { name: c.config.save })
+
+    for (const bad of ['4', '16', '7.5', '']) {
+      await user.clear(box)
+      if (bad !== '') await user.type(box, bad)
+      expect(box).toHaveAttribute('aria-invalid', 'true')
+      expect(config.getByRole('alert')).toHaveTextContent(c.config.invalid)
+      expect(save).toBeDisabled()
+    }
+    for (const good of ['5', '15']) {
+      await user.clear(box)
+      await user.type(box, good)
+      expect(box).not.toHaveAttribute('aria-invalid')
+      expect(save).toBeEnabled()
+    }
+    expect(api.gmSetChaosConfig).not.toHaveBeenCalled()
   })
 
   it('says it could not load, and tries again on request', async () => {

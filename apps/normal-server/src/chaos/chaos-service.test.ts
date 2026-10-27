@@ -235,6 +235,7 @@ describe('config()/setConfig()', () => {
 
   it('is the defaults until a GM saves, then the saved settings', async () => {
     expect(await chaos.config()).toEqual(DEFAULT_CHAOS_CONFIG)
+    expect(DEFAULT_CHAOS_CONFIG.resultMs).toBe(10_000)
     await setConfig(GOOD)
     expect(await chaos.config()).toEqual(GOOD)
     expect((await db.select().from(chaosConfig))[0]).toMatchObject({ key: 'chaos', updatedBy: GM })
@@ -270,6 +271,7 @@ describe('config()/setConfig()', () => {
 
   it('fills a stored row that lacks a field, or holds a wrong one, from the defaults', async () => {
     await db.insert(chaosConfig).values({ key: 'chaos', value: { pointsThreshold: 20, draftMs: 'soon', tierWeights: { gold: 7 } } })
+    expect((await chaos.config()).resultMs).toBe(10_000) // a stored row from before BP-39 has no result time
     expect(await chaos.config()).toEqual({ ...DEFAULT_CHAOS_CONFIG, pointsThreshold: 20, tierWeights: { silver: 60, gold: 7, diamond: 10 } })
     await db.update(chaosConfig).set({ value: 'garbage' }).where(eq(chaosConfig.key, 'chaos'))
     expect(await chaos.config()).toEqual(DEFAULT_CHAOS_CONFIG)

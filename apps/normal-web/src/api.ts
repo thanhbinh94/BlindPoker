@@ -625,7 +625,7 @@ export interface ChaosConfigDto {
   tierWeights: Record<ChaosTierDto, number>
   pointsThreshold: number
   draftMs: number
-  /** How long a chaos table shows the hand result before the next hand deals (BP-39; the GM field comes with Task 5). */
+  /** How long a chaos table shows the hand result before the next hand deals (BP-39). */
   resultMs: number
   dailyCapPoints: number
   dailyRescues: number

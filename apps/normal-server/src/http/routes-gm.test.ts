@@ -340,7 +340,7 @@ describe('the chaos cards (Plan 37)', () => {
     expect(audit.actions.some((a) => a.action === 'set_chaos_rules')).toBe(false)
   })
 
-  it('PUT /api/gm/chaos/config saves the five numbers; a bad one is 400 INVALID_CHAOS_CONFIG', async () => {
+  it('PUT /api/gm/chaos/config saves the six numbers; a bad one is 400 INVALID_CHAOS_CONFIG', async () => {
     const config = { tierWeights: { silver: 50, gold: 35, diamond: 15 }, pointsThreshold: 8, draftMs: 20_000, resultMs: 12_000, dailyCapPoints: 50_000, dailyRescues: 2 }
     const res = await gmReq('PUT', '/api/gm/chaos/config', { config, reason: 'cân lại bậc thẻ' })
     expect(res.statusCode).toBe(200)
