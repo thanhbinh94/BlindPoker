@@ -159,10 +159,19 @@ export const sumOf = (rows: LedgerRow[], reason?: string): number =>
  * the CSRF guard asks for. `page.request` would carry the cookie but not the page's origin.
  */
 export async function postApi(page: Page, path: string, body?: unknown): Promise<{ status: number; body: Record<string, unknown> }> {
+  return sendApi(page, 'POST', path, body)
+}
+
+/** `postApi`'s twin for the routes that replace a whole setting (`PUT /api/gm/chaos/rules`, `…/config`). */
+export async function putApi(page: Page, path: string, body?: unknown): Promise<{ status: number; body: Record<string, unknown> }> {
+  return sendApi(page, 'PUT', path, body)
+}
+
+async function sendApi(page: Page, method: 'POST' | 'PUT', path: string, body?: unknown): Promise<{ status: number; body: Record<string, unknown> }> {
   return page.evaluate(
-    async ({ path, body }) => {
+    async ({ method, path, body }) => {
       const res = await fetch(path, {
-        method: 'POST',
+        method,
         credentials: 'same-origin',
         headers: { accept: 'application/json', 'content-type': 'application/json', 'x-requested-with': 'bind-poker' },
         body: JSON.stringify(body ?? {}),
@@ -170,7 +179,7 @@ export async function postApi(page: Page, path: string, body?: unknown): Promise
       const text = await res.text()
       return { status: res.status, body: (text === '' ? {} : JSON.parse(text)) as Record<string, unknown> }
     },
-    { path, body },
+    { method, path, body },
   )
 }
 

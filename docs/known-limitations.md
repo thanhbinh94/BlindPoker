@@ -63,6 +63,14 @@ not counted, so a player with most of their points on a table can claim relief
 editions, for a once-a-day top-up of at most 5.000.
 *Tracked:* here; spec §12.4.
 
+**At a chaos table the whole balance is on the table, so Cứu trợ is open to a player holding a large stack (BP-39).** A Poker hỗn
+loạn seat brings the whole balance (no table limit, spec 2026-10-27 §3.7), which leaves the account at 0 while it sits: under the
+5.000 threshold, so its owner can claim Cứu trợ once a day however big the stack on the table is.
+*Why it stays:* BP-39 Ruling 1 — the relief is small, and the same loophole already exists for any balance under the Blind 10× limit or
+a Hold'em buy-in (the entry above). *Costs if wrong:* a rich player takes one small relief a day; the fix is to count seated stacks
+in relief, the same change the entry above would need.
+*Tracked:* plan `2026-10-27-plan39-chaos-round-two.md` (amendment A13, Ruling 1); `apps/normal-server/src/economy/economy-service.ts` (relief).
+
 **The `SIT_OUT` auto-stand-up cannot fire on a two-seat table.** A player who sits out is stood up
 after five consecutive *dealt* hands they skipped. The counter ticks on hands, not on wall-clock
 time — and on a table with two seats, one of them sitting out, no hand can start at all, so nothing
@@ -1016,19 +1024,58 @@ layout's height. A dense strip (seven opponents or more) already shows one icon 
 *Tracked:* `packages/ui-kit/src/table/Seat.tsx` (`.stripLine`); `apps/normal-web/e2e/ops/10-chaos.spec.ts` (F-13b); found by the
 full ops run of Plan 37 Task 8.
 
-**The chaos banner and the draft are opaque, and `expectNoTextOverlap` does not count text under an opaque box as overlapped.** The banner
-sits inside the board's own box where no other text is, and a CSS-text test pins that (`ChaosTable.test.tsx`), but nothing measures it in
-a browser. The draft panel stands above the viewer's seat on purpose; at 1440 × 900 its right edge covers the left half of the lower-right
-opponent's plate while it is open (15 s at most). Once board cards are face up the banner no longer hides them (final fix wave): it sits on
-their feet, see-through, so each card's corner index and pip stay in sight (inside the board on a phone on its side, where it covers the
-lower half of the small board cards for its 0.9 s).
-*Why it stays:* the panel is what the table waits on, and it goes away on the last pick. The ruled residual: the draft over a side plate at 1440 × 900.
-*Tracked:* `packages/ui-kit/src/table/ChaosBanner.tsx`, `table.module.css` (`.chaosBannerSlot`, `.community[data-board='up']`, `.draft`); Plan 37 Task 7 report and final fix wave.
+**The draft, the toasts and the result strip are opaque, and `expectNoTextOverlap` does not count text under an opaque box as
+overlapped.** The draft panel stands above the viewer's seat on purpose; at 1440 × 900 its right edge covers the left half of the
+lower-right opponent's plate while it is open (15 s at most). Since BP-39 the cards' toasts replace the banner (Plan 37's "the result
+card waits for the banner queue" is gone: the result opens at the settlement). On a phone on its side the toast band lies across the
+compact header's middle for its 4 s, over the room name and stakes (BP-39 Task 8, Ruling 3); a sliver of the header's text can show at
+the band's right end beside "+N thẻ khác". The ops pack measures toast, strip, board and tray boxes in every frame (F-13d–g), not the
+header under the band.
+*Why it stays:* the panel is what the table waits on, and it goes away on the last pick; at 780 × 360 there are about 16 px between the
+header and the top plates, and the band may not take height from the stage (plan amendment A7). The ruled residuals: the draft over a
+side plate at 1440 × 900, the band over the landscape header.
+*Tracked:* `packages/ui-kit/src/table/ChaosToasts.tsx`, `table.module.css` (`.chaosToastBand`, `.draft`); Plan 37 Task 7 report; BP-39 Task 8 report.
 
-**The result card waits for the banner queue, about 0.9 s per card fired, with no upper bound.** A hand in which a dozen cards fire holds
-its result card for ten seconds or so (the next hand starts 5 s after the settlement and the draft hides the card).
-*Why it stays:* rare in practice (a seat fires one debuff a hand), and capping it would skip effects the table wants to see.
-*Tracked:* `packages/ui-kit/src/table/ChaosBanner.tsx` (`useChaosBanner`).
+**The S25 checks are Chromium's (BP-39).** The ops pack plays the chaos table at the Galaxy S25's 360 × 780 and 780 × 360 (projects
+`s25p` and `s25l`, F-13b–g) in desktop Chromium with touch emulation: the toasts, the result strip, "Bỏ qua", the bonus hand and its
+popup have never been tried on a real phone, in Samsung Internet, iOS Safari or Firefox Android.
+*Why it stays:* only Chromium is installed for Playwright, and real phones are the user's to try (CLAUDE.md §8).
+*Tracked:* `apps/normal-web/e2e/ops/ops.config.ts` (`s25p`, `s25l`); `docs/operation-test-plan.md`.
+
+**Upright at 360 × 780, the stage can run up to about 24 px past its box while three toasts stand.** The toast band is a row of the
+column (it takes the header's facts line's place, BP-39 Task 8 Ruling 4), so two-line toasts take height from the felt for their 4 s;
+measured 0–24 px of stage overflow with four seats (F-13g) and 19 px with eight (Task 8). The page itself never scrolls (F-13d, F-13f).
+F-13b and F-13d measure the stage once the toasts have left. (A separate overflow of 18–19 px at the 360 × 780 result without toasts,
+found by those cases, is for BP-39's final fix wave, not this residual.)
+*Why it stays:* the band may not overlay the felt (spec 2026-10-27 §3.1) and the felt is at its `min-content` floor at that size.
+*Tracked:* `packages/ui-kit/src/screens/RoomScreen.tsx` (`ChaosToasts`), `table.module.css` (`.chaosToastBand`); BP-39 Task 8 report.
+
+**The bonus cards and the seats' card icons are small tap targets (BP-39).** On a phone the bonus hand shows icons only, 26–28 px pills
+(the trigger's `::after` adds 4 px above and below), and the seat icons are 22 px: under the 44 px a finger wants.
+*Why it stays:* the upright felt's left edge has about 50 px for the bonus column and the landscape corner 7.5 rem; the names are in the
+popup. A real phone has to say whether they are hard to hit.
+*Tracked:* `packages/ui-kit/src/table/BonusHand.tsx`, `ChaosCardIcon.tsx`; BP-39 Task 7 and Task 10 reports.
+
+**Nine seats on a phone on its side crowd the top line's badges.** At 780 × 360 with nine seats, seats holding many chaos cards run their
+badge lines (icons and the "×N" bonus count) into each other; `expectNoTextOverlap` does not flag it because the icons are images. The
+baseline without the bonus badge shows the same.
+*Why it stays:* nine humans or bots each with several cards at one landscape phone is rare; the badge was already shrunk to 7 × 10 there.
+*Tracked:* `packages/ui-kit/src/table/Seat.tsx` (`data-bonus-count`); BP-39 Task 10 report.
+
+**At about 1024 px wide the desktop result card covers part of the toast column.** The desktop toasts hang into the stage's top-right
+(at least 11 rem wide) and the result card is centred over the felt; between about 900 and 1250 px the card does not fit beside the
+column, and at 1024 × 768 it covers its left part. The toasts sit under the card (z 1 against 2), so no text is drawn over text, but
+they are partly hidden for the result's time.
+*Why it stays:* reserving the column narrowed the card enough to squeeze the winner's row out at 1024 px; moving the desktop toasts to a
+top band below about 1280 px is left for a later round.
+*Tracked:* `packages/ui-kit/src/table/table.module.css` (`.chaosToastBand[data-layout='desktop']`); BP-39 Task 8 and Task 9 reports.
+
+**A player on auto-play is a "Bỏ qua" voter.** Spec 2026-10-27 §3.3 counts a player on "Tự động chơi" as having pressed; the room
+counts only connected seated humans who are not sitting out, and the auto-playing client presses "Bỏ qua" for its player at the start
+of every result wait. The effect is the same while the client is connected.
+*Why it stays:* the press comes from the client, so a reconnect re-sends it (`useGameClient`); the server never needs to know about
+auto-play.
+*Tracked:* `packages/server-kit/src/room/room.ts` (`resultVoters`); `packages/ui-kit/src/client/useGameClient.tsx`.
 
 **A frozen seat's wait cards do not fire and stay held.** "Đóng băng" blocks a seat from using its cards for the hand (spec §3.5.6), and that
 includes Cấp cứu, Thần tài and Bạo kích: a frozen player at stack 0 waits one more lost hand for its rescue, and may be stood up first.

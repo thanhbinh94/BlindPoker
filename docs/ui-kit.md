@@ -243,7 +243,8 @@ auto-play is offered in a squeeze room too, where it means "turn my cards the mo
 room it still answers `play`).
 
 `RoomHeader` shows the blinds for a Hold'em room and "wager · limit" for a Blind one ("Mức cược 5.000 · Hạn mức 50.000"; the
-limit is `blindTableLimit`, ten wagers since BP-31).
+limit is `blindBuyInCap(rules)`: `blindTableLimit`, ten wagers since BP-31, or `null` at a chaos table, which prints "Hạn mức Không
+giới hạn" (`labels.noLimit`, BP-39); `CreateRoomFields`' hint says "Hạn mức mỗi người: Không giới hạn" when the chaos box is ticked).
 
 `HandResult` reads `hand.result`. Alongside `payouts` (the same money summed per seat) it carries **`pots`** — the
 engine's layered pots straight from `SETTLEMENT.pots`, each with its `amount`, `eligibleSeats` and `winners` — and
@@ -516,6 +517,21 @@ on `CHAOS_STATE` or `HAND_STARTED`, rebuilds seats and draft from a snapshot, st
 cardId)` sends `CHAOS_PICK` and, on its ACK, dispatches `chaosPicked`; with auto-play on, the hook picks the first offered card at
 once (once per `offerId`, like the squeeze's auto-REVEAL).
 
+BP-39 (spec 2026-10-27) adds to that state:
+
+- `chaos.bonus` (`ChaosBonusPayload`: the viewer's own bonus cards and the one it pressed, `armed: { uid, cardId, hand } | null`;
+  never null, `{ cards: [], armed: null }` when empty). The `CHAOS_BONUS` notification sets it (like `CHAOS_OFFER`, never a toast)
+  and a snapshot's `chaos.bonus` rebuilds it; it survives hands and drafts and is emptied on every leave path. Each seat in
+  `chaos.seats` also carries `bonusCount`, the only public part of another seat's bonus hand.
+- `resultSkips` (`ClientResultSkips { skipped, total, mine } | null`): set by `RESULT_SKIPS` and by a snapshot's `resultSkips`;
+  `mine` is set by the ACK of the viewer's own press (`resultSkipped`) and kept while `skipped > 0`; cleared by `HAND_STARTED`,
+  `CHAOS_DRAFT`, `ROOM_STATUS` with `nextHandAt: null`, and every leave path.
+- `chaosUsed[].targets`, from `CHAOS_SUMMARY` (and the applied fallback), for the card popup's "nhắm vào ai".
+- `useGameClient().playBonus(uid)` sends `CHAOS_USE` and resolves with the answer (an `ERROR` with `CHAOS_CANNOT_USE` is shown by
+  `BonusHand`, not by the room's error slip); `skipResult()` sends `RESULT_SKIP` and dispatches `resultSkipped` on its ACK. With
+  auto-play on, the hook sends one `RESULT_SKIP` per result wait (keyed on the hand and the room's return count, so a press lost with
+  the socket is sent again after the reconnect snapshot says `mine: false`).
+
 **Create and lobby.** `CreateRoomForm` takes `chaosOffered` (default `false`; **Normal sets it, Lite does not**, so Lite's form and
 its wire config are unchanged). Offered, a Blind form shows the "Poker hỗn loạn" tick and the "Chu kỳ thẻ" select ("Chu kỳ thẻ: 5
 ván" / 10), and submits `blind.chaosCycle` only when ticked. `.modeFieldsChaos` reserves the taller 17 rem for both modes, so the
@@ -526,36 +542,79 @@ dialog does not change height between Hold'em and Blind. `Badge` has a `chaos` t
 | Component | Props |
 | --- | --- |
 | `ChaosDraft` | `draft`, `serverNow`, `onPick`, `layout?`, `frame?`, `short?` — the panel: a `TurnTimer` ring on `deadlineAt` against `draft.totalMs` (the GM's `draftMs`, from `CHAOS_DRAFT`, the offer or the snapshot; 15 s when none says), each button stamped `data-chaos-card` and its name `data-part="name"`, three real `<button>`s (tier chip, name, one line), focus on the first when the offer lands, one pick (a ref guards a double click), "Đã chọn — chờ người chơi khác" at once, and a refusal lets the player choose again. A spectator or a seat with no offer sees "Các tay chơi đang chọn thẻ". Stamps `data-layout`, `data-frame`, `data-short` |
-| `ChaosCardIcon`, `ChaosCardRow` | `card` / `cards`, `summary?` — the 22 px tier-framed icon (`role="img"`, accessible name and `title` "Khiên gỗ (Bạc) · còn 2 ván", the card's first letter inside, hands left in the corner); at most `MAX_CHAOS_ICONS` (4), then "+N"; `summary` is one icon with the count, for a dense phone strip (seven or more opponents) |
-| `ChaosBanner`, `useChaosBanner` | the queue (`BANNER_MS` 900 ms per card, worked out in the render so no frame of the result card slips through) and a `role="status"` slot, always mounted: "A dùng X" / "A dùng X lên B, C" and "Bị chặn" / "Bị phản lại" / "Không có tác dụng" |
+| `ChaosCardIcon`, `ChaosCardRow` | `card` / `cards`, `summary?` — the 22 px tier-framed icon (`role="img"` named "Khiên gỗ (Bạc) · còn 2 ván", the card's first letter inside, hands left in the corner); at most `MAX_CHAOS_ICONS` (4), then "+N"; `summary` is one icon with the count, for a dense phone strip (seven or more opponents). Since BP-39 each icon, the summary and "+N" sit inside a `ChaosCardInfo` trigger (a tap reads the card); no `title=` |
+| `ChaosCardInfo` | `children`, `className?`, `label?`, then either `cardId` + `handsLeft?` + `use?: { by, targets, outcome }` or `cards` (several in one popup, for the summary icon and "+N"), and `action?` (`{ kind: 'button', label, disabled?, onPress }` or `{ kind: 'status', label }`) — BP-39's own tooltip for every chaos card (draft excepted: its cards already carry the text). Wraps the children in a `<button>` (`aria-label`, `aria-expanded`, `aria-describedby` while open) and portals a `role="tooltip"` popup (`position: fixed`, `data-surface="night"`, `tabIndex={-1}`) into `document.body`: name, tier chip, full description, timing word (`chaos.timing.*`, from `CHAOS_CARDS_SPEC`) and hands left; with `use`, who played it, on whom and how it went. Opens on a tap (pinned; a second tap closes), a mouse hover (closes 120 ms after leaving unless the mouse is on the popup) or keyboard focus; closes on a press outside, `Esc`, blur out of trigger and popup, or unmount. One popup at a time. `placeChaosInfo` (pure, exported) puts it above the trigger when it fits, else below, clamped 8 px inside the viewport. `action` adds a button (or a status line) at the popup's foot; a press closes the popup, then calls `onPress` once, and hands the focus back to the trigger. The inner `[role="img"][data-tier]` stays inside the button |
+| `ChaosToasts` | `applied`, `handId`, `restored`, `nameOf`, `layout` (`stack` / `landscape` / `desktop`), `reverseNote`, `resultOpen` — replaces Plan 37's `ChaosBanner`. One toast per applied card, "{{name}} dùng {{card}}" or "… → {{targets}}", the outcome word inline when the card did not land; the text wraps, never "…". The card's name is a `ChaosCardInfo`; a tap on the toast's body pins it (`data-pinned`). `TOAST_MS` 4 000 counts from a toast's arrival, one timer per batch, so a batch leaves together; a pinned toast outlives it. `TOAST_CAP` stack 3, desktop 3, landscape 2 (1 under `NARROW_LANDSCAPE_QUERY`, `max-width: 739px`), the reverse note taking one place; the rest of a batch goes under one "+N thẻ khác" toast (`data-more`), whose button opens the hand's whole list (`<ol aria-label="Các thẻ đã dùng ván này">`, closed by a second tap, a press outside or `Esc`). A card that arrives while the result was already open goes straight under "+N"; a batch that opens the result in the same render still gets its places. No queue: a card under "+N" is never promoted. A restored hand counts what it holds as seen. "Thế giới đảo ngược" is a pinned toast first in the band (`data-chaos-note`). Each toast is `[data-chaos-toast]` with `data-tier` and `data-outcome`, inside `[data-chaos-toasts]` (with `data-layout`, `data-empty`, `data-list-open`) and an always-mounted `role="status"` |
+| `BonusHand` | `bonus`, `canUse`, `onUse`, `layout` — the viewer's bonus hand, `role="group"` named "Thẻ thưởng" (`data-bonus-hand`, `data-layout`, `data-surface="night"`); nothing when empty. The armed card first (dashed gold edge, a ✓ on its icon, "Đã đặt dùng" in place of its name on a desktop), then the held cards in hand order; each is a `ChaosCardInfo` named `Name (Tier)[ · còn N ván][ · Đã đặt dùng]` around a pill (`data-tier`, `data-uid`, `data-armed`). A desktop shows the title and the names, a phone the icons after a card-back mark. A held card's popup ends with "Dùng", disabled unless `canUse`, nothing is armed and no request is out; the armed card's popup says "Đã đặt dùng". One request at a time; an `ERROR` answer or a rejected request shows `common:errors.<code>` (fallback `CHAOS_CANNOT_USE`) inside the hand as `role="alert"` for `BONUS_ERROR_MS` (4 s) |
 
 **On the table.** `RoomScreen` mounts `ChaosDraft` in an overlay in `<main>` beside the result overlay and disables the action tray while
-it is up; the previous hand's result card steps aside during a draft, and is held while the banner queue runs on a completed hand
-(a snapshot-rebuilt hand replays nothing). `useSeatClearance(stage, active, seat, { minRoom, aboveHand })`: the draft passes
+it is up; the previous hand's result card steps aside during a draft. Since BP-39 the result is no longer held for the cards: it
+waits only for the reveal (`held = revealHeld`), and `ChaosToasts` runs beside it. `useSeatClearance(stage, active, seat, { minRoom, aboveHand })`: the draft passes
 `{ minRoom: 0, aboveHand: true }`, so it always stands just above the viewer's seat block and the highest card of the viewer's fan; the
-result card keeps its tiers. `PokerTable` takes `chaos` and `banner`: each `Seat` shows its icons (in `.tags`, and in `.stripLine` for the
+result card keeps its tiers. `PokerTable` takes `chaos` (and, BP-39, `feltCorner`: a zero-height anchor at the foot of the stack felt
+for the bonus hand): each `Seat` shows its icons (in `.tags`, and in `.stripLine` for the
 viewer's phone strip), "Bạo kích ×2!" / "×3!" beside the payout (from `CHAOS_CREDIT.multiplier`, held back while the result is pending),
 a "Bị che mắt" badge on the viewer's own blindfolded seat (`chaos.blindfolded` from a snapshot's hand view, else inferred: chaos
 room, own seat, `cardCount > 0`, `holeCards === null`, hand not complete), a "Mượn lá" card beside a seat's own at showdown
 (`ShowdownHand.borrowed`, tagged "Mượn", gold-edged when in the top seat's best five; `data-borrowed`), and `CommunityCards` shows the
-viewer's peek face up in the first empty slots under "Nhìn trộm". The banner is rendered **inside the board's own box**
-(`.community` + `.communityAnchor` — only a board that carries a banner is a positioned box — `position: absolute; inset: 0`,
-`pointer-events: none`), where nothing else draws text: centred over an empty board, and on the cards' feet, see-through, once board
-cards are up (`data-board="up"`; inside the board's box in the landscape frame). Its `note` prop is the quiet line the slot holds while
-no card is up — `RoomScreen` passes "Thế giới đảo ngược: bộ yếu nhất thắng" while `chaos.reverse` is on. The reducer keeps
+viewer's peek face up in the first empty slots under "Nhìn trộm". The reducer keeps
 `chaos.reverse` (the public `CHAOS_APPLIED` or the snapshot's hand view) and `chaos.peek` across a reconnect, writes a re-dealt board
 (`CHAOS_APPLIED.community`, with `boardAt`), and writes `CHAOS_CREDIT.stack` to the roster and the finished hand's seat. `HandResult` prints "Thẻ đã dùng: Ann — Đổi lá, Nhìn trộm; Bob — Khiên gỗ (Bị chặn)" and a line per credit ("Ann: Bạo kích
-×2 +6.000", "Cấp cứu +N · Đã chạm trần thẻ hôm nay"). All new motion (`.draft`, `.chaosBannerIn`, `.critShout`, the card hover) is in the
-"Motion off" block of `table.module.css`; the banner's slide class is only applied when not `prefers-reduced-motion`.
+×2 +6.000", "Cấp cứu +N · Đã chạm trần thẻ hôm nay"); since BP-39 each card name in that line is a `ChaosCardInfo` (the line's text is
+unchanged). Another seat with bonus cards wears a `role="img"` badge "Thẻ thưởng: N" (a CSS card back and "×N", `data-bonus-count`) after
+its icons; never on the viewer's own seat, never for 0.
+
+**The toasts (BP-39).** `ChaosToasts` is rendered once, right after `RoomHeader`, so it keeps one place in the tree for every frame. On
+the stack it is a layout row under the header (an empty band takes back the column gap with a negative margin, so it moves nothing;
+while toasts show, the header's facts line `.metaFlow` hides and the band takes its place). In the landscape frame it lies across the
+compact header's middle (`top: 4px; left: 8.5rem; right: 11rem`), one row. On a desktop it has zero height and the toasts hang into
+the stage's top-right (`clamp(11rem, 50% - 26rem - gap, 20rem)` wide, `z-index: 1`, under the result overlay's 2). `[data-list-open]`
+raises the band to z 7 so the list the player opened lies over the result.
+
+**The result strip and "Bỏ qua" (BP-39).** `HandResult` takes `variant?: 'card' | 'strip'`, `skip?: ResultSkip | null` (`{ skipped,
+total, mine, onSkip? }`; no `onSkip` for a spectator, who sees the tally only) and `stage?` (the stage's ref, for the sheet's cap).
+`RoomScreen` uses the strip at a chaos table on the `landscape` frame or the `stack` layout (`resultStrip`): it renders in a
+`.resultStrip` wrapper after `<main>` and before the footer, not in the overlay, and the room carries `data-result-strip="open"`.
+
+- The strip is a group labelled by its `h2`, whose text stays exactly "Người thắng" / "Ván bị hủy"; the countdown is its own
+  `p.stripNext`, outside the live region. The head ends with the tally "Bỏ qua N/M" and the button "Bỏ qua" ("Đã bỏ qua", disabled,
+  once `mine`; disabled too while its request is out, so a double tap sends one).
+- The body shows whole 18 px lines only: one line per row (name, hand name, payout), the winners first, then the viewer; the other
+  rows fold into "+N người" when more than one would fold. "Thẻ đã dùng" and the credits are clamped to two lines (`.stripUsed`,
+  `data-clamped`), and what is cut is counted into "+N thẻ khác". Either expander (`data-strip-more="people" | "cards"`) opens the
+  strip into a sheet that grows upward over the felt (`position: absolute`, the slot keeping its closed height, capped at the closed
+  height + 60 % of the stage and 8 px under the stage top); "Đóng" (`data-strip-close`) folds it back. No "Đóng" on the closed strip.
+- Upright, the strip is a row 4 px above the tray, and the viewer's own seat (`.stack .mine`) hides while it is up, together with the
+  fan's padding: the strip's row carries the viewer's name, hand and payout. On its side it is absolute from `inset + 7.5rem` (clear
+  of "Tự động chơi") to `right: 35%`, level with the tray, `height: min(7rem, 32%)`, z 4, and the viewer's seat is
+  `visibility: hidden` under it. It changes neither the stage height `useStageTier` measures nor `useSeatClearance`.
+- A desktop keeps the card, with the tally and "Bỏ qua" in its head beside "Đóng" (`aria-live="off"` there, so a press does not
+  re-announce the result). A plain table keeps the card exactly as before, with no skip.
+
+**The bonus hand (BP-39).** `bonusUsable` = a chaos table, seated, nothing armed, and either no live hand or the play/fold choice
+(`phase === 'DECISION'`) of a hand the viewer is dealt into and has not folded, chosen "Bỏ" in, or queued a fold for. `BonusHand`
+goes in the desktop's controls row ("Điều khiển bàn", first), in the stack felt's left edge (`feltCorner`, a column hanging up from
+the pot's line, beside the board and above the fan) and, on its side, after `<main>` in the left corner above "Tự động chơi"
+(`max-width: 7.5rem`, z 5, clear of the strip). Never inside the viewer's seat, which the upright strip hides. A `CHAOS_CANNOT_USE`
+refusal shows inside the hand, not as the room's error slip. `ChaosDraft`'s landscape row shows the tier chip again and keeps its
+2–3 description lines (`data-arrange="row"`, `"column"` on the upright sheet).
+
+All new motion (`.draft`, `.chaosToastIn`, `.strip`, `.bonusError`, `.critShout`, the card hover) is in the "Motion off" block of
+`table.module.css`; the toast's slide class is only applied when not `prefers-reduced-motion`.
 
 **Card names** are `chaos.cards.<id>.name|desc` in `game.json` for all 47 ids, vi and en; the tier of a card that has just acted (a
 one-shot is no longer held) is read from the id's prefix (`s_`, `g_`, `d_`). Bạc/Vàng/Kim cương are `chaos.tier.*`, and `errors.CHAOS_UNAVAILABLE`
-and `errors.CHAOS_NO_OFFER` are in `common.json`.
+and `errors.CHAOS_NO_OFFER` are in `common.json`. BP-39 adds `errors.CHAOS_CANNOT_USE`, `chaos.toast.*` (`use`, `useOn`,
+`more_one|_other`, `all`), `chaos.result.*` (`skip`, `skipped`, `skipCount`, `more_one|_other`), `chaos.bonus.*` (`title`, `use`,
+`armed`, `seat_one|_other`, `count`), `chaos.timing.*`, `chaos.info.*`, `labels.noLimit` and `create.tableLimitNoneHint`;
+`chaos.banner.*` is gone.
 
 **Playground.** `blindC` ("Blind B · hỗn loạn") runs the real chaos rules (`drawTier`, `drawOffer`, `receiveCard`, `planHand`,
 `afterHand`) around the engine in `mock-client.ts`: a draft before every hand (not every 5th, so the pages are reachable), bots pick
-at once. `#worst/<state>/…` gains `chaosDraft`, `chaosReveal` (the one that is not a restored snapshot, so its banner plays),
-`chaosFour`, `chaosPeel`, `chaosBlind` and `chaosResult`.
+at once; its result wait emits `RESULT_SKIPS 0/1`, and `playBonus` arms through core's `armBonus` (always for the next hand).
+`#worst/<state>/…` gains `chaosDraft`, `chaosReveal` (not a restored snapshot, so its toasts play), `chaosFour`, `chaosPeel`,
+`chaosBlind`, `chaosResult`, and since BP-39 `chaosBonus` (a full bonus hand, the other seats' counts), `chaosArmed` (a card set to
+play) and `chaosBurst` (eight seats fired one card each, live: three toasts and "+5" beside the open result, `resultSkips` 3/5).
 
 ### Avatars (`src/avatar2d/`)
 
@@ -1222,11 +1281,12 @@ full-viewport, for measuring a layout against a screen size.
   landscape (a room seats nine) has no browser test, only the playground's `#worst/…/9/…/short`; on a stage narrower than
   about 800 px its top line passes over the end seats (BP-28). All in `docs/known-limitations.md`.
 - **The chaos table** (Plan 37): the card icons are the card's first letter in a tier frame (Khiên gỗ and Khiên sắt are both
-  "K"; the name is in the tooltip and the accessible name), there is no card art; the draft panel and the reveal banner are
-  opaque, so `expectNoTextOverlap` reads text under them as covered, not overlapped (the banner has its own CSS-text test in
-  `ChaosTable.test.tsx`, and the draft stands above the viewer's seat on purpose: at 1440 × 900 its right edge covers the left half of the lower-right
-  opponent's plate while the draft is open); the English
-  card names and descriptions are unreviewed by the user; the 320 px room header is 30 px taller with the badge. All in
+  "K"; the name is in the card popup and the accessible name), there is no card art; the draft panel and the result strip are
+  opaque, so `expectNoTextOverlap` reads text under them as covered, not overlapped (the draft stands above the viewer's seat on
+  purpose: at 1440 × 900 its right edge covers the left half of the lower-right opponent's plate while the draft is open); the
+  English card names and descriptions are unreviewed by the user; the 320 px room header is 30 px taller with the badge. BP-39: the
+  Galaxy S25 sizes are checked in Chromium only; the bonus icons and seat icons are 26–28 px tap targets; nine seats in landscape
+  crowd the top line's badges; at 1024 × 768 the desktop result card covers part of the toast column. All in
   `docs/known-limitations.md`.
 - **The bet slider has been driven by keyboard only, in Chromium** (BP-31): no touch drag on a real phone, and a screen
   reader's "increase" swipe can seem stuck (it moves the native range by 1 point, which rounds back to the same cell).
