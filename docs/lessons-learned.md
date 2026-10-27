@@ -1498,6 +1498,56 @@ See the CHANGELOG's "Still open" and `docs/known-limitations.md` → "Poker hỗ
 the English card copy, real phones, card art, and the two ruled residuals (Ruling 12). Rulings 7, 9 and 10 and the banner over the
 board landed in the final wave.
 
+## Plan 39 — Poker hỗn loạn, round two (merged `898f608`, 2026-10-28)
+
+Spec `docs/superpowers/specs/2026-10-27-chaos-feedback-design.md` (the user's decisions F1–F10, from the players' feedback in
+`docs/bug-log.md` §12 H1–H9); plan `docs/superpowers/plans/2026-10-27-plan39-chaos-round-two.md` with pre-flight amendments A1–A14;
+branch `feature/BP-39-chaos-round-two`. Eleven tasks in order (core types → core bonus rules → server bonus use → server skip vote
+and whole-balance seats → GM field → client state → card tooltip → toasts → result strip → bonus hand → S25 ops and docs), one
+final fix wave, two gate fixes. The user: "lập plan triển khai và deploy luôn không cần hỏi".
+
+### Rulings
+
+- Ruling 1: Cứu trợ still ignores table stacks, so a chaos player seated with the whole balance can claim it — the relief is small
+  and the loophole already exists under any table limit. Costs if wrong: one small relief a day for a rich player.
+- Ruling 2: pressing a duration card that the stacking rule would drop is refused (`WEAKER_HELD`), not silently lost.
+- Ruling 3: Bảo hiểm and Bạo kích pressed mid-hand apply from the next hand; the spec's mid-hand list names only steal, lower,
+  swap, board re-deal and borrow.
+- Ruling 4: a subagent's commit carries its own model's trailer.
+- Ruling 5: an armed Nhìn trộm / Bỏ không mất is spent after its hand, used or not (the draft copy lasts one hand too); only reveal
+  cards return to the bonus hand when they did not fire.
+- Ruling 6: `CHAOS_SUMMARY` names targets, Đóng băng and Che mắt included (spec §3.5 "nhắm vào ai").
+- Ruling 7: the first-paint budget rises from 160 to 170 KB gzip for the new UI.
+- Task rulings worth keeping: the toast band has no queue — a card that finds it full goes under "+N thẻ khác" (T8 R2); upright,
+  the header's facts line and the viewer's own seat block step aside while the result strip is open (T9-1, FW-1, FW-6); the strip
+  grows upward as a sheet only when the player opens it (T9 fix 1); upright, the bonus hand is a column on the felt's left edge
+  (T10-1); the bonus popup is a non-modal dialog when it holds "Dùng", a tooltip otherwise (P2).
+
+### Lessons
+
+- **"Separate regions" beats "z-index and hope".** The players' complaint (card notices over the winner) came from two overlays in
+  one place. Making the toast band and the result strip layout regions — not layers — is what let a test assert "never over the
+  result" at every count; an overlay would only have been "not over it in the cases we tried".
+- **A phone's height budget is one budget.** Header facts, toasts, seats, board, strip and tray all draw from 780 px; each task
+  fitted its own piece and the whole overflowed by 19–37 px until the fix wave measured them together (with and without toasts,
+  4–9 seats). Next time, give the plan one task that owns the upright budget, with a measured table.
+- **Privacy seams hide between tasks.** Every task review passed; the whole-branch review found the one leak (a played bonus card
+  that fizzled was announced, then went back into the private hand). Ask the final reviewer to trace each private datum from
+  server state to every client explicitly — that question found it.
+- **`visibility: hidden` still scrolls.** A hidden seat's payout animation (an 8 px rise) pushed a short landscape stage 6 px past
+  its edge for 110 ms — enough for a frame-by-frame ops check. A per-frame recorder that lists elements past the stage's box found
+  it where screenshots could not.
+- **A "lost click" may be a refusal you did not wait to read.** The ops helper waited 30 s for a URL; the server had answered
+  ALREADY_IN_ROOM in 50 ms and the toast had gone after 6 s. Helpers should wait for the actual answer and name it.
+- **Gate under load.** Unit timeouts at 24 min (CPU contention) were all outside the branch and passed alone; re-run the named
+  files instead of the whole suite, and say so in the report.
+
+### Residuals
+
+See the CHANGELOG's "Still open" and `docs/known-limitations.md` → "Poker hỗn loạn (Plan 37)" (the BP-39 entries): card balance
+(H6) waits for the user's statistics; real-phone checks; small tap targets; nine seats on a phone on its side; the 1024 px desktop
+card over part of the toast column; leaving mid-hand then creating at once; the new English copy for the user's review.
+
 ## 5. Open items
 
 The single list is `docs/known-limitations.md`. As of this writing, the items a next session is most likely to meet:

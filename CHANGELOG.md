@@ -9,7 +9,7 @@ below are the real history.
 
 ---
 
-## Plan 39 — Poker hỗn loạn, round two: toasts that never cover the winner, "Bỏ qua", bonus cards played by hand, tap-to-read cards, no table limit — merged `MERGE` (2026-10-27)
+## Plan 39 — Poker hỗn loạn, round two: toasts that never cover the winner, "Bỏ qua", bonus cards played by hand, tap-to-read cards, no table limit — merged `898f608` (2026-10-28)
 
 The players' feedback on chaos tables, `docs/bug-log.md` §12 H1–H9 (2026-10-26/27), brainstormed with the user
 ("chọn B", "L-B", "con số cố định … có nút skip", "giữ trên tay và tự bấm dùng", "chọn a", "mang toàn bộ số dư lên bàn"),
@@ -75,7 +75,13 @@ Normal edition only.
 - **New English copy to review** (the session's draft): `chaos.timing.*`, `chaos.info.*`, `chaos.bonus.*`, `chaos.result.*`,
   "Skip", "Skipped", "Use", "Set to play · this hand / · next hand", "No limit", "+N more cards", "+N more", "Result time,
   seconds (5–15)".
-- **Gate.** GATE
+- **Gate** (the branch's final tree; `main` had not moved). typecheck and lint clean. Unit: on `83f12e3` 239 files, 4,039
+  passed, 14 skipped; on the final tree 12 tests timed out under CPU load (24 min instead of 7) in five files outside BP-39
+  (ShopTab, GiftsTab, avatar verify, the App GM-console flake, CreateRoomForm), all five passing alone (37 + 147). `build:normal`
+  ok; `build:lite` up to the Node 22 exe step (Node 24 here); `avatar:check` ok; e2e Normal 24/24; e2e Lite 4/4. Ops 66 cases:
+  three gate runs found and fixed two real faults — F-13e@s25l (the viewer's payout rising 8 px past a short landscape stage, now a
+  fade, `0568745`) and L-06 (a create refused with ALREADY_IN_ROOM after a mid-hand leave; the helper now waits that answer out,
+  `4f8e6df`) — then 63 passed with the known E-06 Hold'em flake, and `03-holdem` re-run 6/6.
 - **Deployed.** DEPLOYED
 - **Still open.** Card balance (H6) waits for the user's statistics. Real-phone checks (S25, iOS Safari): tap targets of the
   bonus and seat icons are 26–28 px. Nine seats on a phone on its side crowd the top seats' badge lines. At 1024 px desktop the
