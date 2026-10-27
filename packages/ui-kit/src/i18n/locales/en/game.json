@@ -324,6 +324,18 @@
       "reflected": "Reflected",
       "fizzled": "Fizzled"
     },
+    "timing": {
+      "deal": "Acts at the deal",
+      "decision": "Acts at the decision",
+      "reveal": "Acts at the reveal",
+      "wait": "Waits for its moment",
+      "now": "Acts as soon as it is drawn"
+    },
+    "info": {
+      "by": "Played by {{name}}",
+      "on": "On {{targets}}",
+      "outcome": "Result: {{outcome}}"
+    },
     "credit": {
       "chaos_rescue": "Rescue +{{amount}}",
       "chaos_crit": "Crit ×{{multiplier}} +{{amount}}",
@@ -376,7 +388,7 @@
       },
       "s_steal_one": {
         "name": "Pluck a Card",
-        "desc": "At the reveal, 1 random opponent loses a hole card."
+        "desc": "At the reveal, 1 random opponent loses a random hole card."
       },
       "s_lower": {
         "name": "Lower a Card",

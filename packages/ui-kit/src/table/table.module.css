@@ -2871,17 +2871,18 @@
 .chaosIcon,
 .draft,
 .draftCard,
-.chaosBanner {
+.chaosBanner,
+.cardInfoEntry {
   --t-frame: var(--tier-silver);
   --t-ink: var(--tier-silver-ink);
 }
 
-:is(.chaosIcon, .draft, .draftCard, .chaosBanner)[data-tier='gold'] {
+:is(.chaosIcon, .draft, .draftCard, .chaosBanner, .cardInfoEntry)[data-tier='gold'] {
   --t-frame: var(--tier-gold);
   --t-ink: var(--tier-gold-ink);
 }
 
-:is(.chaosIcon, .draft, .draftCard, .chaosBanner)[data-tier='diamond'] {
+:is(.chaosIcon, .draft, .draftCard, .chaosBanner, .cardInfoEntry)[data-tier='diamond'] {
   --t-frame: var(--tier-diamond);
   --t-ink: var(--tier-diamond-ink);
 }
@@ -2976,6 +2977,122 @@
 
 .stripLine > .chaosRow {
   padding-right: 4px;
+}
+
+/* `ChaosCardInfo` (BP-39, spec 2026-10-27 §3.5). The trigger is a bare button around the icon: it adds no box of its own,
+   and its hit area reaches 4 px past the icon's top and bottom (2 px at the sides, so neighbours never share a tap). */
+.cardInfoTrigger {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.cardInfoTrigger::after {
+  content: '';
+  position: absolute;
+  inset: -4px -2px;
+}
+
+.cardInfoTrigger:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* The popup: fixed to the screen in `document.body`, placed by `placeChaosInfo`, never wider than the screen less 8 px a
+   side and never taller (it scrolls inside rather than run off the bottom of a phone held sideways). */
+.cardInfo {
+  position: fixed;
+  z-index: calc(var(--z-toast) + 1);
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(18rem, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+  box-shadow: var(--shadow-2);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  text-align: left;
+  color: var(--ink);
+  animation: cardInfoIn 120ms var(--ease);
+}
+
+@keyframes cardInfoIn {
+  from {
+    opacity: 0;
+  }
+}
+
+.cardInfo p {
+  margin: 0;
+}
+
+.cardInfoEntry + .cardInfoEntry {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.cardInfoHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 8px;
+}
+
+.cardInfoName {
+  font-family: var(--font-display);
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--t-ink);
+}
+
+.cardInfoTier {
+  padding: 0 5px;
+  border: 1px solid var(--t-frame);
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--t-ink);
+}
+
+.cardInfoDesc {
+  margin-top: 2px;
+}
+
+.cardInfoMeta,
+.cardInfoUse {
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+}
+
+.cardInfoMeta {
+  margin-top: 3px;
+}
+
+.cardInfoUse {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.cardInfoUse [data-outcome='blocked'],
+.cardInfoUse [data-outcome='reflected'],
+.cardInfoUse [data-outcome='fizzled'] {
+  color: var(--red);
 }
 
 /* "Bạo kích ×2!" on the seat that won with it: with the hand's name and the payout, which it arrives with. */
@@ -3446,6 +3563,7 @@
   .draft,
   .chaosBannerIn,
   .critShout,
+  .cardInfo,
   .seatWin .plate {
     animation: none;
   }

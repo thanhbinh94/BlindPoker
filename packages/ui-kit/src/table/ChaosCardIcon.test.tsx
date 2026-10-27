@@ -1,5 +1,5 @@
 import type { HeldCardView } from '@bp/core'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { I18nextProvider } from 'react-i18next'
 import { describe, expect, it } from 'vitest'
 import { createI18n } from '../i18n/index.js'
@@ -14,7 +14,7 @@ describe('ChaosCardIcon', () => {
   it('is named by the card and its tier, with the hands it has left', () => {
     draw(<ChaosCardIcon card={held(1, 'g_shield_3', 'gold', 2)} />)
     const icon = screen.getByRole('img', { name: 'Khiên sắt (Vàng) · còn 2 ván' })
-    expect(icon).toHaveAttribute('title', 'Khiên sắt (Vàng) · còn 2 ván')
+    expect(icon).not.toHaveAttribute('title')
     expect(icon).toHaveAttribute('data-tier', 'gold')
     expect(icon).toHaveTextContent('K')
     expect(icon).toHaveTextContent('2')
@@ -51,7 +51,49 @@ describe('ChaosCardRow', () => {
     draw(<ChaosCardRow cards={cards} />)
     expect(screen.getAllByRole('img', { name: /^Khiên gỗ \(Bạc\)$/ })).toHaveLength(4)
     const more = screen.getByText('+2')
-    expect(more).toHaveAttribute('title', 'Đổi bài, Gương phản chiếu')
+    expect(more).toHaveAccessibleName('Đổi bài, Gương phản chiếu')
+  })
+})
+
+describe('ChaosCardRow tooltips (BP-39)', () => {
+  const tap = (el: Element) => {
+    fireEvent.pointerDown(el, { pointerType: 'touch' })
+    fireEvent.pointerUp(el, { pointerType: 'touch' })
+    fireEvent.click(el, { detail: 1 })
+  }
+  const six = [1, 2, 3, 4, 5, 6].map((uid) => held(uid, uid === 5 ? 'g_swap_all' : uid === 6 ? 'd_mirror' : 's_shield', uid === 5 ? 'gold' : uid === 6 ? 'diamond' : 'silver', uid === 1 ? 2 : null))
+
+  it('puts no title= on anything it draws, in a row, a "+N" or a summary', () => {
+    const { container, unmount } = draw(<ChaosCardRow cards={six} />)
+    expect(container.querySelectorAll('[title]')).toHaveLength(0)
+    unmount()
+    const again = draw(<ChaosCardRow summary cards={six} />)
+    expect(again.container.querySelectorAll('[title]')).toHaveLength(0)
+  })
+
+  it('opens the card on a tap of its icon, keeping the icon findable as [role="img"][data-tier]', () => {
+    const { container } = draw(<ChaosCardRow cards={six} />)
+    expect(container.querySelectorAll('[role="img"][data-tier]')).toHaveLength(4)
+    const first = screen.getAllByRole('button')[0]!
+    expect(first).toHaveAccessibleName('Khiên gỗ (Bạc) · còn 2 ván')
+    tap(first)
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Khiên gỗ')
+    expect(screen.getByRole('tooltip')).toHaveTextContent('còn 2 ván')
+  })
+
+  it('opens the cards behind "+N" on a tap of it', () => {
+    draw(<ChaosCardRow cards={six} />)
+    tap(screen.getByRole('button', { name: 'Đổi bài, Gương phản chiếu' }))
+    const box = screen.getByRole('tooltip')
+    expect(box).toHaveTextContent('Đổi bài')
+    expect(box).toHaveTextContent('Gương phản chiếu')
+    expect(box).not.toHaveTextContent('Khiên gỗ')
+  })
+
+  it('opens every card of a summary icon on a tap of it', () => {
+    draw(<ChaosCardRow summary cards={six.slice(3)} />)
+    tap(screen.getByRole('button'))
+    expect(screen.getByRole('tooltip').querySelectorAll('[data-tier]')).toHaveLength(3)
   })
 })
 
@@ -61,7 +103,7 @@ describe('ChaosCardRow as a summary', () => {
     const icon = screen.getByRole('img')
     expect(icon).toHaveAttribute('data-tier', 'gold')
     expect(icon).toHaveTextContent('3')
-    expect(icon).toHaveAttribute('title', 'Khiên gỗ, Đổi bài, Cấp cứu bạc')
+    expect(icon).toHaveAccessibleName('Khiên gỗ, Đổi bài, Cấp cứu bạc')
   })
 
   it('draws nothing for a hand of no cards', () => {

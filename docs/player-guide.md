@@ -403,7 +403,7 @@ Tên dưới đây là đúng chữ trên màn hình. ✱ là thẻ chỉ có �
 | "Khiên gỗ" | Chặn 1 thẻ gây hại kế tiếp. | Chờ |
 | "Cấp cứu bạc" | +5 × mức cược vào stack khi thua mà stack còn dưới 2 mức cược. | Chờ |
 | "Tích lũy" | +3 điểm hỗn loạn. | Ngay |
-| "Rút lá lẻ" | 1 đối thủ ngẫu nhiên mất 1 lá riêng. | Lúc lật |
+| "Rút lá lẻ" | 1 đối thủ ngẫu nhiên mất một lá riêng ngẫu nhiên. | Lúc lật |
 | "Hạ lá" | Lá riêng cao nhất của 1 đối thủ ngẫu nhiên bị chia lại. | Lúc lật |
 | "Che mắt" ✱ | 1 đối thủ ngẫu nhiên không được xem bài riêng ở ván sau (bài của họ úp cho tới lúc lật, kèm nhãn "Bị che mắt"). | Lúc chia |
 | "Đóng băng nhỏ" | 1 đối thủ ngẫu nhiên không dùng được thẻ ở ván sau. | Lúc chia |

@@ -324,6 +324,18 @@
       "reflected": "Bị phản lại",
       "fizzled": "Không có tác dụng"
     },
+    "timing": {
+      "deal": "Áp lúc chia bài",
+      "decision": "Áp lúc quyết định",
+      "reveal": "Áp lúc lật bài",
+      "wait": "Chờ điều kiện để áp",
+      "now": "Áp ngay khi nhận"
+    },
+    "info": {
+      "by": "Người dùng: {{name}}",
+      "on": "Nhắm vào: {{targets}}",
+      "outcome": "Kết quả: {{outcome}}"
+    },
     "credit": {
       "chaos_rescue": "Cấp cứu +{{amount}}",
       "chaos_crit": "Bạo kích ×{{multiplier}} +{{amount}}",
@@ -376,7 +388,7 @@
       },
       "s_steal_one": {
         "name": "Rút lá lẻ",
-        "desc": "Khi lật bài, 1 đối thủ ngẫu nhiên mất 1 lá riêng."
+        "desc": "Khi lật bài, 1 đối thủ ngẫu nhiên mất một lá riêng ngẫu nhiên."
       },
       "s_lower": {
         "name": "Hạ lá",
