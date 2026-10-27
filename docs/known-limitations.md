@@ -69,6 +69,14 @@ loạn seat brings the whole balance (no table limit, spec 2026-10-27 §3.7), wh
 *Why it stays:* BP-39 Ruling 1 — the relief is small, and the same loophole already exists for any balance under the Blind 10× limit or
 a Hold'em buy-in (the entry above). *Costs if wrong:* a rich player takes one small relief a day; the fix is to count seated stacks
 in relief, the same change the entry above would need.
+
+**Leaving mid-hand keeps the player in the room until that hand ends, so creating or joining another room at once is refused.**
+"Rời phòng" pressed while a hand is being played marks the seat to leave after the hand (`leaveAfterHand`); for a Blind hand that
+is a few seconds. A "Tạo phòng" or a join pressed in that window answers "Bạn đang ở trong một phòng khác", and the same press a
+moment later goes through. Found by the ops pack (BP-39 gate, L-06: its helper now waits that answer out).
+*Why it stays:* the hand in play needs the seat until it settles (the stack, a pot, a card's credit); the message says what is
+wrong. *Costs if wrong:* a player taps again. A friendlier path would be to queue the create until the leave lands.
+*Tracked:* here; `packages/server-kit/src/room/room.ts` (`leaveAfterHand`), `apps/normal-web/e2e/ops/ops-helpers.ts` (`finishCreate`).
 *Tracked:* plan `2026-10-27-plan39-chaos-round-two.md` (amendment A13, Ruling 1); `apps/normal-server/src/economy/economy-service.ts` (relief).
 
 **The `SIT_OUT` auto-stand-up cannot fire on a two-seat table.** A player who sits out is stood up
