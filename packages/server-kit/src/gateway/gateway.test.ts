@@ -119,7 +119,10 @@ describe('lobby and rooms', () => {
     expect(await a.request({ t: 'CREATE_ROOM', reqId: rid(), config })).toMatchObject({ t: 'ERROR', code: 'CHAOS_UNAVAILABLE' })
     expect(ts.server.rooms.size).toBe(0)
     expect(await a.request({ t: 'CHAOS_PICK', reqId: rid(), offerId: 'o', cardId: 's_rescue' })).toMatchObject({ t: 'ERROR', code: 'NOT_IN_ROOM' })
+    expect(await a.request({ t: 'CHAOS_USE', reqId: rid(), uid: 1 })).toMatchObject({ t: 'ERROR', code: 'NOT_IN_ROOM' })
     expect(await a.request({ t: 'CREATE_ROOM', reqId: rid(), config: BLIND_BOT })).toMatchObject({ t: 'ACK' })
+    // CHAOS_USE reaches the room, which refuses it on a table without chaos cards.
+    expect(await a.request({ t: 'CHAOS_USE', reqId: rid(), uid: 1 })).toMatchObject({ t: 'ERROR', code: 'CHAOS_CANNOT_USE' })
   })
 
   it('lists public rooms live, joins by code, refuses wrong passwords and double rooms', async () => {

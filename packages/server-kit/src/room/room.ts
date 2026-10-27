@@ -522,6 +522,25 @@ export class Room {
     })
   }
 
+  /**
+   * Poker hỗn loạn (BP-39): the player plays bonus card `uid` from its bonus hand — between hands (during the interval,
+   * a draft, or before the first deal: it fires in the next hand it is dealt into), or during the play/fold choice of the
+   * hand it is dealt into (a one-shot reveal card fires at this hand's reveal, any other in the next hand). Everything else
+   * is `CHAOS_CANNOT_USE`: no chaos table, no seat, a hand past its choice (squeeze, reveal) or one the seat is not in, a
+   * "Hoàn toàn may rủi" hand (it has no choice), a seat frozen this hand, a card not in the hand, a second card pressed.
+   */
+  useChaosBonus(playerId: string, uid: number): Promise<void> {
+    return this.enqueue(() => {
+      this.assertOpen()
+      const p = this.mustPlayer(playerId)
+      if (!this.chaos || p.seat === null || p.identity.isBot) throw new RoomError('CHAOS_CANNOT_USE', 'no seat at a chaos table')
+      // The runner's state is the live object (`HandRunner.state`): a card played into this hand joins its plan in place.
+      const live = this.runner && !this.runner.isComplete ? this.runner.state : null
+      if (live && (live.phase !== 'DECISION' || !live.players.some((hp) => hp.seat === p.seat))) throw new RoomError('CHAOS_CANNOT_USE', 'not during this hand')
+      this.chaos.useBonus(p, uid, live)
+    })
+  }
+
   // ---------- connection lifecycle ----------
 
   onDisconnect(playerId: string): Promise<void> {
@@ -1147,8 +1166,11 @@ export class Room {
     p.sitId = null
     p.seat = null
     p.stack = 0
-    // Chaos cards and points belong to the seat (spec §3.4): gone with it. The cycle's draft is not given back.
+    // Chaos cards and points belong to the seat (spec §3.4): gone with it, the bonus hand too (its owner is told). The
+    // cycle's draft is not given back.
+    const had = p.chaos
     p.chaos = undefined
+    this.chaos?.seatCleared(p, had)
     this.chaos?.dropOffer(p.identity.playerId)
     p.ready = false
     p.standAfterHand = false

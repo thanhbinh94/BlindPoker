@@ -370,10 +370,23 @@ after the credit, absolute, which the client writes to its roster. A credit cut 
 still broadcast, so the table can say "capped". A bot's credit goes on its virtual stack with no ledger row and `capped: false`. A seat that
 **stands up or leaves** loses its cards and points (`standUpNow` clears `p.chaos`).
 
+**The bonus hand (BP-39).** A human's bonus cards (from points, `afterHand`'s `bonusAwarded`) wait in `ChaosSeat.bonus`, private.
+`CHAOS_USE { uid }` → `Room.useChaosBonus` → `ChaosTable.useBonus` → `armBonus`. Allowed for a seated human at a chaos table either
+with no hand live (the interval, a draft, before the first deal: `{ phase: 'between' }`, the card fires in the next hand) or during the
+`DECISION` phase of a hand the seat is dealt into (`{ phase: 'decision', frozen: p.chaos.frozenNextHand, planSeat }`; a `'this'` arm
+calls `addRevealEffect` on `runner.state`, the live object, so the reveal fires it). Anything else — squeeze, reveal, a pure-luck hand, a
+seat not in the hand, every `armBonus` error — is `CHAOS_CANNOT_USE` (the message says why). Nothing is broadcast on a press: the owner
+gets `NOTIFICATION { kind: 'CHAOS_BONUS', payload: ChaosBonusPayload }` (`bonusFor`) after every change to its bonus hand or pressed
+card — a press, `planHand` turning a `next` card into `this`, `afterHand` drawing, spending or returning one, a stand-up or Leave
+clearing it — and the table only sees `bonusCount = bonus.length + (armed ? 1 : 0)` in `CHAOS_STATE` and `RoomPlayerView.chaos`, so an
+armed card is invisible until it fires (a holder who folds gets it back in silence). `CHAOS_AWARDED` lists only cards that went through
+`receiveCard`. `ROOM_SNAPSHOT.chaos.bonus` carries the viewer's own bonus hand, for a seated viewer only; the hand view never carries the
+plan.
+
 **Wire.** `ClientMessage` `CHAOS_PICK { offerId, cardId }` (`Room.pickChaos`: a stale, foreign or second pick is `CHAOS_NO_OFFER`, a card
-that was not offered is `ILLEGAL_ACTION`). Room events `CHAOS_DRAFT` (tier, deadline, `draftMs` — the GM's window, for the client's ring — and the drafted seats), `CHAOS_PICKED`, `CHAOS_STATE`,
-`CHAOS_CREDIT`, `CHAOS_AWARDED`; the private `CHAOS_OFFER` notification (the viewer's three cards); `ROOM_SNAPSHOT.chaos` restores the
-viewer's draft after a reconnect; `RoomPlayerView.chaos` carries a seat's cards and points. Game events (from the engine): `CHAOS_APPLIED`,
+that was not offered is `ILLEGAL_ACTION`) and `CHAOS_USE { uid }` (above). Room events `CHAOS_DRAFT` (tier, deadline, `draftMs` — the GM's window, for the client's ring — and the drafted seats), `CHAOS_PICKED`, `CHAOS_STATE`,
+`CHAOS_CREDIT`, `CHAOS_AWARDED`; the private `CHAOS_OFFER` and `CHAOS_BONUS` notifications; `ROOM_SNAPSHOT.chaos` restores the
+viewer's draft and bonus hand after a reconnect; `RoomPlayerView.chaos` carries a seat's cards, points and `bonusCount`. Game events (from the engine): `CHAOS_APPLIED`,
 `CHAOS_PEEK`, `CHAOS_SUMMARY`.
 
 ### Sitting out (spec §11.3)

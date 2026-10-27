@@ -1,7 +1,7 @@
 import {
-  DEFAULT_CHAOS_CONFIG, EMPTY_CHAOS_SEAT, afterHand, drawOffer, drawTier, planHand, receiveCard, toHeldCardView,
-  type BlindRules, type ChaosCardDef, type ChaosConfig, type ChaosCredit, type ChaosHandPlan, type ChaosSeat,
-  type ChaosSnapshot, type ChaosTier, type HandState, type HeldCardView, type RoomEvent,
+  DEFAULT_CHAOS_CONFIG, EMPTY_CHAOS_SEAT, addRevealEffect, afterHand, armBonus, drawOffer, drawTier, planHand, receiveCard, toHeldCardView,
+  type ArmWhen, type BlindRules, type ChaosBonusPayload, type ChaosCardDef, type ChaosConfig, type ChaosCredit, type ChaosHandPlan,
+  type ChaosSeat, type ChaosSnapshot, type ChaosTier, type HandState, type HeldCardView, type RoomEvent,
 } from '@bp/core'
 import type { ChaosPort } from '../chaos-port.js'
 import type { TimerHandle } from '../infra/clock.js'
@@ -171,6 +171,8 @@ export class ChaosTable {
 
   /** The effects this hand fires, for the seats dealt in; each seat's chaos becomes what `planHand` returns. Counts the hand. */
   planHand(eligible: readonly RoomPlayer[]): ChaosHandPlan {
+    // A card played for this hand now names it (`armed.hand: 'this'`), or joined the held cards: its owner is told.
+    const before = this.bonusKeys(eligible)
     const { plan, seats } = planHand({
       seats: eligible.map((p) => ({ seat: p.seat!, isBot: p.identity.isBot, chaos: p.chaos ?? EMPTY_CHAOS_SEAT })),
       rules: this.host.rules,
@@ -180,8 +182,47 @@ export class ChaosTable {
       weights: this.weights,
     })
     for (const p of eligible) p.chaos = seats.get(p.seat!) ?? p.chaos
+    this.tellBonusChanges(before)
     this.tableHands += 1
     return plan
+  }
+
+  /**
+   * The player presses "Dùng" on bonus card `uid` (BP-39, spec 2026-10-27 §3.4). `live` is the hand in play when the
+   * room allows a press into it — its play/fold choice, the player dealt in — and `null` between hands. `armBonus` decides
+   * the hand the card fires in; one that fires in this hand's reveal joins the live plan here, in place on the state the
+   * runner holds. Nothing is broadcast: only the owner is told (`CHAOS_BONUS`), and the seat's public count is unchanged,
+   * so the table learns of the card when it fires. Any refusal is `CHAOS_CANNOT_USE`.
+   */
+  useBonus(p: RoomPlayer, uid: number, live: HandState | null): void {
+    const seat = p.chaos ?? EMPTY_CHAOS_SEAT
+    let when: ArmWhen = { phase: 'between' }
+    if (live) {
+      const planSeat = live.chaos?.plan.seats.find((s) => s.seat === p.seat)
+      if (!planSeat) throw new RoomError('CHAOS_CANNOT_USE', 'not in this chaos hand')
+      // `frozenNextHand` is the seat as planned for the hand in play: a frozen seat fired nothing and plays nothing in.
+      when = { phase: 'decision', frozen: seat.frozenNextHand, planSeat }
+    }
+    const r = armBonus(seat, uid, when)
+    if ('error' in r) throw new RoomError('CHAOS_CANNOT_USE', r.error)
+    if (r.armed.hand === 'this') {
+      const c = r.armed.card
+      addRevealEffect(live!, p.seat!, { uid: c.uid, cardId: c.cardId, effect: c.effect, params: c.params, timing: c.timing, debuff: c.debuff, targets: [] })
+    }
+    p.chaos = r.seat
+    this.sendBonus(p)
+  }
+
+  /** The owner's bonus hand and the card it pressed (BP-39): sent to the owner only, never to another client. */
+  bonusFor(p: RoomPlayer): ChaosBonusPayload {
+    const chaos = p.chaos ?? EMPTY_CHAOS_SEAT
+    const armed = chaos.armed
+    return { cards: chaos.bonus.map(toHeldCardView), armed: armed ? { uid: armed.card.uid, cardId: armed.card.cardId, hand: armed.hand } : null }
+  }
+
+  /** The seat's chaos is gone (a stand-up or a Leave): an owner who held bonus cards is told its hand is empty. */
+  seatCleared(p: RoomPlayer, had: ChaosSeat | undefined): void {
+    if (had && (had.bonus.length > 0 || had.armed)) this.sendBonus(p)
   }
 
   /**
@@ -198,6 +239,7 @@ export class ChaosTable {
       const p = seatPlayer(hp.seat)
       return p ? [{ hp, p }] : []
     })
+    const before = this.bonusKeys(inHand.map(({ p }) => p))
     const settled = afterHand({
       rules: this.host.rules,
       config: this.config,
@@ -221,6 +263,9 @@ export class ChaosTable {
       })),
     })
     for (const { hp, p } of inHand) p.chaos = settled.seats.get(hp.seat) ?? p.chaos
+    // A bonus card drawn, a played card spent or given back: told to its owner only (`settled.bonusAwarded` is never
+    // broadcast). The table sees the count change in `CHAOS_STATE`.
+    this.tellBonusChanges(before)
     for (const credit of settled.credits) {
       const p = seatPlayer(credit.seat)
       if (p) await this.payCredit(state.handId, p, credit)
@@ -229,10 +274,15 @@ export class ChaosTable {
     this.broadcastState()
   }
 
-  /** The viewer's view of the draft: its own offer (none for a spectator or a seat not drafting) and whether it picked. */
+  /**
+   * The viewer's view of the draft — its own offer (none for a spectator or a seat not drafting) and whether it picked —
+   * and, for a seated viewer, its own bonus hand (`bonus`); a spectator gets none, and nobody gets another seat's.
+   */
   snapshotFor(viewerId: string | null): ChaosSnapshot {
+    const viewer = viewerId === null ? undefined : this.host.players.get(viewerId)
+    const bonus = viewer && viewer.seat !== null && !viewer.identity.isBot ? { bonus: this.bonusFor(viewer) } : {}
     const draft = this.draft
-    if (!draft) return { draft: null }
+    if (!draft) return { draft: null, ...bonus }
     const mine = draft.entries.find((e) => e.playerId === viewerId)
     return {
       draft: {
@@ -242,6 +292,7 @@ export class ChaosTable {
         offer: mine && mine.cardIds.length > 0 ? { offerId: mine.offerId, cardIds: mine.cardIds } : null,
         picked: mine !== undefined && mine.picked !== null,
       },
+      ...bonus,
     }
   }
 
@@ -320,6 +371,21 @@ export class ChaosTable {
       .sort((a, b) => a.seat! - b.seat!)
       .map((p) => ({ seat: p.seat!, ...this.seatView(p) }))
     this.host.broadcast({ type: 'CHAOS_STATE', seats })
+  }
+
+  private sendBonus(p: RoomPlayer): void {
+    if (p.identity.isBot) return
+    this.host.deps.outbox.send(p.identity.playerId, { t: 'NOTIFICATION', kind: 'CHAOS_BONUS', payload: this.bonusFor(p) })
+  }
+
+  /** Each human's bonus hand as it stands, to compare after a change (`tellBonusChanges`). */
+  private bonusKeys(players: readonly RoomPlayer[]): Map<RoomPlayer, string> {
+    return new Map(players.filter((p) => !p.identity.isBot).map((p) => [p, JSON.stringify(this.bonusFor(p))]))
+  }
+
+  /** Sends `CHAOS_BONUS` to each owner whose bonus hand or pressed card changed since `before`. */
+  private tellBonusChanges(before: ReadonlyMap<RoomPlayer, string>): void {
+    for (const [p, was] of before) if (JSON.stringify(this.bonusFor(p)) !== was) this.sendBonus(p)
   }
 
   private nextUid(): number {

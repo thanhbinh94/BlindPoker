@@ -1,4 +1,7 @@
-import { CHAOS_CARDS_SPEC, type ChaosCardDef, type LegalActions, type PlayerAction, type RoomConfig, type RoomEvent, type ServerMessage } from '@bp/core'
+import {
+  CHAOS_CARDS_SPEC, EMPTY_CHAOS_SEAT, toHeld, type ChaosBonusPayload, type ChaosCardDef, type ChaosSeat, type GameEvent, type LegalActions,
+  type PlayerAction, type RoomConfig, type RoomEvent, type ServerMessage,
+} from '@bp/core'
 import { describe, expect, it } from 'vitest'
 import { createRoomHarness, type RoomHarness } from '../testing/room-harness.js'
 import { RoomError } from './types.js'
@@ -184,13 +187,14 @@ describe('Chaos room: the draft', () => {
     await h.room.startGame('h')
     const offer = lastOffer(h, 'h')
     const deadlineAt = h.clock.now() + DRAFT_MS
-    expect(h.room.snapshot('h').chaos).toEqual({ draft: { tier: offer.tier, deadlineAt, draftMs: DRAFT_MS, offer: { offerId: offer.offerId, cardIds: offer.cardIds }, picked: false } })
+    expect(h.room.snapshot('h').chaos).toEqual({ draft: { tier: offer.tier, deadlineAt, draftMs: DRAFT_MS, offer: { offerId: offer.offerId, cardIds: offer.cardIds }, picked: false }, bonus: { cards: [], armed: null } })
     expect(h.room.snapshot('b').chaos).toEqual({ draft: { tier: offer.tier, deadlineAt, draftMs: DRAFT_MS, offer: null, picked: false } })
     expect(h.room.snapshot('h').room.nextHandAt).toBe(deadlineAt)
     await h.room.pickChaos('h', offer.offerId, offer.cardIds[2]!)
     expect(h.room.snapshot('h').chaos!.draft).toMatchObject({ picked: true })
     await h.room.pickChaos('a', lastOffer(h, 'a').offerId, lastOffer(h, 'a').cardIds[0]!)
-    expect(h.room.snapshot('h').chaos).toEqual({ draft: null })
+    expect(h.room.snapshot('h').chaos).toEqual({ draft: null, bonus: { cards: [], armed: null } })
+    expect(h.room.snapshot('b').chaos).toEqual({ draft: null })
   })
 
   it('a pick with a stale or foreign offer id is CHAOS_NO_OFFER, a card not offered is refused, and a second pick is stale', async () => {
@@ -320,6 +324,224 @@ describe('Chaos room: the draft', () => {
     await tick(h)
     expect(h.room.handActive).toBe(false)
     expect(ofEvent(h, 'h', 'CHAOS_PICKED')).toEqual([])
+  })
+})
+
+describe('Chaos room: the bonus hand (BP-39)', () => {
+  const STEAL = byId.get('s_steal_one')!
+  const LOWER = byId.get('s_lower')!
+  /** Above any uid the room hands out in these tests. */
+  const BONUS_UID = 9_001
+  const quiet = () => ({ chaos: { cards: RESCUE_ONLY, config: SILVER_ONLY } })
+
+  /** Puts `cards` in a seat's bonus hand, as a hand's points would have (uids `BONUS_UID`, `BONUS_UID + 1`, …). */
+  function giveBonus(h: RoomHarness, id: string, cards: readonly ChaosCardDef[] = [STEAL], extra: Partial<ChaosSeat> = {}): void {
+    const p = h.room.players.get(id)!
+    p.chaos = { ...(p.chaos ?? EMPTY_CHAOS_SEAT), bonus: cards.map((c, i) => toHeld(c, BONUS_UID + i)), ...extra }
+  }
+  const bonusOf = (h: RoomHarness, id: string): ChaosBonusPayload[] =>
+    h.ofType(id, 'NOTIFICATION').filter((m) => m.kind === 'CHAOS_BONUS').map((m) => m.payload as ChaosBonusPayload)
+  const applied = (h: RoomHarness, id: string) =>
+    h.ofType(id, 'GAME_EVENT').map((m) => m.event as GameEvent).filter((e): e is Extract<GameEvent, { type: 'CHAOS_APPLIED' }> => e.type === 'CHAOS_APPLIED')
+  const seatState = (h: RoomHarness, id: string, seatNo: number) => ofEvent(h, id, 'CHAOS_STATE').at(-1)!.seats.find((s) => s.seat === seatNo)!
+  const view = (card: ChaosCardDef, uid: number) => ({ uid, cardId: card.id, tier: card.tier, handsLeft: card.params.hands ?? null })
+  const phase = (h: RoomHarness) => h.room.snapshot(null).hand?.phase
+  /** A refusal's code and why (`armBonus`'s error, or the room's), so each case is refused for its own reason. */
+  const refusal = (p: Promise<unknown>) => p.then(() => null, (e: unknown) => (e instanceof RoomError ? `${e.code} ${e.message}` : String(e)))
+
+  /** Every human plays, then the clock runs until the hand reaches `target` (or ends). */
+  async function runTo(h: RoomHarness, target: 'REVEAL'): Promise<void> {
+    let guard = 0
+    while (h.room.handActive && phase(h) !== target && guard++ < 300) {
+      const hand = h.room.snapshot(null).hand!
+      const human = hand.phase === 'DECISION' ? hand.seats.find((s) => !s.hasDecided && !s.isBot) : undefined
+      if (human) await h.room.action(human.playerId, { kind: 'play' }, h.room.seq)
+      else {
+        h.clock.advance(1)
+        await tick(h)
+      }
+    }
+  }
+
+  it('a bonus card a hand awards goes to its owner alone: CHAOS_BONUS for the owner, only a count for the table', async () => {
+    const pool: ChaosCardDef[] = [...RESCUE_ONLY]
+    const h = createRoomHarness({ ...CHAOS, maxPlayers: 5 }, { chaos: { cards: pool, config: { ...SILVER_ONLY, pointsThreshold: 1 } } })
+    await seat(h, ['h', 'a'])
+    await h.room.join(h.identity('b'))
+    await h.room.startGame('h')
+    await pickAll(h, ['h', 'a'])
+    // The room keeps the port's array as its pool, so from here every bonus card drawn is a Lấy lá (a card to press).
+    pool.splice(0, pool.length, STEAL)
+    await playOut(h)
+
+    const mine = h.room.players.get('h')!.chaos!
+    expect(mine.bonus.length).toBeGreaterThan(0)
+    expect(mine.bonus.every((c) => c.cardId === 's_steal_one')).toBe(true)
+    expect(mine.cards.map((c) => c.cardId)).toEqual(['s_rescue']) // the drafted card only: a bonus card is not held
+    expect(bonusOf(h, 'h').at(-1)).toEqual({ cards: mine.bonus.map((c) => view(STEAL, c.uid)), armed: null })
+    const pub = { cards: [view(byId.get('s_rescue')!, mine.cards[0]!.uid)], points: mine.points, bonusCount: mine.bonus.length }
+    expect(seatState(h, 'b', 0)).toEqual({ seat: 0, ...pub })
+    expect(h.room.snapshot('b').room.players.find((p) => p.playerId === 'h')!.chaos).toEqual(pub)
+    // Only cards that act on their own are announced: the bots' (theirs act at once), never a human's bonus card.
+    expect(ofEvent(h, 'b', 'CHAOS_AWARDED').map((e) => e.seat)).not.toContain(0)
+    expect(ofEvent(h, 'b', 'CHAOS_AWARDED').map((e) => e.seat)).not.toContain(1)
+    expect(bonusOf(h, 'b')).toEqual([])
+    const uids = new Set(mine.bonus.map((c) => c.uid))
+    expect(bonusOf(h, 'a').flatMap((p) => p.cards.map((c) => c.uid)).some((u) => uids.has(u))).toBe(false)
+    expect(bonusOf(h, 'a').at(-1)).toEqual({ cards: h.room.players.get('a')!.chaos!.bonus.map((c) => view(STEAL, c.uid)), armed: null })
+  })
+
+  it('a card played between hands fires first in the next hand; the table learns of it only when it fires', async () => {
+    const h = createRoomHarness(CHAOS, quiet())
+    await seat(h, ['h', 'a'])
+    giveBonus(h, 'h')
+    await h.room.startGame('h') // the draft is open: between hands
+    await h.room.useChaosBonus('h', BONUS_UID)
+    expect(bonusOf(h, 'h')).toEqual([{ cards: [], armed: { uid: BONUS_UID, cardId: 's_steal_one', hand: 'next' } }])
+    expect(h.room.view().players.find((p) => p.playerId === 'h')!.chaos!.bonusCount).toBe(1) // the armed card still counts
+    expect(bonusOf(h, 'a')).toEqual([])
+
+    await pickAll(h, ['h', 'a'])
+    expect(bonusOf(h, 'h').at(-1)).toEqual({ cards: [], armed: { uid: BONUS_UID, cardId: 's_steal_one', hand: 'this' } })
+    expect(applied(h, 'a')).toEqual([])
+    await playOut(h)
+    expect(applied(h, 'a').filter((e) => e.seat === 0).map((e) => e.cardId)).toEqual(['s_steal_one'])
+    expect(h.room.players.get('h')!.chaos).toMatchObject({ bonus: [], armed: null })
+    expect(bonusOf(h, 'h').at(-1)).toEqual({ cards: [], armed: null })
+    expect(seatState(h, 'a', 0).bonusCount).toBe(0)
+    expect(bonusOf(h, 'a')).toEqual([])
+  })
+
+  it('a steal played during the play/fold choice fires at this hand\'s reveal', async () => {
+    const h = createRoomHarness(CHAOS, quiet())
+    await seat(h, ['h', 'a'])
+    await h.room.startGame('h')
+    await pickAll(h, ['h', 'a'])
+    expect(phase(h)).toBe('DECISION')
+    giveBonus(h, 'h')
+    await h.room.useChaosBonus('h', BONUS_UID)
+    expect(bonusOf(h, 'h')).toEqual([{ cards: [], armed: { uid: BONUS_UID, cardId: 's_steal_one', hand: 'this' } }])
+    expect(applied(h, 'a')).toEqual([])
+    await playOut(h)
+    expect(applied(h, 'a').filter((e) => e.seat === 0).map((e) => e.cardId)).toEqual(['s_steal_one'])
+    expect(h.repos.hands[0]!.chaosUsed).toEqual([expect.objectContaining({ seat: 0, cardId: 's_steal_one' })])
+    expect(h.room.players.get('h')!.chaos).toMatchObject({ bonus: [], armed: null })
+    expect(bonusOf(h, 'h').at(-1)).toEqual({ cards: [], armed: null })
+    expect(seatState(h, 'a', 0).bonusCount).toBe(0)
+  })
+
+  it('a card played during the choice by a seat that then folds goes back to its hand, and nobody else ever learns it was played (Review Focus 1)', async () => {
+    const h = createRoomHarness({ ...CHAOS, maxPlayers: 5 }, quiet())
+    await seat(h, ['h', 'a'])
+    await h.room.join(h.identity('b'))
+    await h.room.startGame('h')
+    await pickAll(h, ['h', 'a'])
+    giveBonus(h, 'h')
+    await h.room.useChaosBonus('h', BONUS_UID)
+    await playOut(h, (id, legal) => (id === 'h' ? { kind: 'fold' } : passive(id, legal)))
+
+    expect(h.room.players.get('h')!.chaos).toMatchObject({ bonus: [toHeld(STEAL, BONUS_UID)], armed: null })
+    expect(bonusOf(h, 'h').at(-1)).toEqual({ cards: [view(STEAL, BONUS_UID)], armed: null })
+    expect(h.repos.hands[0]!.chaosUsed!.some((u) => u.cardId === 's_steal_one')).toBe(false)
+    for (const id of ['a', 'b']) {
+      expect(applied(h, id).filter((e) => e.seat === 0)).toEqual([])
+      expect(bonusOf(h, id)).toEqual([])
+      expect(seatState(h, id, 0).bonusCount).toBe(1)
+      expect(JSON.stringify(h.sent.get(id))).not.toContain('s_steal_one')
+    }
+  })
+
+  it('a reconnect mid-hand: the owner\'s snapshot has its bonus hand and armed card, every other viewer only the count (Review Focus 2)', async () => {
+    const h = createRoomHarness({ ...CHAOS, maxPlayers: 5 }, quiet())
+    await seat(h, ['h', 'a'])
+    await h.room.join(h.identity('b'))
+    await h.room.startGame('h')
+    await pickAll(h, ['h', 'a'])
+    giveBonus(h, 'h', [STEAL, LOWER])
+    await h.room.useChaosBonus('h', BONUS_UID)
+    await h.room.onDisconnect('h')
+    await h.room.onReconnect('h')
+
+    const own = h.room.snapshot('h')
+    expect(own.chaos).toEqual({ draft: null, bonus: { cards: [view(LOWER, BONUS_UID + 1)], armed: { uid: BONUS_UID, cardId: 's_steal_one', hand: 'this' } } })
+    expect(own.room.players.find((p) => p.playerId === 'h')!.chaos!.bonusCount).toBe(2)
+    const seated = h.room.snapshot('a')
+    const spectator = h.room.snapshot('b')
+    expect(seated.chaos).toEqual({ draft: null, bonus: { cards: [], armed: null } })
+    expect(spectator.chaos).toEqual({ draft: null })
+    for (const s of [seated, spectator]) {
+      expect(s.room.players.find((p) => p.playerId === 'h')!.chaos!.bonusCount).toBe(2)
+      expect(JSON.stringify(s)).not.toMatch(/s_steal_one|s_lower/) // nor in the hand view: the plan never leaves the server
+    }
+  })
+
+  it('past the choice (the reveal) and at a "Hoàn toàn may rủi" table mid-hand a card cannot be played', async () => {
+    const h = createRoomHarness(CHAOS, quiet())
+    await seat(h, ['h', 'a'])
+    await h.room.startGame('h')
+    await pickAll(h, ['h', 'a'])
+    giveBonus(h, 'h')
+    await runTo(h, 'REVEAL')
+    expect(phase(h)).toBe('REVEAL')
+    expect(await refusal(h.room.useChaosBonus('h', BONUS_UID))).toBe('CHAOS_CANNOT_USE not during this hand')
+
+    const g = createRoomHarness({ ...CHAOS, blind: { ...CHAOS.blind!, decisionMode: 'none', squeeze: true } }, quiet())
+    await seat(g, ['h', 'a'])
+    await g.room.startGame('h')
+    await pickAll(g, ['h', 'a'])
+    expect(phase(g)).toBe('SQUEEZE')
+    giveBonus(g, 'h')
+    expect(await refusal(g.room.useChaosBonus('h', BONUS_UID))).toBe('CHAOS_CANNOT_USE not during this hand')
+    expect(g.room.players.get('h')!.chaos).toMatchObject({ bonus: [toHeld(STEAL, BONUS_UID)], armed: null })
+    expect(bonusOf(g, 'h')).toEqual([])
+  })
+
+  it('refuses a spectator, a plain Blind table, an unknown card, a second card, a seat frozen this hand and a seat sitting the hand out', async () => {
+    const plain = createRoomHarness({ ...CHAOS, blind: { holeCards: 2, decisionMode: 'playOrFold', fixedWager: 1000, botCount: 2 } })
+    await seat(plain, ['h', 'a'])
+    expect(await refusal(plain.room.useChaosBonus('h', 1))).toBe('CHAOS_CANNOT_USE no seat at a chaos table')
+
+    const h = createRoomHarness({ ...CHAOS, maxPlayers: 5 }, quiet())
+    await seat(h, ['h', 'a'])
+    await h.room.join(h.identity('b'))
+    giveBonus(h, 'h', [STEAL, LOWER])
+    expect(await refusal(h.room.useChaosBonus('b', BONUS_UID))).toBe('CHAOS_CANNOT_USE no seat at a chaos table')
+    expect(await refusal(h.room.useChaosBonus('h', 1))).toBe('CHAOS_CANNOT_USE NO_CARD')
+    await h.room.useChaosBonus('h', BONUS_UID)
+    expect(await refusal(h.room.useChaosBonus('h', BONUS_UID + 1))).toBe('CHAOS_CANNOT_USE ALREADY_ARMED') // one at a time
+    expect(bonusOf(h, 'h')).toHaveLength(1)
+
+    // Frozen this hand: the choice is refused (between hands the card would wait for the next unfrozen hand).
+    const f = createRoomHarness(CHAOS, quiet())
+    await seat(f, ['h', 'a'])
+    giveBonus(f, 'h', [STEAL], { frozenNextHand: true })
+    await f.room.startGame('h')
+    await pickAll(f, ['h', 'a'])
+    expect(phase(f)).toBe('DECISION')
+    expect(await refusal(f.room.useChaosBonus('h', BONUS_UID))).toBe('CHAOS_CANNOT_USE FROZEN')
+
+    // A seat taken during the hand is not in it: nothing to play into until the hand is over.
+    const s = createRoomHarness({ ...CHAOS, maxPlayers: 5 }, quiet())
+    await seat(s, ['h', 'a'])
+    await s.room.startGame('h')
+    await pickAll(s, ['h', 'a'])
+    await s.room.join(s.identity('b'))
+    await s.room.sitDown('b', 2)
+    giveBonus(s, 'b')
+    expect(await refusal(s.room.useChaosBonus('b', BONUS_UID))).toBe('CHAOS_CANNOT_USE not during this hand')
+    await playOut(s)
+    await s.room.useChaosBonus('b', BONUS_UID)
+    expect(bonusOf(s, 'b').at(-1)!.armed).toMatchObject({ uid: BONUS_UID, hand: 'next' })
+  })
+
+  it('standing up empties the bonus hand, and its owner is told', async () => {
+    const h = createRoomHarness(CHAOS, quiet())
+    await seat(h, ['h', 'a'])
+    giveBonus(h, 'h')
+    await h.room.useChaosBonus('h', BONUS_UID)
+    await h.room.standUp('h')
+    expect(bonusOf(h, 'h').at(-1)).toEqual({ cards: [], armed: null })
+    expect(h.room.snapshot('h').chaos).toEqual({ draft: null })
   })
 })
 
