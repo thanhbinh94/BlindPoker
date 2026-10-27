@@ -93,13 +93,22 @@ describe('chaos card copy', () => {
     expect([1, 2].map((count) => vn.t('game:chaos.handsLeft', { count }))).toEqual(['còn 1 ván', 'còn 2 ván'])
   })
 
-  it('has the chaos table strings the room draws: the blindfold, the peek, the Bạo kích shout, the banner', () => {
+  it('has the chaos table strings the room draws: the blindfold, the peek, the Bạo kích shout, the toasts', () => {
     expect(vi.chaos.blindfolded).toBe('Bị che mắt')
     expect(vi.chaos.peek).toBe('Nhìn trộm')
     expect(vi.chaos.critShout).toBe('Bạo kích ×{{multiplier}}!')
     expect(vi.chaos.draft.picked).toBe('Đã chọn — chờ người chơi khác')
-    expect(vi.chaos.banner.use).toContain('{{card}}')
-    expect(en.chaos.banner.useOn).toContain('{{targets}}')
+    expect(vi.chaos.toast.use).toBe('{{name}} dùng {{card}}')
+    expect(vi.chaos.toast.useOn).toBe('{{name}} dùng {{card}} → {{targets}}')
+    expect(en.chaos.toast.useOn).toContain('{{targets}}')
+    expect('banner' in vi.chaos, 'the banner is gone').toBe(false)
+  })
+
+  it('counts the cards under "+N" in both languages', () => {
+    const vn = createI18n({ language: 'vi', storage: null })
+    const en2 = createI18n({ language: 'en', storage: null })
+    expect(vn.t('game:chaos.toast.more', { count: 5 })).toBe('+5 thẻ khác')
+    expect([1, 3].map((count) => en2.t('game:chaos.toast.more', { count }))).toEqual(['+1 more card', '+3 more cards'])
   })
 
   it('labels the chaos error codes in both languages', () => {

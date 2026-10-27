@@ -314,9 +314,12 @@
       "watching": "The players are picking cards",
       "group": "Three cards to choose from"
     },
-    "banner": {
+    "toast": {
       "use": "{{name}} plays {{card}}",
-      "useOn": "{{name}} plays {{card}} on {{targets}}"
+      "useOn": "{{name}} plays {{card}} → {{targets}}",
+      "more_one": "+{{count}} more card",
+      "more_other": "+{{count}} more cards",
+      "all": "Cards played this hand"
     },
     "outcome": {
       "applied": "Applied",

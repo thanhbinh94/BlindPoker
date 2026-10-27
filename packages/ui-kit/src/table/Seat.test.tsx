@@ -696,7 +696,7 @@ describe('Seat on a Poker hỗn loạn table', () => {
 
   it('lists the new motion under reduced motion', () => {
     const off = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(TABLE_CSS)?.[1] ?? ''
-    for (const name of ['draft', 'chaosBannerIn', 'critShout']) expect(off, name).toMatch(new RegExp(`\\.${name}\\b`))
+    for (const name of ['draft', 'chaosToastIn', 'critShout']) expect(off, name).toMatch(new RegExp(`\\.${name}\\b`))
     expect(off).toMatch(/\.draftCard\s*\{\s*transition:\s*none/)
   })
 })

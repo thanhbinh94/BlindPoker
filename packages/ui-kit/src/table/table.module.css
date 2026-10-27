@@ -297,11 +297,6 @@
   justify-content: center;
 }
 
-/* A chaos table's board anchors the banner's slot (`.chaosBannerSlot`); every other board is laid out as it always was. */
-.communityAnchor {
-  position: relative;
-}
-
 .slot {
   width: var(--card-lg, clamp(40px, 10.4vw, 62px));
   aspect-ratio: 60 / 84;
@@ -2871,18 +2866,18 @@
 .chaosIcon,
 .draft,
 .draftCard,
-.chaosBanner,
+.chaosToast,
 .cardInfoEntry {
   --t-frame: var(--tier-silver);
   --t-ink: var(--tier-silver-ink);
 }
 
-:is(.chaosIcon, .draft, .draftCard, .chaosBanner, .cardInfoEntry)[data-tier='gold'] {
+:is(.chaosIcon, .draft, .draftCard, .chaosToast, .cardInfoEntry)[data-tier='gold'] {
   --t-frame: var(--tier-gold);
   --t-ink: var(--tier-gold-ink);
 }
 
-:is(.chaosIcon, .draft, .draftCard, .chaosBanner, .cardInfoEntry)[data-tier='diamond'] {
+:is(.chaosIcon, .draft, .draftCard, .chaosToast, .cardInfoEntry)[data-tier='diamond'] {
   --t-frame: var(--tier-diamond);
   --t-ink: var(--tier-diamond-ink);
 }
@@ -3348,110 +3343,236 @@
   line-height: 1.25;
 }
 
-/* The banner over the board: its slot is the board's own box (`.community`, which `CommunityCards` makes the slot's parent) and
-   the pill is centred in it, whichever way the layout lays the board out — above the pot's row, or beside it in the landscape
-   frame. Over the board there is always room: above it, on a short stage,
-   the top seat's lines reach into the band, and the viewer's seat and the tray are below. It takes no room of its own, so the
-   felt never moves. The live region is always there, empty, so the first card is read. */
-.chaosBannerSlot {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
+/* The cards that fire, as toasts in a band of their own (BP-39, spec 2026-10-27 §3.1). The band is a region of the room's
+   layout, never a layer over the result: `RoomScreen` puts it right after the header, and its `data-layout` says how it
+   lies there. It carries `data-surface='night'`, so it reads the felt's palette on the page in either theme. Each toast is
+   opaque, framed in its card's tier, and wraps (two lines at 360 px) rather than cut a name with "…". */
+.chaosToastBand {
+  z-index: 1;
+}
+
+/* The hand's list, which the player opened from "+N", lies over everything on the stage (the result card included) until it
+   is closed. */
+.chaosToastBand[data-list-open] {
+  z-index: 7;
+}
+
+.chaosToasts {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+}
+
+/* A phone held upright: a row of the room's column under the header, as tall as its toasts (three and "+N" at most) and
+   nothing when it is empty — the negative margin takes back the column's gap, so an empty band moves nothing. */
+.chaosToastBand[data-layout='stack'] {
+  position: relative;
+  flex: none;
+  margin-top: calc(var(--space-2) - var(--space-3));
+}
+
+.chaosToastBand[data-layout='stack'][data-empty] {
+  margin-top: calc(-1 * var(--space-3));
+}
+
+/* While toasts are up, the header's facts line (the badges, the code, the stakes, the head count: the same all hand) steps
+   aside and the band takes its place under the name's row: on a 360 × 780 phone with eight seats the felt has no height to
+   give, and three one-line toasts cost about what that line gives back. It comes back with the last toast. */
+.header:has(+ .chaosToastBand[data-layout='stack']:not([data-empty])) .metaFlow {
+  display: none;
+}
+
+/* Each toast a line of its own, except the last before "+N", which shares its row with the pill: one row less to take
+   from the felt. */
+.chaosToastBand[data-layout='stack'] .chaosToasts {
+  flex-flow: row wrap;
+}
+
+.chaosToastBand[data-layout='stack'] .chaosToast {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.chaosToastBand[data-layout='stack'] .chaosToast:has(+ .chaosToastMore) {
+  flex-basis: 0;
+}
+
+.chaosToastBand[data-layout='stack'] .chaosToastMore {
+  flex: none;
+  align-self: stretch;
+}
+
+/* A desktop: the band takes no room (height 0, the gap taken back) and its toasts hang into the stage's top-right corner,
+   in the free side the oval and a centred result card leave — never wider than half the stage less 26rem, the widest
+   result card's half. Under the result overlay (z-index 1 against its 2), so a toast can never be drawn over the card. */
+.chaosToastBand[data-layout='desktop'] {
+  position: relative;
+  flex: none;
+  height: 0;
+  margin-top: calc(-1 * var(--space-3));
+}
+
+.chaosToastBand[data-layout='desktop'] .chaosToasts {
+  position: absolute;
+  top: calc(var(--space-3) + var(--space-2));
+  right: var(--space-2);
+  width: clamp(11rem, calc(50% - 26rem - var(--space-3)), 20rem);
+}
+
+/* A phone on its side: one row across the top, over the one-line header's middle — from past the connection pill (about
+   120 px) to short of the menu and "Rời phòng" (about 170 px), above the top seats' plates — two toasts side by side at
+   most, then "+N". The room name and the stakes it covers come back when the toasts go; the stage keeps its height. */
+.chaosToastBand[data-layout='landscape'] {
+  position: absolute;
+  top: var(--space-1);
+  left: 8.5rem;
+  right: 11rem;
+  z-index: 5;
   pointer-events: none;
 }
 
-.chaosBanner {
-  display: flex;
-  align-items: baseline;
+.chaosToastBand[data-layout='landscape'] .chaosToasts {
+  flex-direction: row;
   justify-content: center;
-  gap: 0 var(--space-2);
-  max-width: 100%;
-  margin: 0;
-  padding: 4px var(--space-2);
-  border: 1.5px solid var(--t-frame);
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--t-frame) 18%, #0a1220);
-  box-shadow: var(--shadow-2), 0 0 18px color-mix(in srgb, var(--t-frame) 35%, transparent);
-  font-family: var(--font-display);
-  font-size: 0.8125rem;
-  line-height: 1.3;
-  text-align: center;
-  color: var(--ink);
+  align-items: flex-start;
 }
 
-/* One line: a long name gives with "…" (the title carries the whole line) rather than a second row taller than the board's
-   band on a short stage. */
-.chaosBannerText {
+.chaosToastBand[data-layout='landscape'] .chaosToast {
+  flex: 1 1 0;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  padding: 2px var(--space-2);
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  pointer-events: auto;
 }
 
-.chaosBannerOutcome {
+.chaosToastBand[data-layout='landscape'] .chaosToastMore {
   flex: none;
+  align-self: flex-start;
+  padding: 0;
+}
+
+/* One run of text: the outcome follows the line in it, so a blocked card takes no third line for its word. */
+.chaosToast {
+  position: relative;
+  display: block;
+  margin: 0;
+  padding: 3px var(--space-2);
+  border: 1.5px solid var(--t-frame);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--t-frame) 16%, #0a1220);
+  box-shadow: var(--shadow-2);
+  font-family: var(--font-body);
   font-size: 0.75rem;
-  white-space: nowrap;
+  line-height: 1.25;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Pinned by a tap: a second ring in the tier's colour says it stays. */
+.chaosToast[data-pinned='true'] {
+  box-shadow: var(--shadow-2), 0 0 0 2px color-mix(in srgb, var(--t-frame) 55%, transparent);
+}
+
+.chaosToastName {
+  font-weight: 700;
+}
+
+/* The card's name is the button that opens its popup (`ChaosCardInfo`): a word in the line, in the tier's ink, dotted. */
+.chaosToastCard {
+  display: inline;
+  font: inherit;
+  font-weight: 700;
+  line-height: inherit;
+  color: var(--t-ink);
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
+.chaosToastOutcome {
+  margin-left: 0.4em;
   font-style: italic;
+  white-space: nowrap;
   color: var(--t-ink);
 }
 
-/* Board cards face up — the reveal effects fire after the river — and the pill must not hide the middle ones (Plan 37
-   final wave, I3). It sits on their feet instead, a third of it hanging below them into the gap over the pot's row, and lets
-   them show through: each card's corner index and pip stay in sight above it. No seat or tray is near the board's foot. */
-.community[data-board='up'] .chaosBannerSlot {
-  align-items: flex-end;
-}
-
-.community[data-board='up'] :is(.chaosBanner, .chaosNote) {
-  transform: translateY(35%);
-}
-
-.community[data-board='up'] .chaosBanner {
-  background: color-mix(in srgb, var(--t-frame) 18%, rgb(10 18 32 / 0.7));
-}
-
-/* A phone on its side: the viewer's own cards come right under the board, so the pill stays inside the board's box —
-   one compact line on the lower half of the cards, their corner index above it — and never reaches the hand below. */
-.ring[data-frame='landscape'] .community[data-board='up'] :is(.chaosBanner, .chaosNote) {
-  transform: none;
-}
-
-.ring[data-frame='landscape'] .community[data-board='up'] .chaosBanner {
-  padding: 1px var(--space-2);
-  font-size: 0.75rem;
-  line-height: 1.25;
-}
-
-/* "Thế giới đảo ngược" all hand long, once its banner has had its turn: a quiet line in the banner's own slot, so the two
-   never stand on each other (a card that fires takes the slot for its turn). */
-.chaosNote {
-  max-width: 100%;
-  margin: 0;
-  padding: 1px var(--space-2);
-  overflow: hidden;
+/* "Thế giới đảo ngược" for the rest of the hand: pinned, quiet, dashed in the Kim cương colour. */
+.chaosToastNote {
   border: 1px dashed var(--tier-diamond);
-  border-radius: var(--radius-pill);
-  background: rgb(10 18 32 / 0.78);
-  font-size: 0.6875rem;
+  background: rgb(10 18 32 / 0.94);
   font-weight: 700;
-  line-height: 1.4;
-  white-space: nowrap;
-  text-overflow: ellipsis;
   color: var(--tier-diamond-ink);
+  cursor: default;
 }
 
-.chaosBannerIn {
-  animation: chaosBannerIn 260ms var(--ease) backwards;
+/* "+N thẻ khác": a short pill at the band's end; the button opens the hand's whole list under it. */
+.chaosToastMore {
+  display: flex;
+  align-self: flex-end;
+  align-items: center;
+  padding: 0;
+  border-color: color-mix(in srgb, var(--gold) 60%, transparent);
+  background: rgb(10 18 32 / 0.94);
+  cursor: default;
 }
 
-@keyframes chaosBannerIn {
+.chaosToastMoreButton {
+  min-height: 24px;
+  margin: 0;
+  padding: 2px var(--space-2);
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--gold);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.chaosToastMoreButton:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* The hand's whole list: opened by the player, under "+N", scrolling inside past half the screen. */
+.chaosToastList {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: 7;
+  width: max-content;
+  max-width: min(22rem, calc(100vw - 2 * var(--space-2)));
+  max-height: 50vh;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  overflow-y: auto;
+  border: 1px solid color-mix(in srgb, var(--gold) 50%, transparent);
+  border-radius: var(--radius-md);
+  background: rgb(10 18 32 / 0.97);
+  box-shadow: var(--shadow-2);
+  list-style: decimal inside;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--ink);
+  white-space: normal;
+  cursor: default;
+}
+
+.chaosToastList > li + li {
+  margin-top: var(--space-1);
+}
+
+.chaosToastIn {
+  animation: chaosToastIn 220ms var(--ease) backwards;
+}
+
+@keyframes chaosToastIn {
   from {
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateY(-6px);
   }
 }
 
@@ -3561,7 +3682,7 @@
   .payout,
   .result,
   .draft,
-  .chaosBannerIn,
+  .chaosToastIn,
   .critShout,
   .cardInfo,
   .seatWin .plate {

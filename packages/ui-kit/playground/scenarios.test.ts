@@ -81,19 +81,30 @@ describe('the chaos worst-case pages', () => {
     expect(document.querySelector('[data-me="true"] [class*="seatCards"]')!.children.length).toBe(3)
   })
 
-  it('#worst/chaosReveal/6/vi: the banner is up over the board', () => {
+  it('#worst/chaosReveal/6/vi: the three cards that fired are up as toasts', () => {
     draw('#worst/chaosReveal/6/vi')
-    
-    expect(document.querySelector('[data-outcome]')).toHaveTextContent('Bot 1 dùng Rút lá lẻ lên Nguyễn Thị Phương Anh')
-    expect(document.querySelector('[data-outcome]')).toHaveTextContent('Bị chặn')
+    const toasts = document.querySelectorAll('[data-chaos-toasts] [data-outcome]')
+    expect(toasts).toHaveLength(3)
+    expect(toasts[0]).toHaveTextContent('Bot 1 dùng Rút lá lẻ → Nguyễn Thị Phương Anh')
+    expect(toasts[0]).toHaveTextContent('Bị chặn')
   })
 
-  it('#worst/chaosBoard/6/vi: five board cards up, the banner on their feet, and "Thế giới đảo ngược" on', () => {
+  it('#worst/chaosBoard/6/vi: five board cards up, the reveal cards as toasts, and "Thế giới đảo ngược" pinned first', () => {
     draw('#worst/chaosBoard/6/vi')
     const board = screen.getByRole('group', { name: 'Bài chung' })
-    expect(board).toHaveAttribute('data-board', 'up')
     expect(board.querySelectorAll('[data-card]')).toHaveLength(5)
-    expect(within(board).getByText(/dùng Thế giới đảo ngược/)).toBeInTheDocument()
+    const band = document.querySelector<HTMLElement>('[data-chaos-toasts]')!
+    expect(band.querySelector('[data-chaos-toast]')).toHaveAttribute('data-chaos-note')
+    expect(band.textContent).toMatch(/dùng Thế giới đảo ngược/)
+    expect(within(band).getByText('+1 thẻ khác'), 'the note takes one of the three places').toBeInTheDocument()
+  })
+
+  it('#worst/chaosBurst/8/vi: the eight cards come with the settlement — three toasts and "+5 thẻ khác" beside the open result', () => {
+    draw('#worst/chaosBurst/8/vi')
+    const band = document.querySelector<HTMLElement>('[data-chaos-toasts]')!
+    expect(band.querySelectorAll('[data-outcome]')).toHaveLength(3)
+    expect(within(band).getByText('+5 thẻ khác')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Người thắng' })).toBeInTheDocument()
   })
 
   it('#worst/chaosResult/6/vi: "Thẻ đã dùng", the credits, and the winner’s shout', () => {

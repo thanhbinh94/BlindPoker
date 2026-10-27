@@ -10,8 +10,8 @@ import { MenuButton, type MenuItem } from '../primitives/MenuButton.js'
 import { Modal } from '../primitives/Modal.js'
 import { cx } from '../primitives/cx.js'
 import { ActionBar } from '../table/ActionBar.js'
-import { ChaosBanner, useChaosBanner } from '../table/ChaosBanner.js'
 import { ChaosDraft } from '../table/ChaosDraft.js'
+import { ChaosToasts } from '../table/ChaosToasts.js'
 import { HandResult } from '../table/HandResult.js'
 import { STACK_LAYOUT_QUERY, useRoomFrame, useStageTier, type RoomFrame } from '../table/frame.js'
 import { PokerTable, type TableLayout } from '../table/PokerTable.js'
@@ -108,11 +108,10 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
   // nothing on screen gives the result away before the card (the same fix wave, follow-up). The faces take the flag
   // themselves: their reaction counts from the end of the hold, so it shows for its full length.
   const revealHeld = useRevealHold(hand)
-  // Poker hỗn loạn: the cards that fired this hand come up one at a time over the board, and a finished hand's result waits
-  // for the last of them — the table keeps it to itself the way it does for a card turning over. A restored hand replays none.
+  // Poker hỗn loạn (BP-39, spec 2026-10-27 §3.1): the cards that fired come as toasts in a band of their own, and the result
+  // never waits for them — it opens at the settlement, the toasts run beside it.
   const draft = state.chaos.draft
-  const banner = useChaosBanner(state.chaos.applied, hand?.handId ?? null, hand?.restored ?? false)
-  const held = revealHeld || (hand?.phase === 'COMPLETE' && banner.item !== null)
+  const held = revealHeld
   const expressionFor = useTableExpressions(state, client.serverNow, held)
   const onLeftRef = useRef(onLeft)
   onLeftRef.current = onLeft
@@ -388,6 +387,21 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
         menu={menuShown ? <MenuButton label={t('room.more')} items={menuItems} /> : undefined}
       />
 
+      {/* The cards' toasts (BP-39): one place in the tree for every frame, so a phone turning keeps them. Under the header on
+          a phone held upright (a row of the column), across the header's middle on one held sideways, hanging into the
+          felt's top-right corner on a desktop — a region of the layout, never a layer over the result. */}
+      {chaosTable ? (
+        <ChaosToasts
+          applied={state.chaos.applied}
+          handId={hand?.handId ?? null}
+          restored={hand?.restored ?? false}
+          nameOf={seatName}
+          layout={stack ? 'stack' : landscape ? 'landscape' : 'desktop'}
+          reverseNote={state.chaos.reverse && hand !== null ? t('chaos.reverseNote') : null}
+          resultOpen={resultCard !== null}
+        />
+      ) : null}
+
       {state.status === 'open' ? null : (
         <p className={s.banner} role="status">
           <span className={s.bannerPulse} aria-hidden="true" />
@@ -419,7 +433,6 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
           // stack's one-row footer has no room for it either, so it is the felt's last line there (BP-31 P4).
           note={(stack || (landscape && !short)) && waiting ? hint : null}
           chaos={chaosTable ? state.chaos : null}
-          banner={chaosTable ? <ChaosBanner item={banner.item} index={banner.index} nameOf={seatName} note={state.chaos.reverse && hand !== null ? t('chaos.reverseNote') : null} /> : undefined}
         />
 
         {/* The result card is dealt onto the felt, so it keeps the felt's night palette in either theme. The countdown

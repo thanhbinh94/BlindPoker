@@ -314,9 +314,12 @@
       "watching": "Các tay chơi đang chọn thẻ",
       "group": "Ba thẻ để chọn"
     },
-    "banner": {
+    "toast": {
       "use": "{{name}} dùng {{card}}",
-      "useOn": "{{name}} dùng {{card}} lên {{targets}}"
+      "useOn": "{{name}} dùng {{card}} → {{targets}}",
+      "more_one": "+{{count}} thẻ khác",
+      "more_other": "+{{count}} thẻ khác",
+      "all": "Các thẻ đã dùng ván này"
     },
     "outcome": {
       "applied": "Đã áp",

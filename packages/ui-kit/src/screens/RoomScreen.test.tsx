@@ -1639,7 +1639,7 @@ describe('RoomScreen', () => {
   })
 })
 
-// Plan 37: the chaos draft, the cards' banner and the result card that waits for it.
+// Plan 37: the chaos draft and the result card; BP-39: the cards' toasts, which the result no longer waits for.
 describe('RoomScreen on a Poker hỗn loạn table', () => {
   const chaosRoom = makeRoom({
     mode: 'blind',
@@ -1735,7 +1735,7 @@ describe('RoomScreen on a Poker hỗn loạn table', () => {
     expect(clearanceFor(stage, seatBox, null, 0), 'the draft takes what there is').toBe(188)
   })
 
-  describe('the banner', () => {
+  describe('the toasts', () => {
     beforeEach(() => vi.useFakeTimers())
     afterEach(() => vi.useRealTimers())
 
@@ -1743,23 +1743,43 @@ describe('RoomScreen on a Poker hỗn loạn table', () => {
       { seat: 0, cardId: 's_swap_one', effect: 'swapLowest' as const, targets: [], outcome: 'applied' as const },
       { seat: 2, cardId: 's_shield', effect: 'shield' as const, targets: [], outcome: 'applied' as const },
     ]
+    const band = (): HTMLElement => document.querySelector<HTMLElement>('[data-chaos-toasts]')!
 
-    it('shows the cards that fired over the board, one by one, and holds the result card until the last', () => {
+    it('puts the cards in their own band, out of the board, and opens the result at once beside them (BP-39)', () => {
       wrap(fakeClient(stateWith({ applied: fired }, { ...finished, restored: false })))
-      const board = screen.getByRole('group', { name: 'Community cards' })
-      expect(within(board).getByText('Ann plays Card Swap')).toBeInTheDocument()
-      expect(screen.queryByRole('heading', { name: 'Winner' }), 'the result waits for the cards').toBeNull()
-      act(() => void vi.advanceTimersByTime(900))
-      expect(screen.getByText('Mai plays Wooden Shield')).toBeInTheDocument()
-      expect(screen.queryByRole('heading', { name: 'Winner' })).toBeNull()
-      act(() => void vi.advanceTimersByTime(900))
+      expect(within(band()).getByText((_, el) => el?.getAttribute('data-outcome') === 'applied' && el.textContent === 'Ann plays Card Swap')).toBeInTheDocument()
+      expect(within(band()).getByText((_, el) => el?.getAttribute('data-outcome') === 'applied' && el.textContent === 'Mai plays Wooden Shield')).toBeInTheDocument()
+      expect(within(screen.getByRole('group', { name: 'Community cards' })).queryByText(/plays/)).toBeNull()
+      expect(screen.getByRole('heading', { name: 'Winner' }), 'the result never waits for the cards').toBeInTheDocument()
+      expect(band().contains(screen.getByRole('heading', { name: 'Winner' })), 'two regions, not one inside the other').toBe(false)
+      act(() => void vi.advanceTimersByTime(4_000))
+      expect(within(band()).queryByText(/plays/)).toBeNull()
       expect(screen.getByRole('heading', { name: 'Winner' })).toBeInTheDocument()
     })
 
-    it('replays nothing for a hand rebuilt from a snapshot: the result card is up at once', () => {
+    it('lays the band under the header on a phone held upright, across the top on one held sideways, in the felt’s corner on a desktop', () => {
+      const at = (props: { layout?: 'stack'; frame?: 'landscape' }) =>
+        render(
+          <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+            <RoomScreen client={fakeClient(stateWith({ applied: fired }, { ...finished, restored: false }))} lang="en" onLeft={vi.fn()} {...props} />
+          </I18nextProvider>,
+        )
+      const upright = at({ layout: 'stack' })
+      expect(band()).toHaveAttribute('data-layout', 'stack')
+      expect(band().previousElementSibling?.tagName, 'right after the header').toBe('HEADER')
+      expect(band().closest('main')).toBeNull()
+      upright.unmount()
+      const sideways = at({ frame: 'landscape' })
+      expect(band()).toHaveAttribute('data-layout', 'landscape')
+      sideways.unmount()
+      at({})
+      expect(band()).toHaveAttribute('data-layout', 'desktop')
+    })
+
+    it('replays nothing for a hand rebuilt from a snapshot: the result card is up and the band is empty', () => {
       wrap(fakeClient(stateWith({ applied: fired }, { ...finished, restored: true })))
       expect(screen.getByRole('heading', { name: 'Winner' })).toBeInTheDocument()
-      expect(screen.queryByText('Ann plays Card Swap')).toBeNull()
+      expect(within(band()).queryByText(/plays/)).toBeNull()
     })
 
     it('puts the credits the cards paid on the result card', () => {
@@ -1767,27 +1787,26 @@ describe('RoomScreen on a Poker hỗn loạn table', () => {
       expect(screen.getByText('Bob: Rescue +3,000')).toBeInTheDocument()
     })
 
-    it('keeps saying the ranking is reversed all hand long, after a reconnect too, and gives the slot to a card while it fires', () => {
-      // Plan 37 final wave (I2): the snapshot's hand view brings `reverse` back; the note is the banner slot's quiet line.
+    it('keeps saying the ranking is reversed all hand long, after a reconnect too, as a pinned toast beside the cards', () => {
+      // Plan 37 final wave (I2): the snapshot's hand view brings `reverse` back; BP-39: the note is the band's pinned toast.
       const live = { ...finished, phase: 'REVEAL' as const, result: null, restored: true }
       const restored = wrap(fakeClient(stateWith({ reverse: true, applied: fired }, live)))
-      expect(within(screen.getByRole('group', { name: 'Community cards' })).getByText('Upside-Down World: the weakest hand wins')).toBeInTheDocument()
+      expect(within(band()).getByText('Upside-Down World: the weakest hand wins')).toHaveAttribute('data-pinned', 'true')
       restored.view.unmount()
       const { view } = wrap(fakeClient(stateWith({ reverse: true, applied: fired }, { ...live, restored: false })))
-      const board = screen.getByRole('group', { name: 'Community cards' })
-      expect(within(board).getByText('Ann plays Card Swap')).toBeInTheDocument()
-      expect(within(board).queryByText('Upside-Down World: the weakest hand wins'), 'one line at a time').toBeNull()
-      act(() => void vi.advanceTimersByTime(900))
-      act(() => void vi.advanceTimersByTime(900))
-      expect(within(board).getByText('Upside-Down World: the weakest hand wins')).toBeInTheDocument()
+      expect(within(band()).getByText('Upside-Down World: the weakest hand wins')).toBeInTheDocument()
+      expect(band().textContent).toContain('Ann plays Card Swap')
+      act(() => void vi.advanceTimersByTime(4_000))
+      expect(band().textContent).not.toContain('Ann plays')
+      expect(within(band()).getByText('Upside-Down World: the weakest hand wins')).toBeInTheDocument()
       view.rerender(screenFor(fakeClient(stateWith({ reverse: false }, live))))
       expect(screen.queryByText(/Upside-Down World/)).toBeNull()
     })
 
-    it('has no banner region on a table without chaos', () => {
+    it('has no toast band on a table without chaos', () => {
       const plainRoom = makeRoom({ ...chaosRoom, config: { ...chaosRoom.config, blind: { ...chaosRoom.config.blind!, chaosCycle: undefined } } })
       wrap(fakeClient(makeState({ room: plainRoom, hand: finished })))
-      expect(document.querySelector(`.${s.chaosBannerSlot}`)).toBeNull()
+      expect(document.querySelector('[data-chaos-toasts]')).toBeNull()
     })
   })
 })

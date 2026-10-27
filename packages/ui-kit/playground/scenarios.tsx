@@ -52,22 +52,23 @@ export type WorstState = 'waiting' | 'turn' | 'result' | 'blindS' | 'blindP' | '
  *
  * - `chaosDraft`: the last hand over, my three cards still fanned out, and the draft open — three Vàng cards to choose from, the
  *   timer running. The draft lies above my seat; the last hand's result card steps aside for it.
- * - `chaosReveal`: a hand in its `DECISION` round with four cards having fired — the banner plays them one by one over the
- *   board (reload to see it again; the hand is not a snapshot).
+ * - `chaosReveal`: a hand in its `DECISION` round with three cards having fired — their toasts are up for 4 s (reload to see
+ *   them again; the hand is not a snapshot).
  * - `chaosFour`: "Thêm lá" on a three-card table — I hold four cards, one seat holds four face down — with a "Nhìn trộm" of the
  *   next board cards in the ghost slots.
  * - `chaosPeel`: a squeeze table, my four cards face down to peel (the peel layout with a card more).
  * - `chaosBlind`: "Che mắt" on me — my three cards are backs I cannot turn, with the word "Bị che mắt" on my seat.
  * - `chaosResult`: the hand over — the result card with its "Thẻ đã dùng" line and the credits, "Bạo kích ×2!" on the winner, and
  *   the "Mượn lá" card the viewer ranked with beside their own cards, tagged "Mượn" and gold-edged in the winning five.
- * - `chaosBoard`: after the river, the five board cards face up and the reveal cards firing — the banner sits on the cards'
- *   feet, see-through, so it hides none of them — and "Thế giới đảo ngược" on: once the queue has run, its quiet line stays.
+ * - `chaosBoard`: after the river, the five board cards face up and the reveal cards firing as toasts — and "Thế giới đảo
+ *   ngược" on: its pinned toast stays all hand.
  *
  * BP-39, round two:
  * - `chaosBonus`: a hand in its `DECISION` round with my bonus hand full — three cards waiting (a debuff, a board re-deal, a
  *   deal-time buff), none pressed; the other seats show how many bonus cards they hold, never which.
  * - `chaosBurst`: the hand over, and every one of up to eight seats fired a card ("Thẻ đã dùng" at its longest, eight
- *   toasts in one batch), the result wait running with "Bỏ qua" at 3 of 5 and not pressed by me, one bonus card in my hand.
+ *   toasts in one batch with the settlement: as many as the band holds, the rest under "+N thẻ khác", the result open beside
+ *   them), the result wait running with "Bỏ qua" at 3 of 5 and not pressed by me, one bonus card in my hand.
  */
 export type ChaosState = 'chaosDraft' | 'chaosReveal' | 'chaosFour' | 'chaosPeel' | 'chaosBlind' | 'chaosResult' | 'chaosBoard' | 'chaosBonus' | 'chaosBurst'
 
@@ -374,8 +375,9 @@ function chaosHand(n: number, state: ChaosState, long: boolean): ClientHand {
     legal: over || state === 'chaosPeel' || state === 'chaosBoard' ? null : { seat: 0, kinds: ['play', 'fold'], callAmount: BLIND_WAGER, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 },
     result: null,
     potPulse: 1,
-    // The banner plays for a live hand; every other state is a snapshot, which replays nothing.
-    restored: state !== 'chaosReveal' && state !== 'chaosBoard',
+    // The toasts play for a live hand (the burst's eight cards arrive with its settlement, in one batch); every other state
+    // is a snapshot, which replays nothing.
+    restored: state !== 'chaosReveal' && state !== 'chaosBoard' && state !== 'chaosBurst',
     dealtAt: null,
     boardAt: null,
     showdownAt: null,
