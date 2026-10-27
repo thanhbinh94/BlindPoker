@@ -1028,8 +1028,8 @@ full ops run of Plan 37 Task 8.
 overlapped.** The draft panel stands above the viewer's seat on purpose; at 1440 × 900 its right edge covers the left half of the
 lower-right opponent's plate while it is open (15 s at most). Since BP-39 the cards' toasts replace the banner (Plan 37's "the result
 card waits for the banner queue" is gone: the result opens at the settlement). On a phone on its side the toast band lies across the
-compact header's middle for its 4 s, over the room name and stakes (BP-39 Task 8, Ruling 3); a sliver of the header's text can show at
-the band's right end beside "+N thẻ khác". The ops pack measures toast, strip, board and tray boxes in every frame (F-13d–g), not the
+compact header's middle for its 4 s, over the room name and stakes (BP-39 Task 8, Ruling 3); since the final fix wave (P3b) the header's
+name, badges, code and stakes are hidden while the band shows, so none of it peeks past the toasts. The ops pack measures toast, strip, board and tray boxes in every frame (F-13d–g), not the
 header under the band.
 *Why it stays:* the panel is what the table waits on, and it goes away on the last pick; at 780 × 360 there are about 16 px between the
 header and the top plates, and the band may not take height from the stage (plan amendment A7). The ruled residuals: the draft over a
@@ -1042,13 +1042,17 @@ popup have never been tried on a real phone, in Samsung Internet, iOS Safari or 
 *Why it stays:* only Chromium is installed for Playwright, and real phones are the user's to try (CLAUDE.md §8).
 *Tracked:* `apps/normal-web/e2e/ops/ops.config.ts` (`s25p`, `s25l`); `docs/operation-test-plan.md`.
 
-**Upright at 360 × 780, the stage can run up to about 24 px past its box while three toasts stand.** The toast band is a row of the
-column (it takes the header's facts line's place, BP-39 Task 8 Ruling 4), so two-line toasts take height from the felt for their 4 s;
-measured 0–24 px of stage overflow with four seats (F-13g) and 19 px with eight (Task 8). The page itself never scrolls (F-13d, F-13f).
-F-13b and F-13d measure the stage once the toasts have left. (A separate overflow of 18–19 px at the 360 × 780 result without toasts,
-found by those cases, is for BP-39's final fix wave, not this residual.)
-*Why it stays:* the band may not overlay the felt (spec 2026-10-27 §3.1) and the felt is at its `min-content` floor at that size.
-*Tracked:* `packages/ui-kit/src/screens/RoomScreen.tsx` (`ChaosToasts`), `table.module.css` (`.chaosToastBand`); BP-39 Task 8 report.
+**Upright at 360 × 780 the chaos header is shorter, and the band holds two toasts at seven seats or more.** The felt has no height to
+spare at that size, so since BP-39's final fix wave (I2) the header's facts line steps aside while the result strip is open (as it does
+while toasts stand), a chaos table's facts line drops the head-count below 480 px and its type to 11 px below 400 px (four rows become
+two), and an upright band at a table of seven seats or more shows two toasts before "+N thẻ khác" instead of three. Measured on the
+playground's worst pages at 360 × 780 and 375 × 812, six and eight seats, with and without toasts and the strip: the stage overflows
+0–1 px (the ops pack's tolerance); F-13b and F-13d measure the stage both with the toasts up and after they leave.
+*Why it stays:* the head-count is in the seats and the lobby's card (the squeeze table already drops it below 480 px), and the facts
+line comes back with the next deal. The band may not overlay the felt (spec 2026-10-27 §3.1). A real phone with larger system fonts
+can still wrap more than Chromium's emulation does.
+*Tracked:* `packages/ui-kit/src/table/ChaosToasts.tsx` (`CROWDED_STACK_CAP`), `table.module.css` (`.metaFlow[data-chaos]`,
+`[data-result-strip='open'] .header .metaFlow`); BP-39 fix-wave report.
 
 **The bonus cards and the seats' card icons are small tap targets (BP-39).** On a phone the bonus hand shows icons only, 26–28 px pills
 (the trigger's `::after` adds 4 px above and below), and the seat icons are 22 px: under the 44 px a finger wants.

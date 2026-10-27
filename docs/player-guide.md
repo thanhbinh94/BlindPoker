@@ -344,7 +344,7 @@ Thẻ chọn ở khung chọn **tự áp** đúng lúc của nó, bạn không p
 Mỗi lần một thẻ có hiệu ứng, một **thông báo thẻ** nhỏ hiện lên: "Bot 1 dùng Rút lá cả bàn → Ann", kèm "Bị chặn", "Bị phản lại" hoặc "Không có tác dụng" nếu thẻ không chạm tới ai. Chữ xuống dòng, không bị cắt.
 
 - Thông báo nằm trong một vùng riêng, không bao giờ đè lên kết quả ván: điện thoại dọc thì ngay dưới thanh tiêu đề bàn, điện thoại xoay ngang thì một hàng ở trên cùng, máy tính thì góc trên bên phải của bàn.
-- Cùng lúc hiện tối đa **3** thông báo (xoay ngang **2**, máy xoay ngang nhỏ 1). Nhiều thẻ nổ hơn thế thì phần dư gộp thành một thông báo **"+N thẻ khác"**; chạm vào nó để mở danh sách đủ các thẻ của ván, chạm lại hoặc chạm ra ngoài để đóng. Danh sách đủ cũng có ở dòng "Thẻ đã dùng" của kết quả ván.
+- Cùng lúc hiện tối đa **3** thông báo (xoay ngang **2**, máy xoay ngang nhỏ 1; điện thoại dựng đứng ở bàn từ 7 ghế trở lên **2**). Nhiều thẻ nổ hơn thế thì phần dư gộp thành một thông báo **"+N thẻ khác"**; chạm vào nó để mở danh sách đủ các thẻ của ván, chạm lại hoặc chạm ra ngoài để đóng. Danh sách đủ cũng có ở dòng "Thẻ đã dùng" của kết quả ván.
 - Mỗi thông báo ở lại khoảng **4 giây**. Chạm vào phần chữ của thông báo thì nó **ghim** lại cho tới khi bạn chạm lần nữa hoặc ván sau bắt đầu; chạm vào tên thẻ thì mở khung thông tin thẻ.
 - "Thế giới đảo ngược" hiện thành một thông báo ghim suốt ván đó.
 
@@ -374,7 +374,7 @@ Mỗi người có **điểm hỗn loạn** riêng ở bàn: **+1** mỗi ván t
 
 - **Tay thẻ thưởng** nằm cạnh bàn của bạn: điện thoại dọc thì một cột nhỏ ở mép trái mặt bàn, xoay ngang thì góc trái phía trên "Tự động chơi", máy tính thì trong hàng nút dưới bàn (cạnh "Đứng dậy", "Tạm nghỉ"). Trên điện thoại chỉ hiện biểu tượng thẻ; chạm vào để đọc tên và mô tả.
 - Tay giữ tối đa **3** thẻ. Tay đầy thì điểm hỗn loạn được **giữ lại** (không trừ, không mất) cho tới khi có chỗ.
-- **Dùng thẻ:** chạm vào thẻ để mở khung thông tin, rồi bấm **"Dùng"** trong khung đó. Chạm để đọc không dùng thẻ; chỉ nút "Dùng" mới dùng. Thẻ đã bấm hiện **"Đã đặt dùng"** (dấu ✓ trên biểu tượng ở điện thoại) và các thẻ khác tạm khóa: mỗi ván chỉ dùng **1 thẻ thưởng**.
+- **Dùng thẻ:** chạm vào thẻ để mở khung thông tin, rồi bấm **"Dùng"** trong khung đó. Chạm để đọc không dùng thẻ; chỉ nút "Dùng" mới dùng. Thẻ đã bấm hiện **"Đã đặt dùng · ván này"** (thẻ sẽ chạy lúc lật bài của ván đang chơi) hoặc **"Đã đặt dùng · ván sau"** (dấu ✓ trên biểu tượng ở điện thoại) và các thẻ khác tạm khóa: mỗi ván chỉ dùng **1 thẻ thưởng**.
 - **Lúc bấm được:** giữa hai ván (lúc kết quả ván đang hiện, lúc chờ, lúc chọn thẻ) thì thẻ áp từ ván sau. Ở bàn "Chơi hoặc bỏ" bạn cũng bấm được trong lúc chọn "Chơi"/"Bỏ bài" của ván bạn đang chơi: thẻ **lúc lật** (rút lá, hạ lá, tráo bài, chia lại lá chung, mượn lá) áp ngay lúc lật của chính ván đó, các thẻ khác (kể cả "Bảo hiểm", "Bạo kích") áp từ ván sau. Bàn "Hoàn toàn may rủi" không có lúc chọn, nên chỉ bấm được giữa hai ván. Đã bỏ bài, đã qua lúc chọn, hay đang bị "Đóng băng" thì không bấm được; bấm không được thì lý do hiện ngay trong tay thẻ.
 - Thẻ đã đặt dùng mà bạn bỏ bài, hoặc ván không có lật bài, thì thẻ **trở về tay thẻ thưởng**, và không ai biết bạn đã đặt nó.
 - **Người khác chỉ thấy số thẻ**: ghế của bạn có một biểu tượng lá úp kèm "×N" (số thẻ thưởng bạn đang giữ), không thấy là thẻ gì. Thẻ chỉ lộ ra lúc nó nổ, qua thông báo thẻ và dòng "Thẻ đã dùng".

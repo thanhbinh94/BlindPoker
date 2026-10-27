@@ -266,7 +266,9 @@ async function draftFitsPhone({ id, who, phones, via }: { id: string; who: Playe
   // the name, so the name is checked whole there.
   await expect(winnerCard(page)).toBeVisible({ timeout: 90_000 })
   await expectNoSidewaysScroll(page)
-  // Measured once the cards' toasts have left (4 s): see `stripAtS25` for the stage while they stand.
+  // Measured as it opens — the cards' toasts may still stand beside it — and again once they have left (4 s): neither scrolls
+  // the stage (BP-39 final wave, I2).
+  await expectRoomFits(page, `${id}, the chaos result as it opens`, [screen])
   await expect(cardToasts(page)).toHaveCount(0, { timeout: 10_000 })
   await expectRoomFits(page, `${id}, the chaos result`, [screen])
   const name = winnerCard(page).getByText(who.who.displayName, { exact: true })
@@ -315,6 +317,8 @@ const cardToasts = (page: Page): Locator => toastBand(page).locator('[data-chaos
 /** What `watchChaos` saw, frame by frame, until `readWatch`. */
 interface Watch {
   frames: number
+  /** Frames in which the result was on screen and still: the hit checks below had a result to check (P6). */
+  resultFrames: number
   /** Frames in which the result and at least one toast were both on screen and still. */
   both: number
   /** The most card toasts on screen at once ("+N" and the reverse note not counted). */
@@ -335,7 +339,7 @@ interface Watch {
  */
 async function watchChaos(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const w = { frames: 0, both: 0, maxCards: 0, mores: [] as string[], texts: [] as string[], hits: [] as string[], stop: false }
+    const w = { frames: 0, resultFrames: 0, both: 0, maxCards: 0, mores: [] as string[], texts: [] as string[], hits: [] as string[], stop: false }
     Object.assign(window, { __chaosWatch: w })
     const shown = (el: Element): boolean => el.checkVisibility() && el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0
     const still = (el: Element): boolean => el.getAnimations().length === 0
@@ -380,6 +384,7 @@ async function watchChaos(page: Page): Promise<void> {
       }
       if (result !== undefined && shown(result) && still(result)) {
         const r = result.getBoundingClientRect()
+        w.resultFrames += 1
         if (standing.length > 0) w.both += 1
         for (const t of standing) if (meet(t, r)) hit('toast × result', t, r)
         if (boardBox !== null && meet(r, boardBox)) hit('result × board', r, boardBox)
@@ -395,7 +400,7 @@ async function readWatch(page: Page): Promise<Watch> {
   return page.evaluate(() => {
     const w = (window as unknown as { __chaosWatch: Watch & { stop: boolean } }).__chaosWatch
     w.stop = true
-    return { frames: w.frames, both: w.both, maxCards: w.maxCards, mores: w.mores, texts: w.texts, hits: w.hits }
+    return { frames: w.frames, resultFrames: w.resultFrames, both: w.both, maxCards: w.maxCards, mores: w.mores, texts: w.texts, hits: w.hits }
   })
 }
 
@@ -453,20 +458,21 @@ async function stripAtS25({ id, who, screen }: { id: string; who: Player; screen
   await expect(resultCard(page).getByRole('button', { name: 'Đóng', exact: true }), 'the strip has no "Đóng"').toHaveCount(0)
   await shot(page, `chaos-${id}-strip`)
   await expectNoPageScroll(page, `${id}, the chaos result`)
+  // The strip always carries the viewer's row (the winners and the viewer): it must be there, and whole (P6).
   const name = winnerCard(page).getByText(who.who.displayName, { exact: true })
-  if ((await name.count()) > 0) {
-    const { scroll, client } = await name.evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }))
-    expect(scroll, `${id}: "${who.who.displayName}" is whole on the strip`).toBeLessThanOrEqual(client)
-  }
+  await expect(name, `${id}: the viewer's row is on the strip`).toBeVisible()
+  const { scroll, client } = await name.evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }))
+  expect(scroll, `${id}: "${who.who.displayName}" is whole on the strip`).toBeLessThanOrEqual(client)
   await expectNoTextOverlapAt(page, `${id}, the chaos result`)
-  // The stage's own fit once the toasts have left: while three two-line toasts stand upright at 360 × 780, the felt can run
-  // up to ~24 px past the stage (known-limitations, BP-39); the page itself never scrolls (checked above, toasts up).
+  // The stage fits with the cards' toasts still up beside the strip, and again once they have left (BP-39 final wave, I2).
+  await expectRoomFits(page, `${id}, the chaos result as it opens`, [screen])
   await expect(cardToasts(page)).toHaveCount(0, { timeout: 10_000 })
   await expectRoomFits(page, `${id}, the chaos result`, [screen])
 
   await skipDealsAtOnce(page, 'tap')
   const watch = await readWatch(page)
   expect(watch.frames, 'the room was watched').toBeGreaterThan(30)
+  expect(watch.resultFrames, 'the result was on screen in the frames watched (or the hit checks proved nothing)').toBeGreaterThan(0)
   expect(watch.hits, `${id}: the strip meets no toast, board or tray, and no toast meets the board or tray`).toEqual([])
   await leave(page)
 }
@@ -542,6 +548,22 @@ async function restoreChaos(page: Page, before: GmChaos): Promise<void> {
 }
 
 /**
+ * The forced cases' clean-up: the settings go back, then the players' contexts close — the close runs even when the restore
+ * fails, and a restore that fails after the case itself has failed is logged rather than thrown, so the case's own error is
+ * the one reported (P6).
+ */
+async function restoreAndClose(page: Page, before: GmChaos | null, players: Player[], failed: boolean): Promise<void> {
+  try {
+    if (before !== null) await restoreChaos(page, before)
+  } catch (err) {
+    if (!failed) throw err
+    console.error('ops F-13: the chaos settings could not be put back after the case failed', err)
+  } finally {
+    await closeAll(players)
+  }
+}
+
+/**
  * F-13f: eight seats — one human, seven bots, pure luck so nobody folds — each holding one of `REVEAL_GOLD`, so all eight fire at
  * the first reveal and arrive in one batch with the settlement. The band shows its cap (3 upright, 2 sideways) and puts the rest
  * under "+N thẻ khác"; in no frame does a toast meet the result strip (nor the board or the tray).
@@ -572,7 +594,9 @@ async function burstAtS25({ id, who, screen, cap }: { id: string; who: Player; s
   expect(watch.maxCards, 'the band showed toasts').toBeGreaterThanOrEqual(1)
   expect(watch.mores.every((text) => /^\+\d+ thẻ khác$/.test(text)), `"+N thẻ khác": ${watch.mores.join(' | ')}`).toBe(true)
   const more = Math.max(...watch.mores.map((text) => Number(/\d+/.exec(text)?.[0] ?? '0')))
-  expect(watch.maxCards + more, 'the toasts and "+N" account for the burst').toBeGreaterThanOrEqual(cap + 1)
+  // Every one of the eight seats fires at least one card (a steal-all one per target): the toasts and "+N" hold them all (P6).
+  expect(watch.maxCards + more, 'the toasts and "+N" account for all eight seats').toBeGreaterThanOrEqual(8)
+  expect(watch.resultFrames, 'the result was on screen in the frames watched').toBeGreaterThan(0)
   expect(watch.both, 'the toasts and the strip shared the screen (or the check proved nothing)').toBeGreaterThan(0)
   expect(watch.hits, `${id}: no toast meets the strip, the board or the tray`).toEqual([])
   await leave(page)
@@ -583,15 +607,17 @@ test('F-13f: @s25p @s25l eight seats fire their cards at one reveal on the Galax
   const phone = await newPlayer(browser, 'Bu')
   const page = phone.page
   let before: GmChaos | null = null
+  let failed = true
   try {
     await promoteToGm(page, phone.who.email)
     before = await readChaos(page)
     await forceRevealGold(page, before)
     const sideways = page.viewportSize()!.width > page.viewportSize()!.height
-    await burstAtS25({ id: `F13f-${sideways ? '780x360' : '360x780'}`, who: phone, screen: sideways ? S25_SIDEWAYS : S25_UPRIGHT, cap: sideways ? 2 : 3 })
+    // Two either way: sideways the band's own cap, upright an eight-seat table's (BP-39 final wave, I2).
+    await burstAtS25({ id: `F13f-${sideways ? '780x360' : '360x780'}`, who: phone, screen: sideways ? S25_SIDEWAYS : S25_UPRIGHT, cap: 2 })
+    failed = false
   } finally {
-    if (before !== null) await restoreChaos(page, before)
-    await closeAll([phone])
+    await restoreAndClose(page, before, [phone], failed)
   }
 })
 
@@ -601,6 +627,7 @@ test('F-13g: @s25p a bonus card earned at the table — tap it, "Dùng", and it 
   const page = phone.page
   const me = phone.who.displayName
   let before: GmChaos | null = null
+  let failed = true
   try {
     await promoteToGm(page, phone.who.email)
     before = await readChaos(page)
@@ -624,16 +651,18 @@ test('F-13g: @s25p a bonus card earned at the table — tap it, "Dùng", and it 
     expect(REVEAL_GOLD_NAMES).toContain(cardName)
     const uid = await first.locator('[data-uid]').getAttribute('data-uid')
 
-    // A tap reads it — the popup says what it does — and only "Dùng" plays it.
+    // A tap reads it — the popup, a small dialog named by the card while it offers "Dùng", says what it does — and only "Dùng"
+    // plays it.
     await first.tap()
-    const tip = page.getByRole('tooltip')
+    const tip = page.getByRole('dialog', { name: cardName, exact: true })
     await expect(tip).toBeVisible()
     await expect(tip).toContainText(cardName)
     await shot(page, 'chaos-F13g-bonus-popup')
     await tip.getByRole('button', { name: 'Dùng', exact: true }).tap()
     const armed = bonus.locator(`[data-uid="${uid}"][data-armed="true"]`)
     await expect(armed, 'the card is set to play ("Đã đặt dùng")').toHaveCount(1)
-    await expect(bonus.getByRole('button', { name: new RegExp(`^${cardName} \\(Vàng\\) · Đã đặt dùng$`) })).toHaveCount(1)
+    // Pressed between hands at a pure-luck table, it applies to the next hand, and says so (M3).
+    await expect(bonus.getByRole('button', { name: new RegExp(`^${cardName} \\(Vàng\\) · Đã đặt dùng · ván sau$`) })).toHaveCount(1)
     await shot(page, 'chaos-F13g-armed')
 
     // Hand 2: the card fires at its reveal — the result's "Thẻ đã dùng" names it after the viewer, and it has left the hand.
@@ -644,11 +673,12 @@ test('F-13g: @s25p a bonus card earned at the table — tap it, "Dùng", and it 
     expect(line, `the result names the card (${line ?? 'no line'})`).toMatch(new RegExp(`(^|; |: )${me} — [^;]*${cardName}`))
     await expect(bonus.locator(`[data-uid="${uid}"]`), 'the played card has left the bonus hand').toHaveCount(0)
     const watch = await readWatch(page)
+    expect(watch.resultFrames, 'the result was on screen in the frames watched').toBeGreaterThan(0)
     expect(watch.hits, 'no toast meets the strip, the board or the tray').toEqual([])
     await shot(page, 'chaos-F13g-fired')
     await leave(page)
+    failed = false
   } finally {
-    if (before !== null) await restoreChaos(page, before)
-    await closeAll([phone])
+    await restoreAndClose(page, before, [phone], failed)
   }
 })
