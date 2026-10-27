@@ -1252,6 +1252,20 @@
   transform: translate(-50%, calc(-100% - 2px));
 }
 
+/* With only those 2 px under it, nothing in that seat may hang lower, even for a moment: a box past the stage's foot is
+   scrollable overflow, and `.roomMain` scrolls. The payout fades in where it stands instead of rising from 8 px below
+   (`riseUp`), which put it 6 px past the foot for its first frames — under the open strip too, where the viewer's seat is
+   hidden but still laid out (BP-39 gate, F-13e at 780 × 360). */
+.ring[data-frame='landscape'][data-tier='short'] .seat[data-half='bottom']:not([data-edge]) .payout {
+  animation-name: payoutFade;
+}
+
+@keyframes payoutFade {
+  from {
+    opacity: 0;
+  }
+}
+
 .ring[data-frame='landscape'][data-tier='short'] .seat[data-edge][data-half='bottom'] {
   transform: translate(-50%, calc(-50% + max(var(--end-centre) - 50cqh, 6px)));
 }
@@ -2981,6 +2995,13 @@
   height: 16px;
 }
 
+/* The seat standing 2 px above the stage's foot (above): its icons sit on its last line, and a count hanging 6 px under
+   one reached 1.8 px past the foot — the stage scrolled 2 px from the pick to the reveal (BP-39 gate). Hung 3 px, it ends
+   1.2 px inside. */
+.ring[data-frame='landscape'][data-tier='short'] .seat[data-half='bottom']:not([data-edge]) .chaosLeft {
+  bottom: -3px;
+}
+
 .ring[data-frame='landscape'] .tags > .chaosRow {
   padding: 0 4px 0 0;
 }
@@ -4368,6 +4389,7 @@
   .potChips,
   .potValue,
   .payout,
+  .ring[data-frame='landscape'][data-tier='short'] .seat[data-half='bottom']:not([data-edge]) .payout,
   .result,
   .strip,
   .draft,
