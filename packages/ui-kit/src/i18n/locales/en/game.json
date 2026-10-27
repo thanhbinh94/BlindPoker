@@ -112,7 +112,8 @@
     "winner": "Winner",
     "winners": "Winners",
     "you": "You",
-    "closing": "Closing…"
+    "closing": "Closing…",
+    "noLimit": "No limit"
   },
   "mode": {
     "holdem": "Texas Hold'em",
@@ -232,7 +233,8 @@
       "botCount": "There must be fewer bots than seats."
     },
     "buyInHint": "{{bb}} BB = {{points}}",
-    "tableLimitHint": "Table limit per player: {{points}} ({{times}}× the wager)"
+    "tableLimitHint": "Table limit per player: {{points}} ({{times}}× the wager)",
+    "tableLimitNoneHint": "Table limit per player: No limit"
   },
   "room": {
     "title": "Room",
@@ -314,15 +316,48 @@
       "watching": "The players are picking cards",
       "group": "Three cards to choose from"
     },
-    "banner": {
+    "toast": {
       "use": "{{name}} plays {{card}}",
-      "useOn": "{{name}} plays {{card}} on {{targets}}"
+      "useOn": "{{name}} plays {{card}} → {{targets}}",
+      "more_one": "+{{count}} more card",
+      "more_other": "+{{count}} more cards",
+      "all": "Cards played this hand"
+    },
+    "result": {
+      "skip": "Skip",
+      "skipped": "Skipped",
+      "skipCount": "Skip {{done}}/{{total}}",
+      "more_one": "+{{count}} more",
+      "more_other": "+{{count}} more"
     },
     "outcome": {
       "applied": "Applied",
       "blocked": "Blocked",
       "reflected": "Reflected",
       "fizzled": "Fizzled"
+    },
+    "timing": {
+      "deal": "Acts at the deal",
+      "decision": "Acts at the decision",
+      "reveal": "Acts at the reveal",
+      "wait": "Waits for its moment",
+      "now": "Acts as soon as it is drawn"
+    },
+    "info": {
+      "by": "Played by {{name}}",
+      "on": "On {{targets}}",
+      "outcome": "Result: {{outcome}}"
+    },
+    "bonus": {
+      "title": "Bonus cards",
+      "use": "Use",
+      "armed": {
+        "this": "Set to play · this hand",
+        "next": "Set to play · next hand"
+      },
+      "seat_one": "Bonus cards: {{count}}",
+      "seat_other": "Bonus cards: {{count}}",
+      "count": "×{{count}}"
     },
     "credit": {
       "chaos_rescue": "Rescue +{{amount}}",
@@ -376,7 +411,7 @@
       },
       "s_steal_one": {
         "name": "Pluck a Card",
-        "desc": "At the reveal, 1 random opponent loses a hole card."
+        "desc": "At the reveal, 1 random opponent loses a random hole card."
       },
       "s_lower": {
         "name": "Lower a Card",

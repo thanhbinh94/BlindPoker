@@ -5,6 +5,7 @@ import {
   EMPTY_CHAOS_SEAT,
   afterHand,
   applyCommand,
+  armBonus,
   createBotStrategy,
   createHand,
   drawOffer,
@@ -68,7 +69,8 @@ const STEP_MS = 900
 const NEXT_HAND_MS = 6_000
 
 const ACK: AckOrError = { t: 'ACK', reqId: 'playground' }
-const RNG: Rng = { int: (max) => Math.floor(Math.random() * max) }
+/** The page's dealer: `Math.random`. A test passes a seeded one (`createMockClient`'s `rng`) so its draws repeat (P1). */
+const RANDOM: Rng = { int: (max) => Math.floor(Math.random() * max) }
 
 const rulesFor = (mode: PlaygroundMode): Ruleset =>
   mode === 'holdem'
@@ -140,7 +142,8 @@ export interface MockClient {
  * round's deadline, and turns what is still down then. So the
  * playground exercises the same reducer, the same views and the same hole-card hiding as production.
  */
-export function createMockClient(mode: PlaygroundMode, seatCount: number, onChange: (state: ClientState) => void): MockClient {
+export function createMockClient(mode: PlaygroundMode, seatCount: number, onChange: (state: ClientState) => void, rng: Rng = RANDOM): MockClient {
+  const RNG = rng
   const SEATS = seatCount
   const rules = rulesFor(mode)
   const bot = createBotStrategy()
@@ -169,6 +172,8 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
   const blindRules = rules.mode === 'blind' ? rules : null
   const held = new Map<number, ChaosSeat>(Array.from({ length: SEATS }, (_, i) => [i, EMPTY_CHAOS_SEAT]))
   let nextUid = 1
+  /** The result wait's "Bỏ qua" (BP-39): wakes the wait, which then deals at once. The playground has one person, so one press is every press. */
+  let skipWait: (() => void) | null = null
   let drafting: { offerId: string; cardIds: string[]; pick: (cardId: string | null) => void } | null = null
 
   // Everything up to the first `await` runs while `createMockClient` is still returning, so the caller's very first
@@ -184,6 +189,12 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
       timer = setTimeout(resolve, ms)
     })
 
+  /** The bonus cards waiting in a seat's hand, the pressed one included until it fires (the table must not read a press). */
+  const bonusCountOf = (seat: number): number => {
+    const c = held.get(seat) ?? EMPTY_CHAOS_SEAT
+    return c.bonus.length + (c.armed === null ? 0 : 1)
+  }
+
   const players = (): RoomPlayerView[] =>
     Array.from({ length: SEATS }, (_, seat) => ({
       playerId: seat === MY_SEAT ? MY_ID : `bot${seat}`,
@@ -196,7 +207,7 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
       sittingOut: seat === MY_SEAT && sittingOut,
       stack: stacks.get(seat) ?? 0,
       ready: true,
-      ...(chaosOn ? { chaos: { cards: (held.get(seat) ?? EMPTY_CHAOS_SEAT).cards.map(toHeldCardView), points: (held.get(seat) ?? EMPTY_CHAOS_SEAT).points } } : {}),
+      ...(chaosOn ? { chaos: { cards: (held.get(seat) ?? EMPTY_CHAOS_SEAT).cards.map(toHeldCardView), points: (held.get(seat) ?? EMPTY_CHAOS_SEAT).points, bonusCount: bonusCountOf(seat) } } : {}),
     }))
 
   const room = (nextHandAt: number | null): RoomView => ({
@@ -228,16 +239,32 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
 
   const roomEvent = (event: Extract<ServerMessage, { t: 'ROOM_EVENT' }>['event']): void => push({ t: 'ROOM_EVENT', seq: (seq += 1), event })
 
+  /** My bonus hand and the card I pressed, for me alone (the server's `NOTIFICATION { kind: 'CHAOS_BONUS' }`). */
+  const sendBonus = (): void => {
+    const mine = held.get(MY_SEAT) ?? EMPTY_CHAOS_SEAT
+    push({
+      t: 'NOTIFICATION',
+      kind: 'CHAOS_BONUS',
+      payload: {
+        cards: mine.bonus.map(toHeldCardView),
+        armed: mine.armed === null ? null : { uid: mine.armed.card.uid, cardId: mine.armed.card.cardId, hand: mine.armed.hand },
+      },
+    })
+  }
+
   /** Every seat's held cards and chaos points, as the server broadcasts them after a draft and after each hand. */
-  const sendChaosState = (): void =>
+  const sendChaosState = (): void => {
     roomEvent({
       type: 'CHAOS_STATE',
       seats: Array.from({ length: SEATS }, (_, seat) => ({
         seat,
         cards: (held.get(seat) ?? EMPTY_CHAOS_SEAT).cards.map(toHeldCardView),
         points: (held.get(seat) ?? EMPTY_CHAOS_SEAT).points,
+        bonusCount: bonusCountOf(seat),
       })),
     })
+    sendBonus()
+  }
 
   /**
    * The draft before a hand (spec 2026-10-26 §3.2): one tier for the table, three cards for every seat. The bots pick at
@@ -422,7 +449,18 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
 
     const at = Date.now() + NEXT_HAND_MS
     push({ t: 'ROOM_EVENT', seq: (seq += 1), event: { type: 'ROOM_STATUS', status: 'IN_GAME', nextHandAt: at } })
-    await sleep(NEXT_HAND_MS)
+    if (chaosOn) {
+      // The result wait of a chaos table: one person here, so "Bỏ qua" deals the next hand at once.
+      push({ t: 'ROOM_EVENT', seq: (seq += 1), event: { type: 'RESULT_SKIPS', skipped: 0, total: 1 } })
+      await new Promise<void>((resolve) => {
+        skipWait = resolve
+        timer = setTimeout(resolve, NEXT_HAND_MS)
+      })
+      skipWait = null
+      if (timer !== null) clearTimeout(timer)
+    } else {
+      await sleep(NEXT_HAND_MS)
+    }
     if (gen !== generation) return
     void runHand(gen)
   }
@@ -490,6 +528,27 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
       drafting.pick(cardId)
       // what `useGameClient` does on the ACK: the offer is picked now, not only when the draft ends
       publish(reduceClient(state, { type: 'chaosPicked', offerId }))
+      return ACK
+    },
+    // BP-39: press a bonus card. The playground has no running reveal to slip it into, so a card pressed mid-hand waits for the
+    // next deal like one pressed between hands (the real server also fires a board or hole card at this hand's reveal).
+    playBonus: async (uid) => {
+      const mine = held.get(MY_SEAT) ?? EMPTY_CHAOS_SEAT
+      const r = chaosOn ? armBonus(mine, uid, { phase: 'between' }) : { error: 'NO_CARD' as const }
+      if ('error' in r) return { t: 'ERROR', code: 'CHAOS_CANNOT_USE', message: r.error, reqId: 'playground' }
+      held.set(MY_SEAT, r.seat)
+      // My own bonus hand only (P9): the server tells the table nothing when a card is pressed — the count already holds the
+      // armed card — and a CHAOS_STATE here would close an open draft panel in the client.
+      sendBonus()
+      return ACK
+    },
+    skipResult: async () => {
+      const wake = skipWait
+      if (wake === null) return ACK // outside a result wait the server ignores it, with an ACK
+      skipWait = null
+      roomEvent({ type: 'RESULT_SKIPS', skipped: 1, total: 1 })
+      publish(reduceClient(state, { type: 'resultSkipped' }))
+      wake()
       return ACK
     },
     setPreAction: (kind) => publish(reduceClient(state, { type: 'preAction', kind })),

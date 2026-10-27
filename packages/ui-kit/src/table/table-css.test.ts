@@ -25,6 +25,31 @@ const mediaBlock = (css: string, query: string): string => {
 
 const CAP = /width:\s*100%;[\s\S]*max-width:\s*min\(980px,\s*100%\);[\s\S]*margin-inline:\s*auto/
 
+describe('the seat at the foot of a short stage on its side (BP-39 gate, F-13e at 780 × 360)', () => {
+  const FOOT = ".ring[data-frame='landscape'][data-tier='short'] .seat[data-half='bottom']:not([data-edge])"
+
+  it('stands 2 px above the stage’s foot, so nothing in it may hang lower', () => {
+    expect(ruleIn(TABLE_CSS, FOOT)).toMatch(/transform:\s*translate\(-50%,\s*calc\(-100%\s*-\s*2px\)\)/)
+  })
+
+  it('its payout fades in where it stands: no keyframe moves it (riseUp put it 6 px past the foot and the stage scrolled)', () => {
+    expect(ruleIn(TABLE_CSS, `${FOOT} .payout`)).toMatch(/animation-name:\s*payoutFade/)
+    const fade = /@keyframes\s+payoutFade\s*\{([\s\S]*?)\n\}/.exec(TABLE_CSS)?.[1] ?? ''
+    expect(fade).toMatch(/opacity:\s*0/)
+    expect(fade).not.toMatch(/transform|translate|scale|rotate|top|bottom|margin/)
+    // elsewhere the payout still rises
+    expect(ruleIn(TABLE_CSS, '.payout')).toMatch(/animation:\s*riseUp/)
+    // and with motion off it does not even fade: the reduced-motion list names this selector too (the same specificity, later)
+    const off = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(TABLE_CSS)?.[1] ?? ''
+    expect(off).toContain(`${FOOT} .payout,`)
+  })
+
+  it('its chaos cards’ hands-left count hangs 3 px under the icon, not 6, and ends inside the seat', () => {
+    expect(ruleIn(TABLE_CSS, '.chaosLeft')).toMatch(/bottom:\s*-6px/)
+    expect(ruleIn(TABLE_CSS, `${FOOT} .chaosLeft`)).toMatch(/bottom:\s*-3px/)
+  })
+})
+
 describe('desktop table CSS (BP-31 P7, P10)', () => {
   it('the tray is capped at 980 px and centred; the controls row is centred, not capped', () => {
     expect(ruleIn(TABLE_CSS, ".tray:not([data-frame='landscape']):not([data-between])")).toMatch(CAP)

@@ -159,10 +159,19 @@ export const sumOf = (rows: LedgerRow[], reason?: string): number =>
  * the CSRF guard asks for. `page.request` would carry the cookie but not the page's origin.
  */
 export async function postApi(page: Page, path: string, body?: unknown): Promise<{ status: number; body: Record<string, unknown> }> {
+  return sendApi(page, 'POST', path, body)
+}
+
+/** `postApi`'s twin for the routes that replace a whole setting (`PUT /api/gm/chaos/rules`, `…/config`). */
+export async function putApi(page: Page, path: string, body?: unknown): Promise<{ status: number; body: Record<string, unknown> }> {
+  return sendApi(page, 'PUT', path, body)
+}
+
+async function sendApi(page: Page, method: 'POST' | 'PUT', path: string, body?: unknown): Promise<{ status: number; body: Record<string, unknown> }> {
   return page.evaluate(
-    async ({ path, body }) => {
+    async ({ method, path, body }) => {
       const res = await fetch(path, {
-        method: 'POST',
+        method,
         credentials: 'same-origin',
         headers: { accept: 'application/json', 'content-type': 'application/json', 'x-requested-with': 'bind-poker' },
         body: JSON.stringify(body ?? {}),
@@ -170,7 +179,7 @@ export async function postApi(page: Page, path: string, body?: unknown): Promise
       const text = await res.text()
       return { status: res.status, body: (text === '' ? {} : JSON.parse(text)) as Record<string, unknown> }
     },
-    { path, body },
+    { method, path, body },
   )
 }
 
@@ -221,9 +230,42 @@ async function openCreate(page: Page): Promise<Locator> {
   return dialog
 }
 
+/** The slip a refused create leaves (`errors.ALREADY_IN_ROOM`): the server still holds this player in a room. */
+const STILL_IN_A_ROOM = 'Bạn đang ở trong một phòng khác'
+
+/**
+ * Presses "Tạo phòng" and waits for the answer: the room, or the server's refusal on the lobby's error slip.
+ *
+ * A player who presses "Rời phòng" while dealt into a hand is sent to the lobby at once, but the server keeps them a member
+ * until that hand ends (server-kit `Room.leave`, `leaveAfterHand`) and refuses a create meanwhile with `ALREADY_IN_ROOM`.
+ * A case that leaves while the next hand has just been dealt — L-05 when its checks outlast the 5 s between hands — hands
+ * that refusal to the next case's create for the rest of the hand (a Blind hand's streets, about 5 s). That refusal, and
+ * only it, is waited out: the slip is closed and the button pressed again, for as long as a hand can still be running.
+ * Any other refusal fails at once with its words, and no answer at all says what the button was doing — where the old
+ * helper waited 30 s for a URL and reported only "still #/lobby" (BP-39 gate, L-06: the slip had come and gone by then).
+ */
 async function finishCreate(page: Page, dialog: Locator): Promise<string> {
-  await dialog.getByRole('button', { name: 'Tạo phòng' }).click()
-  await expect(page).toHaveURL(/#\/room$/)
+  const button = dialog.getByRole('button', { name: 'Tạo phòng' })
+  const slip = page.getByRole('region', { name: 'Thông báo' }).getByRole('alert')
+  const outcome = async (): Promise<'room' | 'refused' | 'none'> =>
+    /#\/room$/.test(page.url()) ? 'room' : (await slip.isVisible()) ? 'refused' : 'none'
+  const heldAtMost = Date.now() + 60_000
+  for (;;) {
+    // A slip already up (an earlier refusal) must not answer this press.
+    if (await slip.isVisible()) await slip.getByRole('button', { name: 'Đóng' }).click()
+    await expect(slip).toHaveCount(0)
+    await button.click()
+    try {
+      await expect.poll(outcome, { timeout: 30_000 }).not.toBe('none')
+    } catch {
+      const state = await button.evaluate((b) => `disabled: ${String((b as HTMLButtonElement).disabled)}, aria-busy: ${b.getAttribute('aria-busy') ?? 'none'}`).catch(() => 'gone')
+      throw new Error(`"Tạo phòng" got no answer in 30 s: no room, no refusal (the button: ${state})`)
+    }
+    if ((await outcome()) === 'room') break
+    const refusal = (await slip.innerText()).replace(/[!×]/g, '').replace(/\s+/g, ' ').trim()
+    if (!refusal.includes(STILL_IN_A_ROOM) || Date.now() > heldAtMost) throw new Error(`"Tạo phòng" was refused: ${refusal}`)
+    await page.waitForTimeout(1_000)
+  }
   return (await page.locator('header').getByLabel('Mã phòng').innerText()).trim()
 }
 

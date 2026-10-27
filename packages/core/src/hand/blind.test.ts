@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Rng } from '../cards/rng.js'
 import { seededRng } from '../cards/rng.js'
-import { applyBlindCommand, blindLegalActions, blindTableLimit, createBlindHand } from './blind.js'
+import { applyBlindCommand, blindBuyInCap, blindLegalActions, blindTableLimit, createBlindHand } from './blind.js'
 import { playerView } from './view.js'
 import { EngineError, type BlindRules, type GameEvent, type HandState } from './types.js'
 
@@ -45,6 +45,11 @@ describe('setup', () => {
       10_000, 20_000, 50_000, 100_000, 200_000, 500_000,
     ])
     expect(blindTableLimit(rules({ decisionMode: 'playOrFold' }))).toBe(10_000) // the mode does not change it
+  })
+  it('caps a buy-in at the table limit, and not at all at a chaos table (BP-39)', () => {
+    expect(blindBuyInCap({ fixedWager: 1000 })).toBe(10_000)
+    expect(blindBuyInCap({ fixedWager: 1000, chaosCycle: 5 })).toBeNull()
+    expect(blindBuyInCap({ fixedWager: 2000, chaosCycle: 10 })).toBeNull()
   })
   it('antes every seat, deals the configured hole cards, adds carry-over', () => {
     const t = new Table(rules({ holeCards: 3 }), [5000, 5000, 5000], 700)

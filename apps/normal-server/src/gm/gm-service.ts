@@ -925,6 +925,7 @@ export function createGmService(deps: GmServiceDeps): GmService {
         await chaosOf().setConfig(tx, clean, by)
         return logAction(tx, { actorUserId: actor.userId, action: 'set_chaos_config', reason: why, details: { config: clean } })
       })
+      chaosOf().forgetConfig()
       return { actionId }
     },
   }
@@ -978,7 +979,7 @@ function pickRuleChange(raw: unknown): ChaosRuleChange {
   return { cardId: c.cardId, enabled: c.enabled, weight: c.weight, startsAt: c.startsAt, endsAt: c.endsAt } as ChaosRuleChange
 }
 
-/** The five chaos numbers as given (the service judges them); anything else in the body is dropped. */
+/** The six chaos numbers as given (the service judges them); anything else in the body is dropped. */
 function pickConfig(raw: unknown): ChaosConfig {
   const c = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
   const tw = (typeof c.tierWeights === 'object' && c.tierWeights !== null ? c.tierWeights : undefined) as Record<string, unknown> | undefined
@@ -986,6 +987,7 @@ function pickConfig(raw: unknown): ChaosConfig {
     tierWeights: tw === undefined ? undefined : { silver: tw.silver, gold: tw.gold, diamond: tw.diamond },
     pointsThreshold: c.pointsThreshold,
     draftMs: c.draftMs,
+    resultMs: c.resultMs,
     dailyCapPoints: c.dailyCapPoints,
     dailyRescues: c.dailyRescues,
   } as unknown as ChaosConfig

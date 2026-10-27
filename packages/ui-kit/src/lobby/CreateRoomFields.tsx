@@ -1,4 +1,4 @@
-import { blindTableLimit, ECONOMY } from '@bp/core'
+import { blindBuyInCap, ECONOMY } from '@bp/core'
 import { useId, type ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatPoints, type Language } from '../i18n/index.js'
@@ -127,6 +127,13 @@ export function BlindFields({
   const chaosHintId = useId()
   const wagers = ECONOMY.blindWagerTiers.map((n) => ({ value: n, label: formatPoints(n, lang) }))
   const bots = Array.from({ length: maxBots + 1 }, (_, n) => ({ value: n, label: String(n) }))
+  // The table limit the wager sets: ten wagers at a plain Blind table, none at all with "Poker hỗn loạn" ticked (BP-39, spec
+  // 2026-10-27 §3.7) — the seat brings the whole balance there.
+  const cap = blindBuyInCap({ fixedWager, chaosCycle: chaos?.on === true ? chaos.cycle : undefined })
+  const limitHint =
+    cap === null
+      ? t('create.tableLimitNoneHint')
+      : t('create.tableLimitHint', { points: `${formatPoints(cap, lang)} ${t('common:units.pointsShort')}`, times: ECONOMY.blindTableLimitMultiplier })
 
   return (
     <>
@@ -154,10 +161,7 @@ export function BlindFields({
       </Field>
       <Field
         label={t('create.wager')}
-        hint={t('create.tableLimitHint', {
-          points: `${formatPoints(blindTableLimit({ fixedWager }), lang)} ${t('common:units.pointsShort')}`,
-          times: ECONOMY.blindTableLimitMultiplier,
-        })}
+        hint={limitHint}
       >
         <Select value={fixedWager} options={wagers} disabled={disabled} onChange={onFixedWager} />
       </Field>

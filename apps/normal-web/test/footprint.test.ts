@@ -54,8 +54,12 @@ const INDEX = join(DIST, 'index.html')
  * `game.json`, which the entry imports like every other word of the table), the draft, banner and icon components, the
  * reducer's chaos state and the GM tab's strings. The split of the locale namespaces per lazy screen is still the recorded way
  * to win it back (the card texts are only read at a chaos table).
+ * 2026-10-27 (BP-39, fix-wave Ruling FW-8, for the lead to accept at the gate): raised from 160 KB to 170 KB. Chaos round two
+ * (toasts, the result strip and "Bỏ qua", the bonus hand and its popup, the client's bonus and skip state) took the entry to
+ * 160.5 KB gzip at the branch's last task (164,307 bytes) and the final fix wave to 160.9 KB (164,808 bytes). The split of the
+ * locale namespaces per lazy screen is still the recorded way to win it back.
  */
-const MAX_ENTRY_GZIP = 160 * 1024
+const MAX_ENTRY_GZIP = 170 * 1024
 const MAX_TOTAL_GZIP = 900 * 1024
 const MAX_CSS_GZIP = 60 * 1024
 

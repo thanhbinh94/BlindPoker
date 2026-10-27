@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { seededRng } from '../cards/rng.js'
 import type { BlindRules } from '../hand/types.js'
 import { CHAOS_CARDS_SPEC } from './fixtures.js'
-import { receiveCard } from './hold.js'
+import { receiveCard, toHeld } from './hold.js'
 import { planHand } from './plan.js'
 import { EMPTY_CHAOS_SEAT, type ChaosCardDef, type ChaosSeat } from './types.js'
 
@@ -165,6 +165,91 @@ describe('planHand', () => {
     const r = plan({ 0: holding(['d_gambler'], { points: 2 }), 1: EMPTY_CHAOS_SEAT }, RULES, 1, onlyCharge)
     expect(ids(r, 0)).toEqual(['s_charge'])
     expect(r.seats.get(0)!.points).toBe(5)
+  })
+
+  describe('a played bonus card (BP-39)', () => {
+    const armedNext = (id: string, extra: Partial<ChaosSeat> = {}): ChaosSeat =>
+      ({ ...holding([], extra), armed: { card: toHeld(card(id), uid++), hand: 'next' } })
+
+    it('an armed debuff fires first, stays armed for this hand, and a held draft debuff waits', () => {
+      const chaos = { ...armedNext('s_lower'), cards: holding(['s_steal_one', 'g_luck_3']).cards }
+      const r = plan({ 0: chaos, 1: EMPTY_CHAOS_SEAT })
+      expect(ids(r, 0)).toEqual(['s_lower', 'g_luck_3'])
+      expect(effectsOf(r, 0).effects[0]!.uid).toBe(chaos.armed!.card.uid)
+      expect(r.seats.get(0)).toEqual({ ...chaos, armed: { card: chaos.armed!.card, hand: 'this' }, bonusPlayedThisHand: true })
+    })
+
+    it('marks the hand as having had its bonus card on both paths, and not when the card does not play', () => {
+      expect(plan({ 0: armedNext('g_borrow'), 1: EMPTY_CHAOS_SEAT }).seats.get(0)!.bonusPlayedThisHand).toBe(true)
+      expect(plan({ 0: armedNext('g_luck_3'), 1: EMPTY_CHAOS_SEAT }).seats.get(0)!.bonusPlayedThisHand).toBe(true)
+      expect(plan({ 0: armedNext('s_freeze_one'), 1: EMPTY_CHAOS_SEAT }).seats.get(0)!.bonusPlayedThisHand).toBe(true)
+      expect(plan({ 0: armedNext('g_peek_3'), 1: EMPTY_CHAOS_SEAT }, LUCK).seats.get(0)!.bonusPlayedThisHand).toBe(false)
+      const dropped = { ...armedNext('s_luck_1'), cards: holding(['d_luck_5']).cards }
+      expect(plan({ 0: dropped, 1: EMPTY_CHAOS_SEAT }).seats.get(0)!.bonusPlayedThisHand).toBe(false)
+      expect(plan({ 0: holding(['g_luck_3']), 1: EMPTY_CHAOS_SEAT }).seats.get(0)!.bonusPlayedThisHand).toBe(false)
+    })
+
+    it('a card armed for a hand that never settled goes back to the bonus hand unfired, and the marker clears', () => {
+      const lower = toHeld(card('s_lower'), 0)
+      const steal = toHeld(card('s_steal_one'), uid++)
+      const leftover: ChaosSeat = { ...holding([]), bonus: [lower], armed: { card: steal, hand: 'this' }, bonusPlayedThisHand: true }
+      const r = plan({ 0: leftover, 1: EMPTY_CHAOS_SEAT })
+      expect(ids(r, 0)).toEqual([])
+      expect(r.seats.get(0)).toMatchObject({ armed: null, bonus: [lower, steal], bonusPlayedThisHand: false })
+      // also on a frozen seat
+      const frozen = plan({ 0: { ...leftover, frozenNextHand: true }, 1: EMPTY_CHAOS_SEAT })
+      expect(frozen.seats.get(0)).toMatchObject({ armed: null, bonus: [lower, steal], bonusPlayedThisHand: false })
+    })
+
+    it('an armed decision card fires from armed too', () => {
+      const chaos = armedNext('g_peek_3')
+      const r = plan({ 0: chaos, 1: EMPTY_CHAOS_SEAT })
+      expect(ids(r, 0)).toEqual(['g_peek_3'])
+      expect(r.seats.get(0)!.armed).toEqual({ card: chaos.armed!.card, hand: 'this' })
+    })
+
+    it('an armed duration card joins the held cards under the stacking rule and fires from there', () => {
+      const r = plan({ 0: armedNext('g_luck_3'), 1: EMPTY_CHAOS_SEAT })
+      expect(ids(r, 0)).toEqual(['g_luck_3'])
+      expect(r.seats.get(0)!.armed).toBeNull()
+      expect(r.seats.get(0)!.cards.map((c) => [c.cardId, c.handsLeft])).toEqual([['g_luck_3', 3]])
+
+      const stacked = plan({ 0: { ...armedNext('g_luck_3'), cards: holding(['g_luck_3']).cards }, 1: EMPTY_CHAOS_SEAT })
+      expect(stacked.seats.get(0)!.cards.map((c) => [c.cardId, c.handsLeft])).toEqual([['g_luck_3', 6]])
+
+      const farm = plan({ 0: armedNext('g_farm'), 1: EMPTY_CHAOS_SEAT })
+      expect(farm.seats.get(0)!.farmHandsLeft).toBe(5)
+    })
+
+    it('an armed deal-time debuff joins the front of the held cards, so it fires before a held draft debuff', () => {
+      const chaos = { ...armedNext('s_freeze_one'), cards: holding(['s_steal_one']).cards }
+      const r = plan({ 0: chaos, 1: EMPTY_CHAOS_SEAT })
+      expect(effectsOf(r, 0).effects.map((e) => [e.cardId, e.targets])).toEqual([['s_freeze_one', [1]]])
+      expect(r.seats.get(0)!.cards.map((c) => c.cardId)).toEqual(['s_freeze_one', 's_steal_one'])
+      expect(r.seats.get(0)!.armed).toBeNull()
+    })
+
+    it('an armed duration card that a stronger held card would drop goes back to the bonus hand', () => {
+      const chaos = { ...armedNext('s_luck_1'), cards: holding(['d_luck_5']).cards, bonus: [toHeld(card('s_lower'), 0)] }
+      const r = plan({ 0: chaos, 1: EMPTY_CHAOS_SEAT })
+      expect(ids(r, 0)).toEqual(['d_luck_5'])
+      expect(r.seats.get(0)!.armed).toBeNull()
+      expect(r.seats.get(0)!.bonus.map((c) => c.cardId)).toEqual(['s_lower', 's_luck_1'])
+    })
+
+    it('a frozen seat leaves its armed card untouched', () => {
+      const chaos = armedNext('s_lower', { frozenNextHand: true })
+      const r = plan({ 0: chaos, 1: EMPTY_CHAOS_SEAT })
+      expect(ids(r, 0)).toEqual([])
+      expect(r.seats.get(0)).toBe(chaos)
+    })
+
+    it('an armed card the table mode excludes does not fire and waits as this hand, to go back to the bonus hand', () => {
+      const chaos = armedNext('g_peek_3')
+      const r = plan({ 0: chaos, 1: EMPTY_CHAOS_SEAT }, LUCK)
+      expect(ids(r, 0)).toEqual([])
+      expect(r.seats.get(0)!.armed).toEqual({ card: chaos.armed!.card, hand: 'this' })
+    })
   })
 
   it('draws the same plan from the same seed and never changes its input', () => {

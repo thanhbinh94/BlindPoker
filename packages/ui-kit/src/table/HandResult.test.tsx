@@ -442,3 +442,236 @@ describe('HandResult on a Poker hỗn loạn table', () => {
     expect(meta()).toEqual(['Ann: Cấp cứu +10.000', 'Bob: Bạo kích ×2 +12.000', 'Bob: Thần tài +0 · Đã chạm trần thẻ hôm nay'])
   })
 })
+
+describe('HandResult: the chaos strip and "Bỏ qua" (BP-39, spec 2026-10-27 §3.2–3.3)', () => {
+  const NAMES = ['Ann', 'Bob', 'Cẩm', 'Dũng', 'Én', 'Phúc', 'Giang', 'Hà']
+  /** Eight seats shown down; Bob (seat 1) wins, the viewer is Hà (seat 7). */
+  const room = { players: NAMES.map((displayName, seat) => ({ playerId: `p${seat}`, displayName, seat })) } as unknown as RoomView
+  const BEST = ['Ah Kh Qh Jh Th', '9s 8s 7s 6s 5s', 'Qd Qc Qs 2h 2d', '4c 4d 4h Ks 3c', 'Jd Js 9c 9d 2s', '8h 8d 5c 5d Kc', '7d 7c 3h 3s Ac', '6h 6c 4s 2c Ad']
+  const eight = (chaosUsed?: { seat: number; cardId: string; outcome: string; targets: number[] }[]): ClientHand =>
+    ({
+      handId: 'h8',
+      phase: 'COMPLETE',
+      mode: 'blind',
+      seats: NAMES.map((displayName, seat) => ({ seat, playerId: `p${seat}`, displayName })),
+      result: {
+        payouts: [{ seat: 1, amount: 14_000 }],
+        pots: [{ amount: 14_000, eligibleSeats: [0, 1, 2, 3, 4, 5, 6, 7], winners: [{ seat: 1, amount: 14_000 }] }],
+        fee: 0,
+        showdown: BEST.map((best, seat) => ({ seat, cards: parseCards(best).slice(0, 3), rank: seat, category: HandCategory.PAIR, best: parseCards(best) })),
+        carryOverOut: 0,
+        uncalledReturned: null,
+        cancelled: false,
+        reason: null,
+        ...(chaosUsed ? { chaosUsed } : {}),
+      },
+    }) as unknown as ClientHand
+  type Props = Parameters<typeof HandResult>[0]
+  const element = (props: Partial<Props> = {}) => (
+    <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+      <HandResult hand={eight()} room={room} myPlayerId="p7" lang="vi" variant="strip" {...props} />
+    </I18nextProvider>
+  )
+  const draw = (props: Partial<Props> = {}) => render(element(props))
+  const group = () => screen.getByRole('group', { name: 'Người thắng' })
+  const rowNames = () => [...group().querySelectorAll(`.${s.stripRow} .${s.resultName}`)].map((el) => el.textContent)
+
+  it('keeps the title alone as the group’s name, the countdown its own element beside it, and no "Đóng"', () => {
+    draw({ countdown: 'Ván tiếp theo sau 9 giây' })
+    expect(group()).toHaveClass(s.strip!)
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(/^Người thắng$/)
+    expect(screen.getByText('Ván tiếp theo sau 9 giây')).toHaveClass(s.stripNext!)
+    expect(within(screen.getByRole('status')).queryByText(/Ván tiếp theo/), 'the tick stays out of the live region').toBeNull()
+    expect(screen.queryByRole('button', { name: 'Đóng' }), 'the strip leaves with the hand').toBeNull()
+  })
+
+  it('shows "Bỏ qua" with the count; a press calls onSkip once, and once it is mine the button says "Đã bỏ qua" and stays down', () => {
+    const onSkip = vi.fn()
+    const { rerender } = draw({ skip: { skipped: 3, total: 5, mine: false, onSkip } })
+    expect(screen.getByText('Bỏ qua 3/5')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Bỏ qua' }))
+    expect(onSkip).toHaveBeenCalledTimes(1)
+    rerender(element({ skip: { skipped: 4, total: 5, mine: true, onSkip } }))
+    const done = screen.getByRole('button', { name: 'Đã bỏ qua' })
+    expect(done).toBeDisabled()
+    fireEvent.click(done)
+    expect(onSkip).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('Bỏ qua 4/5')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Bỏ qua' })).toBeNull()
+  })
+
+  it('keeps "Bỏ qua" down while the press is out — a double tap sends one — and gives it back when the press is refused', async () => {
+    let settle: (value: unknown) => void = () => undefined
+    const onSkip = vi.fn(() => new Promise((resolve) => (settle = resolve)))
+    draw({ skip: { skipped: 0, total: 3, mine: false, onSkip } })
+    const button = screen.getByRole('button', { name: 'Bỏ qua' })
+    fireEvent.click(button)
+    fireEvent.click(button)
+    expect(onSkip).toHaveBeenCalledTimes(1)
+    expect(button).toBeDisabled()
+    await act(async () => settle(false))
+    expect(button).toBeEnabled()
+    fireEvent.click(button)
+    expect(onSkip).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows the count without a button when there is no press to make (a spectator)', () => {
+    draw({ skip: { skipped: 1, total: 2, mine: false } })
+    expect(screen.getByText('Bỏ qua 1/2')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /qua/ })).toBeNull()
+  })
+
+  it('folds eight rows to the winner and the viewer and "+6 người", a toggle that opens the sheet with every row and "Đóng" to fold it back', () => {
+    draw()
+    expect(rowNames()).toEqual(['Bob', 'Hà'])
+    expect(group().querySelector(`.${s.resultMine} .${s.resultName}`)).toHaveTextContent('Hà')
+    const more = screen.getByRole('button', { name: '+6 người' })
+    expect(more).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(more)
+    expect(rowNames()).toEqual(['Bob', 'Ann', 'Cẩm', 'Dũng', 'Én', 'Phúc', 'Giang', 'Hà'])
+    expect(group()).toHaveAttribute('data-open', 'true')
+    expect(group().parentElement).toHaveAttribute('data-open', 'true')
+    expect(screen.queryByRole('button', { name: /^\+\d+ người$/ })).toBeNull()
+    const close = within(group()).getByRole('button', { name: 'Đóng' })
+    expect(close).toHaveAttribute('aria-expanded', 'true')
+    expect(close, 'focus moves to the toggle that folds the sheet back').toHaveFocus()
+    fireEvent.click(close)
+    expect(rowNames()).toEqual(['Bob', 'Hà'])
+    expect(group()).not.toHaveAttribute('data-open')
+    expect(screen.getByRole('button', { name: '+6 người' }), 'focus goes back to the expander that opened it').toHaveFocus()
+  })
+
+  it('clamps "Thẻ đã dùng" to two lines and counts what the clamp hides in "+N thẻ khác", which opens the whole line', () => {
+    // jsdom lays nothing out: the clamp's box is two 18 px lines of a three-line text, and each card name sits on the line its
+    // place in the list gives it (two to a line).
+    const order = ['Rút lá lẻ', 'Khiên gỗ', 'Đổi lá', 'Nhìn trộm', 'Đổi bài']
+    const scroll = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains(s.stripUsed!) ? 54 : 0
+    })
+    const client = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains(s.stripUsed!) ? 36 : 0
+    })
+    const lines = vi.spyOn(Element.prototype, 'getClientRects').mockImplementation(function (this: Element) {
+      const i = order.indexOf(this.textContent ?? '')
+      return [{ top: i < 0 ? 0 : Math.floor(i / 2) * 18 }] as unknown as DOMRectList
+    })
+    try {
+      draw({
+        hand: eight([
+          { seat: 0, cardId: 's_steal_one', outcome: 'applied', targets: [7] },
+          { seat: 1, cardId: 's_shield', outcome: 'applied', targets: [] },
+          { seat: 2, cardId: 's_swap_one', outcome: 'applied', targets: [] },
+          { seat: 3, cardId: 's_peek_1', outcome: 'applied', targets: [] },
+          { seat: 4, cardId: 'g_swap_all', outcome: 'applied', targets: [] },
+        ]),
+      })
+      const used = group().querySelector(`.${s.stripUsed}`)!
+      expect(used).toHaveAttribute('data-clamped', 'true')
+      const more = screen.getByRole('button', { name: '+1 thẻ khác' })
+      expect(more).toHaveAttribute('aria-expanded', 'false')
+      fireEvent.click(more)
+      expect(used).not.toHaveAttribute('data-clamped')
+      expect(screen.queryByRole('button', { name: /thẻ khác$/ })).toBeNull()
+      fireEvent.click(within(group()).getByRole('button', { name: 'Đóng' }))
+      expect(screen.getByRole('button', { name: '+1 thẻ khác' })).toHaveFocus()
+    } finally {
+      scroll.mockRestore()
+      client.mockRestore()
+      lines.mockRestore()
+    }
+  })
+
+  it('shows no "+N thẻ khác" when the line fits its two lines', () => {
+    draw({ hand: eight([{ seat: 0, cardId: 's_steal_one', outcome: 'applied', targets: [7] }]) })
+    expect(screen.queryByRole('button', { name: /thẻ khác$/ })).toBeNull()
+  })
+
+  it('caps the opened sheet at its closed height plus 60 % of the stage, and never above the stage’s top', () => {
+    const stage = document.createElement('main')
+    document.body.append(stage)
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this === stage) return { top: 100, bottom: 500, height: 400, left: 0, right: 360, width: 360 } as DOMRect
+      if (this.classList.contains(s.stripSlot!)) return { top: 520, bottom: 670, height: 150, left: 0, right: 360, width: 360 } as DOMRect
+      return { top: 0, bottom: 0, height: 0, left: 0, right: 0, width: 0 } as DOMRect
+    })
+    const offset = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains(s.stripSlot!) ? 150 : 0
+    })
+    try {
+      draw({ stage: { current: stage } })
+      fireEvent.click(screen.getByRole('button', { name: '+6 người' }))
+      const slot = group().parentElement!
+      expect(slot.style.height, 'the slot keeps the closed height: nothing else moves').toBe('150px')
+      expect(slot.style.getPropertyValue('--sheet-max'), '150 + 0.6 × 400, under 670 − 100 − 8').toBe('390px')
+    } finally {
+      rect.mockRestore()
+      offset.mockRestore()
+      stage.remove()
+    }
+  })
+
+  it('folds nothing when only one row would fold, and keeps only the winners for a spectator', () => {
+    const full = eight()
+    const three = { ...full, seats: full.seats.slice(0, 3), result: { ...full.result!, showdown: full.result!.showdown!.slice(0, 3) } } as ClientHand
+    draw({ hand: three, myPlayerId: 'p0' })
+    expect(rowNames()).toEqual(['Bob', 'Ann', 'Cẩm'])
+    cleanup()
+    draw({ myPlayerId: null })
+    expect(rowNames()).toEqual(['Bob'])
+    expect(screen.getByRole('button', { name: '+7 người' })).toBeInTheDocument()
+  })
+
+  it('lists "Thẻ đã dùng" in the strip, each card’s name the button that says what it did', () => {
+    draw({ hand: eight([{ seat: 0, cardId: 's_steal_one', outcome: 'blocked', targets: [7] }, { seat: 7, cardId: 's_shield', outcome: 'applied', targets: [] }]) })
+    const line = within(group()).getByText(/^Thẻ đã dùng/)
+    expect(line).toHaveTextContent('Thẻ đã dùng: Ann — Rút lá lẻ (Bị chặn); Hà — Khiên gỗ')
+    expect(within(line).getAllByRole('button').map((b) => b.textContent)).toEqual(['Rút lá lẻ', 'Khiên gỗ'])
+  })
+
+  it('draws a phone held sideways as the same strip, stamped with its frame', () => {
+    draw({ frame: 'landscape' })
+    expect(group()).toHaveClass(s.strip!)
+    expect(group()).toHaveAttribute('data-frame', 'landscape')
+  })
+})
+
+describe('HandResult: the card keeps its shape', () => {
+  const room = { players: [{ playerId: 'a', displayName: 'Ann', seat: 0 }, { playerId: 'b', displayName: 'Bob', seat: 1 }] } as unknown as RoomView
+  const hand = {
+    handId: 'h1',
+    phase: 'COMPLETE',
+    mode: 'blind',
+    seats: [
+      { seat: 0, playerId: 'a', displayName: 'Ann' },
+      { seat: 1, playerId: 'b', displayName: 'Bob' },
+    ],
+    result: { payouts: [{ seat: 1, amount: 500 }], pots: [], fee: 0, showdown: null, carryOverOut: 0, uncalledReturned: null, cancelled: false, reason: null },
+  } as unknown as ClientHand
+
+  it('on a plain table: the card, "Đóng", and no skip anywhere', () => {
+    render(
+      <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+        <HandResult hand={hand} room={room} myPlayerId="a" lang="vi" onDismiss={vi.fn()} />
+      </I18nextProvider>,
+    )
+    const card = screen.getByRole('group', { name: 'Người thắng' })
+    expect(card).toHaveClass(s.result!)
+    expect(within(card).getByRole('button', { name: 'Đóng' })).toBeInTheDocument()
+    expect(card.textContent).not.toMatch(/qua/)
+    expect(card.querySelector(`.${s.resultSkip}`)).toBeNull()
+  })
+
+  it('on a desktop chaos table: the count and "Bỏ qua" in the head beside "Đóng", kept out of the live region’s announcements', () => {
+    const onSkip = vi.fn()
+    render(
+      <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+        <HandResult hand={hand} room={room} myPlayerId="a" lang="vi" onDismiss={vi.fn()} skip={{ skipped: 0, total: 2, mine: false, onSkip }} />
+      </I18nextProvider>,
+    )
+    const head = document.querySelector<HTMLElement>(`.${s.resultHead}`)!
+    expect(within(head).getByText('Bỏ qua 0/2').closest('[aria-live]')).toHaveAttribute('aria-live', 'off')
+    fireEvent.click(within(head).getByRole('button', { name: 'Bỏ qua' }))
+    expect(onSkip).toHaveBeenCalledTimes(1)
+    expect(within(head).getByRole('button', { name: 'Đóng' })).toBeInTheDocument()
+  })
+})

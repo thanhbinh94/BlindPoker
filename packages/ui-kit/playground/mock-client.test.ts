@@ -1,3 +1,4 @@
+import { seededRng } from '@bp/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMockClient, type MockClient } from './mock-client.js'
 
@@ -11,8 +12,9 @@ describe('the playground’s chaos table', () => {
     vi.useRealTimers()
   })
 
-  const open = (): MockClient => {
-    client = createMockClient('blindC', 4, () => {})
+  /** `seed`: deal from a seeded rng, so a test that needs the hand to run its course sees the same hand every time (P1). */
+  const open = (seed?: number): MockClient => {
+    client = createMockClient('blindC', 4, () => {}, seed === undefined ? undefined : seededRng(seed))
     return client
   }
   const flush = async (ms: number): Promise<void> => {
@@ -57,6 +59,32 @@ describe('the playground’s chaos table', () => {
     await flush(0)
     await flush(15_100)
     expect(mock.api.state.chaos.draft).toBeNull()
-    expect(mock.api.state.chaos.seats[0]!.cards.length).toBeGreaterThanOrEqual(1)
+    // a "Tích lũy" card holds nothing and adds points instead; the draw is Math.random
+    const mine = mock.api.state.chaos.seats[0]!
+    expect(mine.cards.length >= 1 || mine.points > 0).toBe(true)
+  })
+
+  // BP-39: the bonus hand and the "Bỏ qua" wait.
+  it('refuses a bonus card that is not in my hand, and ignores a skip outside the result wait', async () => {
+    const mock = open()
+    await flush(0)
+    const r = await mock.api.playBonus(12_345)
+    expect(r.t === 'ERROR' && r.code).toBe('CHAOS_CANNOT_USE')
+    expect((await mock.api.skipResult()).t).toBe('ACK')
+    expect(mock.api.state.resultSkips).toBeNull()
+  })
+
+  it('the result wait counts my "Bỏ qua" and deals the next hand at once', async () => {
+    const mock = open(7)
+    await flush(0)
+    await flush(15_100) // the draft runs out and the hand is dealt
+    await mock.api.act({ kind: 'fold' })
+    await flush(10_000) // the bots play on to the result
+    expect(mock.api.state.hand?.phase).toBe('COMPLETE')
+    expect(mock.api.state.resultSkips).toEqual({ skipped: 0, total: 1, mine: false })
+    expect((await mock.api.skipResult()).t).toBe('ACK')
+    // the press wakes the wait: the next round has begun already (its snapshot ends the count), well before the 6 s ran out
+    expect(mock.api.state.hand).toBeNull()
+    expect(mock.api.state.resultSkips).toBeNull()
   })
 })

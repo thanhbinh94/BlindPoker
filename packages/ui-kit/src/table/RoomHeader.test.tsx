@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { I18nextProvider } from 'react-i18next'
@@ -101,6 +101,29 @@ describe('RoomHeader', () => {
       const { container } = wrap(blindRoom(true, 10))
       const chaos = within(container.querySelector('header')!).getByText('Hỗn loạn')
       expect(chaos.closest(`.${s.metaFlow}`)).not.toBeNull()
+    })
+
+    // BP-39, spec 2026-10-27 §3.7: a chaos table seats the whole balance, so its limit says so; a plain Blind table keeps 10×.
+    it('says "Không giới hạn" for the limit of a chaos table, on both headers, and the 10× figure everywhere else', () => {
+      const full = wrap(blindRoom(false, 5))
+      expect(within(full.container.querySelector('header')!).getByText('Mức cược 5.000 · Hạn mức Không giới hạn')).toBeInTheDocument()
+      full.unmount()
+      render(
+        <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+          <RoomHeader room={blindRoom(false, 10)} status="open" onLeave={vi.fn()} lang="vi" compact />
+        </I18nextProvider>,
+      )
+      expect(screen.getByText('Mức cược 5.000 · Hạn mức Không giới hạn')).toBeInTheDocument()
+      cleanup()
+      wrap(blindRoom())
+      expect(screen.getByText('Mức cược 5.000 · Hạn mức 50.000')).toBeInTheDocument()
+      cleanup()
+      render(
+        <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+          <RoomHeader room={blindRoom(false, 5)} status="open" onLeave={vi.fn()} lang="en" />
+        </I18nextProvider>,
+      )
+      expect(screen.getByText(/Limit No limit$/)).toBeInTheDocument()
     })
 
     it('is in the compact strip too', () => {

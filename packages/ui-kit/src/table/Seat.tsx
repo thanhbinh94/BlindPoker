@@ -183,6 +183,11 @@ export interface SeatProps {
   /** The dense strip of opponents (seven or more, on a phone): the seat's cards are one icon with their number, not a row of them. */
   chaosSummary?: boolean
   /**
+   * Poker hỗn loạn (BP-39, spec 2026-10-27 §3.4): how many bonus cards wait in this seat's hand — a count beside its chaos
+   * cards, never which ones. Drawn for the other seats only (the viewer has the bonus hand itself); 0 or absent: nothing.
+   */
+  bonusCount?: number
+  /**
    * "Mượn lá" at showdown: the opponent's card this seat also ranked with (a copy), drawn after its own cards with a "Mượn"
    * tag on it; `highlighted` when it is one of the winning five (the board's gold edge). Absent or `null`: nothing.
    */
@@ -240,6 +245,7 @@ export function Seat({
   blindfolded = false,
   critMultiplier = null,
   chaosSummary = false,
+  bonusCount = 0,
   borrowed = null,
 }: SeatProps) {
   const { t } = useTranslation()
@@ -354,6 +360,14 @@ export function Seat({
   const betChip = seat.betThisStreet > 0 ? <span className={s.bet}>{formatPoints(seat.betThisStreet, lang)}</span> : null
   // Poker hỗn loạn: the cards the seat holds, and — for the viewer — the word for cards that are down because of one.
   const chaosRow = chaosCards.length === 0 ? null : <ChaosCardRow cards={chaosCards} summary={chaosSummary} />
+  // …and how many bonus cards it holds, as a card back with the count: only the number is anyone else's business.
+  const bonusBadge =
+    isMe || bonusCount <= 0 ? null : (
+      <span className={s.bonusBadge} role="img" aria-label={t('chaos.bonus.seat', { count: bonusCount })} data-bonus-count={bonusCount}>
+        <span className={s.bonusBack} aria-hidden="true" />
+        <span aria-hidden="true">{t('chaos.bonus.count', { count: bonusCount })}</span>
+      </span>
+    )
   const blindBadge = blindfolded ? (
     <Badge tone="chaos" title={t('chaos.blindfoldedHint')}>
       {t('chaos.blindfolded')}
@@ -474,6 +488,7 @@ export function Seat({
                 {blindBadge}
                 {stateBadge}
                 {chaosRow}
+                {bonusBadge}
                 {betChip}
               </span>
               {result}
@@ -531,6 +546,7 @@ export function Seat({
             </Badge>
           ) : null}
           {chaosRow}
+          {bonusBadge}
           {betChip}
         </div>
       )}

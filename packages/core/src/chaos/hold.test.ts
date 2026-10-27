@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { seededRng } from '../cards/rng.js'
 import { CHAOS_CARDS_SPEC } from './fixtures.js'
-import { receiveCard, toHeldCardView } from './hold.js'
+import { receiveCard, stackHeld, toHeld, toHeldCardView } from './hold.js'
 import { EMPTY_CHAOS_SEAT, type ChaosCardDef, type ChaosSeat } from './types.js'
 
 const card = (id: string): ChaosCardDef => {
@@ -124,5 +124,17 @@ describe('toHeldCardView', () => {
   it('shows only what the table may see', () => {
     const held = give(EMPTY_CHAOS_SEAT, ['g_crit']).cards[0]!
     expect(toHeldCardView(held)).toEqual({ uid: held.uid, cardId: 'g_crit', tier: 'gold', handsLeft: 3 })
+  })
+})
+
+describe('stackHeld — a played bonus card joins the held cards (BP-39)', () => {
+  it('follows receiveCard: push, the same card adds its hands, a peer or higher tier replaces under its own uid, a lower tier is dropped', () => {
+    const held = [toHeld(card('s_crit'), 1), toHeld(card('g_luck_3'), 2)]
+    expect(stackHeld(held, toHeld(card('g_farm'), 9))!.map((c) => [c.uid, c.cardId, c.handsLeft])).toEqual([[1, 's_crit', 3], [2, 'g_luck_3', 3], [9, 'g_farm', 5]])
+    expect(stackHeld(held, toHeld(card('g_luck_3'), 9))!.map((c) => [c.uid, c.cardId, c.handsLeft])).toEqual([[1, 's_crit', 3], [2, 'g_luck_3', 6]])
+    expect(stackHeld(held, toHeld(card('d_luck_5'), 9))!.map((c) => [c.uid, c.cardId, c.handsLeft])).toEqual([[1, 's_crit', 3], [9, 'd_luck_5', 5]])
+    expect(stackHeld(held, toHeld(card('g_crit'), 9))!.map((c) => [c.uid, c.cardId])).toEqual([[9, 'g_crit'], [2, 'g_luck_3']])
+    expect(stackHeld(held, toHeld(card('s_luck_1'), 9))).toBeNull()
+    expect(held.map((c) => c.uid)).toEqual([1, 2])
   })
 })

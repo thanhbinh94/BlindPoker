@@ -245,6 +245,8 @@ Khi bạn ngồi vào bàn Blind, bàn lấy từ số dư một khoản gọi l
 
 Mọi khoản cược và điểm thắng đều nằm trong stack trên bàn; thắng nhiều thì stack có thể vượt hạn mức. Blind Poker không thu phí bàn.
 
+Bàn **Poker hỗn loạn** (mục 6a) thì khác: bàn không có hạn mức, đầu bàn ghi "Hạn mức **Không giới hạn**", và khi ngồi bạn mang **toàn bộ số dư** lên bàn (vẫn cần đủ một mức cược).
+
 ### Chơi tới điểm cuối cùng
 
 Đã ngồi vào bàn thì bạn được chia bài miễn là stack còn điểm, dù ít hơn mức cược:
@@ -318,9 +320,13 @@ Không muốn nặn thì bấm nút nhỏ "Lật" dưới bài để mở hết 
 
 ## 6a. Poker hỗn loạn (bản Normal)
 
-"Poker hỗn loạn" là một bàn Blind Poker có thêm **thẻ hiệu ứng**: cả bàn cùng chọn thẻ, và thẻ đổi bài, thêm lá, rút lá của đối thủ, hoàn điểm hay nhân phần thắng. Mọi luật Blind khác (mức cược cố định, hạn mức, "Chơi hoặc bỏ" / "Hoàn toàn may rủi", "Nặn bài", bot, tất tay) giữ nguyên. Chế độ này chỉ có ở **bản Normal**; bản Lite không có.
+"Poker hỗn loạn" là một bàn Blind Poker có thêm **thẻ hiệu ứng**: cả bàn cùng chọn thẻ, và thẻ đổi bài, thêm lá, rút lá của đối thủ, hoàn điểm hay nhân phần thắng. Mọi luật Blind khác (mức cược cố định, "Chơi hoặc bỏ" / "Hoàn toàn may rủi", "Nặn bài", bot, tất tay) giữ nguyên. Chế độ này chỉ có ở **bản Normal**; bản Lite không có.
 
 **Bật chế độ.** Khi tạo phòng Blind Poker, tick ô **"Poker hỗn loạn"** (mặc định tắt) rồi chọn **"Chu kỳ thẻ"**: 5 ván (mặc định) hoặc 10 ván. Phòng có nhãn **"Hỗn loạn"** trong sảnh và ở đầu bàn. Sau khi tạo, không đổi được.
+
+**Không giới hạn.** Bàn hỗn loạn không có hạn mức: màn tạo phòng ghi "Hạn mức mỗi người: Không giới hạn", đầu bàn ghi "Hạn mức Không giới hạn", và khi ngồi bạn mang **toàn bộ số dư** lên bàn (vẫn cần đủ một mức cược). Rời bàn thì cả stack về lại số dư như mọi bàn.
+
+**Chạm vào thẻ để đọc.** Ở đâu có thẻ hỗn loạn (biểu tượng trên ghế, thông báo thẻ, tên thẻ trong dòng "Thẻ đã dùng", tay thẻ thưởng), chạm vào nó (hoặc rê chuột, hoặc dùng phím Tab trên máy tính) để mở khung thông tin: tên thẻ, cấp, mô tả đầy đủ, lúc áp, số ván còn lại; với thẻ đã dùng còn có ai dùng, nhắm vào ai và kết quả. Chạm lại, chạm ra ngoài hoặc bấm `Esc` để đóng.
 
 ### Chọn thẻ
 
@@ -333,7 +339,16 @@ Không muốn nặn thì bấm nút nhỏ "Lật" dưới bài để mở hết 
 
 ### Thẻ làm việc thế nào
 
-Thẻ **tự áp** đúng lúc của nó, bạn không phải bấm gì. Bên dưới tên ghế của mỗi người có các **biểu tượng thẻ** nhỏ (khung theo cấp: bạc, vàng, xanh băng; chữ cái đầu của tên thẻ; số ván còn lại ở góc). Rê chuột hoặc chạm vào để đọc tên. Ai cũng thấy thẻ của ai, nên cả bàn biết đang chờ màn lật kèo nào. Mỗi lần một thẻ có hiệu ứng, một dải thông báo hiện trên bàn: "Bot 1 dùng Rút lá cả bàn lên Ann", kèm "Bị chặn", "Bị phản lại" hoặc "Không có tác dụng" nếu thẻ không chạm tới ai. Lúc áp thẻ có năm loại:
+Thẻ chọn ở khung chọn **tự áp** đúng lúc của nó, bạn không phải bấm gì (thẻ thưởng thì bạn tự bấm dùng, xem mục dưới). Bên dưới tên ghế của mỗi người có các **biểu tượng thẻ** nhỏ (khung theo cấp: bạc, vàng, xanh băng; chữ cái đầu của tên thẻ; số ván còn lại ở góc). Chạm vào để đọc thẻ. Ai cũng thấy thẻ của ai, nên cả bàn biết đang chờ màn lật kèo nào.
+
+Mỗi lần một thẻ có hiệu ứng, một **thông báo thẻ** nhỏ hiện lên: "Bot 1 dùng Rút lá cả bàn → Ann", kèm "Bị chặn", "Bị phản lại" hoặc "Không có tác dụng" nếu thẻ không chạm tới ai. Chữ xuống dòng, không bị cắt.
+
+- Thông báo nằm trong một vùng riêng, không bao giờ đè lên kết quả ván: điện thoại dọc thì ngay dưới thanh tiêu đề bàn, điện thoại xoay ngang thì một hàng ở trên cùng, máy tính thì góc trên bên phải của bàn.
+- Cùng lúc hiện tối đa **3** thông báo (xoay ngang **2**, máy xoay ngang nhỏ 1; điện thoại dựng đứng ở bàn từ 7 ghế trở lên **2**). Nhiều thẻ nổ hơn thế thì phần dư gộp thành một thông báo **"+N thẻ khác"**; chạm vào nó để mở danh sách đủ các thẻ của ván, chạm lại hoặc chạm ra ngoài để đóng. Danh sách đủ cũng có ở dòng "Thẻ đã dùng" của kết quả ván.
+- Mỗi thông báo ở lại khoảng **4 giây**. Chạm vào phần chữ của thông báo thì nó **ghim** lại cho tới khi bạn chạm lần nữa hoặc ván sau bắt đầu; chạm vào tên thẻ thì mở khung thông tin thẻ.
+- "Thế giới đảo ngược" hiện thành một thông báo ghim suốt ván đó.
+
+Lúc áp thẻ có năm loại:
 
 - **Lúc chia**: áp khi bài vừa được chia (đổi lá, chia nhiều bộ giữ bộ tốt nhất, thêm lá, "Che mắt", "Đóng băng"…). Chỉ "Thế giới đảo ngược" là báo cho cả bàn biết ngay lúc chia; các thẻ chia khác chỉ chủ thẻ và người bị nhắm biết, cả bàn biết ở cuối ván qua dòng "Thẻ đã dùng".
 - **Lúc chọn** (✱, chỉ bàn "Chơi hoặc bỏ"): cho bạn thêm thông tin trước khi chọn "Chơi" hay "Bỏ bài", ví dụ xem trước lá chung.
@@ -353,7 +368,18 @@ Các luật chung:
 
 ### Điểm hỗn loạn và thẻ thưởng
 
-Mỗi người có **điểm hỗn loạn** riêng ở bàn: **+1** mỗi ván thắng, **+2** mỗi ván thua; từ ván thứ 3 của một chuỗi thắng hoặc chuỗi thua, điểm ván đó nhân đôi (thẻ "Cày điểm" nhân đôi thêm). Bỏ bài tính như thua. Ván cộng dồn và ván bị hủy không tính. Đủ **10 điểm** thì bạn nhận ngay **1 thẻ thưởng**: cấp rút ngẫu nhiên Bạc 60 % / Vàng 30 % / Kim cương 10 %, không phải chọn. Điểm này không phải điểm thật và không quy ra điểm thật.
+Mỗi người có **điểm hỗn loạn** riêng ở bàn: **+1** mỗi ván thắng, **+2** mỗi ván thua; từ ván thứ 3 của một chuỗi thắng hoặc chuỗi thua, điểm ván đó nhân đôi (thẻ "Cày điểm" nhân đôi thêm). Bỏ bài tính như thua. Ván cộng dồn và ván bị hủy không tính. Điểm này không phải điểm thật và không quy ra điểm thật.
+
+Đủ **10 điểm** thì bàn trừ 10 và cho bạn **1 thẻ thưởng**: cấp rút ngẫu nhiên Bạc 60 % / Vàng 30 % / Kim cương 10 %, thẻ cũng ngẫu nhiên. Thẻ thưởng **không tự chạy**: nó vào **tay thẻ thưởng** ("Thẻ thưởng") của bạn, và bạn tự chọn lúc dùng.
+
+- **Tay thẻ thưởng** nằm cạnh bàn của bạn: điện thoại dọc thì một cột nhỏ ở mép trái mặt bàn, xoay ngang thì góc trái phía trên "Tự động chơi", máy tính thì trong hàng nút dưới bàn (cạnh "Đứng dậy", "Tạm nghỉ"). Trên điện thoại chỉ hiện biểu tượng thẻ; chạm vào để đọc tên và mô tả.
+- Tay giữ tối đa **3** thẻ. Tay đầy thì điểm hỗn loạn được **giữ lại** (không trừ, không mất) cho tới khi có chỗ.
+- **Dùng thẻ:** chạm vào thẻ để mở khung thông tin, rồi bấm **"Dùng"** trong khung đó. Chạm để đọc không dùng thẻ; chỉ nút "Dùng" mới dùng. Thẻ đã bấm hiện **"Đã đặt dùng · ván này"** (thẻ sẽ chạy lúc lật bài của ván đang chơi) hoặc **"Đã đặt dùng · ván sau"** (dấu ✓ trên biểu tượng ở điện thoại) và các thẻ khác tạm khóa: mỗi ván chỉ dùng **1 thẻ thưởng**.
+- **Lúc bấm được:** giữa hai ván (lúc kết quả ván đang hiện, lúc chờ, lúc chọn thẻ) thì thẻ áp từ ván sau. Ở bàn "Chơi hoặc bỏ" bạn cũng bấm được trong lúc chọn "Chơi"/"Bỏ bài" của ván bạn đang chơi: thẻ **lúc lật** (rút lá, hạ lá, tráo bài, chia lại lá chung, mượn lá) áp ngay lúc lật của chính ván đó, các thẻ khác (kể cả "Bảo hiểm", "Bạo kích") áp từ ván sau. Bàn "Hoàn toàn may rủi" không có lúc chọn, nên chỉ bấm được giữa hai ván. Đã bỏ bài, đã qua lúc chọn, hay đang bị "Đóng băng" thì không bấm được; bấm không được thì lý do hiện ngay trong tay thẻ.
+- Thẻ đã đặt dùng mà bạn bỏ bài, hoặc ván không có lật bài, thì thẻ **trở về tay thẻ thưởng**, và không ai biết bạn đã đặt nó.
+- **Người khác chỉ thấy số thẻ**: ghế của bạn có một biểu tượng lá úp kèm "×N" (số thẻ thưởng bạn đang giữ), không thấy là thẻ gì. Thẻ chỉ lộ ra lúc nó nổ, qua thông báo thẻ và dòng "Thẻ đã dùng".
+- Thẻ không cần bấm thì vẫn chạy như trước, không vào tay: thẻ chờ điều kiện (Cấp cứu, Thần tài, Khiên, Gương) vào hàng thẻ của ghế; "Tích lũy" và "Cấp độ" dùng ngay. Thẻ thưởng kèm theo "Thần tài" và thẻ thưởng giữ lại vì bị đóng băng cũng dùng ngay như trước.
+- "Tự động chơi" và lúc vắng mặt không dùng thẻ thưởng hộ bạn; thẻ nằm trên tay chờ bạn quay lại. Bot thì dùng thẻ thưởng ngay ván kế tiếp. Rời bàn thì mất cả tay thẻ thưởng.
 
 ### Bốn họ thẻ đặc biệt
 
@@ -380,7 +406,9 @@ Mỗi người có **điểm hỗn loạn** riêng ở bàn: **+1** mỗi ván t
 
 ### Kết quả ván, lịch sử, thành tựu
 
-- Thẻ kết quả có thêm dòng **"Thẻ đã dùng"**: ai dùng thẻ nào (kèm "Bị chặn" hoặc "Bị phản lại" nếu có), và các khoản thẻ trả như "Bạo kích ×2 +6.000" hay "Cấp cứu +5.000". Thẻ kết quả đợi dải thông báo chạy xong (khoảng 1 giây mỗi thẻ) rồi mới hiện.
+- Kết quả ván có thêm dòng **"Thẻ đã dùng"**: ai dùng thẻ nào (kèm "Bị chặn" hoặc "Bị phản lại" nếu có), và các khoản thẻ trả như "Bạo kích ×2 +6.000" hay "Cấp cứu +5.000". Mỗi tên thẻ chạm vào được để đọc. Kết quả hiện **ngay** lúc tính tiền, không chờ thông báo thẻ.
+- Trên **điện thoại** (dọc và xoay ngang), kết quả bàn hỗn loạn là một **dải** sát trên khay nút (xoay ngang: ở chân bàn, giữa hai góc nút), không phải thẻ đè giữa bàn. Dòng đầu là "Người thắng" và "Ván tiếp theo sau N giây"; rồi người thắng và dòng của bạn, mỗi người một dòng (tên, bộ bài, điểm); rồi "Thẻ đã dùng". Bàn đông thì những người còn lại thu vào **"+N người"**, và thẻ không vừa hai dòng thu vào **"+N thẻ khác"**; chạm vào một trong hai để mở dải lên thành một tấm đủ mọi dòng, "Đóng" để thu lại. Lúc dải đang mở, ghế của chính bạn tạm ẩn (dòng của bạn đã có trên dải). Trên máy tính, kết quả vẫn là thẻ giữa bàn như bàn thường.
+- Ở bàn hỗn loạn, ván sau chia sau **10 giây** (bàn thường 5 giây) để kịp đọc thẻ; người quản trị chỉnh được trong khoảng 5–15 giây. Mỗi người đang ngồi có nút **"Bỏ qua"** trên kết quả; bấm rồi nút thành "Đã bỏ qua". Kết quả ghi số người đã bấm, ví dụ **"Bỏ qua 2/4"**. Khi **mọi** người thật đang ngồi đều đã bấm, ván sau chia ngay; bot, người đang "Tạm nghỉ" và người mất kết nối được tính là đã bấm. Ngồi một mình với bot thì một lần bấm là chia ván mới ngay. "Bỏ qua" không rút ngắn khung chọn thẻ.
 - Mở "Hồ sơ" → "Ván gần đây": ván nào dùng thẻ cũng có dòng **"Thẻ đã dùng"** với cùng nội dung.
 - Ván hỗn loạn **chỉ tính số ván đã chơi** (số ván Blind, số ván trọn vẹn, ván có bot) và số phòng đã vào, cùng danh vọng của ván đã chơi như bàn thường. Nó **không tính** ván thắng, chuỗi thắng hay thua, bộ bài mạnh nhất, ván thắng lớn nhất và mọi thành tựu dựa trên các số đó, vì thẻ đẩy các chỉ số ấy lên.
 
@@ -403,7 +431,7 @@ Tên dưới đây là đúng chữ trên màn hình. ✱ là thẻ chỉ có �
 | "Khiên gỗ" | Chặn 1 thẻ gây hại kế tiếp. | Chờ |
 | "Cấp cứu bạc" | +5 × mức cược vào stack khi thua mà stack còn dưới 2 mức cược. | Chờ |
 | "Tích lũy" | +3 điểm hỗn loạn. | Ngay |
-| "Rút lá lẻ" | 1 đối thủ ngẫu nhiên mất 1 lá riêng. | Lúc lật |
+| "Rút lá lẻ" | 1 đối thủ ngẫu nhiên mất một lá riêng ngẫu nhiên. | Lúc lật |
 | "Hạ lá" | Lá riêng cao nhất của 1 đối thủ ngẫu nhiên bị chia lại. | Lúc lật |
 | "Che mắt" ✱ | 1 đối thủ ngẫu nhiên không được xem bài riêng ở ván sau (bài của họ úp cho tới lúc lật, kèm nhãn "Bị che mắt"). | Lúc chia |
 | "Đóng băng nhỏ" | 1 đối thủ ngẫu nhiên không dùng được thẻ ở ván sau. | Lúc chia |

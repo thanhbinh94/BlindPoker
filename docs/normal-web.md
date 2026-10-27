@@ -401,7 +401,7 @@ the lock.** A player who types `#/gm` is sent to the lobby before the chunk is r
 `window.location.replace` so Back is not trapped on a redirecting entry), and a GM demoted or locked since the page loaded
 finds out on the next call.
 
-- **Seven tabs** — Tổng quan, Người chơi, Phòng, Quà tháng, Cửa hàng (Plan 27), Thẻ hỗn loạn (Plan 37: every chaos card in its tier with a toggle, a weight 0–100 and an economy-day window whose last day is inclusive, "Theo file" = `clear: true`; then the five chaos numbers, saved apart from the cards; `GET /api/gm/chaos`, `PUT /api/gm/chaos/rules`, `PUT /api/gm/chaos/config`, each save under a reason), Nhật ký. The Players tab stays mounted (hidden) while one player's page is
+- **Seven tabs** — Tổng quan, Người chơi, Phòng, Quà tháng, Cửa hàng (Plan 27), Thẻ hỗn loạn (Plan 37: every chaos card in its tier with a toggle, a weight 0–100 and an economy-day window whose last day is inclusive, "Theo file" = `clear: true`; then the chaos numbers, saved apart from the cards — tier weights, points threshold, draft time, daily cap, daily rescues and, since BP-39, "Thời gian xem kết quả, giây (5–15)" (`resultMs`, how long a chaos result stays up before the next deal; 10 s by default); `GET /api/gm/chaos`, `PUT /api/gm/chaos/rules`, `PUT /api/gm/chaos/config`, each save under a reason), Nhật ký. The Players tab stays mounted (hidden) while one player's page is
   open, so Back returns to the same search, results and cursor with no request.
 - **The 403 proxy.** `useAsync` swallows the cause of a failure, so a tab cannot notice that the role is gone. `GmScreen`
   wraps the api in a `Proxy` that checks each call's rejection: a `403 FORBIDDEN` calls `onForbidden` once (a tab firing
@@ -510,7 +510,7 @@ and holds four budgets:
 
 | | Budget | Today |
 |---|---:|---:|
-| entry chunk (first paint) | 140 KB (Plan 27, Ruling 13) | ~136 KB |
+| entry chunk (first paint) | 170 KB (BP-39 fix wave, Ruling FW-8; 140 KB since Plan 27, 150 KB BP-31, 160 KB Plan 37) | ~161 KB |
 | every JS chunk together | 900 KB | ~174 KB |
 | the stylesheet | 60 KB | ~23 KB |
 | `public/avatar/*@2x.png`, raw bytes (design §8) | 32 MB total (design: 6 MB; raised 2026-09-24 for real art) | ~17 MB (the v4 art) |

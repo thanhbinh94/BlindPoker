@@ -64,10 +64,31 @@ export interface HeldCard {
   handsLeft: number | null
 }
 
+/** The most cards a human seat keeps in its bonus hand (BP-39): a fourth bonus card waits as points. */
+export const BONUS_HAND_MAX = 3
+
+/**
+ * A bonus card the player pressed "Dùng" on. `this`: inserted into the running hand's reveal; `next`: fires first in the
+ * next hand's plan. It stays in `armed` through its hand, so no other client learns of it before it fires.
+ */
+export interface ArmedBonus {
+  card: HeldCard
+  hand: 'this' | 'next'
+}
+
 /** A seat's chaos state at one table; all of it is lost when the player leaves the seat (spec §3.4). */
 export interface ChaosSeat {
   /** In the order received: the oldest debuff is the one that fires. */
   cards: HeldCard[]
+  /** The bonus hand (BP-39): cards earned from points, kept private until played; at most `BONUS_HAND_MAX` for a human. */
+  bonus: HeldCard[]
+  /** The bonus card pressed and waiting to fire; one at a time. */
+  armed: ArmedBonus | null
+  /**
+   * A bonus card was played into the hand in play (set by `planHand`, cleared by `afterHand`): "one bonus card per hand"
+   * counts on the hand a card applies to, so a second card pressed during that hand's choice waits for the next.
+   */
+  bonusPlayedThisHand: boolean
   points: number
   streak: { kind: 'win' | 'loss'; len: number } | null
   frozenNextHand: boolean
@@ -82,6 +103,8 @@ export interface ChaosConfig {
   tierWeights: Readonly<Record<ChaosTier, number>>
   pointsThreshold: number
   draftMs: number
+  /** How long the hand result stays up before the next hand deals, unless every human skips it (BP-39). */
+  resultMs: number
   dailyCapPoints: number
   dailyRescues: number
 }
@@ -90,12 +113,16 @@ export const DEFAULT_CHAOS_CONFIG: ChaosConfig = Object.freeze({
   tierWeights: Object.freeze({ silver: 60, gold: 30, diamond: 10 }),
   pointsThreshold: 10,
   draftMs: 15_000,
+  resultMs: 10_000,
   dailyCapPoints: 100_000,
   dailyRescues: 3,
 })
 
 export const EMPTY_CHAOS_SEAT: ChaosSeat = Object.freeze({
   cards: Object.freeze([]) as unknown as HeldCard[],
+  bonus: Object.freeze([]) as unknown as HeldCard[],
+  armed: null,
+  bonusPlayedThisHand: false,
   points: 0,
   streak: null,
   frozenNextHand: false,
@@ -145,6 +172,8 @@ export interface ChaosUse {
   cardId: string
   effect: ChaosEffectKind
   outcome: ChaosOutcome
+  /** The seats the card was aimed at (empty when it has no target), so the tooltip can say who it hit. */
+  targets: number[]
 }
 
 /**
@@ -158,6 +187,11 @@ export interface ChaosHandState {
   applied: number[]
   /** Uids of the debuffs a shield or mirror stopped, and of the one-shot shields and mirrors spent doing it. */
   blocked: number[]
+  /**
+   * Uids of every effect the table was told of (`CHAOS_APPLIED`, `CHAOS_PEEK`, a line in `CHAOS_SUMMARY`), used up or not:
+   * a bonus card played for this hand that is named here never goes back to its owner's private bonus hand (BP-39 I1).
+   */
+  recorded: number[]
   /** "Nhìn trộm": the board cards each seat saw, kept so a reconnect shows them again. */
   peek: { seat: number; cards: Card[] }[]
   freeFoldSeats: number[]

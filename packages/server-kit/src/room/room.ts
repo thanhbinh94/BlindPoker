@@ -1,5 +1,5 @@
 import {
-  ECONOMY, EngineError, blindTableLimit, engineErrorToErrorCode, filterEvent, nextButton, playerView, roomConfigToRuleset,
+  ECONOMY, EngineError, blindBuyInCap, blindTableLimit, engineErrorToErrorCode, filterEvent, nextButton, playerView, roomConfigToRuleset,
   type GameEvent, type PlayerAction, type PlayerIdentity, type RoomConfig, type RoomEvent, type RoomPlayerView,
   type RoomSummary, type RoomView, type Ruleset, type SeatStatus, type ServerMessage,
 } from '@bp/core'
@@ -83,6 +83,10 @@ export class Room {
   private readonly everJoined = new Set<string>()
   /** Poker hỗn loạn (Plan 37): the draft, the plans and the card credits of a chaos table; `null` on every other table. */
   private readonly chaos: ChaosTable | null = null
+  /** Chaos tables (BP-39): who pressed "Bỏ qua" in this result wait. Emptied when a wait starts. */
+  private readonly resultSkips = new Set<string>()
+  /** The last `RESULT_SKIPS` said in this wait, so a recount that changes nothing says nothing. */
+  private resultTally: { skipped: number; total: number } | null = null
 
   constructor(init: RoomInit) {
     this.roomId = init.roomId
@@ -184,6 +188,10 @@ export class Room {
     const hand = this.runner && !this.runner.isComplete ? playerView(this.runner.state, seat) : null
     const snapshot: Snapshot = { t: 'ROOM_SNAPSHOT', seq: this.seq, room: this.view(), hand, deadlineAt: hand ? this.deadlineAt : null }
     if (this.chaos) snapshot.chaos = this.chaos.snapshotFor(viewer === undefined ? null : viewerId)
+    // The "Bỏ qua" tally of a running result wait, or a reconnect and a late joiner would lose the count (BP-39).
+    if (this.resultTally && this.inResultWait()) {
+      snapshot.resultSkips = { ...this.resultTally, mine: viewerId !== null && this.resultSkips.has(viewerId) }
+    }
     return snapshot
   }
 
@@ -231,7 +239,7 @@ export class Room {
         this.runner!.markAutoFold(p.seat!)
         return
       }
-      return this.loggingMoney('leave failed', p, () => this.removePlayer(p, 'left'))
+      return this.loggingMoney('leave failed', p, () => this.removePlayer(p, 'left')).then(() => this.recountResultSkips())
     })
   }
 
@@ -262,7 +270,7 @@ export class Room {
           target.standAfterHand = true
           throw err
         }
-      })
+      }).then(() => this.recountResultSkips())
     })
   }
 
@@ -295,6 +303,7 @@ export class Room {
           throw err
         }
       })
+      await this.recountResultSkips()
       return 'now'
     })
   }
@@ -357,7 +366,8 @@ export class Room {
         } else {
           const balance = await this.deps.repos.balances.get(playerId)
           if (balance < this.rules.fixedWager) throw new RoomError('INSUFFICIENT_BALANCE')
-          amount = Math.min(balance, blindTableLimit(this.rules))
+          // A chaos table has no limit (BP-39, spec 2026-10-27 §3.7): the whole balance comes to the table.
+          amount = Math.min(balance, blindBuyInCap(this.rules) ?? balance)
         }
         pending = { sitId: newId(), amount }
         p.pendingBuyIn = pending
@@ -396,6 +406,7 @@ export class Room {
       this.changed()
       // The balance just moved to the table: the player's own bar must say so now, not at the next stand-up.
       await this.pushBalance(playerId)
+      await this.recountResultSkips() // one more voter in a result wait
     })
   }
 
@@ -410,6 +421,7 @@ export class Room {
         return
       }
       await this.loggingMoney('stand-up failed', p, () => this.standUpNow(p))
+      await this.recountResultSkips()
     })
   }
 
@@ -433,7 +445,8 @@ export class Room {
       this.setSittingOut(p, out || p.cashOutPending || p.stack < this.requiredStack())
       // Sitting back in can be the move that completes the table, so it gets the same look autoStart
       // takes when someone readies up — otherwise the room waits for a ready toggle it does not need.
-      return out ? undefined : this.maybeAutoStart()
+      // In a chaos result wait it is one voter more or less (only one of the two can apply: autoStart needs OPEN).
+      return out ? this.recountResultSkips() : (this.maybeAutoStart() ?? this.recountResultSkips())
     })
   }
 
@@ -522,6 +535,41 @@ export class Room {
     })
   }
 
+  /**
+   * Poker hỗn loạn (BP-39): the player plays bonus card `uid` from its bonus hand — between hands (during the interval,
+   * a draft, or before the first deal: it fires in the next hand it is dealt into), or during the play/fold choice of the
+   * hand it is dealt into (a one-shot reveal card fires at this hand's reveal, any other in the next hand). Everything else
+   * is `CHAOS_CANNOT_USE`: no chaos table, no seat, a hand past its choice (squeeze, reveal) or one the seat is not in, a
+   * "Hoàn toàn may rủi" hand (it has no choice), a seat frozen this hand, a card not in the hand, a second card pressed.
+   */
+  useChaosBonus(playerId: string, uid: number): Promise<void> {
+    return this.enqueue(() => {
+      this.assertOpen()
+      const p = this.mustPlayer(playerId)
+      if (!this.chaos || p.seat === null || p.identity.isBot) throw new RoomError('CHAOS_CANNOT_USE', 'no seat at a chaos table')
+      // The runner's state is the live object (`HandRunner.state`): a card played into this hand joins its plan in place.
+      const live = this.runner && !this.runner.isComplete ? this.runner.state : null
+      if (live && (live.phase !== 'DECISION' || !live.players.some((hp) => hp.seat === p.seat))) throw new RoomError('CHAOS_CANNOT_USE', 'not during this hand')
+      this.chaos.useBonus(p, uid, live)
+    })
+  }
+
+  /**
+   * Poker hỗn loạn (BP-39, spec 2026-10-27 §3.3): the player presses "Bỏ qua" on a hand's result. Counted only in the
+   * result wait of a chaos table, and only from a voter (`resultVoters`); anything else — a draft, a hand in play, a
+   * waiting room, a plain table, a spectator, a seat sitting out, a second press — is ignored without an error. When
+   * every voter has pressed it, the next hand starts now.
+   */
+  skipResult(playerId: string): Promise<void> {
+    return this.enqueue(() => {
+      this.assertOpen()
+      const p = this.mustPlayer(playerId)
+      if (!this.inResultWait() || !this.resultVoters().includes(p) || this.resultSkips.has(playerId)) return
+      this.resultSkips.add(playerId)
+      return this.recountResultSkips()
+    })
+  }
+
   // ---------- connection lifecycle ----------
 
   onDisconnect(playerId: string): Promise<void> {
@@ -533,6 +581,7 @@ export class Room {
       p.disconnectDeadline = deadline
       this.broadcastRoomEvent({ type: 'PLAYER_DISCONNECTED', playerId, deadline }, playerId)
       this.setPlayerTimer(playerId, this.deps.options.reconnectWindowMs, () => this.onReconnectExpired(playerId))
+      return this.recountResultSkips() // a voter gone may be the one the others waited for
     })
   }
 
@@ -544,6 +593,7 @@ export class Room {
       p.disconnectDeadline = null
       this.clearPlayerTimer(playerId)
       this.broadcastRoomEvent({ type: 'PLAYER_RECONNECTED', playerId }, playerId)
+      return this.recountResultSkips()
     })
   }
 
@@ -916,6 +966,9 @@ export class Room {
       } catch (err) {
         this.deps.log.error('chaos settlement failed', { roomId: this.roomId, handId: state.handId, err: String(err) })
       }
+    } else if (this.chaos) {
+      // A cancelled hand: a card played into it goes back to its owner's bonus hand now (M4).
+      this.chaos.handCancelled(state, (seat) => this.seatPlayer(seat))
     }
 
     const required = this.requiredStack()
@@ -943,9 +996,50 @@ export class Room {
       }
     }
     if (this.status === 'CLOSED') return
-    this.nextHandAt = this.deps.clock.now() + this.deps.options.handIntervalMs
+    // A chaos table keeps the result up for the GM's result time (BP-39), every other table for the hand interval. A room
+    // that is closing asks the port nothing (M9): no hand follows anyway.
+    const waitMs = this.chaos && !this.closing ? await this.chaos.resultMs() : this.deps.options.handIntervalMs
+    this.nextHandAt = this.deps.clock.now() + waitMs
     this.broadcastRoomEvent({ type: 'ROOM_STATUS', status: 'IN_GAME', nextHandAt: this.nextHandAt })
-    this.nextHandTimer = this.deps.clock.setTimeout(() => void this.enqueue(() => this.startHand()), this.deps.options.handIntervalMs)
+    // A timer that fired after the hand was started another way (every voter pressed "Bỏ qua") deals nothing.
+    const timer: TimerHandle = this.deps.clock.setTimeout(() => void this.enqueue(() => (this.nextHandTimer === timer ? this.startHand() : undefined)), waitMs)
+    this.nextHandTimer = timer
+    // A new result wait: nobody has pressed "Bỏ qua" yet, and the table is told who is counted.
+    this.resultSkips.clear()
+    this.resultTally = null
+    if (!this.closing) await this.recountResultSkips()
+  }
+
+  /** The wait after a chaos hand's settlement, before the next deal: the only time "Bỏ qua" counts (BP-39). */
+  private inResultWait(): boolean {
+    return this.chaos !== null && this.status !== 'CLOSED' && this.nextHandTimer !== null && this.runner === null && this.chaos.draft === null
+  }
+
+  /** Who "Bỏ qua" waits for: seated humans who are connected and not sitting out (nor asked to). Bots never count. */
+  private resultVoters(): RoomPlayer[] {
+    return this.seatedHumans().filter((p) => p.connected && !p.sittingOut && !p.sitOutRequested)
+  }
+
+  /**
+   * Counts "Bỏ qua" again after anything that can change it — a press, a seat taken or left, a sit-out, a disconnect or
+   * a reconnect — and says `RESULT_SKIPS` when the count moved (always once at the start of a wait). When every voter
+   * has pressed it, the next hand starts now: `startHand` cancels the timer and tells the table the new `nextHandAt`.
+   * Nothing outside a chaos table's result wait. Never throws: the move that caused the recount has already happened.
+   */
+  private async recountResultSkips(): Promise<void> {
+    if (!this.inResultWait()) return
+    const voters = this.resultVoters()
+    const tally = { skipped: voters.filter((p) => this.resultSkips.has(p.identity.playerId)).length, total: voters.length }
+    if (this.resultTally?.skipped !== tally.skipped || this.resultTally.total !== tally.total) {
+      this.resultTally = tally
+      this.broadcastRoomEvent({ type: 'RESULT_SKIPS', ...tally })
+    }
+    if (tally.total === 0 || tally.skipped < tally.total) return
+    try {
+      await this.startHand()
+    } catch (err) {
+      this.deps.log.error('start after every skip failed', { roomId: this.roomId, err: String(err) })
+    }
   }
 
   /**
@@ -1147,8 +1241,11 @@ export class Room {
     p.sitId = null
     p.seat = null
     p.stack = 0
-    // Chaos cards and points belong to the seat (spec §3.4): gone with it. The cycle's draft is not given back.
+    // Chaos cards and points belong to the seat (spec §3.4): gone with it, the bonus hand too (its owner is told). The
+    // cycle's draft is not given back.
+    const had = p.chaos
     p.chaos = undefined
+    this.chaos?.seatCleared(p, had)
     this.chaos?.dropOffer(p.identity.playerId)
     p.ready = false
     p.standAfterHand = false

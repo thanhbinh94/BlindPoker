@@ -112,7 +112,8 @@
     "winner": "Người thắng",
     "winners": "Người thắng",
     "you": "Bạn",
-    "closing": "Đang đóng…"
+    "closing": "Đang đóng…",
+    "noLimit": "Không giới hạn"
   },
   "mode": {
     "holdem": "Texas Hold'em",
@@ -232,7 +233,8 @@
       "botCount": "Số bot phải ít hơn số ghế."
     },
     "buyInHint": "{{bb}} BB = {{points}}",
-    "tableLimitHint": "Hạn mức mỗi người: {{points}} ({{times}}× mức cược)"
+    "tableLimitHint": "Hạn mức mỗi người: {{points}} ({{times}}× mức cược)",
+    "tableLimitNoneHint": "Hạn mức mỗi người: Không giới hạn"
   },
   "room": {
     "title": "Phòng chơi",
@@ -314,15 +316,48 @@
       "watching": "Các tay chơi đang chọn thẻ",
       "group": "Ba thẻ để chọn"
     },
-    "banner": {
+    "toast": {
       "use": "{{name}} dùng {{card}}",
-      "useOn": "{{name}} dùng {{card}} lên {{targets}}"
+      "useOn": "{{name}} dùng {{card}} → {{targets}}",
+      "more_one": "+{{count}} thẻ khác",
+      "more_other": "+{{count}} thẻ khác",
+      "all": "Các thẻ đã dùng ván này"
+    },
+    "result": {
+      "skip": "Bỏ qua",
+      "skipped": "Đã bỏ qua",
+      "skipCount": "Bỏ qua {{done}}/{{total}}",
+      "more_one": "+{{count}} người",
+      "more_other": "+{{count}} người"
     },
     "outcome": {
       "applied": "Đã áp",
       "blocked": "Bị chặn",
       "reflected": "Bị phản lại",
       "fizzled": "Không có tác dụng"
+    },
+    "timing": {
+      "deal": "Áp lúc chia bài",
+      "decision": "Áp lúc quyết định",
+      "reveal": "Áp lúc lật bài",
+      "wait": "Chờ điều kiện để áp",
+      "now": "Áp ngay khi nhận"
+    },
+    "info": {
+      "by": "Người dùng: {{name}}",
+      "on": "Nhắm vào: {{targets}}",
+      "outcome": "Kết quả: {{outcome}}"
+    },
+    "bonus": {
+      "title": "Thẻ thưởng",
+      "use": "Dùng",
+      "armed": {
+        "this": "Đã đặt dùng · ván này",
+        "next": "Đã đặt dùng · ván sau"
+      },
+      "seat_one": "Thẻ thưởng: {{count}}",
+      "seat_other": "Thẻ thưởng: {{count}}",
+      "count": "×{{count}}"
     },
     "credit": {
       "chaos_rescue": "Cấp cứu +{{amount}}",
@@ -376,7 +411,7 @@
       },
       "s_steal_one": {
         "name": "Rút lá lẻ",
-        "desc": "Khi lật bài, 1 đối thủ ngẫu nhiên mất 1 lá riêng."
+        "desc": "Khi lật bài, 1 đối thủ ngẫu nhiên mất một lá riêng ngẫu nhiên."
       },
       "s_lower": {
         "name": "Hạ lá",

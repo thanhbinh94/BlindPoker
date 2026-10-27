@@ -391,6 +391,18 @@ describe('the "Poker hỗn loạn" option', () => {
     expect(screen.queryByLabelText('Poker hỗn loạn')).toBeNull()
   })
 
+  // BP-39, spec 2026-10-27 §3.7: a chaos table seats the whole balance; the wager's hint says the limit is gone, and comes back.
+  it('says "Không giới hạn" for the table limit while it is ticked, and the 10× figure otherwise', async () => {
+    const user = userEvent.setup()
+    wrapVi(<CreateRoomForm onSubmit={vi.fn()} lang="vi" initialMode="blind" chaosOffered />)
+    expect(screen.getByText(/^Hạn mức mỗi người: .+ \(10× mức cược\)$/)).toBeInTheDocument()
+    await user.click(screen.getByLabelText('Poker hỗn loạn'))
+    expect(screen.getByText('Hạn mức mỗi người: Không giới hạn')).toBeInTheDocument()
+    expect(screen.queryByText(/10× mức cược/)).toBeNull()
+    await user.click(screen.getByLabelText('Poker hỗn loạn'))
+    expect(screen.getByText(/^Hạn mức mỗi người: .+ \(10× mức cược\)$/)).toBeInTheDocument()
+  })
+
   it('submits blind.chaosCycle 5 by default and 10 when chosen', async () => {
     const user = userEvent.setup()
     const onSubmit = vi.fn()

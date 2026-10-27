@@ -9,7 +9,7 @@ import { dayKey, nextDayStartMs } from '../economy/daily-rules.js'
 import { ServiceError } from '../errors.js'
 import { UnknownPlayerError } from '../repos/balance-repo.js'
 import { createChaosPort } from './chaos-port.js'
-import { createChaosService, type ChaosService } from './chaos-service.js'
+import { CONFIG_CACHE_MS, createChaosService, type ChaosService } from './chaos-service.js'
 
 const TZ = 'Asia/Ho_Chi_Minh'
 const GM = '00000000-0000-4000-8000-0000000000aa'
@@ -231,10 +231,11 @@ describe('setRules()', () => {
 })
 
 describe('config()/setConfig()', () => {
-  const GOOD: ChaosConfig = { tierWeights: { silver: 50, gold: 40, diamond: 10 }, pointsThreshold: 8, draftMs: 20_000, dailyCapPoints: 250_000, dailyRescues: 5 }
+  const GOOD: ChaosConfig = { tierWeights: { silver: 50, gold: 40, diamond: 10 }, pointsThreshold: 8, draftMs: 20_000, resultMs: 12_000, dailyCapPoints: 250_000, dailyRescues: 5 }
 
   it('is the defaults until a GM saves, then the saved settings', async () => {
     expect(await chaos.config()).toEqual(DEFAULT_CHAOS_CONFIG)
+    expect(DEFAULT_CHAOS_CONFIG.resultMs).toBe(10_000)
     await setConfig(GOOD)
     expect(await chaos.config()).toEqual(GOOD)
     expect((await db.select().from(chaosConfig))[0]).toMatchObject({ key: 'chaos', updatedBy: GM })
@@ -244,10 +245,11 @@ describe('config()/setConfig()', () => {
   })
 
   it('accepts the limits of every field, and a tier weighted 0 while another is not', async () => {
-    await setConfig({ tierWeights: { silver: 0, gold: 0, diamond: 1 }, pointsThreshold: 1, draftMs: 5_000, dailyCapPoints: 0, dailyRescues: 0 })
+    await setConfig({ tierWeights: { silver: 0, gold: 0, diamond: 1 }, pointsThreshold: 1, draftMs: 5_000, resultMs: 5_000, dailyCapPoints: 0, dailyRescues: 0 })
     expect((await chaos.config()).tierWeights).toEqual({ silver: 0, gold: 0, diamond: 1 })
-    await setConfig({ tierWeights: { silver: 100, gold: 100, diamond: 100 }, pointsThreshold: 100, draftMs: 60_000, dailyCapPoints: 10_000_000, dailyRescues: 20 })
+    await setConfig({ tierWeights: { silver: 100, gold: 100, diamond: 100 }, pointsThreshold: 100, draftMs: 60_000, resultMs: 15_000, dailyCapPoints: 10_000_000, dailyRescues: 20 })
     expect((await chaos.config()).dailyCapPoints).toBe(10_000_000)
+    expect((await chaos.config()).resultMs).toBe(15_000)
   })
 
   it('refuses a weight set that adds up to nothing or is not whole, and a value out of its range', async () => {
@@ -258,6 +260,7 @@ describe('config()/setConfig()', () => {
       { tierWeights: { silver: 5, gold: 5 } },
       { pointsThreshold: 0 }, { pointsThreshold: 101 }, { pointsThreshold: 2.5 },
       { draftMs: 4_999 }, { draftMs: 60_001 },
+      { resultMs: 4_999 }, { resultMs: 15_001 }, { resultMs: 9_000.5 },
       { dailyCapPoints: -1 }, { dailyCapPoints: 10_000_001 },
       { dailyRescues: -1 }, { dailyRescues: 21 }, { dailyRescues: Number.NaN },
     ]
@@ -268,9 +271,41 @@ describe('config()/setConfig()', () => {
 
   it('fills a stored row that lacks a field, or holds a wrong one, from the defaults', async () => {
     await db.insert(chaosConfig).values({ key: 'chaos', value: { pointsThreshold: 20, draftMs: 'soon', tierWeights: { gold: 7 } } })
+    expect((await chaos.config()).resultMs).toBe(10_000) // a stored row from before BP-39 has no result time
     expect(await chaos.config()).toEqual({ ...DEFAULT_CHAOS_CONFIG, pointsThreshold: 20, tierWeights: { silver: 60, gold: 7, diamond: 10 } })
     await db.update(chaosConfig).set({ value: 'garbage' }).where(eq(chaosConfig.key, 'chaos'))
+    clock += CONFIG_CACHE_MS // a row edited by hand is seen once the cache runs out
     expect(await chaos.config()).toEqual(DEFAULT_CHAOS_CONFIG)
+  })
+
+  it('keeps what it read for a while, so the rooms\' reads after every hand do not each hit the database; a save drops it at once (M5)', async () => {
+    let reads = 0
+    const counting = createChaosService({
+      db: new Proxy(db, { get: (t, k, r) => (k === 'select' ? (reads++, Reflect.get(t, k, r)) : Reflect.get(t, k, r)) }),
+      catalogue: CHAOS_CARDS_SPEC, timezone: TZ, now: () => clock,
+    })
+    expect(await counting.config()).toEqual(DEFAULT_CHAOS_CONFIG)
+    expect(await counting.config()).toEqual(DEFAULT_CHAOS_CONFIG)
+    expect(reads).toBe(1)
+    // A hand edit waits out the cache.
+    await db.insert(chaosConfig).values({ key: 'chaos', value: { ...GOOD, pointsThreshold: 30 } })
+    expect((await counting.config()).pointsThreshold).toBe(DEFAULT_CHAOS_CONFIG.pointsThreshold)
+    clock += CONFIG_CACHE_MS
+    expect((await counting.config()).pointsThreshold).toBe(30)
+    expect(reads).toBe(2)
+    // A GM's save is seen by the very next read.
+    await db.transaction((tx) => counting.setConfig(tx, GOOD, GM))
+    expect(await counting.config()).toEqual(GOOD)
+    expect(reads).toBe(3)
+  })
+
+  it('forgetConfig drops what a read between the save and its commit kept, so the committed settings are seen at once', async () => {
+    expect(await chaos.config()).toEqual(DEFAULT_CHAOS_CONFIG)
+    // The row lands as the commit would land it, after the cache took the old settings.
+    await db.insert(chaosConfig).values({ key: 'chaos', value: { ...GOOD } })
+    expect(await chaos.config()).toEqual(DEFAULT_CHAOS_CONFIG)
+    chaos.forgetConfig()
+    expect(await chaos.config()).toEqual(GOOD)
   })
 })
 

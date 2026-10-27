@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { seededRng, type Rng } from '../cards/rng.js'
 import type { BlindRules } from '../hand/types.js'
 import { CHAOS_CARDS_SPEC } from './fixtures.js'
-import { receiveCard } from './hold.js'
+import { receiveCard, toHeld } from './hold.js'
 import { afterHand, type AfterHandSeat } from './settle.js'
 import { DEFAULT_CHAOS_CONFIG, EMPTY_CHAOS_SEAT, type ChaosCardDef, type ChaosHandPlan, type ChaosSeat, type PlannedEffect } from './types.js'
 
@@ -81,7 +81,8 @@ describe('afterHand — chaos points and streaks', () => {
   })
 
   it('10 points award a card and keep the remainder', () => {
-    const r = settle([seat({ ...EMPTY_CHAOS_SEAT, points: 9 }, { outcome: 'loss' })])
+    // A bot's bonus card acts at once, as every bonus card did before BP-39; a human's path is below.
+    const r = settle([seat({ ...EMPTY_CHAOS_SEAT, points: 9 }, { outcome: 'loss', isBot: true })])
     expect(r.seats.get(0)!.points).toBe(1)
     expect(r.awarded).toHaveLength(1)
     expect(r.awarded[0]!.seat).toBe(0)
@@ -104,6 +105,136 @@ describe('afterHand — chaos points and streaks', () => {
     const r = settle([seat({ ...EMPTY_CHAOS_SEAT, points: 9 }, { outcome: 'loss' })], { weights: onlyShield, config })
     expect(r.awarded[0]!.cards.map((c) => c.id)).toEqual(['s_shield'])
     expect(r.seats.get(0)!.cards.map((c) => c.cardId)).toEqual(['s_shield'])
+  })
+})
+
+describe('afterHand — the bonus hand (BP-39)', () => {
+  const only = (id: string) => new Map(CHAOS_CARDS_SPEC.filter((c) => c.id !== id).map((c) => [c.id, 0]))
+  const SILVER = { ...DEFAULT_CHAOS_CONFIG, tierWeights: { silver: 1, gold: 0, diamond: 0 } }
+  const bonusOf = (ids: string[]) => ids.map((id) => toHeld(card(id), uid++))
+
+  it("a human's bonus card goes to the bonus hand while it holds fewer than 3", () => {
+    const start = { ...EMPTY_CHAOS_SEAT, points: 9, bonus: bonusOf(['s_lower', 'g_borrow']) }
+    const r = settle([seat(start, { outcome: 'loss' })], { weights: only('s_steal_one'), config: SILVER })
+    const after = r.seats.get(0)!
+    expect(after.points).toBe(1)
+    expect(after.bonus.map((c) => c.cardId)).toEqual(['s_lower', 'g_borrow', 's_steal_one'])
+    expect(after.cards).toEqual([])
+    expect(r.bonusAwarded).toEqual([{ seat: 0, cards: [card('s_steal_one')] }])
+    expect(r.awarded).toEqual([])
+  })
+
+  it('a full bonus hand keeps the points, the armed card counting toward the 3', () => {
+    const full = { ...EMPTY_CHAOS_SEAT, points: 9, bonus: bonusOf(['s_lower', 'g_borrow', 's_steal_one']) }
+    const r = settle([seat(full, { outcome: 'loss' })], { weights: only('s_steal_one'), config: SILVER })
+    expect(r.seats.get(0)).toMatchObject({ points: 11, bonus: full.bonus })
+    expect(r.bonusAwarded).toEqual([])
+
+    const [armedCard, ...rest] = bonusOf(['s_lower', 'g_borrow', 's_steal_one'])
+    const withArmed = { ...EMPTY_CHAOS_SEAT, points: 9, bonus: rest, armed: { card: armedCard!, hand: 'next' as const } }
+    const r2 = settle([seat(withArmed, { outcome: 'loss' })], { weights: only('s_steal_one'), config: SILVER })
+    expect(r2.seats.get(0)).toMatchObject({ points: 11, bonus: rest, armed: withArmed.armed })
+  })
+
+  it('fills the hand to 3 and keeps the rest of the points', () => {
+    const r = settle([seat({ ...EMPTY_CHAOS_SEAT, points: 38 }, { outcome: 'loss' })], { weights: only('s_steal_one'), config: SILVER })
+    expect(r.seats.get(0)!.bonus.map((c) => c.cardId)).toEqual(['s_steal_one', 's_steal_one', 's_steal_one'])
+    expect(r.seats.get(0)!.points).toBe(10)
+  })
+
+  it('a drawn card that needs no press goes to the held cards as today', () => {
+    const r = settle([seat({ ...EMPTY_CHAOS_SEAT, points: 9 }, { outcome: 'loss' })], { weights: only('s_rescue'), config: SILVER })
+    expect(r.seats.get(0)!.cards.map((c) => c.cardId)).toEqual(['s_rescue'])
+    expect(r.seats.get(0)!.bonus).toEqual([])
+    expect(r.awarded).toEqual([{ seat: 0, cards: [card('s_rescue')] }])
+    expect(r.bonusAwarded).toEqual([])
+  })
+
+  it('a low threshold cannot loop on Tích lũy: only the points the hand ended with convert', () => {
+    const config = { ...SILVER, pointsThreshold: 1 }
+    const r = settle([seat({ ...EMPTY_CHAOS_SEAT, points: 3 }, { outcome: 'loss' })], { weights: only('s_charge'), config })
+    // 5 points → 5 Tích lũy, +3 each, waiting for the next hand
+    expect(r.awarded[0]!.cards.map((c) => c.id)).toEqual(Array<string>(5).fill('s_charge'))
+    expect(r.seats.get(0)!.points).toBe(15)
+  })
+
+  it("a bot's bonus card acts at once", () => {
+    const r = settle([seat({ ...EMPTY_CHAOS_SEAT, points: 9 }, { outcome: 'loss', isBot: true })], { weights: only('s_steal_one'), config: SILVER })
+    expect(r.seats.get(0)!.cards.map((c) => c.cardId)).toEqual(['s_steal_one'])
+    expect(r.seats.get(0)!.bonus).toEqual([])
+    expect(r.awarded).toEqual([{ seat: 0, cards: [card('s_steal_one')] }])
+    expect(r.bonusAwarded).toEqual([])
+  })
+
+  it("a frozen human's bonus cards wait in pendingBonus and act as today", () => {
+    const frozen = settle([seat({ ...EMPTY_CHAOS_SEAT, points: 9, frozenNextHand: true }, { outcome: 'loss' })], { weights: only('s_steal_one'), config: SILVER })
+    expect(frozen.seats.get(0)).toMatchObject({ points: 1, pendingBonus: 1, bonus: [] })
+    const next = settle([seat(frozen.seats.get(0)!, { outcome: 'none' })], { weights: only('s_steal_one'), config: SILVER })
+    expect(next.awarded).toEqual([{ seat: 0, cards: [card('s_steal_one')] }])
+    expect(next.seats.get(0)!.cards.map((c) => c.cardId)).toEqual(['s_steal_one'])
+  })
+
+  it('a card played for this hand leaves when used, else goes back to the bonus hand at its old place', () => {
+    const [lower, steal, borrow] = bonusOf(['s_lower', 's_steal_one', 'g_borrow'])
+    const start = { ...EMPTY_CHAOS_SEAT, bonus: [lower!, borrow!], armed: { card: steal!, hand: 'this' as const } }
+    const back = settle([seat(start)]).seats.get(0)!
+    expect(back.armed).toBeNull()
+    expect(back.bonus).toEqual([lower, steal, borrow])
+    const used = settle([seat(start)], { consumed: new Set([steal!.uid]) }).seats.get(0)!
+    expect(used.armed).toBeNull()
+    expect(used.bonus).toEqual([lower, borrow])
+  })
+
+  it('a card played for this hand that fizzled where the table saw it is spent, never back in the private hand (I1)', () => {
+    const [lower, storm] = bonusOf(['s_lower', 'd_storm'])
+    const start = { ...EMPTY_CHAOS_SEAT, bonus: [lower!], armed: { card: storm!, hand: 'this' as const }, bonusPlayedThisHand: true }
+    // an armed storm on a short deck: CHAOS_APPLIED "fizzled", nothing consumed, but recorded
+    const r = settle([seat(start, { outcome: 'win' })], { recorded: new Set([storm!.uid]) }).seats.get(0)!
+    expect(r).toMatchObject({ armed: null, bonus: [lower], bonusPlayedThisHand: false })
+  })
+
+  it('a decision card played for this hand is spent with its hand, used or not, once it entered the plan (Ruling 5)', () => {
+    const [freeFold] = bonusOf(['s_free_fold'])
+    const ff = freeFold!
+    const start = { ...EMPTY_CHAOS_SEAT, armed: { card: ff, hand: 'this' as const }, bonusPlayedThisHand: true }
+    const inPlan: PlannedEffect = { uid: ff.uid, cardId: ff.cardId, effect: ff.effect, params: ff.params, timing: ff.timing, debuff: false, targets: [] }
+    // the owner played, so Bỏ không mất did nothing: not consumed, but in the plan
+    const played = settle([seat(start, { outcome: 'loss' })], { plan: planOf({ 0: [inPlan] }) }).seats.get(0)!
+    expect(played).toMatchObject({ armed: null, bonus: [], bonusPlayedThisHand: false })
+    // a card that never entered the plan (a mode the table excludes) goes back
+    const excluded = settle([seat({ ...start, bonusPlayedThisHand: false }, { outcome: 'loss' })]).seats.get(0)!
+    expect(excluded).toMatchObject({ armed: null, bonus: [ff] })
+  })
+
+  it('a draw that finds no card costs a human nothing', () => {
+    const none = new Map(CHAOS_CARDS_SPEC.map((c) => [c.id, 0]))
+    const r = settle([seat({ ...EMPTY_CHAOS_SEAT, points: 9 }, { outcome: 'loss' })], { weights: none })
+    expect(r.seats.get(0)).toMatchObject({ points: 11, bonus: [], cards: [] })
+    expect(r.bonusAwarded).toEqual([])
+  })
+
+  it('clears the played-this-hand marker', () => {
+    const r = settle([seat({ ...EMPTY_CHAOS_SEAT, bonusPlayedThisHand: true })])
+    expect(r.seats.get(0)!.bonusPlayedThisHand).toBe(false)
+  })
+
+  it('a card played for the next hand stays armed', () => {
+    const [steal] = bonusOf(['s_steal_one'])
+    const start = { ...EMPTY_CHAOS_SEAT, armed: { card: steal!, hand: 'next' as const } }
+    expect(settle([seat(start)]).seats.get(0)!.armed).toEqual({ card: steal, hand: 'next' })
+  })
+
+  it('a held Bạo kích pays in a hand where a played card joined the plan', () => {
+    const chaos = holding(['g_crit'])
+    const [steal] = bonusOf(['s_steal_one'])
+    const inserted: PlannedEffect = { uid: steal!.uid, cardId: steal!.cardId, effect: steal!.effect, params: steal!.params, timing: steal!.timing, debuff: true, targets: [] }
+    const start = { ...chaos, armed: { card: steal!, hand: 'this' as const } }
+    const r = settle([seat(start, { outcome: 'win', net: 700 })], {
+      rng: fixed(0), plan: planOf({ 0: [fired(chaos, 'g_crit'), inserted] }), consumed: new Set([steal!.uid]),
+    })
+    expect(r.credits).toMatchObject([{ reason: 'chaos_crit', amount: 1_400, multiplier: 3 }])
+    expect(r.seats.get(0)!.armed).toBeNull()
+    expect(r.seats.get(0)!.bonus).toEqual([])
   })
 })
 

@@ -27,6 +27,10 @@ export interface GameClientApi {
   reveal(): Promise<AckOrError>
   /** Poker hỗn loạn: take `cardId` from the offer `offerId` this player was sent in the open draft. */
   pickChaos(offerId: string, cardId: string): Promise<AckOrError>
+  /** Poker hỗn loạn (BP-39): press the bonus card `uid` of my bonus hand. Between hands it fires in the next one; mid-choice, a reveal card fires at this hand's reveal. */
+  playBonus(uid: number): Promise<AckOrError>
+  /** Poker hỗn loạn (BP-39): "Bỏ qua" — ask for the next hand now; it is dealt at once when every player has pressed it. */
+  skipResult(): Promise<AckOrError>
   /**
    * Tick (or clear, with `null`) what to do when the turn comes: the hook sends the matching legal action the
    * moment the server says it is this seat's turn, exactly as if the player had pressed the button then. Only
@@ -162,6 +166,36 @@ export function useGameClient(opts: UseGameClientOptions): GameClientApi {
     pickChaos(offer.offerId, offer.cardIds[0]!).catch(() => undefined)
   }, [autoPlay, offer, pickChaos])
 
+  // The skip: the count shows my press only on the ACK, like the pick above.
+  const skipResult = useCallback(async (): Promise<AckOrError> => {
+    const r = await request({ t: 'RESULT_SKIP' })
+    if (r.t === 'ACK') dispatch({ type: 'resultSkipped' })
+    return r
+  }, [request])
+
+  // Auto-play skips the result wait, once per wait: keyed on the hand it follows and the reconnect it was sent after, so a
+  // press lost with the socket is sent again (the snapshot says `mine: false`) and a re-render never sends it twice. A press
+  // the server refuses (or a request that fails) frees the key once (M7): the next change of the count in that wait sends it
+  // again, and a second refusal is final for that wait.
+  const skippedFor = useRef<string | null>(null)
+  const retriedFor = useRef<string | null>(null)
+  const skips = state.resultSkips
+  const lastHandId = state.hand?.handId ?? ''
+  useEffect(() => {
+    if (!autoPlay || skips === null || skips.mine) return
+    const key = `${lastHandId}#${returns}`
+    if (skippedFor.current === key) return
+    skippedFor.current = key
+    const refused = (): void => {
+      if (retriedFor.current === key || skippedFor.current !== key) return
+      retriedFor.current = key
+      skippedFor.current = null
+    }
+    skipResult().then((r) => (r.t === 'ACK' ? undefined : refused()), refused)
+  }, [autoPlay, skips, lastHandId, returns, skipResult])
+
+  const playBonus = useCallback((uid: number) => request({ t: 'CHAOS_USE', uid }), [request])
+
   return useMemo<GameClientApi>(
     () => ({
       state,
@@ -186,6 +220,8 @@ export function useGameClient(opts: UseGameClientOptions): GameClientApi {
       act: (action) => request({ t: 'ACTION', reqId: '', baseSeq: stateRef.current.seq, action }),
       reveal: () => request({ t: 'REVEAL' }),
       pickChaos,
+      playBonus,
+      skipResult,
       setPreAction: (kind) => dispatch({ type: 'preAction', kind }),
       setAutoPlay: (on) => dispatch({ type: 'autoPlay', on }),
       resync: () => void connection.send({ t: 'RESYNC' }),
@@ -195,7 +231,7 @@ export function useGameClient(opts: UseGameClientOptions): GameClientApi {
       reset: () => dispatch({ type: 'reset' }),
       serverNow: () => Date.now() + stateRef.current.serverTimeOffset,
     }),
-    [state, connection, request, pickChaos],
+    [state, connection, request, pickChaos, playBonus, skipResult],
   )
 }
 

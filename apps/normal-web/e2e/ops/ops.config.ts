@@ -44,7 +44,7 @@ export default defineConfig({
   projects: [
     {
       name: 'desktop',
-      grepInvert: /@mobile|@landscape/,
+      grepInvert: /@mobile|@landscape|@s25p|@s25l/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
     },
     {
@@ -58,6 +58,19 @@ export default defineConfig({
       name: 'landscape',
       grep: /@landscape/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 915, height: 412 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2.6 },
+    },
+    {
+      // BP-39: the Galaxy S25 held upright — 360 × 780 CSS px, touch — for the chaos table's toasts, result strip and bonus
+      // hand (titles tagged `@s25p`). The stack layout, like `mobile`, but 15 px narrower and 32 px shorter.
+      name: 's25p',
+      grep: /@s25p/,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 360, height: 780 }, hasTouch: true, isMobile: true, deviceScaleFactor: 3 },
+    },
+    {
+      // BP-39: the same phone on its side — 780 × 360, the landscape frame at its smallest common size (`@s25l`).
+      name: 's25l',
+      grep: /@s25l/,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 780, height: 360 }, hasTouch: true, isMobile: true, deviceScaleFactor: 3 },
     },
   ],
 })

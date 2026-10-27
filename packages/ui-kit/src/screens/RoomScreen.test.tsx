@@ -48,6 +48,8 @@ function fakeClient(state: ClientState, overrides: Partial<GameClientApi> = {}):
     act: vi.fn().mockResolvedValue(ACK),
     reveal: vi.fn().mockResolvedValue(ACK),
     pickChaos: vi.fn().mockResolvedValue(ACK),
+    playBonus: vi.fn().mockResolvedValue(ACK),
+    skipResult: vi.fn().mockResolvedValue(ACK),
     resync: vi.fn(),
     renamed: vi.fn(),
     clearError: vi.fn(),
@@ -1637,7 +1639,7 @@ describe('RoomScreen', () => {
   })
 })
 
-// Plan 37: the chaos draft, the cards' banner and the result card that waits for it.
+// Plan 37: the chaos draft and the result card; BP-39: the cards' toasts, which the result no longer waits for.
 describe('RoomScreen on a Poker hỗn loạn table', () => {
   const chaosRoom = makeRoom({
     mode: 'blind',
@@ -1667,7 +1669,7 @@ describe('RoomScreen on a Poker hỗn loạn table', () => {
   const offer = { offerId: 'o1', cardIds: ['s_swap_one', 's_shield', 's_peek_1'] }
   const drafting = { tier: 'silver' as const, deadlineAt: 1_015_000, totalMs: 15_000, offer, picked: false }
   const stateWith = (chaos: Partial<ClientState['chaos']>, hand: ClientHand | null = finished): ClientState =>
-    makeState({ room: chaosRoom, hand, chaos: { draft: null, seats: {}, applied: [], credits: [], awarded: [], peek: null, reverse: false, blindfolded: null, ...chaos } })
+    makeState({ room: chaosRoom, hand, chaos: { draft: null, seats: {}, applied: [], credits: [], awarded: [], peek: null, reverse: false, blindfolded: null, bonus: { cards: [], armed: null }, ...chaos } })
   const PICK_A_SILVER = { name: 'Pick a Silver card' }
 
   it('opens the draft over the felt, and a pick goes to the client', async () => {
@@ -1733,7 +1735,130 @@ describe('RoomScreen on a Poker hỗn loạn table', () => {
     expect(clearanceFor(stage, seatBox, null, 0), 'the draft takes what there is').toBe(188)
   })
 
-  describe('the banner', () => {
+  describe('the result strip and "Bỏ qua" (BP-39, spec 2026-10-27 §3.2–3.3)', () => {
+    const skips = { skipped: 1, total: 3, mine: false }
+    const drawAt = (state: ClientState, where: { layout?: 'stack'; frame?: 'landscape' } = {}, client = fakeClient(state)) => {
+      render(
+        <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+          <RoomScreen client={client} lang="vi" onLeft={vi.fn()} {...where} />
+        </I18nextProvider>,
+      )
+      return client
+    }
+    const result = () => screen.getByRole('group', { name: 'Người thắng' })
+
+    it('is a strip in the room’s column, directly above the tray, on a phone held upright — not a card over the felt', () => {
+      drawAt(makeState({ ...stateWith({}), resultSkips: skips }), { layout: 'stack' })
+      expect(result()).toHaveClass(s.strip!)
+      expect(result().closest('main'), 'not over the felt').toBeNull()
+      const wrapper = result().closest(`.${screens.resultStrip}`)!
+      expect(wrapper).not.toBeNull()
+      expect(wrapper.nextElementSibling?.tagName, 'the tray follows it').toBe('FOOTER')
+      expect(document.querySelector(`.${screens.room}`)).toHaveAttribute('data-result-strip', 'open')
+      expect(screen.queryByRole('button', { name: 'Đóng' }), 'the strip leaves with the hand').toBeNull()
+    })
+
+    it('sends one request for a double tap: the button stays down while the press is out', async () => {
+      let settle: (value: unknown) => void = () => undefined
+      const client = fakeClient(makeState({ ...stateWith({}), resultSkips: skips }), {
+        skipResult: vi.fn(() => new Promise((resolve) => (settle = resolve))) as unknown as GameClientApi['skipResult'],
+      })
+      drawAt(client.state, { layout: 'stack' }, client)
+      const button = screen.getByRole('button', { name: 'Bỏ qua' })
+      await userEvent.click(button)
+      await userEvent.click(button)
+      expect(client.skipResult).toHaveBeenCalledTimes(1)
+      expect(button).toBeDisabled()
+      await act(async () => settle({ t: 'ERROR', reqId: 'x', code: 'NOT_WAITING', message: '' }))
+      expect(screen.getByRole('button', { name: 'Bỏ qua' }), 'a refused press gives the button back').toBeEnabled()
+    })
+
+    it('hides the viewer’s seat under the strip on a phone held sideways too, so nothing half-shows past its edges', () => {
+      expect(TABLE_CSS).toMatch(/\[data-result-strip='open'\] \.ring\[data-frame='landscape'\] \[data-me='true'\] \{\s*visibility: hidden;/)
+      expect(TABLE_CSS).toMatch(/\[data-result-strip='open'\] \.stack \.mine \{\s*display: none;/)
+    })
+
+    it('is a strip on a phone held sideways too, outside the stage it must not resize', () => {
+      drawAt(makeState({ ...stateWith({}), resultSkips: skips }), { frame: 'landscape' })
+      expect(result()).toHaveClass(s.strip!)
+      expect(result()).toHaveAttribute('data-frame', 'landscape')
+      expect(result().closest('main')).toBeNull()
+    })
+
+    it('stays the card over the felt on a desktop, with "Bỏ qua" and the count added', async () => {
+      const client = drawAt(makeState({ ...stateWith({}), resultSkips: skips }))
+      expect(result()).toHaveClass(s.result!)
+      expect(result().closest('main')).not.toBeNull()
+      expect(within(result()).getByText('Bỏ qua 1/3')).toBeInTheDocument()
+      expect(within(result()).getByRole('button', { name: 'Đóng' })).toBeInTheDocument()
+      await userEvent.click(within(result()).getByRole('button', { name: 'Bỏ qua' }))
+      expect(client.skipResult).toHaveBeenCalledTimes(1)
+    })
+
+    it('sends the press to the client once, and says "Đã bỏ qua" once the press is mine', async () => {
+      const client = drawAt(makeState({ ...stateWith({}), resultSkips: skips }), { layout: 'stack' })
+      await userEvent.click(screen.getByRole('button', { name: 'Bỏ qua' }))
+      expect(client.skipResult).toHaveBeenCalledTimes(1)
+      cleanup()
+      drawAt(makeState({ ...stateWith({}), resultSkips: { skipped: 2, total: 3, mine: true } }), { layout: 'stack' })
+      expect(screen.getByRole('button', { name: 'Đã bỏ qua' })).toBeDisabled()
+      expect(screen.getByText('Bỏ qua 2/3')).toBeInTheDocument()
+    })
+
+    it('shows a spectator the count but no button', () => {
+      const watching = makeRoom({ ...chaosRoom, players: [chaosRoom.players[0]!, makePlayer({ playerId: 'me', displayName: 'Mai' })] })
+      drawAt(makeState({ ...stateWith({}), room: watching, resultSkips: skips }), { layout: 'stack' })
+      expect(screen.getByText('Bỏ qua 1/3')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Bỏ qua' })).toBeNull()
+    })
+
+    it('gives the button only to a voter: a seat sitting out, or one whose connection dropped, sees the count alone (M1)', () => {
+      for (const patch of [{ sittingOut: true }, { connected: false }]) {
+        const room = makeRoom({ ...chaosRoom, players: [chaosRoom.players[0]!, { ...chaosRoom.players[1]!, ...patch }] })
+        drawAt(makeState({ ...stateWith({}), room, resultSkips: skips }), { layout: 'stack' })
+        expect(screen.getByText('Bỏ qua 1/3')).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /Bỏ qua/ }), JSON.stringify(patch)).toBeNull()
+        cleanup()
+      }
+    })
+
+    it('shows no "0/0" for a wait with nobody to count (M8)', () => {
+      const room = makeRoom({ ...chaosRoom, players: [chaosRoom.players[0]!, { ...chaosRoom.players[1]!, sittingOut: true }] })
+      drawAt(makeState({ ...stateWith({}), room, resultSkips: { skipped: 0, total: 0, mine: false } }), { layout: 'stack' })
+      expect(result()).toBeInTheDocument()
+      expect(screen.queryByText(/Bỏ qua/)).toBeNull()
+    })
+
+    it('keeps "Bỏ qua" and its count beside the countdown once the desktop card is closed (M2)', async () => {
+      const room = makeRoom({ ...chaosRoom, nextHandAt: Date.now() + 8_000 })
+      const client = drawAt(makeState({ ...stateWith({}), room, resultSkips: skips }))
+      await userEvent.click(within(result()).getByRole('button', { name: 'Đóng' }))
+      expect(screen.queryByRole('group', { name: 'Người thắng' })).toBeNull()
+      const controls = screen.getByRole('group', { name: 'Điều khiển bàn' })
+      expect(within(controls).getByText(/Ván tiếp theo sau/)).toBeInTheDocument()
+      expect(within(controls).getByText('Bỏ qua 1/3')).toBeInTheDocument()
+      await userEvent.click(within(controls).getByRole('button', { name: 'Bỏ qua' }))
+      expect(client.skipResult).toHaveBeenCalledTimes(1)
+    })
+
+    it('shows no skip while no result wait runs', () => {
+      drawAt(stateWith({}), { layout: 'stack' })
+      expect(result()).toHaveClass(s.strip!)
+      expect(screen.queryByText(/^Bỏ qua/)).toBeNull()
+    })
+
+    it('leaves a table without chaos exactly as it was: the card over the felt, closable, no skip — on a phone too', () => {
+      const plainRoom = makeRoom({ ...chaosRoom, config: { ...chaosRoom.config, blind: { ...chaosRoom.config.blind!, chaosCycle: undefined } } })
+      drawAt(makeState({ room: plainRoom, hand: finished, resultSkips: skips }), { layout: 'stack' })
+      expect(result()).toHaveClass(s.result!)
+      expect(result().closest('main')).not.toBeNull()
+      expect(within(result()).getByRole('button', { name: 'Đóng' })).toBeInTheDocument()
+      expect(screen.queryByText(/Bỏ qua/)).toBeNull()
+      expect(document.querySelector(`.${screens.room}`)).not.toHaveAttribute('data-result-strip')
+    })
+  })
+
+  describe('the toasts', () => {
     beforeEach(() => vi.useFakeTimers())
     afterEach(() => vi.useRealTimers())
 
@@ -1741,23 +1866,43 @@ describe('RoomScreen on a Poker hỗn loạn table', () => {
       { seat: 0, cardId: 's_swap_one', effect: 'swapLowest' as const, targets: [], outcome: 'applied' as const },
       { seat: 2, cardId: 's_shield', effect: 'shield' as const, targets: [], outcome: 'applied' as const },
     ]
+    const band = (): HTMLElement => document.querySelector<HTMLElement>('[data-chaos-toasts]')!
 
-    it('shows the cards that fired over the board, one by one, and holds the result card until the last', () => {
+    it('puts the cards in their own band, out of the board, and opens the result at once beside them (BP-39)', () => {
       wrap(fakeClient(stateWith({ applied: fired }, { ...finished, restored: false })))
-      const board = screen.getByRole('group', { name: 'Community cards' })
-      expect(within(board).getByText('Ann plays Card Swap')).toBeInTheDocument()
-      expect(screen.queryByRole('heading', { name: 'Winner' }), 'the result waits for the cards').toBeNull()
-      act(() => void vi.advanceTimersByTime(900))
-      expect(screen.getByText('Mai plays Wooden Shield')).toBeInTheDocument()
-      expect(screen.queryByRole('heading', { name: 'Winner' })).toBeNull()
-      act(() => void vi.advanceTimersByTime(900))
+      expect(within(band()).getByText((_, el) => el?.getAttribute('data-outcome') === 'applied' && el.textContent === 'Ann plays Card Swap')).toBeInTheDocument()
+      expect(within(band()).getByText((_, el) => el?.getAttribute('data-outcome') === 'applied' && el.textContent === 'Mai plays Wooden Shield')).toBeInTheDocument()
+      expect(within(screen.getByRole('group', { name: 'Community cards' })).queryByText(/plays/)).toBeNull()
+      expect(screen.getByRole('heading', { name: 'Winner' }), 'the result never waits for the cards').toBeInTheDocument()
+      expect(band().contains(screen.getByRole('heading', { name: 'Winner' })), 'two regions, not one inside the other').toBe(false)
+      act(() => void vi.advanceTimersByTime(4_000))
+      expect(within(band()).queryByText(/plays/)).toBeNull()
       expect(screen.getByRole('heading', { name: 'Winner' })).toBeInTheDocument()
     })
 
-    it('replays nothing for a hand rebuilt from a snapshot: the result card is up at once', () => {
+    it('lays the band under the header on a phone held upright, across the top on one held sideways, in the felt’s corner on a desktop', () => {
+      const at = (props: { layout?: 'stack'; frame?: 'landscape' }) =>
+        render(
+          <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+            <RoomScreen client={fakeClient(stateWith({ applied: fired }, { ...finished, restored: false }))} lang="en" onLeft={vi.fn()} {...props} />
+          </I18nextProvider>,
+        )
+      const upright = at({ layout: 'stack' })
+      expect(band()).toHaveAttribute('data-layout', 'stack')
+      expect(band().previousElementSibling?.tagName, 'right after the header').toBe('HEADER')
+      expect(band().closest('main')).toBeNull()
+      upright.unmount()
+      const sideways = at({ frame: 'landscape' })
+      expect(band()).toHaveAttribute('data-layout', 'landscape')
+      sideways.unmount()
+      at({})
+      expect(band()).toHaveAttribute('data-layout', 'desktop')
+    })
+
+    it('replays nothing for a hand rebuilt from a snapshot: the result card is up and the band is empty', () => {
       wrap(fakeClient(stateWith({ applied: fired }, { ...finished, restored: true })))
       expect(screen.getByRole('heading', { name: 'Winner' })).toBeInTheDocument()
-      expect(screen.queryByText('Ann plays Card Swap')).toBeNull()
+      expect(within(band()).queryByText(/plays/)).toBeNull()
     })
 
     it('puts the credits the cards paid on the result card', () => {
@@ -1765,27 +1910,174 @@ describe('RoomScreen on a Poker hỗn loạn table', () => {
       expect(screen.getByText('Bob: Rescue +3,000')).toBeInTheDocument()
     })
 
-    it('keeps saying the ranking is reversed all hand long, after a reconnect too, and gives the slot to a card while it fires', () => {
-      // Plan 37 final wave (I2): the snapshot's hand view brings `reverse` back; the note is the banner slot's quiet line.
+    it('keeps saying the ranking is reversed all hand long, after a reconnect too, as a pinned toast beside the cards', () => {
+      // Plan 37 final wave (I2): the snapshot's hand view brings `reverse` back; BP-39: the note is the band's pinned toast.
       const live = { ...finished, phase: 'REVEAL' as const, result: null, restored: true }
       const restored = wrap(fakeClient(stateWith({ reverse: true, applied: fired }, live)))
-      expect(within(screen.getByRole('group', { name: 'Community cards' })).getByText('Upside-Down World: the weakest hand wins')).toBeInTheDocument()
+      expect(within(band()).getByText('Upside-Down World: the weakest hand wins')).toHaveAttribute('data-pinned', 'true')
       restored.view.unmount()
       const { view } = wrap(fakeClient(stateWith({ reverse: true, applied: fired }, { ...live, restored: false })))
-      const board = screen.getByRole('group', { name: 'Community cards' })
-      expect(within(board).getByText('Ann plays Card Swap')).toBeInTheDocument()
-      expect(within(board).queryByText('Upside-Down World: the weakest hand wins'), 'one line at a time').toBeNull()
-      act(() => void vi.advanceTimersByTime(900))
-      act(() => void vi.advanceTimersByTime(900))
-      expect(within(board).getByText('Upside-Down World: the weakest hand wins')).toBeInTheDocument()
+      expect(within(band()).getByText('Upside-Down World: the weakest hand wins')).toBeInTheDocument()
+      expect(band().textContent).toContain('Ann plays Card Swap')
+      act(() => void vi.advanceTimersByTime(4_000))
+      expect(band().textContent).not.toContain('Ann plays')
+      expect(within(band()).getByText('Upside-Down World: the weakest hand wins')).toBeInTheDocument()
       view.rerender(screenFor(fakeClient(stateWith({ reverse: false }, live))))
       expect(screen.queryByText(/Upside-Down World/)).toBeNull()
     })
 
-    it('has no banner region on a table without chaos', () => {
+    it('has no toast band on a table without chaos', () => {
       const plainRoom = makeRoom({ ...chaosRoom, config: { ...chaosRoom.config, blind: { ...chaosRoom.config.blind!, chaosCycle: undefined } } })
       wrap(fakeClient(makeState({ room: plainRoom, hand: finished })))
-      expect(document.querySelector(`.${s.chaosBannerSlot}`)).toBeNull()
+      expect(document.querySelector('[data-chaos-toasts]')).toBeNull()
+    })
+  })
+
+  describe('the bonus hand (BP-39, spec 2026-10-27 §3.4)', () => {
+    const bonus = {
+      cards: [
+        { uid: 901, cardId: 's_steal_one', tier: 'silver' as const, handsLeft: null },
+        { uid: 903, cardId: 'd_insure_2', tier: 'diamond' as const, handsLeft: 2 },
+      ],
+      armed: null,
+    }
+    /** This hand's play-or-fold round, with me (seat 2) dealt in and `mine` laid over my seat. */
+    const deciding = (mine: Partial<ClientHand['seats'][number]> = {}, phase: ClientHand['phase'] = 'DECISION') =>
+      makeHand({
+        mode: 'blind',
+        phase,
+        mySeat: 2,
+        actingSeat: null,
+        community: [],
+        legal: phase === 'DECISION' ? { seat: 2, kinds: ['play', 'fold'], callAmount: 1_000, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 } : null,
+        seats: [
+          makeSeat({ seat: 0, playerId: 'a', displayName: 'Ann', hasDecided: true }),
+          makeSeat({ seat: 2, playerId: 'me', displayName: 'Mai', holeCards: parseCards('Qs Qd 2c'), ...mine }),
+        ],
+      })
+    const drawAt = (state: ClientState, where: { layout?: 'stack'; frame?: 'landscape' } = {}, client = fakeClient(state)) => {
+      render(
+        <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+          <RoomScreen client={client} lang="vi" onLeft={vi.fn()} {...where} />
+        </I18nextProvider>,
+      )
+      return client
+    }
+    const handGroup = () => screen.queryByRole('group', { name: 'Thẻ thưởng' })
+    const tap = (el: HTMLElement) => {
+      fireEvent.pointerDown(el, { pointerType: 'touch' })
+      fireEvent.pointerUp(el, { pointerType: 'touch' })
+      fireEvent.click(el, { detail: 1 })
+    }
+    /** Opens the first card's popup and answers whether its "Dùng" may be pressed. */
+    const usable = (): boolean => {
+      tap(within(handGroup()!).getAllByRole('button')[0]!)
+      const use = screen.getByRole('button', { name: 'Dùng' })
+      return !(use as HTMLButtonElement).disabled
+    }
+
+    it('lies in the controls’ row on a desktop, in the felt when upright, in the room’s corner when sideways — never in my seat', () => {
+      drawAt(stateWith({ bonus }))
+      expect(handGroup()!.closest('[role="group"][aria-label="Điều khiển bàn"]'), 'the controls').not.toBeNull()
+      expect(handGroup()).toHaveAttribute('data-layout', 'desktop')
+      cleanup()
+      drawAt(stateWith({ bonus }), { layout: 'stack' })
+      expect(handGroup()!.closest(`.${s.stackFelt}`), 'the felt').not.toBeNull()
+      expect(handGroup()!.closest(`.${s.mine}`), 'not my seat, which the strip hides').toBeNull()
+      expect(handGroup()).toHaveAttribute('data-layout', 'stack')
+      cleanup()
+      drawAt(stateWith({ bonus }), { frame: 'landscape' })
+      expect(handGroup()!.closest('main'), 'out of the stage the tier is measured on').toBeNull()
+      expect(handGroup()).toHaveAttribute('data-layout', 'landscape')
+    })
+
+    it('stays up and playable under the upright result strip, the main time to play a card', () => {
+      drawAt(makeState({ ...stateWith({ bonus }), resultSkips: { skipped: 0, total: 2, mine: false } }), { layout: 'stack' })
+      expect(document.querySelector(`.${screens.room}`)).toHaveAttribute('data-result-strip', 'open')
+      expect(handGroup()).not.toBeNull()
+      expect(usable()).toBe(true)
+    })
+
+    it('keeps "Dùng" open while a draft is up between hands (P8)', () => {
+      drawAt(stateWith({ bonus, draft: drafting }))
+      expect(screen.getByRole('region', { name: /Chọn một thẻ/ })).toBeInTheDocument()
+      expect(usable()).toBe(true)
+    })
+
+    it('plays a card through the client, once', async () => {
+      const client = drawAt(stateWith({ bonus }))
+      tap(within(handGroup()!).getAllByRole('button')[1]!)
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Dùng' }), { detail: 1 })
+      })
+      expect(client.playBonus).toHaveBeenCalledTimes(1)
+      expect(client.playBonus).toHaveBeenCalledWith(903)
+    })
+
+    it('opens "Dùng" in this hand’s play-or-fold round while I am in it and not folding', () => {
+      drawAt(stateWith({ bonus }, deciding()))
+      expect(usable()).toBe(true)
+    })
+
+    it('greys "Dùng" once I chose Bỏ, queued a fold, folded, or the round is over — the cards still open', () => {
+      const cases: [string, ClientState][] = [
+        ['chose Bỏ', stateWith({ bonus }, deciding({ hasDecided: true, decision: 'fold' }))],
+        ['folded', stateWith({ bonus }, deciding({ folded: true }))],
+        ['queued a fold', makeState({ ...stateWith({ bonus }, deciding()), preAction: { kind: 'fold', handId: deciding().handId } })],
+        ['the reveal', stateWith({ bonus }, deciding({}, 'REVEAL'))],
+        ['the squeeze', stateWith({ bonus }, deciding({}, 'SQUEEZE'))],
+        ['not dealt in', stateWith({ bonus }, { ...deciding(), mySeat: null })],
+      ]
+      for (const [why, state] of cases) {
+        drawAt(state)
+        expect(usable(), why).toBe(false)
+        cleanup()
+      }
+      // a fold queued for an earlier hand is not this hand's
+      drawAt(makeState({ ...stateWith({ bonus }, deciding()), preAction: { kind: 'fold', handId: 'an-old-hand' } }))
+      expect(usable()).toBe(true)
+    })
+
+    it('greys every other card while one is set to play, and says so on that one', () => {
+      drawAt(stateWith({ bonus: { cards: [bonus.cards[1]!], armed: { uid: 901, cardId: 's_steal_one', hand: 'this' } } }, deciding()))
+      const [armed, other] = within(handGroup()!).getAllByRole('button')
+      expect(armed).toHaveAccessibleName(/Đã đặt dùng/)
+      tap(other!)
+      expect(screen.getByRole('button', { name: 'Dùng' })).toBeDisabled()
+    })
+
+    it('is nowhere for a spectator, on a table without chaos, or while the hand is empty', () => {
+      const watching = makeRoom({ ...chaosRoom, players: [chaosRoom.players[0]!, makePlayer({ playerId: 'me', displayName: 'Mai' })] })
+      drawAt(makeState({ ...stateWith({ bonus }), room: watching }))
+      expect(handGroup()).toBeNull()
+      cleanup()
+      const plainRoom = makeRoom({ ...chaosRoom, config: { ...chaosRoom.config, blind: { ...chaosRoom.config.blind!, chaosCycle: undefined } } })
+      drawAt(makeState({ ...stateWith({ bonus }), room: plainRoom }))
+      expect(handGroup()).toBeNull()
+      cleanup()
+      drawAt(stateWith({}))
+      expect(handGroup()).toBeNull()
+    })
+
+    it('keeps a CHAOS_CANNOT_USE refusal out of the room’s error slip (A14) — other refusals still use it', () => {
+      const refusal = { code: 'CHAOS_CANNOT_USE' as const, message: 'FROZEN', reqId: 'r1', at: 1 }
+      drawAt(makeState({ ...stateWith({ bonus }), lastError: refusal }))
+      expect(screen.queryByRole('alert')).toBeNull()
+      cleanup()
+      drawAt(makeState({ ...stateWith({ bonus }), lastError: { ...refusal, code: 'NOT_YOUR_TURN' } }))
+      expect(screen.getByRole('alert')).toBeInTheDocument()
+    })
+
+    it('writes the refusal in the bonus hand instead', async () => {
+      const client = fakeClient(stateWith({ bonus }), {
+        playBonus: vi.fn().mockResolvedValue({ t: 'ERROR', code: 'CHAOS_CANNOT_USE', message: 'FROZEN', reqId: 'x' }),
+      })
+      drawAt(client.state, {}, client)
+      tap(within(handGroup()!).getAllByRole('button')[0]!)
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Dùng' }), { detail: 1 })
+      })
+      expect(within(handGroup()!).getByRole('alert')).toHaveTextContent('Chưa dùng được thẻ này lúc này')
     })
   })
 })

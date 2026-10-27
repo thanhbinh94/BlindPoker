@@ -6,6 +6,7 @@ import type { AckOrError } from '../client/connection.js'
 import type { ClientChaosDraft } from '../client/types.js'
 import { createI18n } from '../i18n/index.js'
 import { ChaosDraft, type ChaosDraftProps } from './ChaosDraft.js'
+import TABLE_CSS from './table.module.css?raw'
 
 const ACK: AckOrError = { t: 'ACK', reqId: 'x' }
 const REFUSED: AckOrError = { t: 'ERROR', code: 'CHAOS_NO_OFFER', message: 'no', reqId: 'x' }
@@ -119,6 +120,38 @@ describe('ChaosDraft', () => {
     expect(panel).toHaveAttribute('data-layout', 'stack')
     expect(panel).toHaveAttribute('data-frame', 'landscape')
     expect(panel).toHaveAttribute('data-state', 'choosing')
+  })
+
+  it('lays a phone on its side one row of three, each card with its tier, its name and its whole text; a tap still picks', async () => {
+    // spec 2026-10-27 §3.6, A10: the landscape row already was one; the tier is back on it, the text held to three lines.
+    const i18n = createI18n({ language: 'vi', storage: null })
+    const { container, onPick } = mount({ frame: 'landscape', short: true })
+    const group = screen.getByRole('group', { name: 'Ba thẻ để chọn' })
+    expect(group).toHaveAttribute('data-arrange', 'row')
+    expect(container.querySelector('section')).toHaveAttribute('data-frame', 'landscape')
+    const cards = within(group).getAllByRole('button')
+    expect(cards).toHaveLength(3)
+    cards.forEach((card, i) => {
+      const id = OFFER.cardIds[i]!
+      expect(card.querySelector('span:nth-child(1)')).toHaveTextContent('Vàng')
+      expect(card.querySelector('[data-part="name"]')).toHaveTextContent(i18n.t(`game:chaos.cards.${id}.name`))
+      expect(card.querySelector('span:nth-child(3)')?.textContent, 'the whole text, clamped by the CSS only').toBe(i18n.t(`game:chaos.cards.${id}.desc`))
+    })
+    await userEvent.click(cards[1]!)
+    expect(onPick).toHaveBeenCalledWith('o1', 'g_shield_3')
+  })
+
+  it('no longer hides the tier chip on the landscape row, and clamps the text there to three lines', () => {
+    expect(TABLE_CSS).not.toMatch(/\.draft\[data-frame='landscape'\] \.draftCardTier\s*\{[^}]*display:\s*none/)
+    expect(TABLE_CSS).toMatch(/\.draft\[data-frame='landscape'\] \.draftCardDesc\s*\{[^}]*-webkit-line-clamp:\s*3/)
+    // the row of three is the panel's own grid; only the upright sheet turns it into a column
+    expect(TABLE_CSS).toMatch(/\.draftCards\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/)
+    expect(TABLE_CSS).not.toMatch(/\.draft\[data-frame='landscape'\] \.draftCards\s*\{[^}]*grid-template-columns/)
+  })
+
+  it('arranges the upright sheet as a column', () => {
+    mount({ layout: 'stack' })
+    expect(screen.getByRole('group', { name: 'Ba thẻ để chọn' })).toHaveAttribute('data-arrange', 'column')
   })
 
   it('speaks English with the same cards', () => {

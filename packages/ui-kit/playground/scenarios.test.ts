@@ -81,24 +81,36 @@ describe('the chaos worst-case pages', () => {
     expect(document.querySelector('[data-me="true"] [class*="seatCards"]')!.children.length).toBe(3)
   })
 
-  it('#worst/chaosReveal/6/vi: the banner is up over the board', () => {
+  it('#worst/chaosReveal/6/vi: the three cards that fired are up as toasts', () => {
     draw('#worst/chaosReveal/6/vi')
-    
-    expect(document.querySelector('[data-outcome]')).toHaveTextContent('Bot 1 dùng Rút lá lẻ lên Nguyễn Thị Phương Anh')
-    expect(document.querySelector('[data-outcome]')).toHaveTextContent('Bị chặn')
+    const toasts = document.querySelectorAll('[data-chaos-toasts] [data-outcome]')
+    expect(toasts).toHaveLength(3)
+    expect(toasts[0]).toHaveTextContent('Bot 1 dùng Rút lá lẻ → Nguyễn Thị Phương Anh')
+    expect(toasts[0]).toHaveTextContent('Bị chặn')
   })
 
-  it('#worst/chaosBoard/6/vi: five board cards up, the banner on their feet, and "Thế giới đảo ngược" on', () => {
+  it('#worst/chaosBoard/6/vi: five board cards up, the reveal cards as toasts, and "Thế giới đảo ngược" pinned first', () => {
     draw('#worst/chaosBoard/6/vi')
     const board = screen.getByRole('group', { name: 'Bài chung' })
-    expect(board).toHaveAttribute('data-board', 'up')
     expect(board.querySelectorAll('[data-card]')).toHaveLength(5)
-    expect(within(board).getByText(/dùng Thế giới đảo ngược/)).toBeInTheDocument()
+    const band = document.querySelector<HTMLElement>('[data-chaos-toasts]')!
+    expect(band.querySelector('[data-chaos-toast]')).toHaveAttribute('data-chaos-note')
+    expect(band.textContent).toMatch(/dùng Thế giới đảo ngược/)
+    expect(within(band).getByText('+1 thẻ khác'), 'the note takes one of the three places').toBeInTheDocument()
+  })
+
+  it('#worst/chaosBurst/8/vi: the eight cards come with the settlement — three toasts and "+5 thẻ khác" beside the open result', () => {
+    draw('#worst/chaosBurst/8/vi')
+    const band = document.querySelector<HTMLElement>('[data-chaos-toasts]')!
+    expect(band.querySelectorAll('[data-outcome]')).toHaveLength(3)
+    expect(within(band).getByText('+5 thẻ khác')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Người thắng' })).toBeInTheDocument()
   })
 
   it('#worst/chaosResult/6/vi: "Thẻ đã dùng", the credits, and the winner’s shout', () => {
     draw('#worst/chaosResult/6/vi')
-    expect(screen.getByText(/^Thẻ đã dùng: Nguyễn Thị Phương Anh — Đổi bài, Nhìn trộm;/)).toBeInTheDocument()
+    // Each card's name is its own button on the line (BP-39), so the line is read whole rather than by its own text alone.
+    expect(screen.getByText(/^Thẻ đã dùng:/)).toHaveTextContent(/^Thẻ đã dùng: Nguyễn Thị Phương Anh — Đổi bài, Nhìn trộm;/)
     expect(screen.getByText(/Bạo kích ×2 \+6\.000/)).toBeInTheDocument()
     expect(screen.getByText('Bạo kích ×2!')).toBeInTheDocument()
     expect(screen.getByText(/Đã chạm trần thẻ hôm nay/)).toBeInTheDocument()
@@ -120,5 +132,41 @@ describe('the chaos worst-case pages', () => {
   it('#worst/chaosBlind: three backs I cannot turn, and the word for it', () => {
     draw('#worst/chaosBlind/6/vi')
     expect(within(document.querySelector<HTMLElement>('[data-me="true"]')!).getByText('Bị che mắt')).toBeInTheDocument()
+  })
+  // BP-39: the pages Tasks 8-11 take their screenshots from.
+  it('knows the bonus pages by name', () => {
+    expect(parseWorstHash('#worst/chaosBonus/6/vi')?.state).toBe('chaosBonus')
+    expect(parseWorstHash('#worst/chaosBurst/8/en')?.state).toBe('chaosBurst')
+  })
+
+  it('#worst/chaosBurst/8/vi: all eight seats fired a card, in one "Thẻ đã dùng" line, with the next hand counted down', () => {
+    draw('#worst/chaosBurst/8/vi')
+    const line = screen.getByText(/^Thẻ đã dùng: /)
+    expect(line.textContent!.split('; ')).toHaveLength(8)
+    expect(line).toHaveTextContent('Bot 1 — Rút lá lẻ (Bị chặn)')
+    expect(document.body.textContent).toMatch(/Ván tiếp theo sau [0-9]+ giây/)
+  })
+
+  it('#worst/chaosBurst with fewer seats lets only those seats fire', () => {
+    draw('#worst/chaosBurst/4/vi')
+    expect(screen.getByText(/^Thẻ đã dùng: /).textContent!.split('; ')).toHaveLength(4)
+  })
+
+  it('#worst/chaosBonus/6/vi: my decision with a full bonus hand behind it', () => {
+    draw('#worst/chaosBonus/6/vi')
+    expect(screen.getByRole('button', { name: /^Chơi/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Bỏ bài' })).toBeInTheDocument()
+    expect(within(screen.getByRole('group', { name: 'Thẻ thưởng' })).getAllByRole('button')).toHaveLength(3)
+    // the others' counts, never their cards: Bot 1 and Bot 4 hold one, Bot 3 two
+    expect(screen.getAllByRole('img', { name: 'Thẻ thưởng: 1' })).toHaveLength(2)
+    expect(screen.getByRole('img', { name: 'Thẻ thưởng: 2' })).toBeInTheDocument()
+  })
+
+  it('#worst/chaosArmed/6/vi: the board re-deal set to play, the other two cards still in my hand', () => {
+    expect(parseWorstHash('#worst/chaosArmed/6/vi')?.state).toBe('chaosArmed')
+    draw('#worst/chaosArmed/6/vi')
+    const cards = within(screen.getByRole('group', { name: 'Thẻ thưởng' })).getAllByRole('button')
+    expect(cards).toHaveLength(3)
+    expect(cards[0]).toHaveAccessibleName('Chia lại lá chung (Vàng) · Đã đặt dùng · ván này')
   })
 })

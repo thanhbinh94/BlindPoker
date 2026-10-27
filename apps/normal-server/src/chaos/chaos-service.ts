@@ -7,7 +7,10 @@
  *   (`starts_at <= now < ends_at`, a null bound is open); outside it the file's `enabled` applies, with weight 1. Every
  *   call reads the rows afresh: one draft is one call, and a GM's edit is seen by the next draft with no cache to clear.
  * - **Settings.** `chaos_config` key `chaos` is merged over `DEFAULT_CHAOS_CONFIG`, field by field, so a row written before
- *   a field existed (or damaged by hand) still yields a whole, valid config.
+ *   a field existed (or damaged by hand) still yields a whole, valid config. Every chaos room reads it after each hand (the
+ *   result time, BP-39), so `config()` keeps what it read for `CONFIG_CACHE_MS`; `setConfig` drops it at once, and a read
+ *   that began before the drop never stores its older answer. A row edited by hand is seen within `CONFIG_CACHE_MS`. The
+ *   credit path reads the row afresh inside its own transaction.
  * - **Credit.** The only place a chaos card creates points. One transaction per credit: the player row is locked, the
  *   economy day's chaos credits are summed, the amount is cut to what the daily cap (and, for Cấp cứu, the daily count)
  *   leaves, the key is claimed in `ledger_keys`, and two rows are written under it through `creditWithin` — the source
@@ -26,6 +29,9 @@ import { isUuid } from '../repos/util.js'
 
 /** The one `chaos_config` row. */
 export const CHAOS_CONFIG_KEY = 'chaos'
+
+/** How long `config()` keeps the row it read (M5): `setConfig` drops it sooner; this bounds a hand edit or a lost race. */
+export const CONFIG_CACHE_MS = 10_000
 
 /** One catalogue card as the GM tab shows it: the file's facts, the GM's rule if there is one, and whether it is drawn now. */
 export interface GmChaosCard {
@@ -48,7 +54,13 @@ export type ChaosRuleChange =
 export interface ChaosService {
   /** The cards on now (each marked `enabled: true`) and every one's draw weight; a rule's weight, else 1. Read fresh. */
   active(nowMs?: number): Promise<{ cards: ChaosCardDef[]; weights: Map<string, number> }>
+  /** The settings, kept for `CONFIG_CACHE_MS` after a read; `setConfig` drops them at once. */
   config(): Promise<ChaosConfig>
+  /**
+   * Drops the kept settings. The caller of `setConfig` calls it once its transaction has committed: a read between the
+   * write and the commit still sees the old row, and would otherwise keep it for `CONFIG_CACHE_MS`.
+   */
+  forgetConfig(): void
   rules(nowMs?: number): Promise<GmChaosCard[]>
   /** Throws `ServiceError('INVALID_CHAOS_RULES')`. Meant to run inside the caller's transaction, which rolls back with it. */
   setRules(tx: AppTx, changes: readonly ChaosRuleChange[], updatedBy: string): Promise<void>
@@ -77,6 +89,7 @@ interface RuleRow {
 const LIMITS = {
   pointsThreshold: [1, 100],
   draftMs: [5_000, 60_000],
+  resultMs: [5_000, 15_000],
   dailyCapPoints: [0, 10_000_000],
   dailyRescues: [0, 20],
 } as const
@@ -137,6 +150,7 @@ function mergeConfig(stored: unknown): ChaosConfig {
     tierWeights: tierWeights.silver + tierWeights.gold + tierWeights.diamond > 0 ? tierWeights : { ...d.tierWeights },
     pointsThreshold: pick('pointsThreshold'),
     draftMs: pick('draftMs'),
+    resultMs: pick('resultMs'),
     dailyCapPoints: pick('dailyCapPoints'),
     dailyRescues: pick('dailyRescues'),
   }
@@ -179,10 +193,29 @@ export function createChaosService(deps: ChaosServiceDeps): ChaosService {
     return { cards, weights }
   }
 
+  // `generation` moves on every drop: a read that started under an older generation answers its caller but stores nothing,
+  // so a read racing a GM's save cannot put the old settings back in the cache.
+  let cached: { value: ChaosConfig; at: number } | null = null
+  let generation = 0
+  const dropConfig = (): void => {
+    cached = null
+    generation += 1
+  }
+  const copy = (c: ChaosConfig): ChaosConfig => ({ ...c, tierWeights: { ...c.tierWeights } })
+
   return {
     active,
 
-    config: () => readConfig(db),
+    async config() {
+      const at = now()
+      if (cached && at - cached.at >= 0 && at - cached.at < CONFIG_CACHE_MS) return copy(cached.value)
+      const gen = generation
+      const value = await readConfig(db)
+      if (gen === generation) cached = { value: copy(value), at }
+      return value
+    },
+
+    forgetConfig: dropConfig,
 
     async rules(nowMs = now()) {
       const rules = await readRules(db)
@@ -253,11 +286,15 @@ export function createChaosService(deps: ChaosServiceDeps): ChaosService {
         tierWeights: { silver: tw.silver, gold: tw.gold, diamond: tw.diamond },
         pointsThreshold: config.pointsThreshold,
         draftMs: config.draftMs,
+        resultMs: config.resultMs,
         dailyCapPoints: config.dailyCapPoints,
         dailyRescues: config.dailyRescues,
       }
       const set = { value, updatedBy, updatedAt: new Date(now()) }
+      // Dropped before and after the write: a rolled-back save costs one fresh read, never a stale answer.
+      dropConfig()
       await tx.insert(chaosConfig).values({ key: CHAOS_CONFIG_KEY, ...set }).onConflictDoUpdate({ target: chaosConfig.key, set })
+      dropConfig()
     },
 
     async credit({ playerId, amount, reason, key }) {

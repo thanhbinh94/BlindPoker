@@ -58,8 +58,8 @@ describe('PokerTable on a Poker hỗn loạn table', () => {
       handOf(),
       chaos({
         seats: {
-          0: { cards: [{ uid: 1, cardId: 's_shield', tier: 'silver', handsLeft: null }], points: 3 },
-          2: { cards: [{ uid: 2, cardId: 'g_swap_all', tier: 'gold', handsLeft: null }, { uid: 3, cardId: 'd_mirror', tier: 'diamond', handsLeft: 2 }], points: 0 },
+          0: { cards: [{ uid: 1, cardId: 's_shield', tier: 'silver', handsLeft: null }], points: 3, bonusCount: 0 },
+          2: { cards: [{ uid: 2, cardId: 'g_swap_all', tier: 'gold', handsLeft: null }, { uid: 3, cardId: 'd_mirror', tier: 'diamond', handsLeft: 2 }], points: 0, bonusCount: 0 },
         },
       }),
     )
@@ -67,10 +67,13 @@ describe('PokerTable on a Poker hỗn loạn table', () => {
     expect([...seatBox(2).querySelectorAll('[data-chaos-cards] [data-tier]')].map((i) => i.getAttribute('data-tier'))).toEqual(['gold', 'diamond'])
   })
 
-  it('draws a table without chaos state exactly as before: no icons, no banner slot', () => {
-    draw(handOf(), null)
+  it('draws a table without chaos state exactly as before: no icons, and the board is the plain board', () => {
+    draw(handOf({ community: parseCards('Ah Kd 2c') }), null)
     expect(document.querySelector('[data-chaos-cards]')).toBeNull()
-    expect(document.querySelector(`.${s.chaosBannerSlot}`)).toBeNull()
+    expect(document.querySelector('[data-chaos-toasts]')).toBeNull()
+    const board = screen.getByRole('group', { name: 'Bài chung' })
+    expect(board.getAttribute('class')).toBe(s.community)
+    expect(board).not.toHaveAttribute('data-board')
   })
 
   it('lays the peeked cards face up in the first empty board slots, with a "Nhìn trộm" tag over the first', () => {
@@ -131,28 +134,6 @@ describe('PokerTable on a Poker hỗn loạn table', () => {
     expect(screen.queryByText(/Bạo kích/)).toBeNull()
   })
 
-  it('carries the banner inside the board’s own box, so it is centred on the board wherever the layout puts it', () => {
-    draw(handOf(), chaos(), { banner: <p data-testid="banner">cờ</p> })
-    const board = screen.getByRole('group', { name: 'Bài chung' })
-    expect(screen.getByTestId('banner').parentElement).toBe(board)
-    expect(board).toHaveClass(s.community!)
-    expect(board).toHaveClass(s.communityAnchor!)
-    expect(board).not.toHaveAttribute('data-board') // an empty board: the banner is centred on the ghosts
-  })
-
-  it('anchors only a board that carries a banner: a table without chaos lays its board out as before (M4)', () => {
-    draw(handOf({ community: parseCards('Ah Kd 2c') }), null)
-    const board = screen.getByRole('group', { name: 'Bài chung' })
-    expect(board).toHaveClass(s.community!)
-    expect(board).not.toHaveClass(s.communityAnchor!)
-    expect(board).not.toHaveAttribute('data-board')
-  })
-
-  it('moves the banner onto the cards’ feet once board cards are face up, so it hides none of them (I3)', () => {
-    draw(handOf({ phase: 'REVEAL', community: parseCards('Ah Kd 2c 7s 9h') }), chaos(), { banner: <p data-testid="banner">cờ</p> })
-    expect(screen.getByRole('group', { name: 'Bài chung' })).toHaveAttribute('data-board', 'up')
-  })
-
   it('reads the blindfold from the snapshot when it has one: shown cards then are not "down", and a view that says so is', () => {
     const { unmount } = draw(handOf({}, { holeCards: null }), chaos({ blindfolded: false }))
     expect(screen.queryByText('Bị che mắt')).toBeNull()
@@ -206,7 +187,7 @@ describe('PokerTable on a crowded Poker hỗn loạn phone table', () => {
     playerCount: 9,
     players: Array.from({ length: 9 }, (_, seat) => makePlayer({ playerId: seat === 0 ? 'a' : `p${seat}`, displayName: seat === 0 ? 'Ann' : `P${seat}`, seat, status: 'IN_HAND', stack: 20_000 })),
   })
-  const held = { cards: [1, 2, 3].map((uid) => ({ uid, cardId: 's_shield', tier: 'silver' as const, handsLeft: null })), points: 0 }
+  const held = { cards: [1, 2, 3].map((uid) => ({ uid, cardId: 's_shield', tier: 'silver' as const, handsLeft: null })), points: 0, bonusCount: 0 }
   const drawNine = (layout: 'stack' | 'ring') =>
     render(
       <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
@@ -224,25 +205,5 @@ describe('PokerTable on a crowded Poker hỗn loạn phone table', () => {
   it('draws the full row on the ring, however many seats there are', () => {
     drawNine('ring')
     expect(seatBox(3).querySelectorAll('[data-chaos-cards] [role="img"]')).toHaveLength(3)
-  })
-})
-
-describe('the chaos banner’s slot in the stylesheet', () => {
-  it('fills the board’s box and takes no room, and the board is its anchor', async () => {
-    const css = (await import('./table.module.css?raw')).default.replace(/\r\n/g, '\n')
-    const slot = /\.chaosBannerSlot\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
-    expect(slot).toMatch(/position:\s*absolute/)
-    expect(slot).toMatch(/inset:\s*0/)
-    expect(slot).toMatch(/pointer-events:\s*none/)
-    expect(/\.communityAnchor\s*\{([^}]*)\}/.exec(css)?.[1]).toMatch(/position:\s*relative/)
-    // a plain table's board is not repositioned (spec §7: a table without chaos is unchanged)
-    expect(/\.community\s*\{([^}]*)\}/.exec(css)?.[1]).not.toMatch(/position/)
-  })
-
-  it('puts the pill on the cards’ feet, see-through, once board cards are up, and keeps it inside the board on a phone on its side (I3)', async () => {
-    const css = (await import('./table.module.css?raw')).default.replace(/\r\n/g, '\n')
-    expect(/\.community\[data-board='up'\] \.chaosBannerSlot\s*\{([^}]*)\}/.exec(css)?.[1]).toMatch(/align-items:\s*flex-end/)
-    expect(/\.community\[data-board='up'\] \.chaosBanner\s*\{([^}]*)\}/.exec(css)?.[1]).toMatch(/rgb\(10 18 32 \/ 0\.7\)/)
-    expect(/\.ring\[data-frame='landscape'\] \.community\[data-board='up'\] :is\(\.chaosBanner, \.chaosNote\)\s*\{([^}]*)\}/.exec(css)?.[1]).toMatch(/transform:\s*none/)
   })
 })

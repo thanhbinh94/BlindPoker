@@ -1,4 +1,4 @@
-import { blindTableLimit, type RoomView } from '@bp/core'
+import { blindBuyInCap, type RoomView } from '@bp/core'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ConnectionStatus } from '../client/types.js'
@@ -41,12 +41,14 @@ export function RoomHeader({ room, status, onLeave, lang, right, compact = false
   const { t } = useTranslation()
   const holdem = room.config.holdem
   const blind = room.config.blind
+  // A chaos table has no cap (BP-39, spec 2026-10-27 §3.7): the seat brings the whole balance, and the limit says so.
+  const limitText = (cap: number | null): string => (cap === null ? t('labels.noLimit') : formatPoints(cap, lang))
   const stakes =
     room.mode === 'holdem' && holdem !== undefined
       ? `${t('labels.blinds')} ${formatPoints(holdem.smallBlind, lang)}/${formatPoints(holdem.bigBlind, lang)}`
       : blind === undefined
         ? ''
-        : `${t('labels.wager')} ${formatPoints(blind.fixedWager, lang)} · ${t('labels.tableLimit')} ${formatPoints(blindTableLimit(blind), lang)}`
+        : `${t('labels.wager')} ${formatPoints(blind.fixedWager, lang)} · ${t('labels.tableLimit')} ${limitText(blindBuyInCap(blind))}`
   const players = t('lobby.playersOf', { current: room.playerCount, max: room.maxPlayers })
   const conn = (
     <span className={s.conn} data-status={status}>
@@ -98,7 +100,7 @@ export function RoomHeader({ room, status, onLeave, lang, right, compact = false
               fills a row of its own, which is what scrolled its stage by 11 px (Plan 26, B6). On a desktop `metaFlow` steps
               aside and `order` puts the badge back between the badges and the code. */}
           <div className={s.headMeta}>
-            <div className={s.metaFlow}>
+            <div className={s.metaFlow} data-chaos={chaosBadge === null ? undefined : 'true'}>
               <Badge tone="gold">{t(`mode.${room.mode}`)}</Badge>
               {blind === undefined ? null : <Badge tone="teal">{t(blind.holeCards === 3 ? 'blind.cards3' : 'blind.cards2')}</Badge>}
               {blind === undefined ? null : <Badge tone="muted">{t(`blind.decision.${blind.decisionMode}`)}</Badge>}

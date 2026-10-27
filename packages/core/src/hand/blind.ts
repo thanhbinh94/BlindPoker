@@ -29,6 +29,14 @@ export function blindTableLimit(rules: Pick<BlindRules, 'fixedWager'>): number {
   return rules.fixedWager * ECONOMY.blindTableLimitMultiplier
 }
 
+/**
+ * The most a seat may sit down with (BP-39): the table limit at a plain Blind table, `null` (no cap — the whole balance
+ * may go on the table) at a chaos table.
+ */
+export function blindBuyInCap(rules: Pick<BlindRules, 'fixedWager' | 'chaosCycle'>): number | null {
+  return rules.chaosCycle === undefined ? blindTableLimit(rules) : null
+}
+
 const rulesOf = (state: HandState): BlindRules => {
   if (state.rules.mode !== 'blind') throw new EngineError('INVALID_COMMAND', 'not a blind hand')
   return state.rules

@@ -1963,6 +1963,40 @@ describe('Money conservation over many hands', () => {
     expect(await books(h, { h: 1_000_000, a: 1_000_000 })).toBe(0)
   })
 
+  it('a chaos seat brings the whole balance (5.000.000), plays two hands — the second dealt by "Bỏ qua" — and stands: the books stay at 0 (BP-39)', async () => {
+    const start = { h: 5_000_000, a: 100_000 }
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, chaosCycle: 5 } }, { seed: 39, chaos: { config: { resultMs: 10_000 } }, players: Object.entries(start) })
+    const ids = ['h', 'a']
+    const pickAll = async () => {
+      for (const id of ids) {
+        const draft = h.room.snapshot(id).chaos?.draft
+        if (draft?.offer && !draft.picked) await h.room.pickChaos(id, draft.offer.offerId, draft.offer.cardIds[0]!)
+      }
+    }
+    for (const [i, id] of ids.entries()) {
+      if (id !== 'h') await h.room.join(h.identity(id))
+      await h.room.sitDown(id, i)
+      await h.room.setReady(id, true)
+    }
+    // No table limit at a chaos table: everything comes to the seat, nothing stays behind; the bots keep their limit.
+    expect(h.room.players.get('h')!.stack).toBe(5_000_000)
+    expect(h.room.players.get('a')!.stack).toBe(100_000)
+    expect(await h.repos.balances.get('h')).toBe(0)
+    expect(h.room.view().players.filter((p) => p.isBot).map((p) => p.stack)).toEqual([10_000, 10_000])
+    await h.room.startGame('h')
+    await pickAll()
+    await playOut(h)
+    expect(await books(h, start)).toBe(0)
+    for (const id of ids) await h.room.skipResult(id)
+    expect(h.room.handActive).toBe(true) // dealt at once, long before the 10 s result time
+    await playOut(h)
+    expect(h.repos.hands).toHaveLength(2)
+    expect(await books(h, start)).toBe(0)
+    for (const id of ids) await h.room.standUp(id)
+    expect(ids.map((id) => h.room.players.get(id)!.stack)).toEqual([0, 0])
+    expect(await books(h, start)).toBe(0)
+  })
+
   /**
    * Plan 37 final wave (ledger ruling): a credit whose first write landed but whose reply was lost, and whose retry
    * failed, is kept pending under its key — never dropped — and the stack is raised once when a later retry answers.

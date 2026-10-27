@@ -10,9 +10,10 @@ import { MenuButton, type MenuItem } from '../primitives/MenuButton.js'
 import { Modal } from '../primitives/Modal.js'
 import { cx } from '../primitives/cx.js'
 import { ActionBar } from '../table/ActionBar.js'
-import { ChaosBanner, useChaosBanner } from '../table/ChaosBanner.js'
+import { BonusHand } from '../table/BonusHand.js'
 import { ChaosDraft } from '../table/ChaosDraft.js'
-import { HandResult } from '../table/HandResult.js'
+import { ChaosToasts } from '../table/ChaosToasts.js'
+import { HandResult, ResultSkipControl, type ResultSkip } from '../table/HandResult.js'
 import { STACK_LAYOUT_QUERY, useRoomFrame, useStageTier, type RoomFrame } from '../table/frame.js'
 import { PokerTable, type TableLayout } from '../table/PokerTable.js'
 import { RankLabel } from '../table/RankLabel.js'
@@ -108,11 +109,10 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
   // nothing on screen gives the result away before the card (the same fix wave, follow-up). The faces take the flag
   // themselves: their reaction counts from the end of the hold, so it shows for its full length.
   const revealHeld = useRevealHold(hand)
-  // Poker hỗn loạn: the cards that fired this hand come up one at a time over the board, and a finished hand's result waits
-  // for the last of them — the table keeps it to itself the way it does for a card turning over. A restored hand replays none.
+  // Poker hỗn loạn (BP-39, spec 2026-10-27 §3.1): the cards that fired come as toasts in a band of their own, and the result
+  // never waits for them — it opens at the settlement, the toasts run beside it.
   const draft = state.chaos.draft
-  const banner = useChaosBanner(state.chaos.applied, hand?.handId ?? null, hand?.restored ?? false)
-  const held = revealHeld || (hand?.phase === 'COMPLETE' && banner.item !== null)
+  const held = revealHeld
   const expressionFor = useTableExpressions(state, client.serverNow, held)
   const onLeftRef = useRef(onLeft)
   onLeftRef.current = onLeft
@@ -165,18 +165,28 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
   // measured again when the viewer takes a seat or leaves one under it. Up here, above the early return, because it is
   // a hook — and worked out from `resultCard` itself, so what is measured for and what is drawn cannot disagree.
   const stageRef = useRef<HTMLElement>(null)
-  // The draft always stops above the viewer's seat, however little room that leaves: it scrolls inside, and the hand fan stays clear.
-  const clearance = useSeatClearance(stageRef, resultCard !== null || draft !== null, me?.seat ?? null, draft !== null ? { minRoom: 0, aboveHand: true } : undefined)
   // Also a hook, so also above the early return: the frame is what every landscape rule of the room keys on.
   const frame = useRoomFrame(frameOverride)
+  // The stacked table (BP-31 R9), measured once here so the table and the tray agree; a hook, so above the early return.
+  const stackMatch = useMediaQuery(STACK_LAYOUT_QUERY)
+  // Poker hỗn loạn on a phone (BP-39, spec 2026-10-27 §3.2): the result is a strip above the tray, not a card over the felt —
+  // upright (the stack) and on its side. It lies over no seat the clearance would have to keep it off.
+  /** The table's layout, one answer for the table and the tray: an override, else the ring in landscape, else the query. */
+  const tableLayout: TableLayout = layout ?? (frame === 'landscape' ? 'ring' : stackMatch ? 'stack' : 'ring')
+  const resultStrip = room?.config.blind?.chaosCycle !== undefined && (frame === 'landscape' || tableLayout === 'stack')
+  // The draft always stops above the viewer's seat, however little room that leaves: it scrolls inside, and the hand fan stays clear.
+  const clearance = useSeatClearance(
+    stageRef,
+    (resultCard !== null && !resultStrip) || draft !== null,
+    me?.seat ?? null,
+    draft !== null ? { minRoom: 0, aboveHand: true } : undefined,
+  )
   const fullscreen = useFullscreenActive()
   // The landscape frame's tier (BP-28): the stage itself is measured, so a phone that keeps its browser bars — or any
   // stage under 300 px (`SHORT_STAGE_PX`) — gets the short one. A hook too, so above the early return; it starts measuring once the stage
   // is in the tree.
   const tier = useStageTier(stageRef, frame, room !== null)
   const [nudgeDone, dismissNudge] = useFullscreenNudge()
-  // The stacked table (BP-31 R9), measured once here so the table and the tray agree; a hook, so above the early return.
-  const stackMatch = useMediaQuery(STACK_LAYOUT_QUERY)
 
   if (room === null) return null
 
@@ -290,7 +300,29 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
       </Button>
     ) : null
   const readyLine = waiting ? <span className={s.readyCount}>{t('room.readyCount', { ready: readyCount, total: seated.length })}</span> : null
-  const countdownLine = countdownHere ? <p className={s.countdown}>{nextHandText}</p> : null
+  // "Bỏ qua" (spec §3.3): the tally for everyone at a chaos table while the result wait runs, the button for a voter — the
+  // server's own rule: seated, connected and not sitting out (nor asked to: the view's `sittingOut` carries both). A seat
+  // sitting out is not counted, so a button there would read "Đã bỏ qua" while the count stayed put (M1).
+  // Not through `request`, which would grey the tray for a press the tray did not make; a refusal (the wait just ended) is
+  // silent, as the server's is.
+  const skips = state.resultSkips
+  const voter = mySeated && me.connected && !sittingOut
+  const skip: ResultSkip | null =
+    !chaosTable || skips === null
+      ? null
+      : { ...skips, ...(voter ? { onSkip: () => client.skipResult().catch(() => undefined) } : {}) }
+  // A desktop result card closed with "Đóng" takes its "Bỏ qua" with it: the control stays here, beside the countdown, while
+  // the wait runs (M2). The phone's strip has no "Đóng", so this is the card's case only.
+  const countdownLine = countdownHere ? (
+    <p className={s.countdown}>
+      {nextHandText}
+      {skip !== null && !resultStrip ? (
+        <span className={s.countdownSkip}>
+          <ResultSkipControl skip={skip} handId={finished?.handId ?? ''} />
+        </span>
+      ) : null}
+    </p>
+  ) : null
   const startButton =
     waiting && isHost ? (
       <Button variant="gold" disabled={request.busy || !canStart} onClick={() => void request.run(() => client.startGame())}>
@@ -311,8 +343,6 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
    * toggles, "Tự động chơi" among them — stays, so auto-play can be turned off during the countdown (B4).
    */
   const landscape = frame === 'landscape'
-  /** The table's layout, one answer for the table and the tray: an override, else the ring in landscape, else the query. */
-  const tableLayout: TableLayout = layout ?? (frame === 'landscape' ? 'ring' : stackMatch ? 'stack' : 'ring')
   /**
    * A phone held upright (BP-31 §3.1, R11) — or any window the stack query catches (R9) — keyed on the resolved layout,
    * never on the raw query, which a phone on its side also answers (P2). It takes landscape's two pieces: the seat's
@@ -352,6 +382,36 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
     }
   }
   const leave = (): void => void request.run(() => client.leaveRoom())
+  /**
+   * The bonus hand's window (spec 2026-10-27 §3.4, the server's own rule mirrored): a seated player at a chaos table with
+   * nothing pressed yet, between hands — the result wait, the draft, the room waiting — or in this hand's play-or-fold round
+   * with the seat dealt in and not folding (no "Bỏ" chosen, none queued). Not in any other round, so never mid-hand at a
+   * "Hoàn toàn may rủi" table, which has no such round. Outside it the cards still open to be read, "Dùng" greyed.
+   */
+  const myHandSeat = hand !== null && hand.mySeat !== null ? hand.seats.find((x) => x.seat === hand.mySeat) : undefined
+  const folding =
+    myHandSeat === undefined || myHandSeat.folded || myHandSeat.decision === 'fold' || (state.preAction?.kind === 'fold' && state.preAction.handId === hand?.handId)
+  const bonusUsable =
+    chaosTable && mySeated && state.chaos.bonus.armed === null && (!handLive || (hand.phase === 'DECISION' && !folding))
+  const bonusHand =
+    chaosTable && mySeated ? (
+      <BonusHand bonus={state.chaos.bonus} canUse={bonusUsable} onUse={client.playBonus} layout={stack ? 'stack' : landscape ? 'landscape' : 'desktop'} />
+    ) : null
+  const result =
+    resultCard === null ? null : (
+      <HandResult
+        hand={resultCard}
+        room={room}
+        myPlayerId={state.me?.playerId ?? null}
+        lang={lang}
+        countdown={nextHandText}
+        frame={frame}
+        chaosCredits={state.chaos.credits}
+        skip={skip}
+        stage={stageRef}
+        {...(resultStrip ? { variant: 'strip' as const } : { onDismiss: () => setDismissedHandId(resultCard.handId) })}
+      />
+    )
   const tray =
     hand === null || hand.mySeat === null ? null : (
       <ActionBar
@@ -376,7 +436,13 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
   const footerShown = !stack || dockShown || tray !== null || nudgeShown
 
   return (
-    <div className={s.room} data-frame={frame} data-tier={landscape ? tier : undefined} data-layout={stack ? 'stack' : undefined}>
+    <div
+      className={s.room}
+      data-frame={frame}
+      data-tier={landscape ? tier : undefined}
+      data-layout={stack ? 'stack' : undefined}
+      data-result-strip={resultStrip && result !== null ? 'open' : undefined}
+    >
       {header}
       <RoomHeader
         room={room}
@@ -387,6 +453,23 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
         compact={landscape}
         menu={menuShown ? <MenuButton label={t('room.more')} items={menuItems} /> : undefined}
       />
+
+      {/* The cards' toasts (BP-39): one place in the tree for every frame, so a phone turning keeps them. Under the header on
+          a phone held upright (a row of the column), across the header's middle on one held sideways, hanging into the
+          felt's top-right corner on a desktop — a region of the layout, never a layer over the result. */}
+      {chaosTable ? (
+        <ChaosToasts
+          applied={state.chaos.applied}
+          handId={hand?.handId ?? null}
+          restored={hand?.restored ?? false}
+          nameOf={seatName}
+          layout={stack ? 'stack' : landscape ? 'landscape' : 'desktop'}
+          reverseNote={state.chaos.reverse && hand !== null ? t('chaos.reverseNote') : null}
+          resultOpen={resultCard !== null}
+          // Upright, seven seats or more put the opponents in three rows: the band holds two toasts there (I2).
+          crowded={room.config.maxPlayers > 6}
+        />
+      ) : null}
 
       {state.status === 'open' ? null : (
         <p className={s.banner} role="status">
@@ -418,25 +501,16 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
           // The short tier's felt has no free band under the board for it (BP-28, R2): the dock carries it there. The
           // stack's one-row footer has no room for it either, so it is the felt's last line there (BP-31 P4).
           note={(stack || (landscape && !short)) && waiting ? hint : null}
+          feltCorner={stack ? bonusHand : null}
           chaos={chaosTable ? state.chaos : null}
-          banner={chaosTable ? <ChaosBanner item={banner.item} index={banner.index} nameOf={seatName} note={state.chaos.reverse && hand !== null ? t('chaos.reverseNote') : null} /> : undefined}
         />
 
         {/* The result card is dealt onto the felt, so it keeps the felt's night palette in either theme. The countdown
             to the next deal is the card's own footer line: printed under the card, it landed on the viewer's seat
             (review 2026-09-29, No2). Its stage stops above the viewer's own seat when that leaves it room (R2-3). */}
-        {resultCard === null ? null : (
+        {result === null || resultStrip ? null : (
           <div className={s.overlay} data-surface="night" data-frame={frame} style={overlayStyle}>
-            <HandResult
-              hand={resultCard}
-              room={room}
-              myPlayerId={state.me?.playerId ?? null}
-              lang={lang}
-              onDismiss={() => setDismissedHandId(resultCard.handId)}
-              countdown={nextHandText}
-              frame={frame}
-              chaosCredits={state.chaos.credits}
-            />
+            {result}
           </div>
         )}
 
@@ -448,6 +522,21 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
           </div>
         )}
       </main>
+
+      {/* The chaos result on a phone (BP-39): a row of the room's column directly above the tray when upright — the felt gives
+          it the height, the toasts' band above keeps its own — and a band at the stage's foot, between the tray's corners, when
+          on its side, laid over the foot of the felt without changing the stage the frame's tier is measured on. */}
+      {/* The bonus hand (BP-39): the left corner over "Tự động chơi" when sideways (its CSS places it); in the felt's left
+          edge when upright (`PokerTable`'s `feltCorner`: a 360 × 780 stage has no row to spare), in the controls' row on a
+          desktop. Never in the viewer's own seat, which the upright strip hides — and the result wait is the main time to
+          play a card. */}
+      {landscape ? bonusHand : null}
+
+      {result === null || !resultStrip ? null : (
+        <div className={s.resultStrip} data-surface="night" data-frame={frame}>
+          {result}
+        </div>
+      )}
 
       {footerShown ? (
         // The stack's dock row is the footer itself: one night bar, the tray's height, holding the dock and — between
@@ -487,6 +576,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
             ) : null
           ) : (
             <div className={s.controls} role="group" aria-label={t('room.controls')}>
+              {bonusHand}
               {readyButton}
               {mySeated ? (
                 <Button variant="ghost" disabled={request.busy} onClick={standUp}>
@@ -577,7 +667,8 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
       </Modal>
 
       <Toasts
-        error={request.error ?? state.lastError}
+        // A bonus card's refusal is written in the bonus hand itself (A14): a slip here would lie over the result strip.
+        error={request.error ?? (state.lastError?.code === 'CHAOS_CANNOT_USE' ? null : state.lastError)}
         notifications={state.notifications}
         onClearError={clearError}
         onDismiss={dismiss}

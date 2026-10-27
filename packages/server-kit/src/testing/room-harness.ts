@@ -49,7 +49,9 @@ export function createRoomHarness(
 ): RoomHarness {
   const clock = new ManualClock()
   const repos = createMemoryRepositories()
-  const chaos = opts.chaos === undefined ? undefined : createMemoryChaosPort({ ...(opts.chaos === true ? {} : opts.chaos), repos })
+  // The result wait of a chaos table matches the harness hand interval (100 ms) unless a test sets its own.
+  const chaosOpts = opts.chaos === true ? {} : opts.chaos
+  const chaos = chaosOpts === undefined ? undefined : createMemoryChaosPort({ ...chaosOpts, config: { resultMs: TEST_ROOM_OPTIONS.handIntervalMs, ...chaosOpts.config }, repos })
   const sent = new Map<string, ServerMessage[]>()
   const domainEvents: DomainEvent[] = []
   const logs: HarnessLogLine[] = []

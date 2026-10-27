@@ -252,6 +252,10 @@ the player chose, Blind brings the table limit `blindTableLimit(rules)`
 (10 × the wager, 5 × before BP-31) — or the whole balance when that is less, as long as it
 covers **one** wager, in both decision modes (Plan 27 D2; below that the
 answer is `INSUFFICIENT_BALANCE`, and the client's hint quotes one wager).
+A chaos table (BP-39, spec 2026-10-27 §3.7) has no limit: the room asks
+`blindBuyInCap(rules)` from `@bp/core`, which is `null` there, and the seat
+brings the **whole balance** (still at least one wager); a plain Blind table
+keeps the 10× limit. Bots at a chaos table keep their virtual 10-wager stack.
 The room pushes `BALANCE` right after the buy-in. Hands move only table
 stacks; every way off a seat (stand, leave, kick, reconnect expiry, sat out
 too long, shutdown) writes the stack back as a `cash_out`.
@@ -334,8 +338,10 @@ key on the config or on the ruleset) is a chaos table. The cards' rules are pure
 The code is `room/room-chaos.ts` (`ChaosTable`, the helper `Room` holds) and a few hooks in `room.ts`.
 
 **The port.** `RoomDeps.chaos?: ChaosPort` (from `createGameServer({ chaos })`), three calls: `catalogue()` (the cards active now and
-the GM's draw weights, 0 = never), `config()` (`ChaosConfig`: tier weights, points threshold, draft ms, daily cap and rescues) and
-`credit({ playerId, roomId, amount, reason, key })` → `{ credited, capped }`. Without a port, `RoomManager.create` answers
+the GM's draw weights, 0 = never), `config()` (`ChaosConfig`: tier weights, points threshold, draft ms, result ms, daily cap and
+rescues) and `credit({ playerId, roomId, amount, reason, key })` → `{ credited, capped }`. `config()` is read at each draft and, since
+BP-39, again after each hand for `resultMs` (`ChaosTable.resultMs()`; a port that throws or answers a non-positive number gives
+`DEFAULT_CHAOS_CONFIG.resultMs`, 10 s, logged), so a GM change takes effect from the next result. Without a port, `RoomManager.create` answers
 `ERROR{CHAOS_UNAVAILABLE}` to a chaos config (and `Room`'s constructor throws the same code), so Lite and any edition that passes none
 simply never has a chaos table. The catalogue is read at each draft and kept for the hands until the next one; if the port throws
 there, the room logs it and deals without a draft (the next hand tries again).
@@ -370,11 +376,36 @@ after the credit, absolute, which the client writes to its roster. A credit cut 
 still broadcast, so the table can say "capped". A bot's credit goes on its virtual stack with no ledger row and `capped: false`. A seat that
 **stands up or leaves** loses its cards and points (`standUpNow` clears `p.chaos`).
 
+**The bonus hand (BP-39).** A human's bonus cards (from points, `afterHand`'s `bonusAwarded`) wait in `ChaosSeat.bonus`, private.
+`CHAOS_USE { uid }` → `Room.useChaosBonus` → `ChaosTable.useBonus` → `armBonus`. Allowed for a seated human at a chaos table either
+with no hand live (the interval, a draft, before the first deal: `{ phase: 'between' }`, the card fires in the next hand) or during the
+`DECISION` phase of a hand the seat is dealt into (`{ phase: 'decision', frozen: p.chaos.frozenNextHand, planSeat }`; a `'this'` arm
+calls `addRevealEffect` on `runner.state`, the live object, so the reveal fires it). Anything else — squeeze, reveal, a pure-luck hand, a
+seat not in the hand, every `armBonus` error — is `CHAOS_CANNOT_USE` (the message says why). Nothing is broadcast on a press: the owner
+gets `NOTIFICATION { kind: 'CHAOS_BONUS', payload: ChaosBonusPayload }` (`bonusFor`) after every change to its bonus hand or pressed
+card — a press, `planHand` turning a `next` card into `this`, `afterHand` drawing, spending or returning one, a stand-up or Leave
+clearing it — and the table only sees `bonusCount = bonus.length + (armed ? 1 : 0)` in `CHAOS_STATE` and `RoomPlayerView.chaos`, so an
+armed card is invisible until it fires (a holder who folds gets it back in silence). `CHAOS_AWARDED` lists only cards that went through
+`receiveCard`. `ROOM_SNAPSHOT.chaos.bonus` carries the viewer's own bonus hand, for a seated viewer only; the hand view never carries the
+plan.
+
+**The result wait and "Bỏ qua" (BP-39).** After a chaos hand the room waits `chaos.resultMs()` (10 s by default, the GM's 5–15 s)
+instead of `handIntervalMs`, and says so in `ROOM_STATUS { nextHandAt }`; a plain table still waits `handIntervalMs`. The wait is
+`inResultWait()`: a chaos room, not closed, `nextHandTimer` armed, no runner and no draft open. Its voters are the seated humans
+who are connected and neither sitting out nor asked to (`resultVoters()`; bots never count, a human on auto-play does — its client
+presses for it). `RESULT_SKIP` → `Room.skipResult(playerId)` adds the voter to `resultSkips`; outside a wait, from a non-voter or
+twice it is ignored without an error (the gateway still ACKs). `recountResultSkips()` runs after a press and after anything that can
+move the count — a seat taken or left, a sit-out or sit-in, a disconnect or reconnect, a stand-up, Leave or kick — broadcasts
+`RESULT_SKIPS { skipped, total }` when the tally changed (always once at the start of a wait), and when every voter has pressed it
+calls `startHand()` at once, which cancels the timer (a timer that fires after that deals nothing: it checks it is still
+`nextHandTimer`). `ROOM_SNAPSHOT.resultSkips` (`{ skipped, total, mine }`, `mine` per viewer, false for a spectator) restores the
+tally during a wait and is absent otherwise. A new wait clears the presses.
+
 **Wire.** `ClientMessage` `CHAOS_PICK { offerId, cardId }` (`Room.pickChaos`: a stale, foreign or second pick is `CHAOS_NO_OFFER`, a card
-that was not offered is `ILLEGAL_ACTION`). Room events `CHAOS_DRAFT` (tier, deadline, `draftMs` — the GM's window, for the client's ring — and the drafted seats), `CHAOS_PICKED`, `CHAOS_STATE`,
-`CHAOS_CREDIT`, `CHAOS_AWARDED`; the private `CHAOS_OFFER` notification (the viewer's three cards); `ROOM_SNAPSHOT.chaos` restores the
-viewer's draft after a reconnect; `RoomPlayerView.chaos` carries a seat's cards and points. Game events (from the engine): `CHAOS_APPLIED`,
-`CHAOS_PEEK`, `CHAOS_SUMMARY`.
+that was not offered is `ILLEGAL_ACTION`), `CHAOS_USE { uid }` (above) and `RESULT_SKIP` (no body but the optional `reqId`). Room events `CHAOS_DRAFT` (tier, deadline, `draftMs` — the GM's window, for the client's ring — and the drafted seats), `CHAOS_PICKED`, `CHAOS_STATE`,
+`CHAOS_CREDIT`, `CHAOS_AWARDED`, `RESULT_SKIPS`; the private `CHAOS_OFFER` and `CHAOS_BONUS` notifications; `ROOM_SNAPSHOT.chaos` restores the
+viewer's draft and bonus hand after a reconnect, and `ROOM_SNAPSHOT.resultSkips` the "Bỏ qua" tally; `RoomPlayerView.chaos` carries a seat's cards, points and `bonusCount`. Game events (from the engine): `CHAOS_APPLIED`,
+`CHAOS_PEEK`, `CHAOS_SUMMARY` (each use with its `targets`). Error code `CHAOS_CANNOT_USE` answers every refused `CHAOS_USE`.
 
 ### Sitting out (spec §11.3)
 
@@ -405,7 +436,7 @@ falls back to `OPEN`.
 
 | Option | Default | Purpose |
 |---|---|---|
-| `handIntervalMs` | 5,000 | Pause between hands in a room |
+| `handIntervalMs` | 5,000 | Pause between hands in a room (a chaos table waits its port's `resultMs` instead, BP-39) |
 | `revealDelayMs` | 1,500 | Delay before revealing decisions/community cards |
 | `botDelayMs` | `[1000, 3000]` | Random think-time range for bot actions |
 | `reconnectWindowMs` | 90,000 | How long a disconnected seated player is held before auto-fold/stand |
@@ -598,7 +629,8 @@ for integration tests:
   the `[+reason, −chaos_to_table]` pair under its key, a replayed key
   returns the amount already written, `capPoints` and `rescues` stand in
   for the economy-day cap, and `weights`, `failReads` and `failCredit`
-  are test hooks. Bots-only drafts finish at once; to play a human's
+  are test hooks. Its `resultMs` is 100 ms (the harness's own interval),
+  so the result wait never stalls a test that is not about it. Bots-only drafts finish at once; to play a human's
   draft call `room.pickChaos(playerId, offerId, cardId)` with the ids
   from its `CHAOS_OFFER`.
 - **`ManualClock`** — a `Clock` whose time only advances on `advance(ms)`,

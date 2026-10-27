@@ -1,7 +1,9 @@
 import type { Rng } from '../cards/rng.js'
 import type { BlindRules } from '../hand/types.js'
+import { clearUnsettledHand, firesFromArmed, returnToBonus } from './bonus.js'
 import { pickCard } from './draw.js'
-import type { ChaosCardDef, ChaosEffectKind, ChaosHandPlan, ChaosMode, ChaosSeat, PlannedEffect } from './types.js'
+import { farmHandsOf, stackHeld } from './hold.js'
+import type { ChaosCardDef, ChaosEffectKind, ChaosHandPlan, ChaosMode, ChaosSeat, HeldCard, PlannedEffect } from './types.js'
 
 /** Spec §5.3 Tay bạc: it rolls any enabled Silver or Gold effect except these. */
 const GAMBLER_EXCLUDED: ReadonlySet<ChaosEffectKind> = new Set(['rescue', 'fortune', 'levelUp', 'gambler'])
@@ -19,7 +21,8 @@ type Firing = Omit<PlannedEffect, 'targets'>
 
 /**
  * Picks the effects that fire this hand (spec §3.4–§3.5) for the seats dealt in. A frozen seat fires nothing, not even
- * its shield. Otherwise, in the order the cards were received: duration cards fire while they have hands left; one-shot
+ * its shield (and its armed bonus card waits, untouched). Otherwise a played bonus card fires first (see below), then,
+ * in the order the cards were received: duration cards fire while they have hands left; one-shot
  * buffs fire once per effect kind; at most one debuff fires (the oldest); shields and mirrors are exposed as `shield`
  * for the engine; Cấp cứu and Thần tài wait for `afterHand`; a card whose modes exclude the table's never fires. Each
  * Tay bạc then rolls one effect under the same rules. Deal-time debuffs get their targets here (one other seat at
@@ -42,11 +45,37 @@ export function planHand(input: {
 
   const planSeats: PlanSeat[] = []
   const seats = new Map<number, ChaosSeat>()
-  for (const { seat, chaos } of input.seats) {
+  for (const { seat, chaos: given } of input.seats) {
+    // What a hand that never settled (cancelled) left behind: a card armed for it goes back to the bonus hand unfired
+    // (spec §3.4), and its "played" marker is cleared. The room does this when the hand is cancelled (M4); this is the
+    // fallback for a seat that never reached that path.
+    let chaos = clearUnsettledHand(given)
     const out: PlanSeat = { seat, effects: [], shield: null, blindfolded: chaos.blindfoldedNextHand }
     planSeats.push(out)
     seats.set(seat, chaos)
     if (chaos.frozenNextHand) continue
+
+    // A bonus card played for this hand (BP-39) fires first, and marks the hand as having had its one bonus card. A
+    // one-shot reveal or decision card fires from `armed`, which now names this hand, so `afterHand` can see whether it
+    // was used (and nobody learns it was played before it fires). Any other card joins `cards` and fires under the rules
+    // below: a duration card by the stacking rule (back to the bonus hand, unplayed, if a stronger held card would drop
+    // it), a one-shot deal card (freeze, blindfold, Tay bạc) at the front, so a pressed debuff fires before a held draft
+    // debuff (spec §3.4). A card this table's mode excludes does not fire: it waits as `this`, to go back to the bonus hand.
+    let lead: HeldCard | null = null
+    if (chaos.armed) {
+      const card = chaos.armed.card
+      if (!validHere(card.cardId)) chaos = { ...chaos, armed: { card, hand: 'this' } }
+      else if (firesFromArmed(card)) {
+        lead = card
+        chaos = { ...chaos, armed: { card, hand: 'this' }, bonusPlayedThisHand: true }
+      } else {
+        const cards = card.handsLeft === null ? [card, ...chaos.cards] : stackHeld(chaos.cards, card)
+        chaos = cards
+          ? { ...chaos, cards, armed: null, farmHandsLeft: farmHandsOf(cards), bonusPlayedThisHand: true }
+          : { ...chaos, bonus: returnToBonus(chaos.bonus, card), armed: null }
+      }
+      seats.set(seat, chaos)
+    }
 
     const opponents = input.seats.filter((s) => s.seat !== seat).map((s) => s.seat)
     const kinds = new Set<ChaosEffectKind>()
@@ -62,6 +91,7 @@ export function planHand(input: {
       if (f.debuff) debuffFired = true
     }
 
+    if (lead) fire(lead)
     let gamblers = 0
     for (const card of chaos.cards) {
       if (!validHere(card.cardId)) continue
