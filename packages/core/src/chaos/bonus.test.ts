@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { armBonus, canInsertThisHand, MID_HAND_EFFECTS, needsNoPress, returnToBonus } from './bonus.js'
+import { armBonus, canInsertThisHand, clearUnsettledHand, MID_HAND_EFFECTS, needsNoPress, returnToBonus } from './bonus.js'
 import { CHAOS_CARDS_SPEC } from './fixtures.js'
 import { toHeld } from './hold.js'
 import { EMPTY_CHAOS_SEAT, type ChaosCardDef, type ChaosHandPlan, type ChaosSeat, type HeldCard } from './types.js'
@@ -122,5 +122,24 @@ describe('needsNoPress and returnToBonus', () => {
     expect(returnToBonus([b!, c!], a!)).toEqual([a, b, c])
     expect(returnToBonus([a!, b!], c!)).toEqual([a, b, c])
     expect(returnToBonus([], a!)).toEqual([a])
+  })
+})
+
+describe('clearUnsettledHand (a cancelled hand, M4)', () => {
+  it('a card armed for the cancelled hand goes back where it was, and the played marker clears', () => {
+    const [a, b, c] = [held('s_lower'), held('s_steal_one'), held('g_borrow')]
+    const seat = { ...EMPTY_CHAOS_SEAT, bonus: [a!, c!], armed: { card: b!, hand: 'this' as const }, bonusPlayedThisHand: true }
+    expect(clearUnsettledHand(seat)).toMatchObject({ bonus: [a, b, c], armed: null, bonusPlayedThisHand: false })
+  })
+
+  it('a card the table was told of is spent, not returned (I1)', () => {
+    const [a, b] = [held('s_lower'), held('d_storm')]
+    const seat = { ...EMPTY_CHAOS_SEAT, bonus: [a!], armed: { card: b!, hand: 'this' as const } }
+    expect(clearUnsettledHand(seat, new Set([b!.uid]))).toMatchObject({ bonus: [a], armed: null })
+  })
+
+  it('leaves a card armed for the next hand, and returns the same seat when nothing changes', () => {
+    const seat = { ...EMPTY_CHAOS_SEAT, armed: { card: held('s_lower'), hand: 'next' as const } }
+    expect(clearUnsettledHand(seat)).toBe(seat)
   })
 })

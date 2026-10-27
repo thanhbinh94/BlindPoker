@@ -36,6 +36,23 @@ export function returnToBonus(bonus: readonly HeldCard[], card: HeldCard): HeldC
 }
 
 /**
+ * What a hand that never settled (cancelled, spec §3.4) leaves behind: a card armed for it goes back to the bonus hand
+ * unfired and the "played" marker is cleared. A card whose uid is in `recorded` (the table was told of it before the
+ * hand was cancelled) is spent instead: putting it back would tell every viewer what the private hand holds (I1). The
+ * room calls it as soon as a hand is cancelled (M4); `planHand` calls it again for a hand that never reached that path.
+ * Returns the same object when nothing changes.
+ */
+export function clearUnsettledHand(seat: ChaosSeat, recorded: ReadonlySet<number> = new Set()): ChaosSeat {
+  let out = seat
+  if (out.armed?.hand === 'this') {
+    const card = out.armed.card
+    out = { ...out, bonus: recorded.has(card.uid) ? out.bonus : returnToBonus(out.bonus, card), armed: null }
+  }
+  if (out.bonusPlayedThisHand) out = { ...out, bonusPlayedThisHand: false }
+  return out
+}
+
+/**
  * Whether a card of `effect` can join this hand's reveal on a seat whose live plan is `planSeat`: a one-shot reveal card
  * (`MID_HAND_EFFECTS`), on a seat that has fired no deal-time debuff (freeze, blindfold: one debuff per seat per hand) and
  * plans no effect of the same kind (A2). A planned reveal debuff is no conflict: the played one replaces it.

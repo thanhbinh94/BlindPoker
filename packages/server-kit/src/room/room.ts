@@ -966,6 +966,9 @@ export class Room {
       } catch (err) {
         this.deps.log.error('chaos settlement failed', { roomId: this.roomId, handId: state.handId, err: String(err) })
       }
+    } else if (this.chaos) {
+      // A cancelled hand: a card played into it goes back to its owner's bonus hand now (M4).
+      this.chaos.handCancelled(state, (seat) => this.seatPlayer(seat))
     }
 
     const required = this.requiredStack()
@@ -993,8 +996,9 @@ export class Room {
       }
     }
     if (this.status === 'CLOSED') return
-    // A chaos table keeps the result up for the GM's result time (BP-39), every other table for the hand interval.
-    const waitMs = this.chaos ? await this.chaos.resultMs() : this.deps.options.handIntervalMs
+    // A chaos table keeps the result up for the GM's result time (BP-39), every other table for the hand interval. A room
+    // that is closing asks the port nothing (M9): no hand follows anyway.
+    const waitMs = this.chaos && !this.closing ? await this.chaos.resultMs() : this.deps.options.handIntervalMs
     this.nextHandAt = this.deps.clock.now() + waitMs
     this.broadcastRoomEvent({ type: 'ROOM_STATUS', status: 'IN_GAME', nextHandAt: this.nextHandAt })
     // A timer that fired after the hand was started another way (every voter pressed "Bỏ qua") deals nothing.

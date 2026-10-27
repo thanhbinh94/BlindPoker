@@ -185,6 +185,14 @@ describe('afterHand — the bonus hand (BP-39)', () => {
     expect(used.bonus).toEqual([lower, borrow])
   })
 
+  it('a card played for this hand that fizzled where the table saw it is spent, never back in the private hand (I1)', () => {
+    const [lower, storm] = bonusOf(['s_lower', 'd_storm'])
+    const start = { ...EMPTY_CHAOS_SEAT, bonus: [lower!], armed: { card: storm!, hand: 'this' as const }, bonusPlayedThisHand: true }
+    // an armed storm on a short deck: CHAOS_APPLIED "fizzled", nothing consumed, but recorded
+    const r = settle([seat(start, { outcome: 'win' })], { recorded: new Set([storm!.uid]) }).seats.get(0)!
+    expect(r).toMatchObject({ armed: null, bonus: [lower], bonusPlayedThisHand: false })
+  })
+
   it('a decision card played for this hand is spent with its hand, used or not, once it entered the plan (Ruling 5)', () => {
     const [freeFold] = bonusOf(['s_free_fold'])
     const ff = freeFold!

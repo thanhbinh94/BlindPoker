@@ -1,6 +1,6 @@
 import type { Rng } from '../cards/rng.js'
 import type { BlindRules } from '../hand/types.js'
-import { firesFromArmed, returnToBonus } from './bonus.js'
+import { clearUnsettledHand, firesFromArmed, returnToBonus } from './bonus.js'
 import { pickCard } from './draw.js'
 import { farmHandsOf, stackHeld } from './hold.js'
 import type { ChaosCardDef, ChaosEffectKind, ChaosHandPlan, ChaosMode, ChaosSeat, HeldCard, PlannedEffect } from './types.js'
@@ -46,11 +46,10 @@ export function planHand(input: {
   const planSeats: PlanSeat[] = []
   const seats = new Map<number, ChaosSeat>()
   for (const { seat, chaos: given } of input.seats) {
-    let chaos = given
     // What a hand that never settled (cancelled) left behind: a card armed for it goes back to the bonus hand unfired
-    // (spec §3.4), and its "played" marker is cleared.
-    if (chaos.armed?.hand === 'this') chaos = { ...chaos, bonus: returnToBonus(chaos.bonus, chaos.armed.card), armed: null }
-    if (chaos.bonusPlayedThisHand) chaos = { ...chaos, bonusPlayedThisHand: false }
+    // (spec §3.4), and its "played" marker is cleared. The room does this when the hand is cancelled (M4); this is the
+    // fallback for a seat that never reached that path.
+    let chaos = clearUnsettledHand(given)
     const out: PlanSeat = { seat, effects: [], shield: null, blindfolded: chaos.blindfoldedNextHand }
     planSeats.push(out)
     seats.set(seat, chaos)

@@ -474,7 +474,26 @@ describe('a bonus card played mid-hand (BP-39)', () => {
     expect(t.state.chaos!.applied).not.toContain(steal.uid)
   })
 
-  it('refuses what armBonus never sends: a card that is not a one-shot reveal card, a repeated effect, a seat that fired a deal debuff', () => {
+  it('a played card that fizzles on a short deck is still recorded: the table was told of it (I1)', () => {
+    const t = choice()
+    const storm = fx('d_storm')
+    addRevealEffect(t.state, 0, storm)
+    // leave exactly the board in the deck: the storm finds nothing to redeal
+    t.state.deck = t.state.deck.slice(0, t.state.deckIndex + 5)
+    t.play(0); t.play(1); t.advanceAll()
+    expect(t.applied()).toEqual([expect.objectContaining({ cardId: 'd_storm', outcome: 'fizzled' })])
+    expect(t.state.chaos!.applied).not.toContain(storm.uid)
+    expect(t.state.chaos!.recorded).toEqual([storm.uid])
+  })
+
+  it('a card that never fired is not recorded', () => {
+    const t = new Table({ chaos: plan(3, {}), deck: layout(['2c 7d', '8h Ks', 'As Ad'], BOARD), rules: { decisionMode: 'playOrFold' } })
+    addRevealEffect(t.state, 0, fx('s_steal_one'))
+    t.fold(0); t.play(1); t.play(2); t.advanceAll()
+    expect(t.state.chaos!.recorded).toEqual([])
+  })
+
+  it('refuses what armBonus never sends:a card that is not a one-shot reveal card, a repeated effect, a seat that fired a deal debuff', () => {
     expect(() => addRevealEffect(choice().state, 0, fx('g_insure_full'))).toThrow()
     expect(() => addRevealEffect(choice().state, 5, fx('s_steal_one'))).toThrow()
     expect(() => addRevealEffect(choice({ 0: { effects: [fx('g_steal_all')] } }).state, 0, fx('s_steal_one'))).toThrow()

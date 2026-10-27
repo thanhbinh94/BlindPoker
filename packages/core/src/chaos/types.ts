@@ -187,6 +187,11 @@ export interface ChaosHandState {
   applied: number[]
   /** Uids of the debuffs a shield or mirror stopped, and of the one-shot shields and mirrors spent doing it. */
   blocked: number[]
+  /**
+   * Uids of every effect the table was told of (`CHAOS_APPLIED`, `CHAOS_PEEK`, a line in `CHAOS_SUMMARY`), used up or not:
+   * a bonus card played for this hand that is named here never goes back to its owner's private bonus hand (BP-39 I1).
+   */
+  recorded: number[]
   /** "Nhìn trộm": the board cards each seat saw, kept so a reconnect shows them again. */
   peek: { seat: number; cards: Card[] }[]
   freeFoldSeats: number[]

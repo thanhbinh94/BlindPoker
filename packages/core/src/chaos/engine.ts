@@ -36,6 +36,7 @@ export function initialChaosState(plan: ChaosHandPlan): ChaosHandState {
     plan,
     applied: [],
     blocked: [],
+    recorded: [],
     peek: [],
     freeFoldSeats: effects('freeFold').map((x) => x.seat),
     insured: effects('refundStake').map((x) => ({ seat: x.seat, percent: x.e.params.percent ?? 0 })),
@@ -86,6 +87,7 @@ function record(
   if (extra.amount !== undefined) ev.amount = extra.amount
   events.push(ev)
   chaos.used.push({ seat, cardId: e.cardId, effect: e.effect, outcome, targets: targets.slice() })
+  addUid(chaos.recorded, e.uid)
   const consume = extra.consume === undefined ? 'applied' : extra.consume
   if (consume === 'applied') addUid(chaos.applied, e.uid)
   else if (consume === 'blocked') addUid(chaos.blocked, e.uid)
@@ -267,6 +269,7 @@ export function emitPeeks(state: HandState, events: GameEvent[]): void {
     const cards = state.deck.slice(state.deckIndex, state.deckIndex + (e.params.count ?? 1))
     chaos.peek.push({ seat: p.seat, cards })
     chaos.used.push({ seat: p.seat, cardId: e.cardId, effect: e.effect, outcome: 'applied', targets: [] })
+    addUid(chaos.recorded, e.uid)
     addUid(chaos.applied, e.uid)
     events.push({ type: 'CHAOS_PEEK', seat: p.seat, cards: cards.slice() })
   }

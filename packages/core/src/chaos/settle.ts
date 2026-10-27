@@ -44,7 +44,7 @@ const fortuneRow = (len: number): 2 | 4 | 6 => (len >= 6 ? 6 : len >= 4 ? 4 : 2)
  * - unless frozen: Bạo kích rolls on a win with `net > 0` and pays (k − 1) × net; the oldest Thần tài pays per its
  *   params when a win ends a loss streak of 2 or more; the oldest Cấp cứu pays multiplier × wager after a lost hand that
  *   leaves the stack under 2 wagers — each fired wait card leaves;
- * - a bonus card played for this hand (`armed.hand === 'this'`, BP-39) leaves if its uid is in `consumed`, else goes
+ * - a bonus card played for this hand (`armed.hand === 'this'`, BP-39) leaves if its uid is in `consumed` or `recorded`, else goes
  *   back to the bonus hand at its old place — except a decision card that entered the plan, spent with its hand (Ruling
  *   5); `bonusPlayedThisHand` is cleared;
  * - every `pointsThreshold` points become a bonus card (the remainder stays); a frozen seat's bonus cards wait in
@@ -62,12 +62,18 @@ export function afterHand(input: {
   nextUid: () => number
   plan: ChaosHandPlan
   consumed: ReadonlySet<number>
+  /**
+   * The uids the table was told of this hand (`ChaosHandState.recorded`), used up or fizzled: an armed card named there
+   * is spent, never returned to the private bonus hand (BP-39 I1). Defaults to none.
+   */
+  recorded?: ReadonlySet<number>
   carryOverOnly: boolean
   marks: readonly ChaosMark[]
   seats: readonly AfterHandSeat[]
   weights?: ReadonlyMap<string, number>
 }): AfterHandResult {
   const { rules, config, pool, rng, nextUid, plan, consumed, marks, weights } = input
+  const recorded = input.recorded ?? new Set<number>()
   const mode: ChaosMode = rules.decisionMode
   const wager = rules.fixedWager
   const result: AfterHandResult = { seats: new Map(), credits: [], awarded: [], bonusAwarded: [] }
@@ -136,12 +142,14 @@ export function afterHand(input: {
 
     // A bonus card played for this hand (BP-39) leaves if it was used, else goes back to the bonus hand where it was. A
     // decision card (Nhìn trộm, Bỏ không mất) that entered the plan is spent with its hand, used or not (Ruling 5); one
-    // that never entered it (a mode the table excludes) goes back.
+    // that never entered it (a mode the table excludes) goes back. A card the table was told of (`recorded`: a reveal card
+    // that fizzled still reaches CHAOS_APPLIED and the summary) is spent too, or every viewer would know it went back
+    // into the private hand (I1).
     let bonus = chaos.bonus
     let armed = chaos.armed
     if (armed?.hand === 'this') {
       const uid = armed.card.uid
-      const spent = consumed.has(uid) || (armed.card.timing === 'decision' && fired.some((e) => e.uid === uid))
+      const spent = consumed.has(uid) || recorded.has(uid) || (armed.card.timing === 'decision' && fired.some((e) => e.uid === uid))
       if (!spent) bonus = returnToBonus(bonus, armed.card)
       armed = null
     }

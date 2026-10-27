@@ -1,5 +1,5 @@
 import {
-  CHAOS_CARDS_SPEC, DEFAULT_CHAOS_CONFIG, EMPTY_CHAOS_SEAT, toHeld, type ChaosBonusPayload, type ChaosCardDef, type ChaosSeat, type GameEvent, type LegalActions,
+  CHAOS_CARDS_SPEC, DEFAULT_CHAOS_CONFIG, EMPTY_CHAOS_SEAT, toHeld, type ChaosBonusPayload, type ChaosCardDef, type ChaosSeat, type GameEvent, type HandState, type LegalActions,
   type PlayerAction, type RoomConfig, type RoomEvent, type ServerMessage,
 } from '@bp/core'
 import { describe, expect, it } from 'vitest'
@@ -370,14 +370,16 @@ describe('Chaos room: the bonus hand (BP-39)', () => {
   }
 
   it('a bonus card a hand awards goes to its owner alone: CHAOS_BONUS for the owner, only a count for the table', async () => {
-    const pool: ChaosCardDef[] = [...RESCUE_ONLY]
-    const h = createRoomHarness({ ...CHAOS, maxPlayers: 5 }, { chaos: { cards: pool, config: { ...SILVER_ONLY, pointsThreshold: 1 } } })
+    // The pool holds both Bạc cards, so every offer shows both: each human drafts the Cấp cứu (it waits, held), and the
+    // bonus cards drawn after the hand lean to Lấy lá (a card to press) by weight; the seeded rng keeps the draws fixed.
+    const pool: readonly ChaosCardDef[] = [...RESCUE_ONLY, STEAL]
+    const weights = new Map([['s_steal_one', 50]])
+    const h = createRoomHarness({ ...CHAOS, maxPlayers: 5 }, { chaos: { cards: pool, weights, config: { ...SILVER_ONLY, pointsThreshold: 1 } } })
     await seat(h, ['h', 'a'])
     await h.room.join(h.identity('b'))
     await h.room.startGame('h')
-    await pickAll(h, ['h', 'a'])
-    // The room keeps the port's array as its pool, so from here every bonus card drawn is a Lấy lá (a card to press).
-    pool.splice(0, pool.length, STEAL)
+    for (const id of ['h', 'a']) await h.room.pickChaos(id, lastOffer(h, id).offerId, 's_rescue')
+    await tick(h)
     await playOut(h)
 
     const mine = h.room.players.get('h')!.chaos!
@@ -548,6 +550,58 @@ describe('Chaos room: the bonus hand (BP-39)', () => {
     await h.room.standUp('h')
     expect(bonusOf(h, 'h').at(-1)).toEqual({ cards: [], armed: null })
     expect(h.room.snapshot('h').chaos).toEqual({ draft: null })
+  })
+
+  it('a played card that fizzles where the table saw it is spent: nobody can later tell it went back to the hand (I1)', async () => {
+    const STORM = byId.get('d_storm')!
+    const h = createRoomHarness({ ...CHAOS, maxPlayers: 5 }, quiet())
+    await seat(h, ['h', 'a'])
+    await h.room.join(h.identity('b'))
+    await h.room.startGame('h')
+    await pickAll(h, ['h', 'a'])
+    giveBonus(h, 'h', [STORM, LOWER])
+    await h.room.useChaosBonus('h', BONUS_UID)
+    // Leave exactly the board in the deck: at the reveal the storm finds nothing to redeal and fizzles.
+    const live = (h.room as unknown as { runner: { state: HandState } }).runner.state
+    live.deck = live.deck.slice(0, live.deckIndex + 5)
+    await playOut(h)
+
+    for (const id of ['a', 'b']) {
+      expect(applied(h, id).filter((e) => e.seat === 0)).toEqual([expect.objectContaining({ cardId: 'd_storm', outcome: 'fizzled' })])
+      expect(seatState(h, id, 0).bonusCount).toBe(1) // the Hạ bài left in the hand; the storm is gone
+    }
+    expect(h.room.players.get('h')!.chaos).toMatchObject({ bonus: [toHeld(LOWER, BONUS_UID + 1)], armed: null })
+    expect(bonusOf(h, 'h').at(-1)).toEqual({ cards: [view(LOWER, BONUS_UID + 1)], armed: null })
+  })
+
+  it('a seat that stands up or leaves mid-hand with a played card is folded, gets the card back, then an empty hand (P4)', async () => {
+    for (const move of ['standUp', 'leave'] as const) {
+      const h = createRoomHarness(CHAOS, quiet())
+      await seat(h, ['h', 'a'])
+      await h.room.startGame('h')
+      await pickAll(h, ['h', 'a'])
+      giveBonus(h, 'h')
+      await h.room.useChaosBonus('h', BONUS_UID)
+      await h.room[move]('a')
+      await h.room[move]('h')
+      await playOut(h)
+      expect(applied(h, 'a').filter((e) => e.seat === 0)).toEqual([])
+      expect(h.repos.hands[0]!.players.find((p) => p.playerId === 'h')!.net).toBe(-1_000) // folded: the ante is lost
+      expect(bonusOf(h, 'h').slice(-2)).toEqual([{ cards: [view(STEAL, BONUS_UID)], armed: null }, { cards: [], armed: null }])
+    }
+  })
+
+  it('a cancelled hand gives a played card back at once, told to its owner, before the close clears the seat (M4)', async () => {
+    const h = createRoomHarness(CHAOS, quiet())
+    await seat(h, ['h', 'a'])
+    await h.room.startGame('h')
+    await pickAll(h, ['h', 'a'])
+    giveBonus(h, 'h')
+    await h.room.useChaosBonus('h', BONUS_UID)
+    await h.room.shutdown('test')
+    expect(h.repos.hands[0]!.cancelled).toBe(true)
+    expect(bonusOf(h, 'h').slice(-2)).toEqual([{ cards: [view(STEAL, BONUS_UID)], armed: null }, { cards: [], armed: null }])
+    expect(bonusOf(h, 'a')).toEqual([])
   })
 })
 
@@ -811,6 +865,43 @@ describe('Chaos room: the result time and "Bỏ qua" (BP-39)', () => {
     expect(await code(h.room.skipResult('h'))).toBeNull()
     expect(skips(h)).toEqual([])
     expect(await code(h.room.skipResult('nobody'))).toBe('NOT_IN_ROOM')
+  })
+
+  it('a wait with nobody to count says 0/0 and runs its full time: it never deals at once (P5)', async () => {
+    const h = table()
+    await seat(h, ['h', 'a'])
+    await h.room.startGame('h')
+    await pickAll(h, ['h', 'a'])
+    await h.room.sitOut('h', true) // asked mid-hand: neither is counted once the hand is over
+    await h.room.sitOut('a', true)
+    await playOut(h)
+    expect(skips(h)).toEqual([[0, 0]])
+    expect(h.room.handActive).toBe(false)
+    expect(h.room.nextHandAt).toBe(h.clock.now() + RESULT_MS)
+    await h.room.skipResult('h') // not a voter: ignored
+    expect(skips(h)).toEqual([[0, 0]])
+    expect(h.room.handActive).toBe(false)
+  })
+
+  it('a port that gives a result time that is not a positive number falls back to the default, logged (P5)', async () => {
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, 0, -5_000]) {
+      const h = table(bad)
+      await toResult(h)
+      expect(h.room.nextHandAt).toBe(h.clock.now() + DEFAULT_CHAOS_CONFIG.resultMs)
+      expect(h.logs.some((l) => l.level === 'error' && l.msg.startsWith('chaos result time invalid'))).toBe(true)
+    }
+  })
+
+  it('a room that closes after a hand asks the port for no result time (M9)', async () => {
+    let reads = 0
+    const h = createRoomHarness(ONE_BOT, { chaos: { cards: RESCUE_ONLY, config: SILVER_ONLY, failReads: () => (reads++, false) } })
+    await seat(h, ['h', 'a'])
+    await h.room.startGame('h')
+    await pickAll(h, ['h', 'a'])
+    const before = reads
+    await h.room.shutdown('test') // the hand is cancelled and settled by the close
+    expect(h.room.status).toBe('CLOSED')
+    expect(reads).toBe(before)
   })
 
   it('a chaos sit-down brings the whole balance; a plain Blind table still brings its limit', async () => {

@@ -1,5 +1,5 @@
 import {
-  DEFAULT_CHAOS_CONFIG, EMPTY_CHAOS_SEAT, addRevealEffect, afterHand, armBonus, drawOffer, drawTier, planHand, receiveCard, toHeldCardView,
+  DEFAULT_CHAOS_CONFIG, EMPTY_CHAOS_SEAT, addRevealEffect, afterHand, armBonus, clearUnsettledHand, drawOffer, drawTier, planHand, receiveCard, toHeldCardView,
   type ArmWhen, type BlindRules, type ChaosBonusPayload, type ChaosCardDef, type ChaosConfig, type ChaosCredit, type ChaosHandPlan,
   type ChaosSeat, type ChaosSnapshot, type ChaosTier, type HandState, type HeldCardView, type RoomEvent,
 } from '@bp/core'
@@ -263,6 +263,8 @@ export class ChaosTable {
       nextUid: () => this.nextUid(),
       plan: chaos.plan,
       consumed: new Set([...chaos.applied, ...chaos.blocked]),
+      // A played card the table was told of (a reveal card that fizzled still says CHAOS_APPLIED) is spent (I1).
+      recorded: new Set(chaos.recorded),
       carryOverOnly,
       marks: chaos.marks,
       weights: this.weights,
@@ -287,6 +289,22 @@ export class ChaosTable {
     }
     for (const a of settled.awarded) this.host.broadcast({ type: 'CHAOS_AWARDED', seat: a.seat, cardIds: a.cards.map((x) => x.id) })
     this.broadcastState()
+  }
+
+  /**
+   * A cancelled hand settles nothing (spec §3.4), but a card a seat played into it goes back to its owner's bonus hand
+   * now, not at the next deal (M4), and the owner is told (`CHAOS_BONUS`). A card the table was already told of is spent
+   * instead (I1). Seats that left mid-hand were cleared already (`seatCleared`).
+   */
+  handCancelled(state: HandState, seatPlayer: (seat: number) => RoomPlayer | undefined): void {
+    const recorded = new Set(state.chaos?.recorded ?? [])
+    const inHand = state.players.flatMap((hp) => {
+      const p = seatPlayer(hp.seat)
+      return p?.chaos ? [p] : []
+    })
+    const before = this.bonusKeys(inHand)
+    for (const p of inHand) p.chaos = clearUnsettledHand(p.chaos!, recorded)
+    this.tellBonusChanges(before)
   }
 
   /**
