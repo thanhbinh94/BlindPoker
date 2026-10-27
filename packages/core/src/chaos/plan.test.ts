@@ -176,7 +176,29 @@ describe('planHand', () => {
       const r = plan({ 0: chaos, 1: EMPTY_CHAOS_SEAT })
       expect(ids(r, 0)).toEqual(['s_lower', 'g_luck_3'])
       expect(effectsOf(r, 0).effects[0]!.uid).toBe(chaos.armed!.card.uid)
-      expect(r.seats.get(0)).toEqual({ ...chaos, armed: { card: chaos.armed!.card, hand: 'this' } })
+      expect(r.seats.get(0)).toEqual({ ...chaos, armed: { card: chaos.armed!.card, hand: 'this' }, bonusPlayedThisHand: true })
+    })
+
+    it('marks the hand as having had its bonus card on both paths, and not when the card does not play', () => {
+      expect(plan({ 0: armedNext('g_borrow'), 1: EMPTY_CHAOS_SEAT }).seats.get(0)!.bonusPlayedThisHand).toBe(true)
+      expect(plan({ 0: armedNext('g_luck_3'), 1: EMPTY_CHAOS_SEAT }).seats.get(0)!.bonusPlayedThisHand).toBe(true)
+      expect(plan({ 0: armedNext('s_freeze_one'), 1: EMPTY_CHAOS_SEAT }).seats.get(0)!.bonusPlayedThisHand).toBe(true)
+      expect(plan({ 0: armedNext('g_peek_3'), 1: EMPTY_CHAOS_SEAT }, LUCK).seats.get(0)!.bonusPlayedThisHand).toBe(false)
+      const dropped = { ...armedNext('s_luck_1'), cards: holding(['d_luck_5']).cards }
+      expect(plan({ 0: dropped, 1: EMPTY_CHAOS_SEAT }).seats.get(0)!.bonusPlayedThisHand).toBe(false)
+      expect(plan({ 0: holding(['g_luck_3']), 1: EMPTY_CHAOS_SEAT }).seats.get(0)!.bonusPlayedThisHand).toBe(false)
+    })
+
+    it('a card armed for a hand that never settled goes back to the bonus hand unfired, and the marker clears', () => {
+      const lower = toHeld(card('s_lower'), 0)
+      const steal = toHeld(card('s_steal_one'), uid++)
+      const leftover: ChaosSeat = { ...holding([]), bonus: [lower], armed: { card: steal, hand: 'this' }, bonusPlayedThisHand: true }
+      const r = plan({ 0: leftover, 1: EMPTY_CHAOS_SEAT })
+      expect(ids(r, 0)).toEqual([])
+      expect(r.seats.get(0)).toMatchObject({ armed: null, bonus: [lower, steal], bonusPlayedThisHand: false })
+      // also on a frozen seat
+      const frozen = plan({ 0: { ...leftover, frozenNextHand: true }, 1: EMPTY_CHAOS_SEAT })
+      expect(frozen.seats.get(0)).toMatchObject({ armed: null, bonus: [lower, steal], bonusPlayedThisHand: false })
     })
 
     it('an armed decision card fires from armed too', () => {

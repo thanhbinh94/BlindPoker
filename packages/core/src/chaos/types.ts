@@ -84,6 +84,11 @@ export interface ChaosSeat {
   bonus: HeldCard[]
   /** The bonus card pressed and waiting to fire; one at a time. */
   armed: ArmedBonus | null
+  /**
+   * A bonus card was played into the hand in play (set by `planHand`, cleared by `afterHand`): "one bonus card per hand"
+   * counts on the hand a card applies to, so a second card pressed during that hand's choice waits for the next.
+   */
+  bonusPlayedThisHand: boolean
   points: number
   streak: { kind: 'win' | 'loss'; len: number } | null
   frozenNextHand: boolean
@@ -117,6 +122,7 @@ export const EMPTY_CHAOS_SEAT: ChaosSeat = Object.freeze({
   cards: Object.freeze([]) as unknown as HeldCard[],
   bonus: Object.freeze([]) as unknown as HeldCard[],
   armed: null,
+  bonusPlayedThisHand: false,
   points: 0,
   streak: null,
   frozenNextHand: false,

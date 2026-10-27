@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { armBonus, MID_HAND_EFFECTS, needsNoPress, returnToBonus } from './bonus.js'
+import { armBonus, canInsertThisHand, MID_HAND_EFFECTS, needsNoPress, returnToBonus } from './bonus.js'
 import { CHAOS_CARDS_SPEC } from './fixtures.js'
 import { toHeld } from './hold.js'
 import { EMPTY_CHAOS_SEAT, type ChaosCardDef, type ChaosHandPlan, type ChaosSeat, type HeldCard } from './types.js'
@@ -58,6 +58,21 @@ describe('armBonus', () => {
     expect(armBonus(seat, steal, { ...DECISION, planSeat: planSeat(['g_steal_all']) })).toMatchObject({ armed: { hand: 'next' } })
     // another reveal debuff is replaced at insertion, so the pressed one still applies this hand
     expect(armBonus(seat, steal, { ...DECISION, planSeat: planSeat(['s_lower', 'g_luck_3']) })).toMatchObject({ armed: { hand: 'this' } })
+  })
+
+  it('once a bonus card was played into this hand, a second pressed during its choice waits for the next hand', () => {
+    const seat = withBonus(['s_steal_one'], { bonusPlayedThisHand: true })
+    expect(armBonus(seat, seat.bonus[0]!.uid, DECISION)).toMatchObject({ armed: { hand: 'next' } })
+    expect(armBonus(seat, seat.bonus[0]!.uid, { phase: 'between' })).toMatchObject({ armed: { hand: 'next' } })
+  })
+
+  it('canInsertThisHand: a one-shot reveal card, no deal-time debuff fired, no same effect planned', () => {
+    expect(canInsertThisHand(undefined, 'stealHole')).toBe(true)
+    expect(canInsertThisHand(planSeat(['s_lower', 'g_crit']), 'stealHole')).toBe(true)
+    expect(canInsertThisHand(planSeat(['s_freeze_one']), 'redealBoard')).toBe(false)
+    expect(canInsertThisHand(planSeat(['g_borrow']), 'borrowHole')).toBe(false)
+    expect(canInsertThisHand(undefined, 'refundStake')).toBe(false)
+    expect(canInsertThisHand(undefined, 'peekBoard')).toBe(false)
   })
 
   it('one armed card at a time', () => {

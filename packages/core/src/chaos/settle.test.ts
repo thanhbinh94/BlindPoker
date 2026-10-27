@@ -185,6 +185,31 @@ describe('afterHand — the bonus hand (BP-39)', () => {
     expect(used.bonus).toEqual([lower, borrow])
   })
 
+  it('a decision card played for this hand is spent with its hand, used or not, once it entered the plan (Ruling 5)', () => {
+    const [freeFold] = bonusOf(['s_free_fold'])
+    const ff = freeFold!
+    const start = { ...EMPTY_CHAOS_SEAT, armed: { card: ff, hand: 'this' as const }, bonusPlayedThisHand: true }
+    const inPlan: PlannedEffect = { uid: ff.uid, cardId: ff.cardId, effect: ff.effect, params: ff.params, timing: ff.timing, debuff: false, targets: [] }
+    // the owner played, so Bỏ không mất did nothing: not consumed, but in the plan
+    const played = settle([seat(start, { outcome: 'loss' })], { plan: planOf({ 0: [inPlan] }) }).seats.get(0)!
+    expect(played).toMatchObject({ armed: null, bonus: [], bonusPlayedThisHand: false })
+    // a card that never entered the plan (a mode the table excludes) goes back
+    const excluded = settle([seat({ ...start, bonusPlayedThisHand: false }, { outcome: 'loss' })]).seats.get(0)!
+    expect(excluded).toMatchObject({ armed: null, bonus: [ff] })
+  })
+
+  it('a draw that finds no card costs a human nothing', () => {
+    const none = new Map(CHAOS_CARDS_SPEC.map((c) => [c.id, 0]))
+    const r = settle([seat({ ...EMPTY_CHAOS_SEAT, points: 9 }, { outcome: 'loss' })], { weights: none })
+    expect(r.seats.get(0)).toMatchObject({ points: 11, bonus: [], cards: [] })
+    expect(r.bonusAwarded).toEqual([])
+  })
+
+  it('clears the played-this-hand marker', () => {
+    const r = settle([seat({ ...EMPTY_CHAOS_SEAT, bonusPlayedThisHand: true })])
+    expect(r.seats.get(0)!.bonusPlayedThisHand).toBe(false)
+  })
+
   it('a card played for the next hand stays armed', () => {
     const [steal] = bonusOf(['s_steal_one'])
     const start = { ...EMPTY_CHAOS_SEAT, armed: { card: steal!, hand: 'next' as const } }

@@ -3,7 +3,7 @@ import type { Rng } from '../cards/rng.js'
 import type { Pot } from '../betting/pots.js'
 import { dealCards, getPlayer, seatsClockwiseFrom, type SettleHooks } from '../hand/common.js'
 import type { GameEvent, HandPlayer, HandState } from '../hand/types.js'
-import { MID_HAND_EFFECTS } from './bonus.js'
+import { canInsertThisHand } from './bonus.js'
 import type { ChaosEffectKind, ChaosHandPlan, ChaosHandState, ChaosOutcome, PlannedEffect } from './types.js'
 
 /**
@@ -59,12 +59,8 @@ export function addRevealEffect(state: HandState, seat: number, effect: PlannedE
   const chaos = state.chaos
   const planSeat = chaos?.plan.seats.find((s) => s.seat === seat)
   if (!chaos || !planSeat) throw new Error(`addRevealEffect: seat ${seat} is not in this chaos hand`)
-  if (!MID_HAND_EFFECTS.has(effect.effect)) throw new Error(`addRevealEffect: ${effect.cardId} cannot be played mid-hand`)
-  if (planSeat.effects.some((e) => e.effect === effect.effect)) throw new Error(`addRevealEffect: seat ${seat} already plans ${effect.effect}`)
-  if (effect.debuff) {
-    if (planSeat.effects.some((e) => e.debuff && e.timing === 'deal')) throw new Error(`addRevealEffect: seat ${seat} fired a deal-time debuff`)
-    planSeat.effects = planSeat.effects.filter((e) => !e.debuff)
-  }
+  if (!canInsertThisHand(planSeat, effect.effect)) throw new Error(`addRevealEffect: ${effect.cardId} cannot join seat ${seat}'s reveal`)
+  if (effect.debuff) planSeat.effects = planSeat.effects.filter((e) => !e.debuff)
   planSeat.effects.push({ ...effect, targets: effect.targets.slice() })
 }
 

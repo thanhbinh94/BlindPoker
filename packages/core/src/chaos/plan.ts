@@ -47,27 +47,32 @@ export function planHand(input: {
   const seats = new Map<number, ChaosSeat>()
   for (const { seat, chaos: given } of input.seats) {
     let chaos = given
+    // What a hand that never settled (cancelled) left behind: a card armed for it goes back to the bonus hand unfired
+    // (spec §3.4), and its "played" marker is cleared.
+    if (chaos.armed?.hand === 'this') chaos = { ...chaos, bonus: returnToBonus(chaos.bonus, chaos.armed.card), armed: null }
+    if (chaos.bonusPlayedThisHand) chaos = { ...chaos, bonusPlayedThisHand: false }
     const out: PlanSeat = { seat, effects: [], shield: null, blindfolded: chaos.blindfoldedNextHand }
     planSeats.push(out)
     seats.set(seat, chaos)
     if (chaos.frozenNextHand) continue
 
-    // A played bonus card (BP-39) fires first. A one-shot reveal or decision card fires from `armed`, which now names
-    // this hand, so `afterHand` can return it to the bonus hand if it is not used (and nobody learns it was played). Any
-    // other card joins `cards` and fires under the rules below: a duration card by the stacking rule (back to the bonus
-    // hand if a stronger held card would drop it), a one-shot deal card (freeze, blindfold, Tay bạc) at the front, so a
-    // pressed debuff fires before a held draft debuff (spec §3.4). A card this table's mode excludes waits as `this` and
-    // goes back to the bonus hand. An armed `this` here (a cancelled hand never settled) is treated the same.
+    // A bonus card played for this hand (BP-39) fires first, and marks the hand as having had its one bonus card. A
+    // one-shot reveal or decision card fires from `armed`, which now names this hand, so `afterHand` can see whether it
+    // was used (and nobody learns it was played before it fires). Any other card joins `cards` and fires under the rules
+    // below: a duration card by the stacking rule (back to the bonus hand, unplayed, if a stronger held card would drop
+    // it), a one-shot deal card (freeze, blindfold, Tay bạc) at the front, so a pressed debuff fires before a held draft
+    // debuff (spec §3.4). A card this table's mode excludes does not fire: it waits as `this`, to go back to the bonus hand.
     let lead: HeldCard | null = null
     if (chaos.armed) {
       const card = chaos.armed.card
-      if (!validHere(card.cardId) || firesFromArmed(card)) {
-        if (validHere(card.cardId)) lead = card
-        chaos = { ...chaos, armed: { card, hand: 'this' } }
+      if (!validHere(card.cardId)) chaos = { ...chaos, armed: { card, hand: 'this' } }
+      else if (firesFromArmed(card)) {
+        lead = card
+        chaos = { ...chaos, armed: { card, hand: 'this' }, bonusPlayedThisHand: true }
       } else {
         const cards = card.handsLeft === null ? [card, ...chaos.cards] : stackHeld(chaos.cards, card)
         chaos = cards
-          ? { ...chaos, cards, armed: null, farmHandsLeft: farmHandsOf(cards) }
+          ? { ...chaos, cards, armed: null, farmHandsLeft: farmHandsOf(cards), bonusPlayedThisHand: true }
           : { ...chaos, bonus: returnToBonus(chaos.bonus, card), armed: null }
       }
       seats.set(seat, chaos)

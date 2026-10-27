@@ -45,7 +45,8 @@ const fortuneRow = (len: number): 2 | 4 | 6 => (len >= 6 ? 6 : len >= 4 ? 4 : 2)
  *   params when a win ends a loss streak of 2 or more; the oldest Cấp cứu pays multiplier × wager after a lost hand that
  *   leaves the stack under 2 wagers — each fired wait card leaves;
  * - a bonus card played for this hand (`armed.hand === 'this'`, BP-39) leaves if its uid is in `consumed`, else goes
- *   back to the bonus hand at its old place;
+ *   back to the bonus hand at its old place — except a decision card that entered the plan, spent with its hand (Ruling
+ *   5); `bonusPlayedThisHand` is cleared;
  * - every `pointsThreshold` points become a bonus card (the remainder stays); a frozen seat's bonus cards wait in
  *   `pendingBonus` for the end of its next unfrozen hand and then act as today. A bot's bonus cards act at once
  *   (`receiveCard`); a human's go to the bonus hand (`bonusAwarded`) while it holds fewer than `BONUS_HAND_MAX` cards,
@@ -133,11 +134,15 @@ export function afterHand(input: {
       }
     }
 
-    // A bonus card played for this hand (BP-39) leaves if it was used, else goes back to the bonus hand where it was.
+    // A bonus card played for this hand (BP-39) leaves if it was used, else goes back to the bonus hand where it was. A
+    // decision card (Nhìn trộm, Bỏ không mất) that entered the plan is spent with its hand, used or not (Ruling 5); one
+    // that never entered it (a mode the table excludes) goes back.
     let bonus = chaos.bonus
     let armed = chaos.armed
     if (armed?.hand === 'this') {
-      if (!consumed.has(armed.card.uid)) bonus = returnToBonus(bonus, armed.card)
+      const uid = armed.card.uid
+      const spent = consumed.has(uid) || (armed.card.timing === 'decision' && fired.some((e) => e.uid === uid))
+      if (!spent) bonus = returnToBonus(bonus, armed.card)
       armed = null
     }
 
@@ -151,7 +156,7 @@ export function afterHand(input: {
       }
     }
 
-    let next: ChaosSeat = { ...chaos, cards, points, streak, pendingBonus, bonus, armed }
+    let next: ChaosSeat = { ...chaos, cards, points, streak, pendingBonus, bonus, armed, bonusPlayedThisHand: false }
     const got: ChaosCardDef[] = []
     const receive = (card: ChaosCardDef): void => {
       const r = receiveCard(next, card, nextUid, pool, mode, rng, weights, config.tierWeights)
@@ -170,15 +175,16 @@ export function afterHand(input: {
 
     // The bonus hand holds at most BONUS_HAND_MAX cards, the armed one included; when it is full the points wait. A card
     // that needs no press goes to the seat as today and takes no room. Only the points the hand ended with convert: a
-    // Tích lũy drawn here adds points for a later hand, so a low threshold cannot loop.
+    // Tích lũy drawn here adds points for a later hand, so a low threshold cannot loop. A draw that finds no card (an
+    // empty tier) costs nothing.
     const drawn: ChaosCardDef[] = []
     if (toBonusHand && config.pointsThreshold > 0) {
       let spendable = next.points
       while (spendable >= config.pointsThreshold && next.bonus.length + (next.armed ? 1 : 0) < BONUS_HAND_MAX) {
         spendable -= config.pointsThreshold
-        next = { ...next, points: next.points - config.pointsThreshold }
         const card = drawOffer(pool, drawTier(config.tierWeights, rng), mode, rng, 1, weights)[0]
         if (!card) continue
+        next = { ...next, points: next.points - config.pointsThreshold }
         if (needsNoPress(card)) receive(card)
         else {
           next = { ...next, bonus: [...next.bonus, toHeld(card, nextUid())] }

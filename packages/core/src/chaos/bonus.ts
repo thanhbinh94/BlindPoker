@@ -35,6 +35,17 @@ export function returnToBonus(bonus: readonly HeldCard[], card: HeldCard): HeldC
   return out
 }
 
+/**
+ * Whether a card of `effect` can join this hand's reveal on a seat whose live plan is `planSeat`: a one-shot reveal card
+ * (`MID_HAND_EFFECTS`), on a seat that has fired no deal-time debuff (freeze, blindfold: one debuff per seat per hand) and
+ * plans no effect of the same kind (A2). A planned reveal debuff is no conflict: the played one replaces it.
+ */
+export function canInsertThisHand(planSeat: Pick<ChaosHandPlan['seats'][number], 'effects'> | undefined, effect: ChaosEffectKind): boolean {
+  if (!MID_HAND_EFFECTS.has(effect)) return false
+  const effects = planSeat?.effects ?? []
+  return !effects.some((e) => (e.debuff && e.timing === 'deal') || e.effect === effect)
+}
+
 export type ArmWhen =
   | { phase: 'between' }
   | { phase: 'decision'; frozen: boolean; planSeat?: ChaosHandPlan['seats'][number] }
@@ -43,9 +54,9 @@ export type ArmError = 'NO_CARD' | 'ALREADY_ARMED' | 'FROZEN' | 'WEAKER_HELD'
 
 /**
  * The player presses "Dùng" on bonus card `uid`: it leaves `bonus` for `armed`. One armed card at a time — the "one bonus
- * card per hand" limit, counted on the hand it applies to. `hand: 'this'` only during the play/fold choice, for a card in
- * `MID_HAND_EFFECTS`, when the live hand's plan seat (`planSeat`) has not fired a deal-time debuff (freeze, blindfold:
- * one debuff per seat per hand) and does not already plan the same effect; otherwise `'next'`. Refused: a uid not in
+ * card per hand" limit, counted on the hand it applies to. `hand: 'this'` only during the play/fold choice, when no bonus
+ * card was played into this hand yet (`bonusPlayedThisHand`) and `canInsertThisHand` allows it on the live plan seat
+ * (`planSeat`); otherwise `'next'`. Refused: a uid not in
  * the bonus hand, a seat frozen this hand (spec §3.4), and a duration card weaker than the held one of the same effect,
  * which the stacking rule would drop (Ruling 2). The input seat is never changed.
  */
@@ -56,13 +67,8 @@ export function armBonus(seat: ChaosSeat, uid: number, when: ArmWhen): { seat: C
   if (when.phase === 'decision' && when.frozen) return { error: 'FROZEN' }
   if (card.handsLeft !== null && stackRule(seat.cards, card).kind === 'drop') return { error: 'WEAKER_HELD' }
 
-  let hand: ArmedBonus['hand'] = 'next'
-  if (when.phase === 'decision' && MID_HAND_EFFECTS.has(card.effect)) {
-    const effects = when.planSeat?.effects ?? []
-    const dealDebuffFired = effects.some((e) => e.debuff && e.timing === 'deal')
-    const sameKind = effects.some((e) => e.effect === card.effect)
-    if (!dealDebuffFired && !sameKind) hand = 'this'
-  }
+  const hand: ArmedBonus['hand'] =
+    when.phase === 'decision' && !seat.bonusPlayedThisHand && canInsertThisHand(when.planSeat, card.effect) ? 'this' : 'next'
   const armed: ArmedBonus = { card, hand }
   return { seat: { ...seat, bonus: seat.bonus.filter((c) => c.uid !== uid), armed }, armed }
 }
