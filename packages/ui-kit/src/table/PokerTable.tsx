@@ -70,6 +70,12 @@ export interface PokerTableProps {
    */
   note?: ReactNode
   /**
+   * The stack only: what the room lays in the felt's left edge, beside the board and the pot and clear of the viewer's fan —
+   * the bonus hand (BP-39, spec 2026-10-27 §3.4), which has no height to take anywhere else on a 360 × 780 phone. It takes
+   * no height of its own. Ignored on the ring.
+   */
+  feltCorner?: ReactNode
+  /**
    * Poker hỗn loạn (spec 2026-10-26): every seat's held cards, this hand's credits and the viewer's peek, from
    * `ClientState.chaos`. Each seat draws its cards as icons, the winner of a Bạo kích says so, the peeked board cards sit
    * face up in the ghost slots, and a viewer whose cards are down under a blindfold is told. Absent, the table is as it was.
@@ -161,6 +167,7 @@ export function PokerTable({
   resultPending = false,
   onReveal,
   note,
+  feltCorner = null,
   chaos = null,
 }: PokerTableProps) {
   const { t } = useTranslation()
@@ -294,6 +301,7 @@ export function PokerTable({
         restored={hand?.restored ?? false}
         onReveal={onReveal}
         chaosCards={chaos?.seats[index]?.cards}
+        bonusCount={chaos?.seats[index]?.bonusCount ?? 0}
         // Down because of a blindfold: what the snapshot's hand view said, else read off the deal — the viewer's own seat holds
         // cards and was shown none — while the hand is on.
         blindfolded={
@@ -354,6 +362,8 @@ export function PokerTable({
           <div className={s.stackFelt}>
             {centre}
             {note === undefined || note === null ? null : <p className={s.note}>{note}</p>}
+            {/* A zero-height anchor at the foot of the felt's content: what it holds hangs up from there along the left edge. */}
+            {feltCorner === undefined || feltCorner === null ? null : <div className={s.feltCorner}>{feltCorner}</div>}
           </div>
           {mySeat === null ? null : <div className={s.mine}>{renderSeat(mySeat)}</div>}
         </section>

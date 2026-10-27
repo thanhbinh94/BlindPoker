@@ -1903,4 +1903,146 @@ describe('RoomScreen on a Poker hỗn loạn table', () => {
       expect(document.querySelector('[data-chaos-toasts]')).toBeNull()
     })
   })
+
+  describe('the bonus hand (BP-39, spec 2026-10-27 §3.4)', () => {
+    const bonus = {
+      cards: [
+        { uid: 901, cardId: 's_steal_one', tier: 'silver' as const, handsLeft: null },
+        { uid: 903, cardId: 'd_insure_2', tier: 'diamond' as const, handsLeft: 2 },
+      ],
+      armed: null,
+    }
+    /** This hand's play-or-fold round, with me (seat 2) dealt in and `mine` laid over my seat. */
+    const deciding = (mine: Partial<ClientHand['seats'][number]> = {}, phase: ClientHand['phase'] = 'DECISION') =>
+      makeHand({
+        mode: 'blind',
+        phase,
+        mySeat: 2,
+        actingSeat: null,
+        community: [],
+        legal: phase === 'DECISION' ? { seat: 2, kinds: ['play', 'fold'], callAmount: 1_000, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 } : null,
+        seats: [
+          makeSeat({ seat: 0, playerId: 'a', displayName: 'Ann', hasDecided: true }),
+          makeSeat({ seat: 2, playerId: 'me', displayName: 'Mai', holeCards: parseCards('Qs Qd 2c'), ...mine }),
+        ],
+      })
+    const drawAt = (state: ClientState, where: { layout?: 'stack'; frame?: 'landscape' } = {}, client = fakeClient(state)) => {
+      render(
+        <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+          <RoomScreen client={client} lang="vi" onLeft={vi.fn()} {...where} />
+        </I18nextProvider>,
+      )
+      return client
+    }
+    const handGroup = () => screen.queryByRole('group', { name: 'Thẻ thưởng' })
+    const tap = (el: HTMLElement) => {
+      fireEvent.pointerDown(el, { pointerType: 'touch' })
+      fireEvent.pointerUp(el, { pointerType: 'touch' })
+      fireEvent.click(el, { detail: 1 })
+    }
+    /** Opens the first card's popup and answers whether its "Dùng" may be pressed. */
+    const usable = (): boolean => {
+      tap(within(handGroup()!).getAllByRole('button')[0]!)
+      const use = screen.getByRole('button', { name: 'Dùng' })
+      return !(use as HTMLButtonElement).disabled
+    }
+
+    it('lies in the controls’ row on a desktop, in the felt when upright, in the room’s corner when sideways — never in my seat', () => {
+      drawAt(stateWith({ bonus }))
+      expect(handGroup()!.closest('[role="group"][aria-label="Điều khiển bàn"]'), 'the controls').not.toBeNull()
+      expect(handGroup()).toHaveAttribute('data-layout', 'desktop')
+      cleanup()
+      drawAt(stateWith({ bonus }), { layout: 'stack' })
+      expect(handGroup()!.closest(`.${s.stackFelt}`), 'the felt').not.toBeNull()
+      expect(handGroup()!.closest(`.${s.mine}`), 'not my seat, which the strip hides').toBeNull()
+      expect(handGroup()).toHaveAttribute('data-layout', 'stack')
+      cleanup()
+      drawAt(stateWith({ bonus }), { frame: 'landscape' })
+      expect(handGroup()!.closest('main'), 'out of the stage the tier is measured on').toBeNull()
+      expect(handGroup()).toHaveAttribute('data-layout', 'landscape')
+    })
+
+    it('stays up and playable under the upright result strip, the main time to play a card', () => {
+      drawAt(makeState({ ...stateWith({ bonus }), resultSkips: { skipped: 0, total: 2, mine: false } }), { layout: 'stack' })
+      expect(document.querySelector(`.${screens.room}`)).toHaveAttribute('data-result-strip', 'open')
+      expect(handGroup()).not.toBeNull()
+      expect(usable()).toBe(true)
+    })
+
+    it('plays a card through the client, once', async () => {
+      const client = drawAt(stateWith({ bonus }))
+      tap(within(handGroup()!).getAllByRole('button')[1]!)
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Dùng' }), { detail: 1 })
+      })
+      expect(client.playBonus).toHaveBeenCalledTimes(1)
+      expect(client.playBonus).toHaveBeenCalledWith(903)
+    })
+
+    it('opens "Dùng" in this hand’s play-or-fold round while I am in it and not folding', () => {
+      drawAt(stateWith({ bonus }, deciding()))
+      expect(usable()).toBe(true)
+    })
+
+    it('greys "Dùng" once I chose Bỏ, queued a fold, folded, or the round is over — the cards still open', () => {
+      const cases: [string, ClientState][] = [
+        ['chose Bỏ', stateWith({ bonus }, deciding({ hasDecided: true, decision: 'fold' }))],
+        ['folded', stateWith({ bonus }, deciding({ folded: true }))],
+        ['queued a fold', makeState({ ...stateWith({ bonus }, deciding()), preAction: { kind: 'fold', handId: deciding().handId } })],
+        ['the reveal', stateWith({ bonus }, deciding({}, 'REVEAL'))],
+        ['the squeeze', stateWith({ bonus }, deciding({}, 'SQUEEZE'))],
+        ['not dealt in', stateWith({ bonus }, { ...deciding(), mySeat: null })],
+      ]
+      for (const [why, state] of cases) {
+        drawAt(state)
+        expect(usable(), why).toBe(false)
+        cleanup()
+      }
+      // a fold queued for an earlier hand is not this hand's
+      drawAt(makeState({ ...stateWith({ bonus }, deciding()), preAction: { kind: 'fold', handId: 'an-old-hand' } }))
+      expect(usable()).toBe(true)
+    })
+
+    it('greys every other card while one is set to play, and says so on that one', () => {
+      drawAt(stateWith({ bonus: { cards: [bonus.cards[1]!], armed: { uid: 901, cardId: 's_steal_one', hand: 'this' } } }, deciding()))
+      const [armed, other] = within(handGroup()!).getAllByRole('button')
+      expect(armed).toHaveAccessibleName(/Đã đặt dùng/)
+      tap(other!)
+      expect(screen.getByRole('button', { name: 'Dùng' })).toBeDisabled()
+    })
+
+    it('is nowhere for a spectator, on a table without chaos, or while the hand is empty', () => {
+      const watching = makeRoom({ ...chaosRoom, players: [chaosRoom.players[0]!, makePlayer({ playerId: 'me', displayName: 'Mai' })] })
+      drawAt(makeState({ ...stateWith({ bonus }), room: watching }))
+      expect(handGroup()).toBeNull()
+      cleanup()
+      const plainRoom = makeRoom({ ...chaosRoom, config: { ...chaosRoom.config, blind: { ...chaosRoom.config.blind!, chaosCycle: undefined } } })
+      drawAt(makeState({ ...stateWith({ bonus }), room: plainRoom }))
+      expect(handGroup()).toBeNull()
+      cleanup()
+      drawAt(stateWith({}))
+      expect(handGroup()).toBeNull()
+    })
+
+    it('keeps a CHAOS_CANNOT_USE refusal out of the room’s error slip (A14) — other refusals still use it', () => {
+      const refusal = { code: 'CHAOS_CANNOT_USE' as const, message: 'FROZEN', reqId: 'r1', at: 1 }
+      drawAt(makeState({ ...stateWith({ bonus }), lastError: refusal }))
+      expect(screen.queryByRole('alert')).toBeNull()
+      cleanup()
+      drawAt(makeState({ ...stateWith({ bonus }), lastError: { ...refusal, code: 'NOT_YOUR_TURN' } }))
+      expect(screen.getByRole('alert')).toBeInTheDocument()
+    })
+
+    it('writes the refusal in the bonus hand instead', async () => {
+      const client = fakeClient(stateWith({ bonus }), {
+        playBonus: vi.fn().mockResolvedValue({ t: 'ERROR', code: 'CHAOS_CANNOT_USE', message: 'FROZEN', reqId: 'x' }),
+      })
+      drawAt(client.state, {}, client)
+      tap(within(handGroup()!).getAllByRole('button')[0]!)
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Dùng' }), { detail: 1 })
+      })
+      expect(within(handGroup()!).getByRole('alert')).toHaveTextContent('Chưa dùng được thẻ này lúc này')
+    })
+  })
 })

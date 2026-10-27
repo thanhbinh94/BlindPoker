@@ -69,10 +69,12 @@ export type WorstState = 'waiting' | 'turn' | 'result' | 'blindS' | 'blindP' | '
  * - `chaosBurst`: the hand over, and every one of up to eight seats fired a card ("Thẻ đã dùng" at its longest, eight
  *   toasts in one batch with the settlement: as many as the band holds, the rest under "+N thẻ khác", the result open beside
  *   them), the result wait running with "Bỏ qua" at 3 of 5 and not pressed by me, one bonus card in my hand.
+ * - `chaosArmed`: `chaosBonus` after I pressed "Dùng" on the board re-deal: it waits marked "Đã đặt dùng" for this hand's
+ *   reveal, the other two cards still in my hand with their "Dùng" greyed.
  */
-export type ChaosState = 'chaosDraft' | 'chaosReveal' | 'chaosFour' | 'chaosPeel' | 'chaosBlind' | 'chaosResult' | 'chaosBoard' | 'chaosBonus' | 'chaosBurst'
+export type ChaosState = 'chaosDraft' | 'chaosReveal' | 'chaosFour' | 'chaosPeel' | 'chaosBlind' | 'chaosResult' | 'chaosBoard' | 'chaosBonus' | 'chaosBurst' | 'chaosArmed'
 
-const CHAOS_STATES: readonly ChaosState[] = ['chaosDraft', 'chaosReveal', 'chaosFour', 'chaosPeel', 'chaosBlind', 'chaosResult', 'chaosBoard', 'chaosBonus', 'chaosBurst']
+const CHAOS_STATES: readonly ChaosState[] = ['chaosDraft', 'chaosReveal', 'chaosFour', 'chaosPeel', 'chaosBlind', 'chaosResult', 'chaosBoard', 'chaosBonus', 'chaosBurst', 'chaosArmed']
 const isChaos = (state: WorstState): state is ChaosState => (CHAOS_STATES as readonly string[]).includes(state)
 
 /** `/short`: the box the room is laid out in, the user's 855 × 319 phone (bug log §10, E1/E2). */
@@ -267,7 +269,7 @@ function chaosSeat(i: number, state: ChaosState, long: boolean): ClientSeat {
     cardCount: count,
     holeCards: shown ? cards(count === 4 && !mine ? `${own} ${FOURTH}` : own) : null,
     ...(state === 'chaosPeel' ? { revealed: turned } : {}),
-    hasDecided: state === 'chaosBoard' || (!mine && (state === 'chaosReveal' || state === 'chaosFour' || state === 'chaosBlind' || state === 'chaosBonus')),
+    hasDecided: state === 'chaosBoard' || (!mine && (state === 'chaosReveal' || state === 'chaosFour' || state === 'chaosBlind' || state === 'chaosBonus' || state === 'chaosArmed')),
     decision: null,
     lastAction: null,
     timedOut: false,
@@ -430,11 +432,15 @@ function chaosState(n: number, state: ChaosState, now: number): ClientChaos {
   const seats: ClientChaos['seats'] = {}
   for (let i = 0; i < n; i++) {
     const count = state === 'chaosFour' && i === 0 ? 5 : (HELD_COUNT[i] ?? 0)
-    const bonusCount = state === 'chaosBonus' ? (BONUS_COUNT[i] ?? 0) : state === 'chaosBurst' ? (i % 3 === 0 ? 1 : 0) : 0
+    const bonusCount = state === 'chaosBonus' || state === 'chaosArmed' ? (BONUS_COUNT[i] ?? 0) : state === 'chaosBurst' ? (i % 3 === 0 ? 1 : 0) : 0
     seats[i] = { cards: Array.from({ length: count }, (_, k) => ({ uid: i * 10 + k, ...HELD[(i + k) % HELD.length]! })), points: i, bonusCount }
   }
   const chaos: ClientChaos = { ...initialChaos, seats }
   if (state === 'chaosBonus') return { ...chaos, bonus: { cards: BONUS_HAND.map((c) => ({ ...c })), armed: null } }
+  if (state === 'chaosArmed') {
+    const pressed = BONUS_HAND[1]!
+    return { ...chaos, bonus: { cards: BONUS_HAND.filter((c) => c !== pressed).map((c) => ({ ...c })), armed: { uid: pressed.uid, cardId: pressed.cardId, hand: 'this' } } }
+  }
   if (state === 'chaosBurst') {
     return {
       ...chaos,

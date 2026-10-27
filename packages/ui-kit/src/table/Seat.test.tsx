@@ -694,9 +694,28 @@ describe('Seat on a Poker hỗn loạn table', () => {
     expect(screen.queryByText(/Bạo kích/)).toBeNull()
   })
 
+  it('shows another seat how many bonus cards it holds — a count only, never which — and nothing on the viewer’s own seat', () => {
+    const other = { seat: bot, player: makePlayer({ playerId: 'bot2', displayName: 'Bảo', seat: 2, isBot: true, status: 'IN_HAND' }), isMe: false }
+    const { unmount } = wrap(plain({ ...other, bonusCount: 2 }))
+    const badge = screen.getByRole('img', { name: 'Thẻ thưởng: 2' })
+    expect(badge.closest(`.${s.tags}`), 'on the line under the plate').not.toBeNull()
+    expect(badge).toHaveTextContent('×2')
+    expect(badge.querySelector('[data-tier]'), 'no tier, no card').toBeNull()
+    expect(badge.closest('button'), 'nothing to open').toBeNull()
+    unmount()
+    const strip = wrap(plain({ ...other, strip: true, bonusCount: 1 }))
+    expect(plate().querySelector(`.${s.stripLine} [data-bonus-count="1"]`)).toHaveAccessibleName('Thẻ thưởng: 1')
+    strip.unmount()
+    const none = wrap(plain({ ...other, bonusCount: 0 }))
+    expect(document.querySelector('[data-bonus-count]')).toBeNull()
+    none.unmount()
+    wrap(plain({ isMe: true, bonusCount: 3 }))
+    expect(document.querySelector('[data-bonus-count]'), 'the viewer has the bonus hand itself').toBeNull()
+  })
+
   it('lists the new motion under reduced motion', () => {
     const off = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(TABLE_CSS)?.[1] ?? ''
-    for (const name of ['draft', 'chaosToastIn', 'critShout']) expect(off, name).toMatch(new RegExp(`\\.${name}\\b`))
+    for (const name of ['draft', 'chaosToastIn', 'critShout', 'bonusError']) expect(off, name).toMatch(new RegExp(`\\.${name}\\b`))
     expect(off).toMatch(/\.draftCard\s*\{\s*transition:\s*none/)
   })
 })

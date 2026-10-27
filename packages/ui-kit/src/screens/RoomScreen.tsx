@@ -10,6 +10,7 @@ import { MenuButton, type MenuItem } from '../primitives/MenuButton.js'
 import { Modal } from '../primitives/Modal.js'
 import { cx } from '../primitives/cx.js'
 import { ActionBar } from '../table/ActionBar.js'
+import { BonusHand } from '../table/BonusHand.js'
 import { ChaosDraft } from '../table/ChaosDraft.js'
 import { ChaosToasts } from '../table/ChaosToasts.js'
 import { HandResult } from '../table/HandResult.js'
@@ -367,6 +368,21 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
     !chaosTable || skips === null
       ? null
       : { ...skips, ...(mySeated ? { onSkip: () => client.skipResult().catch(() => undefined) } : {}) }
+  /**
+   * The bonus hand's window (spec 2026-10-27 §3.4, the server's own rule mirrored): a seated player at a chaos table with
+   * nothing pressed yet, between hands — the result wait, the draft, the room waiting — or in this hand's play-or-fold round
+   * with the seat dealt in and not folding (no "Bỏ" chosen, none queued). Not in any other round, so never mid-hand at a
+   * "Hoàn toàn may rủi" table, which has no such round. Outside it the cards still open to be read, "Dùng" greyed.
+   */
+  const myHandSeat = hand !== null && hand.mySeat !== null ? hand.seats.find((x) => x.seat === hand.mySeat) : undefined
+  const folding =
+    myHandSeat === undefined || myHandSeat.folded || myHandSeat.decision === 'fold' || (state.preAction?.kind === 'fold' && state.preAction.handId === hand?.handId)
+  const bonusUsable =
+    chaosTable && mySeated && state.chaos.bonus.armed === null && (!handLive || (hand.phase === 'DECISION' && !folding))
+  const bonusHand =
+    chaosTable && mySeated ? (
+      <BonusHand bonus={state.chaos.bonus} canUse={bonusUsable} onUse={client.playBonus} layout={stack ? 'stack' : landscape ? 'landscape' : 'desktop'} />
+    ) : null
   const result =
     resultCard === null ? null : (
       <HandResult
@@ -469,6 +485,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
           // The short tier's felt has no free band under the board for it (BP-28, R2): the dock carries it there. The
           // stack's one-row footer has no room for it either, so it is the felt's last line there (BP-31 P4).
           note={(stack || (landscape && !short)) && waiting ? hint : null}
+          feltCorner={stack ? bonusHand : null}
           chaos={chaosTable ? state.chaos : null}
         />
 
@@ -493,6 +510,12 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
       {/* The chaos result on a phone (BP-39): a row of the room's column directly above the tray when upright — the felt gives
           it the height, the toasts' band above keeps its own — and a band at the stage's foot, between the tray's corners, when
           on its side, laid over the foot of the felt without changing the stage the frame's tier is measured on. */}
+      {/* The bonus hand (BP-39): the left corner over "Tự động chơi" when sideways (its CSS places it); in the felt's left
+          edge when upright (`PokerTable`'s `feltCorner`: a 360 × 780 stage has no row to spare), in the controls' row on a
+          desktop. Never in the viewer's own seat, which the upright strip hides — and the result wait is the main time to
+          play a card. */}
+      {landscape ? bonusHand : null}
+
       {result === null || !resultStrip ? null : (
         <div className={s.resultStrip} data-surface="night" data-frame={frame}>
           {result}
@@ -537,6 +560,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
             ) : null
           ) : (
             <div className={s.controls} role="group" aria-label={t('room.controls')}>
+              {bonusHand}
               {readyButton}
               {mySeated ? (
                 <Button variant="ghost" disabled={request.busy} onClick={standUp}>
@@ -627,7 +651,8 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
       </Modal>
 
       <Toasts
-        error={request.error ?? state.lastError}
+        // A bonus card's refusal is written in the bonus hand itself (A14): a slip here would lie over the result strip.
+        error={request.error ?? (state.lastError?.code === 'CHAOS_CANNOT_USE' ? null : state.lastError)}
         notifications={state.notifications}
         onClearError={clearError}
         onDismiss={dismiss}

@@ -348,6 +348,14 @@
       "on": "On {{targets}}",
       "outcome": "Result: {{outcome}}"
     },
+    "bonus": {
+      "title": "Bonus cards",
+      "use": "Use",
+      "armed": "Set to play",
+      "seat_one": "Bonus cards: {{count}}",
+      "seat_other": "Bonus cards: {{count}}",
+      "count": "×{{count}}"
+    },
     "credit": {
       "chaos_rescue": "Rescue +{{amount}}",
       "chaos_crit": "Crit ×{{multiplier}} +{{amount}}",

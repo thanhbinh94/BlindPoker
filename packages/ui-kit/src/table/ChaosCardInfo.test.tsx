@@ -204,6 +204,89 @@ describe('ChaosCardInfo', () => {
     expect(tip()).toHaveTextContent('Gương phản chiếu')
   })
 
+  describe('with a step to take (the bonus hand’s "Dùng", BP-39)', () => {
+    const card = () => screen.getByRole('button', { name: /Khiên gỗ/ })
+    const use = () => screen.getByRole('button', { name: 'Dùng' })
+
+    it('offers the button under the description, in a separate step from the tap that opened it', () => {
+      const onPress = vi.fn()
+      draw({ cardId: 's_shield', action: { kind: 'button', label: 'Dùng', onPress } })
+      expect(screen.queryByRole('button', { name: 'Dùng' }), 'not before the popup opens').toBeNull()
+      tap(card())
+      expect(tip()).toContainElement(use())
+      expect(onPress, 'opening it plays nothing').not.toHaveBeenCalled()
+    })
+
+    it('calls the step exactly once on a press and closes, handing the focus back to the card without reopening', () => {
+      const onPress = vi.fn()
+      draw({ cardId: 's_shield', action: { kind: 'button', label: 'Dùng', onPress } })
+      tap(card())
+      const button = use()
+      fireEvent.pointerDown(button, { pointerType: 'touch' })
+      act(() => button.focus())
+      fireEvent.pointerUp(button, { pointerType: 'touch' })
+      fireEvent.click(button, { detail: 1 })
+      fireEvent.click(button, { detail: 1 })
+      expect(onPress).toHaveBeenCalledTimes(1)
+      expect(tip()).toBeNull()
+      expect(document.activeElement).toBe(card())
+    })
+
+    it('stays open when the trigger blurs towards the popup itself — Chrome’s press on its text or its button', () => {
+      draw({ cardId: 's_shield', action: { kind: 'button', label: 'Dùng', onPress: vi.fn() } })
+      tap(card())
+      const box = tip()!
+      expect(box).toHaveAttribute('tabindex', '-1')
+      fireEvent.pointerDown(box.querySelector('p')!)
+      fireEvent.blur(card(), { relatedTarget: box })
+      expect(tip()).not.toBeNull()
+      fireEvent.blur(card(), { relatedTarget: use() })
+      expect(tip()).not.toBeNull()
+      // …and a press on the popup's text, where Chrome moves the focus to the popup: nothing closes it either.
+      act(() => box.focus())
+      expect(tip()).not.toBeNull()
+    })
+
+    it('greys the button and calls nothing while the step is not open', () => {
+      const onPress = vi.fn()
+      draw({ cardId: 's_shield', action: { kind: 'button', label: 'Dùng', disabled: true, onPress } })
+      tap(card())
+      expect(tip()).toHaveTextContent('Khiên gỗ') // still readable
+      expect(use()).toBeDisabled()
+      fireEvent.click(use())
+      expect(onPress).not.toHaveBeenCalled()
+    })
+
+    it('says a card is already set instead of offering the button', () => {
+      draw({ cardId: 's_shield', action: { kind: 'status', label: 'Đã đặt dùng' } })
+      tap(card())
+      expect(tip()).toHaveTextContent('Đã đặt dùng')
+      expect(screen.queryByRole('button', { name: 'Dùng' })).toBeNull()
+    })
+
+    it('lets the keyboard reach the button: Tab from the card steps into it, Tab out of it comes back and closes', () => {
+      draw({ cardId: 's_shield', action: { kind: 'button', label: 'Dùng', onPress: vi.fn() } })
+      act(() => card().focus())
+      expect(tip()).not.toBeNull()
+      fireEvent.keyDown(card(), { key: 'Tab' })
+      expect(document.activeElement).toBe(use())
+      fireEvent.blur(card(), { relatedTarget: use() })
+      expect(tip()).not.toBeNull()
+      fireEvent.keyDown(use(), { key: 'Tab' })
+      expect(tip()).toBeNull()
+      expect(document.activeElement).toBe(card())
+    })
+
+    it('closes on Esc from inside the popup and gives the focus back to the card', () => {
+      draw({ cardId: 's_shield', action: { kind: 'button', label: 'Dùng', onPress: vi.fn() } })
+      tap(card())
+      act(() => use().focus())
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(tip()).toBeNull()
+      expect(document.activeElement).toBe(card())
+    })
+  })
+
   it('drops its fade under reduced motion', () => {
     expect(TABLE_CSS).toMatch(/\.cardInfo\s*\{[^}]*animation:\s*cardInfoIn/)
     const off = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(TABLE_CSS)?.[1] ?? ''

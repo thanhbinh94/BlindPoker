@@ -76,7 +76,9 @@ export function ChaosDraft({ draft, serverNow, onPick, layout = 'ring', frame = 
       </header>
 
       {offer === null ? null : (
-        <div className={s.draftCards} role="group" aria-label={t('chaos.draft.group')}>
+        // One row of three everywhere but the upright sheet, a phone on its side included (spec 2026-10-27 §3.6), each card
+        // with its tier chip, name and text.
+        <div className={s.draftCards} role="group" aria-label={t('chaos.draft.group')} data-arrange={layout === 'stack' ? 'column' : 'row'}>
           {offer.cardIds.map((cardId, i) => {
             return (
               <button

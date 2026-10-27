@@ -348,6 +348,14 @@
       "on": "Nhắm vào: {{targets}}",
       "outcome": "Kết quả: {{outcome}}"
     },
+    "bonus": {
+      "title": "Thẻ thưởng",
+      "use": "Dùng",
+      "armed": "Đã đặt dùng",
+      "seat_one": "Thẻ thưởng: {{count}}",
+      "seat_other": "Thẻ thưởng: {{count}}",
+      "count": "×{{count}}"
+    },
     "credit": {
       "chaos_rescue": "Cấp cứu +{{amount}}",
       "chaos_crit": "Bạo kích ×{{multiplier}} +{{amount}}",

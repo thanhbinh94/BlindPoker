@@ -156,5 +156,17 @@ describe('the chaos worst-case pages', () => {
     draw('#worst/chaosBonus/6/vi')
     expect(screen.getByRole('button', { name: /^Chơi/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Bỏ bài' })).toBeInTheDocument()
+    expect(within(screen.getByRole('group', { name: 'Thẻ thưởng' })).getAllByRole('button')).toHaveLength(3)
+    // the others' counts, never their cards: Bot 1 and Bot 4 hold one, Bot 3 two
+    expect(screen.getAllByRole('img', { name: 'Thẻ thưởng: 1' })).toHaveLength(2)
+    expect(screen.getByRole('img', { name: 'Thẻ thưởng: 2' })).toBeInTheDocument()
+  })
+
+  it('#worst/chaosArmed/6/vi: the board re-deal set to play, the other two cards still in my hand', () => {
+    expect(parseWorstHash('#worst/chaosArmed/6/vi')?.state).toBe('chaosArmed')
+    draw('#worst/chaosArmed/6/vi')
+    const cards = within(screen.getByRole('group', { name: 'Thẻ thưởng' })).getAllByRole('button')
+    expect(cards).toHaveLength(3)
+    expect(cards[0]).toHaveAccessibleName('Chia lại lá chung (Vàng) · Đã đặt dùng')
   })
 })

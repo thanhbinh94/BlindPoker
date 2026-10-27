@@ -2867,17 +2867,18 @@
 .draft,
 .draftCard,
 .chaosToast,
-.cardInfoEntry {
+.cardInfoEntry,
+.bonusCard {
   --t-frame: var(--tier-silver);
   --t-ink: var(--tier-silver-ink);
 }
 
-:is(.chaosIcon, .draft, .draftCard, .chaosToast, .cardInfoEntry)[data-tier='gold'] {
+:is(.chaosIcon, .draft, .draftCard, .chaosToast, .cardInfoEntry, .bonusCard)[data-tier='gold'] {
   --t-frame: var(--tier-gold);
   --t-ink: var(--tier-gold-ink);
 }
 
-:is(.chaosIcon, .draft, .draftCard, .chaosToast, .cardInfoEntry)[data-tier='diamond'] {
+:is(.chaosIcon, .draft, .draftCard, .chaosToast, .cardInfoEntry, .bonusCard)[data-tier='diamond'] {
   --t-frame: var(--tier-diamond);
   --t-ink: var(--tier-diamond-ink);
 }
@@ -2972,6 +2973,56 @@
 
 .stripLine > .chaosRow {
   padding-right: 4px;
+}
+
+/* Another seat's bonus hand (BP-39, spec 2026-10-27 §3.4): a small card back and "×N" — how many, never which. One flex
+   item of `.tags` / `.stripLine` beside the chaos icons, a size under them. */
+.bonusBadge {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 2px;
+  padding-right: 4px;
+  font-family: var(--font-display);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+}
+
+.bonusBack {
+  flex: none;
+  width: 10px;
+  height: 14px;
+  border: 1px solid color-mix(in srgb, var(--gold) 75%, transparent);
+  border-radius: 2px;
+  background:
+    repeating-linear-gradient(45deg, color-mix(in srgb, var(--gold) 45%, transparent) 0 1.5px, transparent 1.5px 3.5px),
+    #4a1420;
+}
+
+/* The dense strip (seven opponents or more on a phone): a chip's badge line has about 26 px left beside the cards' icon and
+   the bet, so the back shrinks and the gaps close rather than push the bet onto a line of its own. */
+.othersDense .bonusBadge,
+.ring[data-frame='landscape'] .bonusBadge {
+  gap: 1px;
+  padding-right: 0;
+}
+
+/* …and on a phone held sideways, whose seat lines run wide along the top of the ring. */
+.ring[data-frame='landscape'] .bonusBack {
+  width: 7px;
+  height: 10px;
+}
+
+.othersDense .chaosRow:has(+ .bonusBadge) {
+  padding-right: 0;
+}
+
+.othersDense .bonusBack {
+  width: 7px;
+  height: 10px;
 }
 
 /* `ChaosCardInfo` (BP-39, spec 2026-10-27 §3.5). The trigger is a bare button around the icon: it adds no box of its own,
@@ -3088,6 +3139,253 @@
 .cardInfoUse [data-outcome='reflected'],
 .cardInfoUse [data-outcome='fizzled'] {
   color: var(--red);
+}
+
+/* The popup is focusable from a script only (a press on its text keeps the focus with it): no ring for that. */
+.cardInfo:focus {
+  outline: none;
+}
+
+/* The bonus hand's "Dùng" (BP-39, spec 2026-10-27 §3.4): the popup's last line, a full-width gold button with a thumb's
+   height; greyed, still in place, while the card cannot be played. A card already pressed says so in its stead. */
+.cardInfoAction {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  margin-top: 8px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--gold);
+  font: 700 0.875rem/1.2 var(--font-body);
+  color: var(--gold-ink);
+  cursor: pointer;
+}
+
+.cardInfoAction:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.cardInfoAction:disabled {
+  background: color-mix(in srgb, var(--ink-muted) 30%, transparent);
+  color: var(--ink-muted);
+  cursor: not-allowed;
+}
+
+.cardInfo .cardInfoStatus {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  font-weight: 700;
+  color: var(--gold);
+}
+
+@media (pointer: coarse) {
+  .cardInfoAction {
+    min-height: var(--tap);
+  }
+}
+
+/* The bonus hand (BP-39, spec 2026-10-27 §3.4): the viewer's up to three bonus cards, each a tier-framed pill — the card's
+   initial in its icon, then its name, cut with "…" before the row gives — that opens its popup with "Dùng". It carries
+   `data-surface='night'`, so it reads the felt's palette on the page in either theme. `RoomScreen` places it by layout:
+   the controls' row under the felt on a desktop, a row of the column above the result strip and the tray when upright,
+   and the left corner over "Tự động chơi" when sideways. It is never part of the viewer's own seat, which the upright
+   result strip hides, since the result wait is the main time to play a card. */
+.bonusHand {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.bonusTitle {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--gold);
+}
+
+.bonusCards {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* The trigger gives: three names share what the row has left, each cut before the row overflows. */
+.bonusTrigger {
+  flex: 0 1 auto;
+  min-width: 0;
+  border-radius: 8px;
+}
+
+.bonusCard {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 11rem;
+  height: 30px;
+  padding: 0 8px 0 3px;
+  border: 1.5px solid var(--t-frame);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--t-frame) 14%, #0a1220);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.bonusName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Pressed and waiting to fire: a dashed gold edge, "Đã đặt dùng" in place of the name, a tick on the icon. */
+.bonusCard[data-armed] {
+  border-style: dashed;
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 16%, #0a1220);
+}
+
+.bonusCard[data-armed] .bonusName {
+  color: var(--gold);
+}
+
+.bonusArmedMark {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  min-width: 14px;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--gold);
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  line-height: 14px;
+  text-align: center;
+  color: var(--gold-ink);
+}
+
+/* A refusal (A14): written over the hand for a few seconds, opaque, rather than as the room's slip in the bottom-right
+   corner, which the result strip and the tray's buttons hold. */
+.bonusError {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 6;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(18rem, calc(100vw - 24px));
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--red-fill);
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+  box-shadow: var(--shadow-2);
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  color: var(--ink);
+  animation: riseUp 200ms var(--ease) backwards;
+}
+
+/* The card back that names the hand where its title has no room (upright and sideways). */
+.bonusMark {
+  display: none;
+  flex: none;
+  place-items: center;
+  width: 12px;
+  height: 14px;
+}
+
+/* On a phone, upright or sideways: the icons alone under the card back, the names left to each card's popup. */
+.bonusHand:is([data-layout='stack'], [data-layout='landscape']) .bonusTitle,
+.bonusHand:is([data-layout='stack'], [data-layout='landscape']) .bonusName {
+  display: none;
+}
+
+.bonusHand:is([data-layout='stack'], [data-layout='landscape']) .bonusMark {
+  display: grid;
+}
+
+.bonusHand:is([data-layout='stack'], [data-layout='landscape']) .bonusCard {
+  height: 28px;
+  padding: 0 2px;
+}
+
+/* Upright: the stack has no row to spare at 360 × 780 (the felt is already at its floor there), so the hand lies in the
+   felt's left edge — `PokerTable`'s `feltCorner`, a zero-height anchor at the foot of the felt's content — as a column of
+   icons hanging up from the pot's line: beside the board (which starts 50 px in at 360 px) and above the viewer's fan. */
+.feltCorner {
+  position: relative;
+  height: 0;
+}
+
+.bonusHand[data-layout='stack'] {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  z-index: 2;
+  flex-direction: column;
+  gap: 4px;
+  padding: 3px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+
+/* 110 px from the mark to the last card: under the board and pot's 108 px plus the felt's top padding, at every width. */
+.bonusHand[data-layout='stack'] .bonusCards {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bonusHand[data-layout='stack'] .bonusCard {
+  height: 26px;
+}
+
+/* The felt's last line (the pre-hand hint) keeps its words off the column. */
+.stackFelt:has(> .feltCorner > .bonusHand) .note {
+  padding-inline: 40px;
+}
+
+/* Upright the refusal opens to the column's right, over the felt, rather than above it onto the opponents. */
+.bonusHand[data-layout='stack'] .bonusError {
+  left: calc(100% + 6px);
+  bottom: 0;
+}
+
+/* Sideways: the left corner, over the tray's "Tự động chơi" pill (34 px; 44 px under a thumb) and clear of the result
+   strip, which starts 7.5rem in from that corner. One row on a night wash, so it reads over the felt; above the felt, beside
+   the tray's corners (z 5). */
+.bonusHand[data-layout='landscape'] {
+  position: absolute;
+  left: max(var(--space-3), env(safe-area-inset-left));
+  bottom: calc(max(var(--space-3), env(safe-area-inset-bottom)) + 34px + var(--space-2));
+  z-index: 5;
+  gap: 4px;
+  max-width: 7.5rem;
+  padding: 3px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+}
+
+/* The back, then three 29 px icons: 117 px with the gaps and the wash, inside the corner's 7.5rem. */
+.bonusHand[data-layout='landscape'] .bonusCards {
+  gap: 4px;
+}
+
+@media (pointer: coarse) {
+  .bonusHand[data-layout='landscape'] {
+    bottom: calc(max(var(--space-3), env(safe-area-inset-bottom)) + var(--tap) + var(--space-2));
+  }
 }
 
 /* "Bạo kích ×2!" on the seat that won with it: with the hand's name and the payout, which it arrives with. */
@@ -3271,7 +3569,8 @@
   grid-column: 1 / -1;
 }
 
-/* The compact row for a phone on its side: smaller type, the text held to three lines, no tier chip (the title says it). */
+/* The compact row for a phone on its side (spec 2026-10-27 §3.6): one row of three cards, each with its tier chip and name
+   on one line and the text held to three lines, the timer in the head's corner; smaller type, nothing that scrolls. */
 .draft[data-frame='landscape'] {
   width: min(100%, 44rem);
   gap: var(--space-2);
@@ -3287,12 +3586,16 @@
 }
 
 .draft[data-frame='landscape'] .draftCard {
-  gap: 2px;
+  gap: 2px 6px;
   padding: var(--space-2);
 }
 
 .draft[data-frame='landscape'] .draftCardTier {
-  display: none;
+  flex: none;
+  padding: 0 5px;
+  font-size: 0.6875rem;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
 }
 
 .draft[data-frame='landscape'] .draftCardName {
@@ -4029,6 +4332,7 @@
   .chaosToastIn,
   .critShout,
   .cardInfo,
+  .bonusError,
   .seatWin .plate {
     animation: none;
   }
