@@ -109,7 +109,8 @@ describe('the chaos worst-case pages', () => {
 
   it('#worst/chaosResult/6/vi: "Thẻ đã dùng", the credits, and the winner’s shout', () => {
     draw('#worst/chaosResult/6/vi')
-    expect(screen.getByText(/^Thẻ đã dùng: Nguyễn Thị Phương Anh — Đổi bài, Nhìn trộm;/)).toBeInTheDocument()
+    // Each card's name is its own button on the line (BP-39), so the line is read whole rather than by its own text alone.
+    expect(screen.getByText(/^Thẻ đã dùng:/)).toHaveTextContent(/^Thẻ đã dùng: Nguyễn Thị Phương Anh — Đổi bài, Nhìn trộm;/)
     expect(screen.getByText(/Bạo kích ×2 \+6\.000/)).toBeInTheDocument()
     expect(screen.getByText('Bạo kích ×2!')).toBeInTheDocument()
     expect(screen.getByText(/Đã chạm trần thẻ hôm nay/)).toBeInTheDocument()

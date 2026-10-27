@@ -3670,6 +3670,319 @@
   text-overflow: clip;
 }
 
+/* A card's name on the "Thẻ đã dùng" line opens what it does (`ChaosCardInfo`): it reads as the line's own text, with the
+   dotted rule that says it can be tapped, and wraps with the line. */
+.resultCardName {
+  display: inline;
+  font: inherit;
+  line-height: inherit;
+  color: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
+/* ---------------- Hand result, the chaos strip (BP-39) ---------------- */
+/* Spec 2026-10-27 §3.2. On a phone the chaos table's result is a strip directly above the tray: a row of the room's column
+   when the phone is upright (`RoomScreen`'s `.resultStrip` wrapper; the felt gives it the height and the viewer's own seat
+   steps aside for it, below), a band at the stage's foot when it is on its side. Opaque, in the result card's night lacquer,
+   so whatever it lies over on a phone held sideways is covered, not overlapped. Keyed on the strip's own `data-frame`.
+
+   - head: the title (alone the group's name), the countdown under it, and on the right "Bỏ qua 3/5" with the button — one
+     44 px row, two lines of text beside the button, so the strip does not grow when a digit changes;
+   - body: the rows (one line each: name, hand, payout; the winners and the viewer, the rest in "+N người"), then
+     "Thẻ đã dùng" and the credits. The only part that scrolls, and it fades at the foot while there is more below. */
+.strip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid rgba(217, 164, 65, 0.42);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 40%),
+    var(--bg-elev);
+  box-shadow: var(--shadow-2), 0 0 24px rgba(217, 164, 65, 0.12);
+  animation: riseUp 320ms var(--ease) backwards;
+}
+
+.stripHead {
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'title skip'
+    'next skip';
+  align-items: center;
+  column-gap: var(--space-2);
+  min-height: var(--tap);
+}
+
+.stripTitle {
+  grid-area: title;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 1rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stripNext {
+  grid-area: next;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  color: var(--ink-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stripNext strong {
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* "Bỏ qua 3/5" and the button. On the card it closes the footer's line; on the strip it is the head's right side. */
+.resultSkip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.stripHead > .resultSkip {
+  grid-area: skip;
+}
+
+.resultSkipCount {
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.resultSkip > button {
+  flex: none;
+}
+
+/* On the card, the head's right side: after the title, before "Đóng". */
+.resultHead > .resultSkip {
+  margin-left: auto;
+}
+
+/* The upright strip's body is at most about four lines tall: the felt keeps its height on a 360 × 780 phone with eight seats.
+   More (the rows "+N người" opened, a long "Thẻ đã dùng") scrolls here. */
+.stripBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-height: 0;
+  max-height: 5.5rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.stripBody[data-more='true'] {
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 1.25rem), transparent);
+  mask-image: linear-gradient(180deg, #000 calc(100% - 1.25rem), transparent);
+}
+
+.stripPeople {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stripPeople > .resultLive {
+  align-self: stretch;
+  gap: 0;
+}
+
+.stripRows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stripRow {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.stripRow .resultName {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stripRow[data-won] .resultName {
+  font-weight: 700;
+}
+
+.stripRow .resultHand {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stripRow .resultPayout {
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+/* "+N người": a quiet gold link under the rows, its tap area grown past its line without growing the line. */
+.stripMore {
+  position: relative;
+  margin: 0 0 0 var(--space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 600 0.75rem/1.35 var(--font-body);
+  color: var(--gold);
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.stripMore::after {
+  content: '';
+  position: absolute;
+  inset: -6px -8px;
+}
+
+.stripMore:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.strip .resultChaosBox {
+  flex: none;
+  max-width: none;
+  padding: 0 var(--space-2);
+}
+
+.strip .resultMeta {
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+/* A phone on its side (L-B): the parts side by side so the strip stays low — the head in a column of its own (title,
+   countdown, then "Bỏ qua"), the rows beside it, "Thẻ đã dùng" in a third column where the strip is wide enough (a second
+   column under the rows where it is not). Each column scrolls on its own. */
+.strip[data-frame='landscape'] {
+  flex-direction: row;
+  align-items: stretch;
+  gap: var(--space-3);
+  height: 100%;
+  padding: var(--space-1) var(--space-3);
+  container-type: inline-size;
+}
+
+.strip[data-frame='landscape'] .stripHead {
+  flex: 0 0 auto;
+  width: 9.5rem;
+  grid-template-columns: minmax(0, 1fr);
+  /* `min-content`, not `auto`: the title and the countdown clip their overflow, and an `auto` row in a head no taller than
+     the strip shrank under them, the countdown over the title */
+  grid-template-rows: repeat(3, min-content);
+  grid-template-areas:
+    'title'
+    'next'
+    'skip';
+  align-content: start;
+  row-gap: 2px;
+}
+
+.strip[data-frame='landscape'] .stripNext {
+  font-size: 0.75rem;
+}
+
+.strip[data-frame='landscape'] .resultSkip {
+  flex-wrap: wrap;
+  gap: 2px var(--space-2);
+}
+
+.strip[data-frame='landscape'] .stripBody {
+  flex: 1 1 0;
+  min-width: 0;
+  max-height: none;
+}
+
+.strip[data-frame='landscape'] .stripRow {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name payout'
+    'hand hand';
+  row-gap: 0;
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+.strip[data-frame='landscape'] .stripRow .resultName {
+  grid-area: name;
+}
+
+.strip[data-frame='landscape'] .stripRow .resultHand {
+  grid-area: hand;
+}
+
+.strip[data-frame='landscape'] .stripRow .resultPayout {
+  grid-area: payout;
+  font-size: 0.8125rem;
+}
+
+@container (min-width: 32rem) {
+  .strip[data-frame='landscape'] .stripBody {
+    display: grid;
+    /* the rows a little wider: who won is what the strip is for, and "Thẻ đã dùng" wraps and scrolls anyway */
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-3);
+    overflow: hidden;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .strip[data-frame='landscape'] .stripPeople,
+  .strip[data-frame='landscape'] .resultChaosBox {
+    max-height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .strip[data-frame='landscape'] .resultChaosBox {
+    padding: 0;
+  }
+}
+
+/* The upright stack while the strip is up: the viewer's own seat steps aside — the strip carries its row (name, hand,
+   payout) right where the seat was, above the tray — and the felt drops the foot it padded for the viewer's fan. On a
+   360 × 780 phone with eight seats this is the height the strip needs; it comes back with the next hand. Keyed on the room's
+   `data-result-strip` (`RoomScreen`), which this module cannot name otherwise. */
+[data-result-strip='open'] .stack .mine {
+  display: none;
+}
+
+[data-result-strip='open'] .stack[data-mine-cards] .stackFelt {
+  padding-bottom: var(--space-4);
+}
+
 /* ---------------- Motion off ---------------- */
 @media (prefers-reduced-motion: reduce) {
   .card,
@@ -3681,6 +3994,7 @@
   .potValue,
   .payout,
   .result,
+  .strip,
   .draft,
   .chaosToastIn,
   .critShout,

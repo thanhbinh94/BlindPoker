@@ -164,18 +164,27 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
   // measured again when the viewer takes a seat or leaves one under it. Up here, above the early return, because it is
   // a hook — and worked out from `resultCard` itself, so what is measured for and what is drawn cannot disagree.
   const stageRef = useRef<HTMLElement>(null)
-  // The draft always stops above the viewer's seat, however little room that leaves: it scrolls inside, and the hand fan stays clear.
-  const clearance = useSeatClearance(stageRef, resultCard !== null || draft !== null, me?.seat ?? null, draft !== null ? { minRoom: 0, aboveHand: true } : undefined)
   // Also a hook, so also above the early return: the frame is what every landscape rule of the room keys on.
   const frame = useRoomFrame(frameOverride)
+  // The stacked table (BP-31 R9), measured once here so the table and the tray agree; a hook, so above the early return.
+  const stackMatch = useMediaQuery(STACK_LAYOUT_QUERY)
+  // Poker hỗn loạn on a phone (BP-39, spec 2026-10-27 §3.2): the result is a strip above the tray, not a card over the felt —
+  // upright (the stack) and on its side. It lies over no seat the clearance would have to keep it off.
+  const resultStrip =
+    room?.config.blind?.chaosCycle !== undefined && (frame === 'landscape' || (layout ?? (stackMatch ? 'stack' : 'ring')) === 'stack')
+  // The draft always stops above the viewer's seat, however little room that leaves: it scrolls inside, and the hand fan stays clear.
+  const clearance = useSeatClearance(
+    stageRef,
+    (resultCard !== null && !resultStrip) || draft !== null,
+    me?.seat ?? null,
+    draft !== null ? { minRoom: 0, aboveHand: true } : undefined,
+  )
   const fullscreen = useFullscreenActive()
   // The landscape frame's tier (BP-28): the stage itself is measured, so a phone that keeps its browser bars — or any
   // stage under 300 px (`SHORT_STAGE_PX`) — gets the short one. A hook too, so above the early return; it starts measuring once the stage
   // is in the tree.
   const tier = useStageTier(stageRef, frame, room !== null)
   const [nudgeDone, dismissNudge] = useFullscreenNudge()
-  // The stacked table (BP-31 R9), measured once here so the table and the tray agree; a hook, so above the early return.
-  const stackMatch = useMediaQuery(STACK_LAYOUT_QUERY)
 
   if (room === null) return null
 
@@ -351,6 +360,28 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
     }
   }
   const leave = (): void => void request.run(() => client.leaveRoom())
+  // "Bỏ qua" (spec §3.3): the tally for everyone at a chaos table while the result wait runs, the button for a seated player.
+  // Not through `request`, which would grey the tray for a press the tray did not make; a refusal (the wait just ended) is
+  // silent, as the server's is.
+  const skips = state.resultSkips
+  const skip =
+    !chaosTable || skips === null
+      ? null
+      : { ...skips, ...(mySeated ? { onSkip: () => void client.skipResult().catch(() => undefined) } : {}) }
+  const result =
+    resultCard === null ? null : (
+      <HandResult
+        hand={resultCard}
+        room={room}
+        myPlayerId={state.me?.playerId ?? null}
+        lang={lang}
+        countdown={nextHandText}
+        frame={frame}
+        chaosCredits={state.chaos.credits}
+        skip={skip}
+        {...(resultStrip ? { variant: 'strip' as const } : { onDismiss: () => setDismissedHandId(resultCard.handId) })}
+      />
+    )
   const tray =
     hand === null || hand.mySeat === null ? null : (
       <ActionBar
@@ -375,7 +406,13 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
   const footerShown = !stack || dockShown || tray !== null || nudgeShown
 
   return (
-    <div className={s.room} data-frame={frame} data-tier={landscape ? tier : undefined} data-layout={stack ? 'stack' : undefined}>
+    <div
+      className={s.room}
+      data-frame={frame}
+      data-tier={landscape ? tier : undefined}
+      data-layout={stack ? 'stack' : undefined}
+      data-result-strip={resultStrip && result !== null ? 'open' : undefined}
+    >
       {header}
       <RoomHeader
         room={room}
@@ -438,18 +475,9 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
         {/* The result card is dealt onto the felt, so it keeps the felt's night palette in either theme. The countdown
             to the next deal is the card's own footer line: printed under the card, it landed on the viewer's seat
             (review 2026-09-29, No2). Its stage stops above the viewer's own seat when that leaves it room (R2-3). */}
-        {resultCard === null ? null : (
+        {result === null || resultStrip ? null : (
           <div className={s.overlay} data-surface="night" data-frame={frame} style={overlayStyle}>
-            <HandResult
-              hand={resultCard}
-              room={room}
-              myPlayerId={state.me?.playerId ?? null}
-              lang={lang}
-              onDismiss={() => setDismissedHandId(resultCard.handId)}
-              countdown={nextHandText}
-              frame={frame}
-              chaosCredits={state.chaos.credits}
-            />
+            {result}
           </div>
         )}
 
@@ -461,6 +489,15 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
           </div>
         )}
       </main>
+
+      {/* The chaos result on a phone (BP-39): a row of the room's column directly above the tray when upright — the felt gives
+          it the height, the toasts' band above keeps its own — and a band at the stage's foot, between the tray's corners, when
+          on its side, laid over the foot of the felt without changing the stage the frame's tier is measured on. */}
+      {result === null || !resultStrip ? null : (
+        <div className={s.resultStrip} data-surface="night" data-frame={frame}>
+          {result}
+        </div>
+      )}
 
       {footerShown ? (
         // The stack's dock row is the footer itself: one night bar, the tray's height, holding the dock and — between

@@ -1735,6 +1735,80 @@ describe('RoomScreen on a Poker hỗn loạn table', () => {
     expect(clearanceFor(stage, seatBox, null, 0), 'the draft takes what there is').toBe(188)
   })
 
+  describe('the result strip and "Bỏ qua" (BP-39, spec 2026-10-27 §3.2–3.3)', () => {
+    const skips = { skipped: 1, total: 3, mine: false }
+    const drawAt = (state: ClientState, where: { layout?: 'stack'; frame?: 'landscape' } = {}, client = fakeClient(state)) => {
+      render(
+        <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+          <RoomScreen client={client} lang="vi" onLeft={vi.fn()} {...where} />
+        </I18nextProvider>,
+      )
+      return client
+    }
+    const result = () => screen.getByRole('group', { name: 'Người thắng' })
+
+    it('is a strip in the room’s column, directly above the tray, on a phone held upright — not a card over the felt', () => {
+      drawAt(makeState({ ...stateWith({}), resultSkips: skips }), { layout: 'stack' })
+      expect(result()).toHaveClass(s.strip!)
+      expect(result().closest('main'), 'not over the felt').toBeNull()
+      const wrapper = result().parentElement!
+      expect(wrapper).toHaveClass(screens.resultStrip!)
+      expect(wrapper.nextElementSibling?.tagName, 'the tray follows it').toBe('FOOTER')
+      expect(document.querySelector(`.${screens.room}`)).toHaveAttribute('data-result-strip', 'open')
+      expect(screen.queryByRole('button', { name: 'Đóng' }), 'the strip leaves with the hand').toBeNull()
+    })
+
+    it('is a strip on a phone held sideways too, outside the stage it must not resize', () => {
+      drawAt(makeState({ ...stateWith({}), resultSkips: skips }), { frame: 'landscape' })
+      expect(result()).toHaveClass(s.strip!)
+      expect(result()).toHaveAttribute('data-frame', 'landscape')
+      expect(result().closest('main')).toBeNull()
+    })
+
+    it('stays the card over the felt on a desktop, with "Bỏ qua" and the count added', async () => {
+      const client = drawAt(makeState({ ...stateWith({}), resultSkips: skips }))
+      expect(result()).toHaveClass(s.result!)
+      expect(result().closest('main')).not.toBeNull()
+      expect(within(result()).getByText('Bỏ qua 1/3')).toBeInTheDocument()
+      expect(within(result()).getByRole('button', { name: 'Đóng' })).toBeInTheDocument()
+      await userEvent.click(within(result()).getByRole('button', { name: 'Bỏ qua' }))
+      expect(client.skipResult).toHaveBeenCalledTimes(1)
+    })
+
+    it('sends the press to the client once, and says "Đã bỏ qua" once the press is mine', async () => {
+      const client = drawAt(makeState({ ...stateWith({}), resultSkips: skips }), { layout: 'stack' })
+      await userEvent.click(screen.getByRole('button', { name: 'Bỏ qua' }))
+      expect(client.skipResult).toHaveBeenCalledTimes(1)
+      cleanup()
+      drawAt(makeState({ ...stateWith({}), resultSkips: { skipped: 2, total: 3, mine: true } }), { layout: 'stack' })
+      expect(screen.getByRole('button', { name: 'Đã bỏ qua' })).toBeDisabled()
+      expect(screen.getByText('Bỏ qua 2/3')).toBeInTheDocument()
+    })
+
+    it('shows a spectator the count but no button', () => {
+      const watching = makeRoom({ ...chaosRoom, players: [chaosRoom.players[0]!, makePlayer({ playerId: 'me', displayName: 'Mai' })] })
+      drawAt(makeState({ ...stateWith({}), room: watching, resultSkips: skips }), { layout: 'stack' })
+      expect(screen.getByText('Bỏ qua 1/3')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Bỏ qua' })).toBeNull()
+    })
+
+    it('shows no skip while no result wait runs', () => {
+      drawAt(stateWith({}), { layout: 'stack' })
+      expect(result()).toHaveClass(s.strip!)
+      expect(screen.queryByText(/^Bỏ qua/)).toBeNull()
+    })
+
+    it('leaves a table without chaos exactly as it was: the card over the felt, closable, no skip — on a phone too', () => {
+      const plainRoom = makeRoom({ ...chaosRoom, config: { ...chaosRoom.config, blind: { ...chaosRoom.config.blind!, chaosCycle: undefined } } })
+      drawAt(makeState({ room: plainRoom, hand: finished, resultSkips: skips }), { layout: 'stack' })
+      expect(result()).toHaveClass(s.result!)
+      expect(result().closest('main')).not.toBeNull()
+      expect(within(result()).getByRole('button', { name: 'Đóng' })).toBeInTheDocument()
+      expect(screen.queryByText(/Bỏ qua/)).toBeNull()
+      expect(document.querySelector(`.${screens.room}`)).not.toHaveAttribute('data-result-strip')
+    })
+  })
+
   describe('the toasts', () => {
     beforeEach(() => vi.useFakeTimers())
     afterEach(() => vi.useRealTimers())

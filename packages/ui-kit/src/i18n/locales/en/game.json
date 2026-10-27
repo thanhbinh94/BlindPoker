@@ -112,7 +112,8 @@
     "winner": "Winner",
     "winners": "Winners",
     "you": "You",
-    "closing": "Closing…"
+    "closing": "Closing…",
+    "noLimit": "No limit"
   },
   "mode": {
     "holdem": "Texas Hold'em",
@@ -232,7 +233,8 @@
       "botCount": "There must be fewer bots than seats."
     },
     "buyInHint": "{{bb}} BB = {{points}}",
-    "tableLimitHint": "Table limit per player: {{points}} ({{times}}× the wager)"
+    "tableLimitHint": "Table limit per player: {{points}} ({{times}}× the wager)",
+    "tableLimitNoneHint": "Table limit per player: No limit"
   },
   "room": {
     "title": "Room",
@@ -320,6 +322,13 @@
       "more_one": "+{{count}} more card",
       "more_other": "+{{count}} more cards",
       "all": "Cards played this hand"
+    },
+    "result": {
+      "skip": "Skip",
+      "skipped": "Skipped",
+      "skipCount": "Skip {{done}}/{{total}}",
+      "more_one": "+{{count}} more",
+      "more_other": "+{{count}} more"
     },
     "outcome": {
       "applied": "Applied",

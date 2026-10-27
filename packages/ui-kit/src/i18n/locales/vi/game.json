@@ -112,7 +112,8 @@
     "winner": "Người thắng",
     "winners": "Người thắng",
     "you": "Bạn",
-    "closing": "Đang đóng…"
+    "closing": "Đang đóng…",
+    "noLimit": "Không giới hạn"
   },
   "mode": {
     "holdem": "Texas Hold'em",
@@ -232,7 +233,8 @@
       "botCount": "Số bot phải ít hơn số ghế."
     },
     "buyInHint": "{{bb}} BB = {{points}}",
-    "tableLimitHint": "Hạn mức mỗi người: {{points}} ({{times}}× mức cược)"
+    "tableLimitHint": "Hạn mức mỗi người: {{points}} ({{times}}× mức cược)",
+    "tableLimitNoneHint": "Hạn mức mỗi người: Không giới hạn"
   },
   "room": {
     "title": "Phòng chơi",
@@ -320,6 +322,13 @@
       "more_one": "+{{count}} thẻ khác",
       "more_other": "+{{count}} thẻ khác",
       "all": "Các thẻ đã dùng ván này"
+    },
+    "result": {
+      "skip": "Bỏ qua",
+      "skipped": "Đã bỏ qua",
+      "skipCount": "Bỏ qua {{done}}/{{total}}",
+      "more_one": "+{{count}} người",
+      "more_other": "+{{count}} người"
     },
     "outcome": {
       "applied": "Đã áp",

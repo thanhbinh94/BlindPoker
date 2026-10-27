@@ -563,6 +563,21 @@
   align-items: center;
 }
 
+/* The chaos result strip (BP-39, spec 2026-10-27 §3.2): on a phone held sideways a band at the stage's foot, out of the
+   column's flow so the stage — and the tier measured on it — keeps its height. It runs from just past the left corner's
+   "Tự động chơi" (one 44 px pill) to where the right corner's box begins (35 % of the room, the tray's own rule), so the
+   tray's buttons and the pre-hand dock keep their corners; its height stops below the board (about 110 px at 780 × 360).
+   It lies over the foot of the felt — the viewer's plate and hand line — which is the price of a stage that does not shrink;
+   opaque, it covers them rather than printing over them. Under the tray's corners (z 5) and above the felt. */
+.room[data-frame='landscape'] .resultStrip {
+  position: absolute;
+  left: calc(max(var(--space-3), env(safe-area-inset-left)) + 7.5rem);
+  right: 35%;
+  bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  z-index: 4;
+  height: min(7rem, 32%);
+}
+
 /* ── room, phone held upright (the stack) ─────────────────────────────────── */
 
 /* BP-31 §3.1, P5. The stack has no row of controls: the seat's own are in the header's "Thêm" menu, and between hands
@@ -612,6 +627,14 @@
   flex: none;
   font-size: 0.8125rem;
   white-space: nowrap;
+}
+
+/* Upright, the chaos result strip is a row of the column directly above the tray: it takes its height from the felt (the
+   viewer's own seat steps aside for it, `table.module.css`), and sits 4 px over the tray rather than a whole gap away. */
+.room[data-layout='stack'] .resultStrip {
+  flex: none;
+  min-width: 0;
+  margin-bottom: calc(var(--space-1) - var(--space-3));
 }
 
 .room[data-layout='stack'] .dock .countdown {
