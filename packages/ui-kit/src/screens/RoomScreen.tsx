@@ -170,8 +170,9 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
   const stackMatch = useMediaQuery(STACK_LAYOUT_QUERY)
   // Poker hỗn loạn on a phone (BP-39, spec 2026-10-27 §3.2): the result is a strip above the tray, not a card over the felt —
   // upright (the stack) and on its side. It lies over no seat the clearance would have to keep it off.
-  const resultStrip =
-    room?.config.blind?.chaosCycle !== undefined && (frame === 'landscape' || (layout ?? (stackMatch ? 'stack' : 'ring')) === 'stack')
+  /** The table's layout, one answer for the table and the tray: an override, else the ring in landscape, else the query. */
+  const tableLayout: TableLayout = layout ?? (frame === 'landscape' ? 'ring' : stackMatch ? 'stack' : 'ring')
+  const resultStrip = room?.config.blind?.chaosCycle !== undefined && (frame === 'landscape' || tableLayout === 'stack')
   // The draft always stops above the viewer's seat, however little room that leaves: it scrolls inside, and the hand fan stays clear.
   const clearance = useSeatClearance(
     stageRef,
@@ -319,8 +320,6 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
    * toggles, "Tự động chơi" among them — stays, so auto-play can be turned off during the countdown (B4).
    */
   const landscape = frame === 'landscape'
-  /** The table's layout, one answer for the table and the tray: an override, else the ring in landscape, else the query. */
-  const tableLayout: TableLayout = layout ?? (frame === 'landscape' ? 'ring' : stackMatch ? 'stack' : 'ring')
   /**
    * A phone held upright (BP-31 §3.1, R11) — or any window the stack query catches (R9) — keyed on the resolved layout,
    * never on the raw query, which a phone on its side also answers (P2). It takes landscape's two pieces: the seat's
@@ -367,7 +366,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
   const skip =
     !chaosTable || skips === null
       ? null
-      : { ...skips, ...(mySeated ? { onSkip: () => void client.skipResult().catch(() => undefined) } : {}) }
+      : { ...skips, ...(mySeated ? { onSkip: () => client.skipResult().catch(() => undefined) } : {}) }
   const result =
     resultCard === null ? null : (
       <HandResult
@@ -379,6 +378,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
         frame={frame}
         chaosCredits={state.chaos.credits}
         skip={skip}
+        stage={stageRef}
         {...(resultStrip ? { variant: 'strip' as const } : { onDismiss: () => setDismissedHandId(resultCard.handId) })}
       />
     )

@@ -500,19 +500,114 @@ describe('HandResult: the chaos strip and "Bỏ qua" (BP-39, spec 2026-10-27 §3
     expect(screen.queryByRole('button', { name: 'Bỏ qua' })).toBeNull()
   })
 
+  it('keeps "Bỏ qua" down while the press is out — a double tap sends one — and gives it back when the press is refused', async () => {
+    let settle: (value: unknown) => void = () => undefined
+    const onSkip = vi.fn(() => new Promise((resolve) => (settle = resolve)))
+    draw({ skip: { skipped: 0, total: 3, mine: false, onSkip } })
+    const button = screen.getByRole('button', { name: 'Bỏ qua' })
+    fireEvent.click(button)
+    fireEvent.click(button)
+    expect(onSkip).toHaveBeenCalledTimes(1)
+    expect(button).toBeDisabled()
+    await act(async () => settle(false))
+    expect(button).toBeEnabled()
+    fireEvent.click(button)
+    expect(onSkip).toHaveBeenCalledTimes(2)
+  })
+
   it('shows the count without a button when there is no press to make (a spectator)', () => {
     draw({ skip: { skipped: 1, total: 2, mine: false } })
     expect(screen.getByText('Bỏ qua 1/2')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /qua/ })).toBeNull()
   })
 
-  it('folds eight rows to the winner and the viewer and "+6 người", which opens them all', () => {
+  it('folds eight rows to the winner and the viewer and "+6 người", a toggle that opens the sheet with every row and "Đóng" to fold it back', () => {
     draw()
     expect(rowNames()).toEqual(['Bob', 'Hà'])
     expect(group().querySelector(`.${s.resultMine} .${s.resultName}`)).toHaveTextContent('Hà')
-    fireEvent.click(screen.getByRole('button', { name: '+6 người' }))
+    const more = screen.getByRole('button', { name: '+6 người' })
+    expect(more).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(more)
     expect(rowNames()).toEqual(['Bob', 'Ann', 'Cẩm', 'Dũng', 'Én', 'Phúc', 'Giang', 'Hà'])
+    expect(group()).toHaveAttribute('data-open', 'true')
+    expect(group().parentElement).toHaveAttribute('data-open', 'true')
     expect(screen.queryByRole('button', { name: /^\+\d+ người$/ })).toBeNull()
+    const close = within(group()).getByRole('button', { name: 'Đóng' })
+    expect(close).toHaveAttribute('aria-expanded', 'true')
+    expect(close, 'focus moves to the toggle that folds the sheet back').toHaveFocus()
+    fireEvent.click(close)
+    expect(rowNames()).toEqual(['Bob', 'Hà'])
+    expect(group()).not.toHaveAttribute('data-open')
+    expect(screen.getByRole('button', { name: '+6 người' }), 'focus goes back to the expander that opened it').toHaveFocus()
+  })
+
+  it('clamps "Thẻ đã dùng" to two lines and counts what the clamp hides in "+N thẻ khác", which opens the whole line', () => {
+    // jsdom lays nothing out: the clamp's box is two 18 px lines of a three-line text, and each card name sits on the line its
+    // place in the list gives it (two to a line).
+    const order = ['Rút lá lẻ', 'Khiên gỗ', 'Đổi lá', 'Nhìn trộm', 'Đổi bài']
+    const scroll = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains(s.stripUsed!) ? 54 : 0
+    })
+    const client = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains(s.stripUsed!) ? 36 : 0
+    })
+    const lines = vi.spyOn(Element.prototype, 'getClientRects').mockImplementation(function (this: Element) {
+      const i = order.indexOf(this.textContent ?? '')
+      return [{ top: i < 0 ? 0 : Math.floor(i / 2) * 18 }] as unknown as DOMRectList
+    })
+    try {
+      draw({
+        hand: eight([
+          { seat: 0, cardId: 's_steal_one', outcome: 'applied', targets: [7] },
+          { seat: 1, cardId: 's_shield', outcome: 'applied', targets: [] },
+          { seat: 2, cardId: 's_swap_one', outcome: 'applied', targets: [] },
+          { seat: 3, cardId: 's_peek_1', outcome: 'applied', targets: [] },
+          { seat: 4, cardId: 'g_swap_all', outcome: 'applied', targets: [] },
+        ]),
+      })
+      const used = group().querySelector(`.${s.stripUsed}`)!
+      expect(used).toHaveAttribute('data-clamped', 'true')
+      const more = screen.getByRole('button', { name: '+1 thẻ khác' })
+      expect(more).toHaveAttribute('aria-expanded', 'false')
+      fireEvent.click(more)
+      expect(used).not.toHaveAttribute('data-clamped')
+      expect(screen.queryByRole('button', { name: /thẻ khác$/ })).toBeNull()
+      fireEvent.click(within(group()).getByRole('button', { name: 'Đóng' }))
+      expect(screen.getByRole('button', { name: '+1 thẻ khác' })).toHaveFocus()
+    } finally {
+      scroll.mockRestore()
+      client.mockRestore()
+      lines.mockRestore()
+    }
+  })
+
+  it('shows no "+N thẻ khác" when the line fits its two lines', () => {
+    draw({ hand: eight([{ seat: 0, cardId: 's_steal_one', outcome: 'applied', targets: [7] }]) })
+    expect(screen.queryByRole('button', { name: /thẻ khác$/ })).toBeNull()
+  })
+
+  it('caps the opened sheet at its closed height plus 60 % of the stage, and never above the stage’s top', () => {
+    const stage = document.createElement('main')
+    document.body.append(stage)
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this === stage) return { top: 100, bottom: 500, height: 400, left: 0, right: 360, width: 360 } as DOMRect
+      if (this.classList.contains(s.stripSlot!)) return { top: 520, bottom: 670, height: 150, left: 0, right: 360, width: 360 } as DOMRect
+      return { top: 0, bottom: 0, height: 0, left: 0, right: 0, width: 0 } as DOMRect
+    })
+    const offset = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains(s.stripSlot!) ? 150 : 0
+    })
+    try {
+      draw({ stage: { current: stage } })
+      fireEvent.click(screen.getByRole('button', { name: '+6 người' }))
+      const slot = group().parentElement!
+      expect(slot.style.height, 'the slot keeps the closed height: nothing else moves').toBe('150px')
+      expect(slot.style.getPropertyValue('--sheet-max'), '150 + 0.6 × 400, under 670 − 100 − 8').toBe('390px')
+    } finally {
+      rect.mockRestore()
+      offset.mockRestore()
+      stage.remove()
+    }
   })
 
   it('folds nothing when only one row would fold, and keeps only the winners for a spectator', () => {

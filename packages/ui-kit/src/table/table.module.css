@@ -3685,12 +3685,22 @@
 /* Spec 2026-10-27 §3.2. On a phone the chaos table's result is a strip directly above the tray: a row of the room's column
    when the phone is upright (`RoomScreen`'s `.resultStrip` wrapper; the felt gives it the height and the viewer's own seat
    steps aside for it, below), a band at the stage's foot when it is on its side. Opaque, in the result card's night lacquer,
-   so whatever it lies over on a phone held sideways is covered, not overlapped. Keyed on the strip's own `data-frame`.
+   so whatever it lies over is covered, not overlapped. Keyed on the strip's own `data-frame`.
 
    - head: the title (alone the group's name), the countdown under it, and on the right "Bỏ qua 3/5" with the button — one
      44 px row, two lines of text beside the button, so the strip does not grow when a digit changes;
-   - body: the rows (one line each: name, hand, payout; the winners and the viewer, the rest in "+N người"), then
-     "Thẻ đã dùng" and the credits. The only part that scrolls, and it fades at the foot while there is more below. */
+   - body, closed: whole lines only, every one 18 px (`--strip-line`) so nothing is ever cut through the middle — the winners'
+     and the viewer's rows, "Thẻ đã dùng" clamped to two lines;
+   - then one line of expanders ("+N người", "+N thẻ khác"), which becomes the opened sheet's "Đóng";
+   - opened (fix round 1): the strip lifts out of its slot as a sheet anchored at the slot's foot and grows upward over the
+     felt, at most `--sheet-max` (its closed height plus 60 % of the stage, `HandResult`), scrolling inside only past that.
+     The slot keeps the closed height, so nothing else on the screen moves. */
+.stripSlot {
+  --strip-line: 1.125rem;
+  position: relative;
+  min-width: 0;
+}
+
 .strip {
   display: flex;
   flex-direction: column;
@@ -3715,7 +3725,6 @@
     'next skip';
   align-items: center;
   column-gap: var(--space-2);
-  min-height: var(--tap);
 }
 
 .stripTitle {
@@ -3746,7 +3755,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* "Bỏ qua 3/5" and the button. On the card it closes the footer's line; on the strip it is the head's right side. */
+/* "Bỏ qua 3/5" and the button. On the card it sits in the head before "Đóng"; on the strip it is the head's right side. */
 .resultSkip {
   display: inline-flex;
   flex: none;
@@ -3774,40 +3783,24 @@
   margin-left: auto;
 }
 
-/* The upright strip's body is at most about four lines tall: the felt keeps its height on a 360 × 780 phone with eight seats.
-   More (the rows "+N người" opened, a long "Thẻ đã dùng") scrolls here. */
 .stripBody {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   min-height: 0;
-  max-height: 5.5rem;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.stripBody[data-more='true'] {
-  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 1.25rem), transparent);
-  mask-image: linear-gradient(180deg, #000 calc(100% - 1.25rem), transparent);
 }
 
 .stripPeople {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
   min-width: 0;
 }
 
 .stripPeople > .resultLive {
-  align-self: stretch;
   gap: 0;
 }
 
 .stripRows {
   display: flex;
   flex-direction: column;
-  gap: 2px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -3818,10 +3811,10 @@
   grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto;
   align-items: baseline;
   gap: var(--space-2);
-  padding: 1px var(--space-2);
+  padding: 0 var(--space-2);
   border-radius: var(--radius-sm);
   font-size: 0.8125rem;
-  line-height: 1.35;
+  line-height: var(--strip-line);
 }
 
 .stripRow .resultName {
@@ -3843,17 +3836,49 @@
 
 .stripRow .resultPayout {
   font-size: 0.875rem;
+  line-height: var(--strip-line);
   white-space: nowrap;
 }
 
-/* "+N người": a quiet gold link under the rows, its tap area grown past its line without growing the line. */
+/* "Thẻ đã dùng" and the credits: one column of 18 px lines; closed, exactly two of them. */
+.stripUsed {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0 var(--space-2);
+}
+
+.stripUsed[data-clamped] {
+  max-height: calc(2 * var(--strip-line));
+  overflow: hidden;
+}
+
+.strip .resultMeta {
+  font-size: 0.75rem;
+  line-height: var(--strip-line);
+}
+
+/* A card's name keeps the line's own height: aligned to the line's top, the button adds nothing to it. */
+.strip .resultCardName {
+  vertical-align: top;
+}
+
+/* The expanders' line, under the body and outside its scroll — "+N người", "+N thẻ khác", or the opened sheet's "Đóng" —
+   quiet gold links, each tap area grown past its line without growing the line. */
+.stripMores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-4);
+  padding: 0 var(--space-2);
+}
+
 .stripMore {
   position: relative;
-  margin: 0 0 0 var(--space-2);
+  margin: 0;
   padding: 0;
   border: 0;
   background: none;
-  font: 600 0.75rem/1.35 var(--font-body);
+  font: 600 0.75rem / var(--strip-line) var(--font-body);
   color: var(--gold);
   text-decoration: underline dotted;
   text-underline-offset: 2px;
@@ -3871,32 +3896,45 @@
   outline-offset: 2px;
 }
 
-.strip .resultChaosBox {
-  flex: none;
-  max-width: none;
-  padding: 0 var(--space-2);
+/* The opened sheet: out of the slot's flow, standing on the slot's foot and growing upward over the felt, over the stage's
+   seats and overlays (z 6, under the header's menu). Its body takes what the cap leaves and scrolls only past it. */
+.stripSlot[data-open] > .strip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 6;
+  height: auto;
+  max-height: var(--sheet-max, 60vh);
+  animation: none;
 }
 
-.strip .resultMeta {
-  font-size: 0.75rem;
-  line-height: 1.35;
+.stripSlot[data-open] .stripBody {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* A phone on its side (L-B): the parts side by side so the strip stays low — the head in a column of its own (title,
-   countdown, then "Bỏ qua"), the rows beside it, "Thẻ đã dùng" in a third column where the strip is wide enough (a second
-   column under the rows where it is not). Each column scrolls on its own. */
+   countdown, then "Bỏ qua"), the rows beside it, "Thẻ đã dùng" under them, or in a third column where the strip is wide
+   enough. Rows are one line each here too, so the closed body is five lines at most: two rows, two lines of cards, the
+   expanders. */
 .strip[data-frame='landscape'] {
-  flex-direction: row;
-  align-items: stretch;
-  gap: var(--space-3);
+  display: grid;
+  grid-template-columns: 9.5rem minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-3);
   height: 100%;
   padding: var(--space-1) var(--space-3);
   container-type: inline-size;
 }
 
+.stripSlot:has(> .strip[data-frame='landscape']) {
+  height: 100%;
+}
+
 .strip[data-frame='landscape'] .stripHead {
-  flex: 0 0 auto;
-  width: 9.5rem;
+  grid-row: 1 / -1;
   grid-template-columns: minmax(0, 1fr);
   /* `min-content`, not `auto`: the title and the countdown clip their overflow, and an `auto` row in a head no taller than
      the strip shrank under them, the countdown over the title */
@@ -3906,7 +3944,13 @@
     'next'
     'skip';
   align-content: start;
+  justify-items: start;
   row-gap: 2px;
+}
+
+.strip[data-frame='landscape'] .stripTitle,
+.strip[data-frame='landscape'] .stripNext {
+  justify-self: stretch;
 }
 
 .strip[data-frame='landscape'] .stripNext {
@@ -3919,54 +3963,34 @@
 }
 
 .strip[data-frame='landscape'] .stripBody {
-  flex: 1 1 0;
   min-width: 0;
-  max-height: none;
+  overflow: hidden;
+}
+
+.stripSlot[data-open] > .strip[data-frame='landscape'] .stripBody {
+  overflow-y: auto;
 }
 
 .strip[data-frame='landscape'] .stripRow {
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas:
-    'name payout'
-    'hand hand';
-  row-gap: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   font-size: 0.75rem;
-  line-height: 1.3;
-}
-
-.strip[data-frame='landscape'] .stripRow .resultName {
-  grid-area: name;
-}
-
-.strip[data-frame='landscape'] .stripRow .resultHand {
-  grid-area: hand;
 }
 
 .strip[data-frame='landscape'] .stripRow .resultPayout {
-  grid-area: payout;
   font-size: 0.8125rem;
 }
 
 @container (min-width: 32rem) {
   .strip[data-frame='landscape'] .stripBody {
     display: grid;
-    /* the rows a little wider: who won is what the strip is for, and "Thẻ đã dùng" wraps and scrolls anyway */
+    /* the rows a little wider: who won is what the strip is for */
     grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    align-content: start;
     align-items: start;
-    gap: var(--space-3);
-    overflow: hidden;
-    -webkit-mask-image: none;
-    mask-image: none;
+    gap: var(--space-1) var(--space-3);
   }
 
-  .strip[data-frame='landscape'] .stripPeople,
-  .strip[data-frame='landscape'] .resultChaosBox {
-    max-height: 100%;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
-
-  .strip[data-frame='landscape'] .resultChaosBox {
+  .strip[data-frame='landscape'] .stripUsed {
     padding: 0;
   }
 }
@@ -3981,6 +4005,12 @@
 
 [data-result-strip='open'] .stack[data-mine-cards] .stackFelt {
   padding-bottom: var(--space-4);
+}
+
+/* On its side the strip lies over the foot of the felt, where the viewer's seat is: the seat steps aside there too (fix
+   round 1), so no badge or card top half-shows past the strip's edges. `visibility`, so the ring keeps its geometry. */
+[data-result-strip='open'] .ring[data-frame='landscape'] [data-me='true'] {
+  visibility: hidden;
 }
 
 /* ---------------- Motion off ---------------- */

@@ -1751,11 +1751,31 @@ describe('RoomScreen on a Poker hỗn loạn table', () => {
       drawAt(makeState({ ...stateWith({}), resultSkips: skips }), { layout: 'stack' })
       expect(result()).toHaveClass(s.strip!)
       expect(result().closest('main'), 'not over the felt').toBeNull()
-      const wrapper = result().parentElement!
-      expect(wrapper).toHaveClass(screens.resultStrip!)
+      const wrapper = result().closest(`.${screens.resultStrip}`)!
+      expect(wrapper).not.toBeNull()
       expect(wrapper.nextElementSibling?.tagName, 'the tray follows it').toBe('FOOTER')
       expect(document.querySelector(`.${screens.room}`)).toHaveAttribute('data-result-strip', 'open')
       expect(screen.queryByRole('button', { name: 'Đóng' }), 'the strip leaves with the hand').toBeNull()
+    })
+
+    it('sends one request for a double tap: the button stays down while the press is out', async () => {
+      let settle: (value: unknown) => void = () => undefined
+      const client = fakeClient(makeState({ ...stateWith({}), resultSkips: skips }), {
+        skipResult: vi.fn(() => new Promise((resolve) => (settle = resolve))) as unknown as GameClientApi['skipResult'],
+      })
+      drawAt(client.state, { layout: 'stack' }, client)
+      const button = screen.getByRole('button', { name: 'Bỏ qua' })
+      await userEvent.click(button)
+      await userEvent.click(button)
+      expect(client.skipResult).toHaveBeenCalledTimes(1)
+      expect(button).toBeDisabled()
+      await act(async () => settle({ t: 'ERROR', reqId: 'x', code: 'NOT_WAITING', message: '' }))
+      expect(screen.getByRole('button', { name: 'Bỏ qua' }), 'a refused press gives the button back').toBeEnabled()
+    })
+
+    it('hides the viewer’s seat under the strip on a phone held sideways too, so nothing half-shows past its edges', () => {
+      expect(TABLE_CSS).toMatch(/\[data-result-strip='open'\] \.ring\[data-frame='landscape'\] \[data-me='true'\] \{\s*visibility: hidden;/)
+      expect(TABLE_CSS).toMatch(/\[data-result-strip='open'\] \.stack \.mine \{\s*display: none;/)
     })
 
     it('is a strip on a phone held sideways too, outside the stage it must not resize', () => {

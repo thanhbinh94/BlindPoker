@@ -3,7 +3,6 @@ import { shot } from '../support.js'
 import {
   closeAll,
   createBlind,
-  expectMyNameWhole,
   expectNoSidewaysScroll,
   expectNoTextOverlapAt,
   expectRoomFits,
@@ -230,19 +229,15 @@ async function draftFitsPhone({ id, who, screen, via }: { id: string; who: Playe
   await expect(cardIcons(page).first(), 'a card icon on a seat').toBeVisible({ timeout: 20_000 })
 
   // The hand plays by itself (pure luck); its result is the other state that has to fit. On a phone it is the strip above the
-  // tray (BP-39). Upright, the viewer's own seat steps aside while the strip is up and the strip's row carries the name, so the
-  // name is checked whole there; on its side the seat stays (the strip covers its foot) and is checked as before.
+  // tray (BP-39), and the viewer's own seat steps aside while it is up (upright and on its side alike): the strip's row carries
+  // the name, so the name is checked whole there.
   await expect(winnerCard(page)).toBeVisible({ timeout: 90_000 })
   await expectNoSidewaysScroll(page)
   await expectRoomFits(page, `${id}, the chaos result`, [screen])
-  if (via === 'sheet') {
-    const name = winnerCard(page).getByText(who.who.displayName, { exact: true })
-    await expect(name, 'the viewer’s row on the result strip').toBeVisible()
-    const { scroll, client } = await name.evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }))
-    expect(scroll, `${id}: "${who.who.displayName}" is whole on the strip`).toBeLessThanOrEqual(client)
-  } else {
-    await expectMyNameWhole(page, who.who.displayName, `${id}, the chaos result`, [screen])
-  }
+  const name = winnerCard(page).getByText(who.who.displayName, { exact: true })
+  await expect(name, 'the viewer’s row on the result strip').toBeVisible()
+  const { scroll, client } = await name.evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }))
+  expect(scroll, `${id}: "${who.who.displayName}" is whole on the strip`).toBeLessThanOrEqual(client)
   await expectNoTextOverlapAt(page, `${id}, the chaos result`)
   await shot(page, `chaos-${id}-result`)
   await leave(page)
