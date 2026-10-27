@@ -82,7 +82,9 @@ Normal edition only.
   three gate runs found and fixed two real faults — F-13e@s25l (the viewer's payout rising 8 px past a short landscape stage, now a
   fade, `0568745`) and L-06 (a create refused with ALREADY_IN_ROOM after a mid-hand leave; the helper now waits that answer out,
   `4f8e6df`) — then 63 passed with the known E-06 Hold'em flake, and `03-holdem` re-run 6/6.
-- **Deployed.** DEPLOYED
+- **Deployed.** On the VPS since 2026-10-28, by git bundle ahead of the push (`f602641..e5ec884`; backup `bp-2026-10-28-0043`;
+  no new migration; rooms 0; health ok). The LAN host is not touched. Lite was rebuilt locally up to the exe step, not shipped
+  (Lite has no chaos).
 - **Still open.** Card balance (H6) waits for the user's statistics. Real-phone checks (S25, iOS Safari): tap targets of the
   bonus and seat icons are 26–28 px. Nine seats on a phone on its side crowd the top seats' badge lines. At 1024 px desktop the
   result card covers part of the toast column. The LAN host still lacks migrations 0004–0007 (BP-39 adds none).
