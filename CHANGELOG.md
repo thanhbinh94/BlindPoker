@@ -9,6 +9,80 @@ below are the real history.
 
 ---
 
+## Plan 39 — Poker hỗn loạn, round two: toasts that never cover the winner, "Bỏ qua", bonus cards played by hand, tap-to-read cards, no table limit — merged `MERGE` (2026-10-27)
+
+The players' feedback on chaos tables, `docs/bug-log.md` §12 H1–H9 (2026-10-26/27), brainstormed with the user
+("chọn B", "L-B", "con số cố định … có nút skip", "giữ trên tay và tự bấm dùng", "chọn a", "mang toàn bộ số dư lên bàn"),
+then "lập plan triển khai và deploy luôn không cần hỏi". Spec `2026-10-27-chaos-feedback-design.md` (user decisions F1–F10),
+plan `2026-10-27-plan39-chaos-round-two.md` with its pre-flight amendments A1–A14. Branch `feature/BP-39-chaos-round-two`.
+Normal edition only.
+
+- **What a player gets.**
+  - **Card notices are toasts in their own band** (phone upright: under the header; on its side: the top band; desktop:
+    top right), at most three (two side by side on its side, two upright at 7+ seats), the rest under **"+N thẻ khác"** that
+    opens the hand's whole list. A toast stays 4 s, tap to pin. They can no longer cover the winner: the band and the result
+    are separate regions, and the result no longer waits for them.
+  - **On a phone the result is a strip above the buttons**: "Người thắng", "Ván tiếp theo sau N giây", the winner and you,
+    "Thẻ đã dùng" in two lines, "+N người" / "+N thẻ khác" open it upward as a sheet with "Đóng". Desktop keeps the card.
+  - **Chaos tables wait 10 s after a hand** (the GM sets 5–15 s in "Thẻ hỗn loạn"), and every seated player gets **"Bỏ qua"**:
+    once every connected, playing human has pressed, the next hand deals at once; "Bỏ qua 2/4" shows who is still reading.
+    Auto-play presses for you.
+  - **Bonus cards wait in your hand** (up to 3, "Thẻ thưởng") instead of firing at random: tap one to read it, **"Dùng"** to
+    play it — between hands for the next hand, or during your Chơi/Bỏ choice for this hand's reveal (steal, lower, swap, board
+    re-deal, borrow). One per hand. Others see only how many you hold, never which, until it fires; if you fold, a card set for
+    this hand comes back unseen. Cards that wait for a condition (Cấp cứu, Thần tài, Khiên, Gương) and Tích lũy, Cấp độ still
+    act on their own.
+  - **Tap any chaos card to read it** — our own tooltip (name, tier, full text, when it acts, hands left; for a played card:
+    by whom, on whom, the result), on seat icons, toasts, "Thẻ đã dùng" and the bonus hand. "Rút lá lẻ" now says the card is
+    random.
+  - **No table limit at chaos tables**: you sit with your whole balance ("Hạn mức Không giới hạn"). Plain Blind keeps 10×.
+  - On its side, the draft shows each card's tier again; nothing scrolls at the Galaxy S25's 780×360 or 360×780.
+- **Under it.** Core: `ChaosSeat.bonus` / `armed` / `bonusPlayedThisHand`, `chaos/bonus.ts` (`armBonus`, `canInsertThisHand`,
+  `MID_HAND_EFFECTS`, `needsNoPress`), `addRevealEffect` (a reveal card added to a live hand), `afterHand` bonus draws into
+  the hand and returns or spends armed cards (a card the table was told of is spent — the engine's `recorded` uids),
+  `ChaosConfig.resultMs`, `ChaosUse.targets`, `blindBuyInCap`. Protocol: `CHAOS_USE`, `RESULT_SKIP`, `RESULT_SKIPS`, owner-only
+  `NOTIFICATION CHAOS_BONUS`, `ChaosSnapshot.bonus`, `ROOM_SNAPSHOT.resultSkips`, `bonusCount` on seats, `CHAOS_CANNOT_USE`.
+  server-kit: `Room.useChaosBonus`, `Room.skipResult`, the result wait from `resultMs`, the vote recount on every seat change,
+  whole-balance sit-down. Normal server: `resultMs` bounds, the config cached 10 s and dropped on save. ui-kit: `ChaosToasts`
+  (replaces `ChaosBanner`), `ChaosCardInfo`, `BonusHand`, the `HandResult` strip, `playBonus` / `skipResult`, seat bonus badge.
+  Web: the GM "Thời gian xem kết quả, giây (5–15)" box.
+- **Tests.** core 377, server-kit 233 (incl. the privacy tests that scan every other viewer's frames for card ids, the skip
+  vote, and a whole-balance conservation test in `room-hands.test.ts`), ui-kit 1,039, normal-server 842, normal-web 1,116.
+  Ops: two new projects for the Galaxy S25, `s25p` 360×780 and `s25l` 780×360; F-13 presses "Bỏ qua"; F-13b/c also at S25;
+  **F-13d/e** (the strip at S25, no scroll, nothing over the strip, "Bỏ qua" deals at once), **F-13f** (eight seats firing at
+  one reveal, forced through the GM card rules and restored after), **F-13g** (a bonus card: tap, "Dùng", it fires). The
+  first-paint budget rises from 160 to 170 KB gzip (ruling 7).
+- **Docs.** `docs/player-guide.md` (§5, §6a), `docs/ui-kit.md`, `docs/server-kit.md`, `docs/normal-web.md`,
+  `docs/known-limitations.md`, `docs/test-matrix.md` (three rows; the pin and `CLAUDE.md` §3 updated, ops 66 cases),
+  `docs/bug-log.md` §12.
+- **Khác với spec / Deviations from the spec.**
+  1. Toasts have no queue: a card that finds the band full goes under "+N thẻ khác" instead of pushing out the oldest
+     (spec §3.1).
+  2. Upright at 7 or more seats the band holds two toasts, not three (360×780 height budget).
+  3. Upright, while the strip is open, the header's facts line (badges, code, stakes, head count) is hidden, and below 480 px a
+     chaos header drops the head count; the viewer's own seat block hides while the strip is up (the strip's row carries
+     your name, hand and payout).
+  4. The strip shows the title and the countdown on two lines, and no loser amounts (as the old card).
+  5. Upright, the bonus hand is a column on the felt's left edge, not by the tray.
+  6. Bảo hiểm and Bạo kích pressed mid-hand apply from the next hand; a mid-hand card that would clash with a deal-time debuff
+     or the same effect already planned also moves to the next hand (the strip says "· ván sau").
+  7. An armed Nhìn trộm / Bỏ không mất is spent after its hand, used or not.
+  8. A player on auto-play counts as a voter whose client presses "Bỏ qua", not as already pressed.
+- **Rulings.** 1 Cứu trợ still ignores table stacks, so a player seated with the whole balance can claim it (residual).
+  2 A weaker duplicate duration card is refused when pressed. 3 Bảo hiểm / Bạo kích mid-hand → next hand. 4 Subagent commits
+  carry their own model's trailer. 5 Armed decision cards spent after their hand. 6 `CHAOS_SUMMARY` names targets, Đóng băng
+  and Che mắt included (spec §3.5 "nhắm vào ai"). 7 First-paint budget 160 → 170 KB.
+- **New English copy to review** (the session's draft): `chaos.timing.*`, `chaos.info.*`, `chaos.bonus.*`, `chaos.result.*`,
+  "Skip", "Skipped", "Use", "Set to play · this hand / · next hand", "No limit", "+N more cards", "+N more", "Result time,
+  seconds (5–15)".
+- **Gate.** GATE
+- **Deployed.** DEPLOYED
+- **Still open.** Card balance (H6) waits for the user's statistics. Real-phone checks (S25, iOS Safari): tap targets of the
+  bonus and seat icons are 26–28 px. Nine seats on a phone on its side crowd the top seats' badge lines. At 1024 px desktop the
+  result card covers part of the toast column. The LAN host still lacks migrations 0004–0007 (BP-39 adds none).
+
+---
+
 ## BP-38 — a table that goes back to waiting tells every player their "ready" is cleared, so "Chơi tiếp" then "Bắt đầu" no longer lights a Start the server refuses — merged `29cc1d0` (2026-10-27)
 
 The user's bug log, `docs/bug-log.md` §10 E6 (found 2026-10-23 while screenshotting BP-31, option (a) recommended there). Branch
