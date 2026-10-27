@@ -28,7 +28,7 @@ export function parseClientMessage(raw: unknown): ParseResult<ClientMessage> {
   switch (raw.t) {
     case 'HELLO':
       return isStr(raw.sessionToken) && raw.sessionToken.length > 0 ? { ok: true, value: withReq({ t: 'HELLO', sessionToken: raw.sessionToken }) } : fail('INVALID_MESSAGE', 'HELLO needs sessionToken')
-    case 'LIST_ROOMS': case 'LEAVE_ROOM': case 'STAND_UP': case 'SIT_OUT': case 'SIT_IN': case 'START_GAME': case 'RESYNC': case 'PONG': case 'REVEAL':
+    case 'LIST_ROOMS': case 'LEAVE_ROOM': case 'STAND_UP': case 'SIT_OUT': case 'SIT_IN': case 'START_GAME': case 'RESYNC': case 'PONG': case 'REVEAL': case 'RESULT_SKIP':
       return { ok: true, value: withReq({ t: raw.t }) }
     case 'CREATE_ROOM': {
       const cfg = validateRoomConfig(raw.config)
@@ -61,6 +61,10 @@ export function parseClientMessage(raw: unknown): ParseResult<ClientMessage> {
       return isStr(raw.offerId) && raw.offerId.length > 0 && isStr(raw.cardId) && raw.cardId.length > 0
         ? { ok: true, value: withReq({ t: 'CHAOS_PICK', offerId: raw.offerId, cardId: raw.cardId }) }
         : fail('INVALID_MESSAGE', 'CHAOS_PICK needs offerId and cardId')
+    case 'CHAOS_USE':
+      return isInt(raw.uid) && raw.uid > 0
+        ? { ok: true, value: withReq({ t: 'CHAOS_USE', uid: raw.uid }) }
+        : fail('INVALID_MESSAGE', 'CHAOS_USE needs a positive integer uid')
     case 'ACTION': {
       const action = parseAction(raw.action)
       if (!isStr(raw.reqId) || !isInt(raw.baseSeq) || !action) return fail('INVALID_MESSAGE', 'ACTION needs reqId, baseSeq and a valid action')

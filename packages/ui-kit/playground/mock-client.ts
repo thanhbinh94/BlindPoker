@@ -196,7 +196,7 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
       sittingOut: seat === MY_SEAT && sittingOut,
       stack: stacks.get(seat) ?? 0,
       ready: true,
-      ...(chaosOn ? { chaos: { cards: (held.get(seat) ?? EMPTY_CHAOS_SEAT).cards.map(toHeldCardView), points: (held.get(seat) ?? EMPTY_CHAOS_SEAT).points } } : {}),
+      ...(chaosOn ? { chaos: { cards: (held.get(seat) ?? EMPTY_CHAOS_SEAT).cards.map(toHeldCardView), points: (held.get(seat) ?? EMPTY_CHAOS_SEAT).points, bonusCount: 0 } } : {}),
     }))
 
   const room = (nextHandAt: number | null): RoomView => ({
@@ -236,6 +236,7 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
         seat,
         cards: (held.get(seat) ?? EMPTY_CHAOS_SEAT).cards.map(toHeldCardView),
         points: (held.get(seat) ?? EMPTY_CHAOS_SEAT).points,
+        bonusCount: 0,
       })),
     })
 

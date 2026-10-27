@@ -331,6 +331,7 @@ function applyRoomEvent(room: RoomView, event: RoomEvent): RoomView {
     case 'CHAOS_PICKED':
     case 'CHAOS_STATE':
     case 'CHAOS_AWARDED':
+    case 'RESULT_SKIPS': // Task 6 keeps the count in client state
       return room
   }
 }

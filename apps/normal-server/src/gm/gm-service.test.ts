@@ -1014,7 +1014,7 @@ describe('GmService — chaos cards (Plan 37)', () => {
   })
 
   it('setChaosConfig saves the five numbers and logs set_chaos_config; a bad number is refused with no log line', async () => {
-    const config = { tierWeights: { silver: 50, gold: 35, diamond: 15 }, pointsThreshold: 8, draftMs: 20_000, dailyCapPoints: 50_000, dailyRescues: 2 }
+    const config = { tierWeights: { silver: 50, gold: 35, diamond: 15 }, pointsThreshold: 8, draftMs: 20_000, resultMs: 12_000, dailyCapPoints: 50_000, dailyRescues: 2 }
     const r = await gm.setChaosConfig(actor(boss), { ...config, junk: 1 }, 'cân lại')
     expect(await h.app.services.chaos.config()).toEqual(config)
     expect(await logged('set_chaos_config')).toEqual([expect.objectContaining({ id: r.actionId, reason: 'cân lại', details: { config } })])

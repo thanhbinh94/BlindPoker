@@ -96,6 +96,13 @@ describe('parseClientMessage', () => {
     expect(parseClientMessage({ t: 'CHAOS_PICK', reqId: 'r1', offerId: 'o1', cardId: 's_rescue', extra: 1 }))
       .toEqual({ ok: true, value: { t: 'CHAOS_PICK', reqId: 'r1', offerId: 'o1', cardId: 's_rescue' } })
   })
+  it('parses a CHAOS_USE with its card uid, and a RESULT_SKIP with or without a reqId', () => {
+    expect(parseClientMessage({ t: 'CHAOS_USE', reqId: 'r1', uid: 3, extra: 1 }))
+      .toEqual({ ok: true, value: { t: 'CHAOS_USE', reqId: 'r1', uid: 3 } })
+    expect(parseClientMessage({ t: 'CHAOS_USE', uid: 3 })).toEqual({ ok: true, value: { t: 'CHAOS_USE', uid: 3 } })
+    expect(parseClientMessage({ t: 'RESULT_SKIP', reqId: 'r2' })).toEqual({ ok: true, value: { t: 'RESULT_SKIP', reqId: 'r2' } })
+    expect(parseClientMessage({ t: 'RESULT_SKIP' })).toEqual({ ok: true, value: { t: 'RESULT_SKIP' } })
+  })
   it('reports a rejected CREATE_ROOM config as INVALID_ROOM_CONFIG, not INVALID_MESSAGE', () => {
     const r = parseClientMessage({ t: 'CREATE_ROOM', config: {} })
     expect(r.ok).toBe(false)
@@ -113,6 +120,7 @@ describe('parseClientMessage', () => {
     [{ t: 'ACTION', reqId: 'r', baseSeq: 1, action: { kind: 'bet', amount: 1.5 } }],
     [{ t: 'SIT_DOWN', seat: 'x' }], [{ t: 'READY' }], [{ t: 'JOIN_ROOM' }], [{ t: 'HELLO' }],
     [{ t: 'CHAOS_PICK', offerId: 'o1' }], [{ t: 'CHAOS_PICK', cardId: 's_rescue' }], [{ t: 'CHAOS_PICK', offerId: '', cardId: 's_rescue' }],
+    [{ t: 'CHAOS_USE' }], [{ t: 'CHAOS_USE', uid: 0 }], [{ t: 'CHAOS_USE', uid: -2 }], [{ t: 'CHAOS_USE', uid: 1.5 }], [{ t: 'CHAOS_USE', uid: '3' }],
   ])('rejects %j with INVALID_MESSAGE', (input) => {
     const r = parseClientMessage(input)
     expect(r.ok).toBe(false)

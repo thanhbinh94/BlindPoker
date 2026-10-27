@@ -77,6 +77,7 @@ interface RuleRow {
 const LIMITS = {
   pointsThreshold: [1, 100],
   draftMs: [5_000, 60_000],
+  resultMs: [5_000, 15_000],
   dailyCapPoints: [0, 10_000_000],
   dailyRescues: [0, 20],
 } as const
@@ -137,6 +138,7 @@ function mergeConfig(stored: unknown): ChaosConfig {
     tierWeights: tierWeights.silver + tierWeights.gold + tierWeights.diamond > 0 ? tierWeights : { ...d.tierWeights },
     pointsThreshold: pick('pointsThreshold'),
     draftMs: pick('draftMs'),
+    resultMs: pick('resultMs'),
     dailyCapPoints: pick('dailyCapPoints'),
     dailyRescues: pick('dailyRescues'),
   }
@@ -253,6 +255,7 @@ export function createChaosService(deps: ChaosServiceDeps): ChaosService {
         tierWeights: { silver: tw.silver, gold: tw.gold, diamond: tw.diamond },
         pointsThreshold: config.pointsThreshold,
         draftMs: config.draftMs,
+        resultMs: config.resultMs,
         dailyCapPoints: config.dailyCapPoints,
         dailyRescues: config.dailyRescues,
       }

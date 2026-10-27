@@ -341,7 +341,8 @@ function configOf(text: ConfigText, was: ChaosConfigDto): ChaosConfigDto | null 
   const draftMs = text.draftSeconds === textOf(was).draftSeconds ? was.draftMs : seconds === null ? null : seconds * 1000
   if (silver === null || gold === null || diamond === null || pointsThreshold === null || draftMs === null || dailyCapPoints === null || dailyRescues === null) return null
   if (silver + gold + diamond <= 0) return null
-  return { tierWeights: { silver, gold, diamond }, pointsThreshold, draftMs, dailyCapPoints, dailyRescues }
+  // No box for the result time yet (Task 5): the loaded value travels with every save.
+  return { tierWeights: { silver, gold, diamond }, pointsThreshold, draftMs, resultMs: was.resultMs, dailyCapPoints, dailyRescues }
 }
 
 interface ConfigEditorProps {
@@ -378,7 +379,7 @@ function ConfigEditor({ api, config, onDone }: ConfigEditorProps) {
   ]
   const boxBroken = (key: ConfigField): boolean => {
     // One box is judged by the whole: swap in a known-good config for the others and see whether this one still fails.
-    const probe = textOf({ tierWeights: { silver: 1, gold: 1, diamond: 1 }, pointsThreshold: 10, draftMs: 15_000, dailyCapPoints: 0, dailyRescues: 0 })
+    const probe = textOf({ tierWeights: { silver: 1, gold: 1, diamond: 1 }, pointsThreshold: 10, draftMs: 15_000, resultMs: 10_000, dailyCapPoints: 0, dailyRescues: 0 })
     return configOf({ ...probe, [key]: text[key] }, config) === null && text[key] !== textOf(config)[key]
   }
 

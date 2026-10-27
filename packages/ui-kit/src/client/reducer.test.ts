@@ -707,7 +707,7 @@ describe('Poker hỗn loạn', () => {
 
   function chaosRoom(): RoomView {
     const base = roomView('blind', BLIND_B, [20000, 20000, 20000])
-    return { ...base, config: { ...base.config, blind: { ...base.config.blind!, chaosCycle: 5 } }, players: base.players.map((p) => (p.seat === 1 ? { ...p, chaos: { cards: [card(7, 's_shield')], points: 3 } } : p)) }
+    return { ...base, config: { ...base.config, blind: { ...base.config.blind!, chaosCycle: 5 } }, players: base.players.map((p) => (p.seat === 1 ? { ...p, chaos: { cards: [card(7, 's_shield')], points: 3, bonusCount: 0 } } : p)) }
   }
   function inChaosRoom(chaos?: Snapshot['chaos']): ClientState {
     let s = reduceClient(initialClientState, { type: 'server', msg: { t: 'WELCOME', playerId: 'p0', displayName: 'P0', balance: 0, serverTime: 0 }, now: 0 })
@@ -786,7 +786,7 @@ describe('Poker hỗn loạn', () => {
 
   it('keeps each seat\'s cards from CHAOS_STATE and closes the draft', () => {
     let s = offer(room(inChaosRoom(), 11, draftFrame))
-    s = room(s, 12, { type: 'CHAOS_STATE', seats: [{ seat: 0, cards: [card(9, 'g_freeze', 'gold', 2)], points: 0 }, { seat: 1, cards: [], points: 4 }] })
+    s = room(s, 12, { type: 'CHAOS_STATE', seats: [{ seat: 0, cards: [card(9, 'g_freeze', 'gold', 2)], points: 0, bonusCount: 0 }, { seat: 1, cards: [], points: 4, bonusCount: 0 }] })
     expect(s.chaos.seats[0]).toEqual({ cards: [card(9, 'g_freeze', 'gold', 2)], points: 0 })
     expect(s.chaos.seats[1]).toEqual({ cards: [], points: 4 })
     expect(s.chaos.draft).toBeNull()
@@ -840,7 +840,7 @@ describe('Poker hỗn loạn', () => {
   it('moves what the hand used into result.chaosUsed at settlement (from the public summary)', () => {
     let s = game(inChaosRoom(), 11, started)
     s = game(s, 12, swap)
-    s = game(s, 13, { type: 'CHAOS_SUMMARY', used: [{ seat: 0, cardId: 's_swap_lowest', effect: 'swapLowest', outcome: 'applied' }, { seat: 2, cardId: 'g_freeze', effect: 'freeze', outcome: 'blocked' }] })
+    s = game(s, 13, { type: 'CHAOS_SUMMARY', used: [{ seat: 0, cardId: 's_swap_lowest', effect: 'swapLowest', outcome: 'applied', targets: [] }, { seat: 2, cardId: 'g_freeze', effect: 'freeze', outcome: 'blocked', targets: [0] }] })
     s = game(s, 14, { ...settlement, payouts: [{ seat: 0, amount: 3000 }], stacks: [{ seat: 0, stack: 22000 }] } as GameEvent)
     expect(s.hand!.result!.chaosUsed).toEqual([{ seat: 0, cardId: 's_swap_lowest', outcome: 'applied' }, { seat: 2, cardId: 'g_freeze', outcome: 'blocked' }])
   })

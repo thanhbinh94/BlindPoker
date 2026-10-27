@@ -4,14 +4,15 @@ import type { HandView } from '../hand/view.js'
 
 /**
  * `CHAOS_UNAVAILABLE`: a chaos table asked of a server that has no chaos port (Lite). `CHAOS_NO_OFFER`: a pick for an
- * offer that is not open (already picked, gone with the draft, or never this player's).
+ * offer that is not open (already picked, gone with the draft, or never this player's). `CHAOS_CANNOT_USE`: a bonus card
+ * pressed when it cannot be played (no such card, one already armed, frozen, a weaker duplicate, or not a moment to play).
  */
 export type ErrorCode =
   | 'UNAUTHENTICATED' | 'INVALID_MESSAGE' | 'RATE_LIMITED' | 'ROOM_NOT_FOUND' | 'ROOM_FULL' | 'WRONG_PASSWORD'
   | 'INVALID_ROOM_CONFIG' | 'NOT_HOST' | 'SEAT_TAKEN' | 'INSUFFICIENT_BALANCE' | 'NOT_YOUR_TURN' | 'ILLEGAL_ACTION'
   | 'INVALID_AMOUNT' | 'STALE_STATE' | 'DUPLICATE_REQUEST' | 'NOT_IN_HAND' | 'NOT_IN_ROOM' | 'ALREADY_IN_ROOM'
   | 'NOT_SEATED' | 'GAME_IN_PROGRESS' | 'NOT_ENOUGH_PLAYERS' | 'DISPLAY_NAME_TAKEN' | 'SERVER_SHUTDOWN' | 'INTERNAL'
-  | 'CHAOS_UNAVAILABLE' | 'CHAOS_NO_OFFER'
+  | 'CHAOS_UNAVAILABLE' | 'CHAOS_NO_OFFER' | 'CHAOS_CANNOT_USE'
 
 export interface PlayerIdentity {
   playerId: string
@@ -70,8 +71,11 @@ export interface RoomPlayerView {
   ready: boolean
   /** Opaque, app-specific cosmetics (e.g. avatar config); core never interprets it. */
   cosmetics?: unknown
-  /** A chaos table only, on a seated player: the cards the seat holds and its chaos points (public, spec §3.4). */
-  chaos?: { cards: HeldCardView[]; points: number }
+  /**
+   * A chaos table only, on a seated player: the cards the seat holds and its chaos points (public, spec §3.4), and how
+   * many bonus cards wait in its hand (armed one included; which cards they are stays private to the owner).
+   */
+  chaos?: { cards: HeldCardView[]; points: number; bonusCount: number }
 }
 
 export interface RoomSummary {
@@ -120,7 +124,7 @@ export type RoomEvent =
   /** The draft is over: what each seat received (every card, a Cấp độ's results included). */
   | { type: 'CHAOS_PICKED'; seat: number; cardIds: string[] }
   /** Every seat's held cards and chaos points, after a draft and after each hand. */
-  | { type: 'CHAOS_STATE'; seats: { seat: number; cards: HeldCardView[]; points: number }[] }
+  | { type: 'CHAOS_STATE'; seats: { seat: number; cards: HeldCardView[]; points: number; bonusCount: number }[] }
   /**
    * New points a card paid onto the seat's stack (`amount` as credited; `capped` when the daily cap cut it). `stack` is
    * the seat's stack after the credit, absolute, so a client never has to add it up (a seat at 0 rescued between hands).
@@ -128,6 +132,8 @@ export type RoomEvent =
   | { type: 'CHAOS_CREDIT'; seat: number; amount: number; stack: number; reason: ChaosCreditReason; capped: boolean; multiplier?: 2 | 3 }
   /** Bonus or prize cards the seat received at the end of a hand. */
   | { type: 'CHAOS_AWARDED'; seat: number; cardIds: string[] }
+  /** A chaos table's result wait: how many humans pressed "Bỏ qua" out of how many are waited for (BP-39). */
+  | { type: 'RESULT_SKIPS'; skipped: number; total: number }
 
 /** `NOTIFICATION { kind: 'CHAOS_OFFER' }`'s payload: the three cards offered privately to one player in a draft. */
 export interface ChaosOfferPayload {
@@ -139,9 +145,22 @@ export interface ChaosOfferPayload {
   draftMs: number
 }
 
-/** `ROOM_SNAPSHOT.chaos`: the draft as the viewer sees it — its own offer (none for a spectator) and whether it picked. */
+/**
+ * `NOTIFICATION { kind: 'CHAOS_BONUS' }`'s payload, sent to the owner only: the bonus hand and the card pressed and
+ * waiting (`armed`), with the hand it will fire in.
+ */
+export interface ChaosBonusPayload {
+  cards: HeldCardView[]
+  armed: { uid: number; cardId: string; hand: 'this' | 'next' } | null
+}
+
+/**
+ * `ROOM_SNAPSHOT.chaos`: the draft as the viewer sees it — its own offer (none for a spectator) and whether it picked —
+ * and, for a seated viewer, its own bonus hand (`bonus`; never another seat's).
+ */
 export interface ChaosSnapshot {
   draft: { tier: ChaosTier; deadlineAt: number; draftMs: number; offer: { offerId: string; cardIds: string[] } | null; picked: boolean } | null
+  bonus?: ChaosBonusPayload
 }
 
 /** Every client message may carry a `reqId`; the server echoes it on `ACK` / `ERROR`. `ACTION` requires one. */
@@ -167,6 +186,10 @@ export type ClientMessage =
   | { t: 'PONG'; reqId?: string }
   /** Poker hỗn loạn: take one card of the offer this player was sent in the open draft. */
   | { t: 'CHAOS_PICK'; reqId?: string; offerId: string; cardId: string }
+  /** Poker hỗn loạn: play the bonus card `uid` from this player's bonus hand (BP-39). */
+  | { t: 'CHAOS_USE'; reqId?: string; uid: number }
+  /** Poker hỗn loạn: skip the rest of the hand-result wait; the next hand deals when every human has (BP-39). */
+  | { t: 'RESULT_SKIP'; reqId?: string }
 
 export type ServerMessage =
   | { t: 'WELCOME'; playerId: string; displayName: string; balance: number; serverTime: number }

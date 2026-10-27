@@ -27,7 +27,7 @@ const CARDS: GmChaosCardDto[] = [
   card('d_extra_card_3', 'diamond', 'extra'),
 ]
 
-const CONFIG: GmChaosDto['config'] = { tierWeights: { silver: 60, gold: 30, diamond: 10 }, pointsThreshold: 10, draftMs: 15_000, dailyCapPoints: 100_000, dailyRescues: 3 }
+const CONFIG: GmChaosDto['config'] = { tierWeights: { silver: 60, gold: 30, diamond: 10 }, pointsThreshold: 10, draftMs: 15_000, resultMs: 10_000, dailyCapPoints: 100_000, dailyRescues: 3 }
 
 type Stub = NormalApi & Record<string, ReturnType<typeof vi.fn>>
 
@@ -255,7 +255,7 @@ describe('ChaosTab', () => {
     await confirmWithReason('cân lại thẻ hỗn loạn')
 
     expect(api.gmSetChaosConfig).toHaveBeenCalledWith(
-      { tierWeights: { silver: 60, gold: 30, diamond: 20 }, pointsThreshold: 10, draftMs: 25_000, dailyCapPoints: 100_000, dailyRescues: 1 },
+      { tierWeights: { silver: 60, gold: 30, diamond: 20 }, pointsThreshold: 10, draftMs: 25_000, resultMs: 10_000, dailyCapPoints: 100_000, dailyRescues: 1 },
       'cân lại thẻ hỗn loạn',
     )
     expect(await screen.findByText(t.done.chaosConfig)).toBeInTheDocument()

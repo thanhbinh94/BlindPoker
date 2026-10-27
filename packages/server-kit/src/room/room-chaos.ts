@@ -245,9 +245,10 @@ export class ChaosTable {
     }
   }
 
-  seatView(p: RoomPlayer): { cards: HeldCardView[]; points: number } {
+  seatView(p: RoomPlayer): { cards: HeldCardView[]; points: number; bonusCount: number } {
     const chaos: ChaosSeat = p.chaos ?? EMPTY_CHAOS_SEAT
-    return { cards: chaos.cards.map(toHeldCardView), points: chaos.points }
+    // Only the count of the bonus hand is public (the armed card included); which cards they are stays with the owner.
+    return { cards: chaos.cards.map(toHeldCardView), points: chaos.points, bonusCount: chaos.bonus.length + (chaos.armed ? 1 : 0) }
   }
 
   /** The room is closing: no draft outlives it. */

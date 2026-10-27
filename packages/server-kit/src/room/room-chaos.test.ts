@@ -122,7 +122,7 @@ describe('Chaos room: the draft', () => {
     expect(state.seats.map((s) => [s.seat, s.cards.map((c) => c.cardId), s.points])).toEqual([[0, ['s_rescue'], 0], [1, ['s_rescue'], 0], [2, ['s_rescue'], 0], [3, ['s_rescue'], 0]])
     const types = h.ofType('h', 'ROOM_EVENT').map((m) => m.event.type)
     expect(types.lastIndexOf('CHAOS_STATE')).toBeLessThan(types.lastIndexOf('ROOM_STATUS')) // then the hand's IN_GAME
-    expect(h.room.view().players.find((p) => p.playerId === 'h')!.chaos).toEqual({ cards: [expect.objectContaining({ cardId: 's_rescue', tier: 'silver', handsLeft: null })], points: 0 })
+    expect(h.room.view().players.find((p) => p.playerId === 'h')!.chaos).toEqual({ cards: [expect.objectContaining({ cardId: 's_rescue', tier: 'silver', handsLeft: null })], points: 0, bonusCount: 0 })
     await playOut(h)
     expect(h.repos.hands[0]!.chaosUsed).toEqual([]) // a rescue card is not "used" by a hand it does not pay in
   })
@@ -260,7 +260,7 @@ describe('Chaos room: the draft', () => {
     expect(h.room.players.get('h')!.chaos).toBeUndefined()
     expect(h.room.view().players.find((p) => p.playerId === 'h')!.chaos).toBeUndefined()
     await h.room.sitDown('h', 0)
-    expect(h.room.view().players.find((p) => p.playerId === 'h')!.chaos).toEqual({ cards: [], points: 0 })
+    expect(h.room.view().players.find((p) => p.playerId === 'h')!.chaos).toEqual({ cards: [], points: 0, bonusCount: 0 })
     h.clock.advance(100)
     await tick(h)
     expect(h.room.handActive).toBe(true)

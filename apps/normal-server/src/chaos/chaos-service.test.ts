@@ -231,7 +231,7 @@ describe('setRules()', () => {
 })
 
 describe('config()/setConfig()', () => {
-  const GOOD: ChaosConfig = { tierWeights: { silver: 50, gold: 40, diamond: 10 }, pointsThreshold: 8, draftMs: 20_000, dailyCapPoints: 250_000, dailyRescues: 5 }
+  const GOOD: ChaosConfig = { tierWeights: { silver: 50, gold: 40, diamond: 10 }, pointsThreshold: 8, draftMs: 20_000, resultMs: 12_000, dailyCapPoints: 250_000, dailyRescues: 5 }
 
   it('is the defaults until a GM saves, then the saved settings', async () => {
     expect(await chaos.config()).toEqual(DEFAULT_CHAOS_CONFIG)
@@ -244,10 +244,11 @@ describe('config()/setConfig()', () => {
   })
 
   it('accepts the limits of every field, and a tier weighted 0 while another is not', async () => {
-    await setConfig({ tierWeights: { silver: 0, gold: 0, diamond: 1 }, pointsThreshold: 1, draftMs: 5_000, dailyCapPoints: 0, dailyRescues: 0 })
+    await setConfig({ tierWeights: { silver: 0, gold: 0, diamond: 1 }, pointsThreshold: 1, draftMs: 5_000, resultMs: 5_000, dailyCapPoints: 0, dailyRescues: 0 })
     expect((await chaos.config()).tierWeights).toEqual({ silver: 0, gold: 0, diamond: 1 })
-    await setConfig({ tierWeights: { silver: 100, gold: 100, diamond: 100 }, pointsThreshold: 100, draftMs: 60_000, dailyCapPoints: 10_000_000, dailyRescues: 20 })
+    await setConfig({ tierWeights: { silver: 100, gold: 100, diamond: 100 }, pointsThreshold: 100, draftMs: 60_000, resultMs: 15_000, dailyCapPoints: 10_000_000, dailyRescues: 20 })
     expect((await chaos.config()).dailyCapPoints).toBe(10_000_000)
+    expect((await chaos.config()).resultMs).toBe(15_000)
   })
 
   it('refuses a weight set that adds up to nothing or is not whole, and a value out of its range', async () => {
@@ -258,6 +259,7 @@ describe('config()/setConfig()', () => {
       { tierWeights: { silver: 5, gold: 5 } },
       { pointsThreshold: 0 }, { pointsThreshold: 101 }, { pointsThreshold: 2.5 },
       { draftMs: 4_999 }, { draftMs: 60_001 },
+      { resultMs: 4_999 }, { resultMs: 15_001 }, { resultMs: 9_000.5 },
       { dailyCapPoints: -1 }, { dailyCapPoints: 10_000_001 },
       { dailyRescues: -1 }, { dailyRescues: 21 }, { dailyRescues: Number.NaN },
     ]

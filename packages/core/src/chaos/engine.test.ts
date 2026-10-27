@@ -493,8 +493,8 @@ describe('settlement', () => {
     expect(t.events[i + 1]!.type).toBe('SETTLEMENT')
     const summary = t.events[i]!
     expect(summary).toEqual({ type: 'CHAOS_SUMMARY', used: [
-      { seat: 0, cardId: 's_swap_one', effect: 'swapLowest', outcome: 'applied' },
-      { seat: 0, cardId: 's_steal_one', effect: 'stealHole', outcome: 'applied' },
+      { seat: 0, cardId: 's_swap_one', effect: 'swapLowest', outcome: 'applied', targets: [] },
+      { seat: 0, cardId: 's_steal_one', effect: 'stealHole', outcome: 'applied', targets: [1] },
     ] })
     expect(filterEvent(summary, 1)).toEqual(summary)
   })

@@ -292,7 +292,7 @@ describe('the shop and reputation (Plan 27 B4)', () => {
 describe('the chaos cards (Plan 37)', () => {
   interface ChaosBody {
     cards: { id: string; tier: string; activeNow: boolean; rule: { weight: number } | null }[]
-    config: { tierWeights: { silver: number; gold: number; diamond: number }; pointsThreshold: number; draftMs: number; dailyCapPoints: number; dailyRescues: number }
+    config: { tierWeights: { silver: number; gold: number; diamond: number }; pointsThreshold: number; draftMs: number; resultMs: number; dailyCapPoints: number; dailyRescues: number }
   }
   const chaos = async (): Promise<ChaosBody> => (await gmReq('GET', '/api/gm/chaos')).json() as ChaosBody
   const rule = (cardId: string, weight: number, enabled = true) => ({ cardId, enabled, weight, startsAt: null, endsAt: null })
@@ -341,7 +341,7 @@ describe('the chaos cards (Plan 37)', () => {
   })
 
   it('PUT /api/gm/chaos/config saves the five numbers; a bad one is 400 INVALID_CHAOS_CONFIG', async () => {
-    const config = { tierWeights: { silver: 50, gold: 35, diamond: 15 }, pointsThreshold: 8, draftMs: 20_000, dailyCapPoints: 50_000, dailyRescues: 2 }
+    const config = { tierWeights: { silver: 50, gold: 35, diamond: 15 }, pointsThreshold: 8, draftMs: 20_000, resultMs: 12_000, dailyCapPoints: 50_000, dailyRescues: 2 }
     const res = await gmReq('PUT', '/api/gm/chaos/config', { config, reason: 'cân lại bậc thẻ' })
     expect(res.statusCode).toBe(200)
     expect((await chaos()).config).toEqual(config)

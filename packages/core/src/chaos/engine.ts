@@ -67,7 +67,7 @@ function record(
   if (extra.community) ev.community = extra.community
   if (extra.amount !== undefined) ev.amount = extra.amount
   events.push(ev)
-  chaos.used.push({ seat, cardId: e.cardId, effect: e.effect, outcome })
+  chaos.used.push({ seat, cardId: e.cardId, effect: e.effect, outcome, targets: targets.slice() })
   const consume = extra.consume === undefined ? 'applied' : extra.consume
   if (consume === 'applied') addUid(chaos.applied, e.uid)
   else if (consume === 'blocked') addUid(chaos.blocked, e.uid)
@@ -248,7 +248,7 @@ export function emitPeeks(state: HandState, events: GameEvent[]): void {
     if (!e) continue
     const cards = state.deck.slice(state.deckIndex, state.deckIndex + (e.params.count ?? 1))
     chaos.peek.push({ seat: p.seat, cards })
-    chaos.used.push({ seat: p.seat, cardId: e.cardId, effect: e.effect, outcome: 'applied' })
+    chaos.used.push({ seat: p.seat, cardId: e.cardId, effect: e.effect, outcome: 'applied', targets: [] })
     addUid(chaos.applied, e.uid)
     events.push({ type: 'CHAOS_PEEK', seat: p.seat, cards: cards.slice() })
   }

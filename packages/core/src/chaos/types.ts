@@ -64,10 +64,26 @@ export interface HeldCard {
   handsLeft: number | null
 }
 
+/** The most cards a human seat keeps in its bonus hand (BP-39): a fourth bonus card waits as points. */
+export const BONUS_HAND_MAX = 3
+
+/**
+ * A bonus card the player pressed "Dùng" on. `this`: inserted into the running hand's reveal; `next`: fires first in the
+ * next hand's plan. It stays in `armed` through its hand, so no other client learns of it before it fires.
+ */
+export interface ArmedBonus {
+  card: HeldCard
+  hand: 'this' | 'next'
+}
+
 /** A seat's chaos state at one table; all of it is lost when the player leaves the seat (spec §3.4). */
 export interface ChaosSeat {
   /** In the order received: the oldest debuff is the one that fires. */
   cards: HeldCard[]
+  /** The bonus hand (BP-39): cards earned from points, kept private until played; at most `BONUS_HAND_MAX` for a human. */
+  bonus: HeldCard[]
+  /** The bonus card pressed and waiting to fire; one at a time. */
+  armed: ArmedBonus | null
   points: number
   streak: { kind: 'win' | 'loss'; len: number } | null
   frozenNextHand: boolean
@@ -82,6 +98,8 @@ export interface ChaosConfig {
   tierWeights: Readonly<Record<ChaosTier, number>>
   pointsThreshold: number
   draftMs: number
+  /** How long the hand result stays up before the next hand deals, unless every human skips it (BP-39). */
+  resultMs: number
   dailyCapPoints: number
   dailyRescues: number
 }
@@ -90,12 +108,15 @@ export const DEFAULT_CHAOS_CONFIG: ChaosConfig = Object.freeze({
   tierWeights: Object.freeze({ silver: 60, gold: 30, diamond: 10 }),
   pointsThreshold: 10,
   draftMs: 15_000,
+  resultMs: 10_000,
   dailyCapPoints: 100_000,
   dailyRescues: 3,
 })
 
 export const EMPTY_CHAOS_SEAT: ChaosSeat = Object.freeze({
   cards: Object.freeze([]) as unknown as HeldCard[],
+  bonus: Object.freeze([]) as unknown as HeldCard[],
+  armed: null,
   points: 0,
   streak: null,
   frozenNextHand: false,
@@ -145,6 +166,8 @@ export interface ChaosUse {
   cardId: string
   effect: ChaosEffectKind
   outcome: ChaosOutcome
+  /** The seats the card was aimed at (empty when it has no target), so the tooltip can say who it hit. */
+  targets: number[]
 }
 
 /**
