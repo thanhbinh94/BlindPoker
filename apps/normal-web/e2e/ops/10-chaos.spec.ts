@@ -218,8 +218,9 @@ test('F-13: a Poker hỗn loạn table — the badge, a draft of three, icons on
 })
 
 /**
- * The upright phone and the phone on its side, from the draft to the result card. The draft is a bottom sheet (upright) or a
- * compact row (landscape): all of it on screen and out of the tray's way, nothing scrolls, no text over text. `phones` are the
+ * The upright phone and the phone on its side, from the draft to the result card, and on to the next cycle's draft (BP-40). The
+ * draft is a bottom sheet (upright) or a compact row (landscape): all of it on screen and out of the tray's way, nothing scrolls,
+ * no text over text — the second draft, which follows a result, as much as the first. `phones` are the
  * sizes the case is written for (the 375 × 812 / 915 × 412 projects, and since BP-39 the Galaxy S25's): the project's own
  * viewport must be one of them.
  */
@@ -236,26 +237,7 @@ async function draftFitsPhone({ id, who, phones, via }: { id: string; who: Playe
   await start(page)
 
   const opened = await readDraft(page)
-  const panel = draftPanel(page)
-  // The upright phone stacks the table and draws the draft as a sheet; the landscape frame is always the ring, with the row.
-  await expect(panel).toHaveAttribute('data-layout', via === 'sheet' ? 'stack' : 'ring')
-  await expect(panel).toHaveAttribute('data-frame', via === 'sheet' ? 'desktop' : 'landscape')
-  // The panel and its three cards sit whole inside the screen, above the tray (which covers the foot of the stage).
-  const tray = (await page.locator('footer').last().boundingBox())!
-  const parts: [string, Locator][] = [['the panel', panel]]
-  for (let i = 0; i < 3; i++) parts.push([`card ${i + 1} (${opened.names[i]})`, draftCards(page).getByRole('button').nth(i)])
-  for (const [label, part] of parts) {
-    const box = await part.boundingBox()
-    expect(box, `${label} has a box`).not.toBeNull()
-    expect(box!.x, `${label} starts inside the screen`).toBeGreaterThanOrEqual(0)
-    expect(box!.y, `${label} starts inside the screen`).toBeGreaterThanOrEqual(0)
-    expect(box!.x + box!.width, `${label} ends inside the screen`).toBeLessThanOrEqual(screen.width)
-    expect(box!.y + box!.height, `${label} ends inside the screen and above the tray`).toBeLessThanOrEqual(Math.min(screen.height, tray.y > 0 ? tray.y + 1 : screen.height))
-  }
-  await expectNoSidewaysScroll(page)
-  await expectRoomFits(page, `${id}, the chaos draft`, [screen])
-  await expectNoTextOverlapAt(page, `${id}, the chaos draft`)
-  await settled(panel)
+  await expectDraftFits(page, { id, label: 'the chaos draft', names: opened.names, via })
   await shot(page, `chaos-${id}-${test.info().project.name}-draft`)
 
   await pickFirst(page, 'tap')
@@ -277,11 +259,64 @@ async function draftFitsPhone({ id, who, phones, via }: { id: string; who: Playe
   expect(scroll, `${id}: "${who.who.displayName}" is whole on the strip`).toBeLessThanOrEqual(client)
   await expectNoTextOverlapAt(page, `${id}, the chaos result`)
   await shot(page, `chaos-${id}-${test.info().project.name}-result`)
+
+  // BP-40 (bug-log H10): the second draft comes after a result — upright, the strip hid the viewer's seat, and giving it back
+  // dealt the last hand's cards again from the deck, which the draft measured in flight and stopped over the board; on its side
+  // the last hand's fan and lines lift the seat. It must fit as the first did. "Bỏ qua" deals each hand at once.
+  const deadline = Date.now() + 150_000
+  while ((await draftCards(page).count()) === 0 && Date.now() < deadline) {
+    const skip = skipButton(page)
+    if ((await skip.count()) > 0 && (await skip.isEnabled().catch(() => false))) await skip.tap({ timeout: 3_000 }).catch(() => undefined)
+    await keepPlaying(page, 0)
+    await page.waitForTimeout(250)
+  }
+  const again = await readDraft(page)
+  // Measured as it opens — the deal it once measured lasts under half a second — and again once everything has settled.
+  await expectDraftFits(page, { id, label: 'the second chaos draft as it opens', names: again.names, via, settle: false })
+  await expectDraftFits(page, { id, label: 'the second chaos draft', names: again.names, via })
+  await shot(page, `chaos-${id}-${test.info().project.name}-draft2`)
   await leave(page)
 }
 
+/**
+ * The draft panel and its three cards sit whole inside the screen, above the tray (which covers the foot of the stage), and the
+ * panel does not scroll inside: every card is all there to read. The upright phone stacks the table and draws the draft as a
+ * sheet; the landscape frame is always the ring, with the row. `settle` (the default) waits for the panel's motion to end first.
+ */
+async function expectDraftFits(page: Page, { id, label, names, via, settle = true }: { id: string; label: string; names: string[]; via: 'sheet' | 'row'; settle?: boolean }): Promise<void> {
+  const screen = page.viewportSize()!
+  const panel = draftPanel(page)
+  await expect(panel).toHaveAttribute('data-layout', via === 'sheet' ? 'stack' : 'ring')
+  await expect(panel).toHaveAttribute('data-frame', via === 'sheet' ? 'desktop' : 'landscape')
+  if (settle) await settled(panel)
+  const tray = (await page.locator('footer').last().boundingBox())!
+  const parts: [string, Locator][] = [['the panel', panel]]
+  for (let i = 0; i < 3; i++) parts.push([`card ${i + 1} (${names[i]})`, draftCards(page).getByRole('button').nth(i)])
+  for (const [part, locator] of parts) {
+    const box = await locator.boundingBox()
+    expect(box, `${id}, ${label}: ${part} has a box`).not.toBeNull()
+    expect(box!.x, `${id}, ${label}: ${part} starts inside the screen`).toBeGreaterThanOrEqual(0)
+    expect(box!.y, `${id}, ${label}: ${part} starts inside the screen`).toBeGreaterThanOrEqual(0)
+    expect(box!.x + box!.width, `${id}, ${label}: ${part} ends inside the screen`).toBeLessThanOrEqual(screen.width)
+    expect(box!.y + box!.height, `${id}, ${label}: ${part} ends inside the screen and above the tray`).toBeLessThanOrEqual(Math.min(screen.height, tray.y > 0 ? tray.y + 1 : screen.height))
+  }
+  // No scroll inside the panel, and each card inside the panel's own box (a card cut at its foot was half of H10).
+  const inside = await panel.evaluate((el) => {
+    const p = el.getBoundingClientRect()
+    const cards = Array.from(el.querySelectorAll('[aria-label="Ba thẻ để chọn"] button'), (card) => card.getBoundingClientRect())
+    return { scroll: el.scrollHeight - el.clientHeight, cut: cards.filter((c) => c.top < p.top - 0.5 || c.bottom > p.bottom + 0.5).length }
+  })
+  expect(inside.cut, `${id}, ${label}: no card is cut by the panel's edge`).toBe(0)
+  expect(inside.scroll, `${id}, ${label}: the panel does not scroll inside`).toBeLessThanOrEqual(1)
+  if (settle) {
+    await expectNoSidewaysScroll(page)
+    await expectRoomFits(page, `${id}, ${label}`, [screen])
+    await expectNoTextOverlapAt(page, `${id}, ${label}`)
+  }
+}
+
 test('F-13b: @mobile @s25p the chaos draft fits a phone — a sheet of three cards above the tray, then the result card', async ({ browser }) => {
-  test.setTimeout(240_000)
+  test.setTimeout(420_000)
   // A one-letter stem on purpose: the viewer's strip also holds the host badge, a card icon and the bet chip, and a name of more than
   // about eight characters is cut with an ellipsis there (known-limitations); the rule 'the name whole' is for the names the pack uses.
   const phone = await newPlayer(browser, 'K')
@@ -293,7 +328,7 @@ test('F-13b: @mobile @s25p the chaos draft fits a phone — a sheet of three car
 })
 
 test('F-13c: @landscape @s25l the chaos draft fits a phone on its side — the compact row of three cards, then the result card', async ({ browser }) => {
-  test.setTimeout(240_000)
+  test.setTimeout(420_000)
   const phone = await newPlayer(browser, 'Cl')
   try {
     await draftFitsPhone({ id: 'F13c', who: phone, phones: [LANDSCAPE_SCREEN, S25_SIDEWAYS], via: 'row' })

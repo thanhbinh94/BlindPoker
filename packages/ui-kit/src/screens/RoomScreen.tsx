@@ -174,12 +174,15 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
   /** The table's layout, one answer for the table and the tray: an override, else the ring in landscape, else the query. */
   const tableLayout: TableLayout = layout ?? (frame === 'landscape' ? 'ring' : stackMatch ? 'stack' : 'ring')
   const resultStrip = room?.config.blind?.chaosCycle !== undefined && (frame === 'landscape' || tableLayout === 'stack')
-  // The draft always stops above the viewer's seat, however little room that leaves: it scrolls inside, and the hand fan stays clear.
+  // The draft stops above the viewer's seat and the hand fan when the whole panel fits there; where it would have to scroll, it
+  // steps down to above the plate, then to the whole stage (BP-40: from the second draft on, the last hand's fan and lines lift
+  // the seat — and upright, its cards are dealt again from the deck as the seat comes back from under the result strip).
+  const draftRef = useRef<HTMLDivElement>(null)
   const clearance = useSeatClearance(
     stageRef,
     (resultCard !== null && !resultStrip) || draft !== null,
     me?.seat ?? null,
-    draft !== null ? { minRoom: 0, aboveHand: true } : undefined,
+    draft !== null ? { minRoom: 0, aboveHand: true, fit: draftRef } : undefined,
   )
   const fullscreen = useFullscreenActive()
   // The landscape frame's tier (BP-28): the stage itself is measured, so a phone that keeps its browser bars — or any
@@ -517,7 +520,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
         {draft === null ? null : (
           // The draft lies over the felt the way the result card does, stopped above the viewer's seat: a centred panel, a sheet
           // at the foot of the stage on a phone held upright, a compact row on one held sideways.
-          <div className={s.overlay} data-surface="night" data-frame={frame} data-kind="draft" data-layout={stack ? 'stack' : undefined} style={overlayStyle}>
+          <div ref={draftRef} className={s.overlay} data-surface="night" data-frame={frame} data-kind="draft" data-layout={stack ? 'stack' : undefined} style={overlayStyle}>
             <ChaosDraft key={draft.deadlineAt} draft={draft} serverNow={client.serverNow} onPick={client.pickChaos} layout={stack ? 'stack' : 'ring'} frame={frame} short={short} />
           </div>
         )}

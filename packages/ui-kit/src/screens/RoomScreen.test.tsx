@@ -1735,6 +1735,64 @@ describe('RoomScreen on a Poker hỗn loạn table', () => {
     expect(clearanceFor(stage, seatBox, null, 0), 'the draft takes what there is').toBe(188)
   })
 
+  // BP-40 (bug-log H10): upright, the result strip hides the viewer's seat with `display: none`; the draft that follows it gives
+  // the seat back, which deals the last hand's cards again from the deck — and the draft measured them in flight, near the
+  // board, and stopped there for the whole draft, two of its three cards behind a scroll. jsdom lays nothing out: the boxes
+  // and the deal's running animation are pinned here.
+  it('stops a draft that follows the result strip where a draft over a resting fan stops, though the fan is being dealt again (BP-40)', () => {
+    const box = (top: number, bottom: number): DOMRect =>
+      ({ top, bottom, left: 0, right: 400, x: 0, y: top, width: 400, height: bottom - top, toJSON: () => ({}) }) as DOMRect
+    let flying = false
+    const inFan = (el: Element): boolean => el.parentElement?.hasAttribute('data-hand') === true
+    // On `HTMLElement`: the short tier's cases above restore their own spy there, which leaves `Element`'s a step too far up.
+    const spy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.tagName === 'MAIN') return box(100, 700)
+      if (this.getAttribute('data-me') === 'true') return box(560, 700)
+      if (this.hasAttribute('data-plate')) return box(640, 700)
+      if (this.hasAttribute('data-hand')) return box(552, 640)
+      // a card of the fan: at rest its tilted corner stands 3 px over the fan's box; in flight it is up by the deck
+      if (inFan(this)) return flying ? box(300, 330) : box(549, 640)
+      return box(0, 0)
+    })
+    Object.defineProperty(Element.prototype, 'getAnimations', {
+      configurable: true,
+      value(this: Element) {
+        return flying && inFan(this) ? [{ playState: 'running' }] : []
+      },
+    })
+    const mine = makeSeat({ seat: 2, playerId: 'me', displayName: 'Mai', stack: 20_400, holeCards: parseCards('Ah Kd 7c'), cardCount: 3 })
+    const hand = { ...finished, seats: [makeSeat({ seat: 0, playerId: 'a', displayName: 'Ann', stack: 19_800 }), mine] }
+    const upright = (state: ClientState) => (
+      <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+        <RoomScreen client={fakeClient(state)} lang="vi" onLeft={vi.fn()} layout="stack" />
+      </I18nextProvider>
+    )
+    const clearanceNow = (): string => (document.querySelector('[data-kind="draft"]') as HTMLElement).style.getPropertyValue('--seat-clearance')
+    try {
+      // the draft over a fan at rest: above its highest card, 700 − 549 + 8
+      const resting = render(upright(stateWith({ draft: drafting }, hand)))
+      expect(document.querySelector('[data-me="true"] [data-hand]'), 'the viewer’s fan is on the seat').not.toBeNull()
+      expect(clearanceNow()).toBe('159px')
+      resting.unmount()
+
+      // the result strip, then the draft: the seat comes back and its cards are dealt again from the deck
+      const view = render(upright(makeState({ ...stateWith({}, hand), resultSkips: { skipped: 0, total: 1, mine: false } })))
+      expect(document.querySelector('[data-result-strip="open"]')).not.toBeNull()
+      flying = true
+      view.rerender(upright(stateWith({ draft: drafting }, hand)))
+      // not 700 − 300 + 8 (the card by the deck): the fan's own box stands for the cards in flight
+      expect(clearanceNow()).toBe('156px')
+      flying = false
+      act(() => {
+        document.querySelector('[data-me="true"] [data-hand] > *')!.dispatchEvent(new Event('animationend', { bubbles: true }))
+      })
+      expect(clearanceNow(), 'landed, the cards are measured where a resting fan’s are').toBe('159px')
+    } finally {
+      spy.mockRestore()
+      delete (Element.prototype as { getAnimations?: unknown }).getAnimations
+    }
+  })
+
   describe('the result strip and "Bỏ qua" (BP-39, spec 2026-10-27 §3.2–3.3)', () => {
     const skips = { skipped: 1, total: 3, mine: false }
     const drawAt = (state: ClientState, where: { layout?: 'stack'; frame?: 'landscape' } = {}, client = fakeClient(state)) => {
