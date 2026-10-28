@@ -58,8 +58,12 @@ const INDEX = join(DIST, 'index.html')
  * (toasts, the result strip and "Bỏ qua", the bonus hand and its popup, the client's bonus and skip state) took the entry to
  * 160.5 KB gzip at the branch's last task (164,307 bytes) and the final fix wave to 160.9 KB (164,808 bytes). The split of the
  * locale namespaces per lazy screen is still the recorded way to win it back.
+ * 2026-10-29 (BP-41, fix-wave Ruling 27, for the lead to accept at the gate): raised from 170 KB to 180 KB. Chaos round three —
+ * the 39 new cards' names and descriptions in vi and en, the herald, the dice, the seat marks and the client's table, heralds and
+ * rolls — took the entry to 170.9 KB gzip at the branch's last task and the final fix wave to 171.5 KB (175,662 bytes). The split
+ * of the locale namespaces per lazy screen (the card texts are read only at a chaos table) is still the way to win it back.
  */
-const MAX_ENTRY_GZIP = 170 * 1024
+const MAX_ENTRY_GZIP = 180 * 1024
 const MAX_TOTAL_GZIP = 900 * 1024
 const MAX_CSS_GZIP = 60 * 1024
 

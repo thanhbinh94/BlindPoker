@@ -761,7 +761,7 @@ one process lifetime, as for every keyed write. Conservation (a credit leaves `�
 `balances.apply([], { refId, fee, kind: 'chaos_dice' })` under the key `chaos_dice:<room>:<hand>:<seat>:<uid>` (one `chaos_dice` ledger
 row on no player, the sum the stack lost), retried once and logged if it fails twice (`docs/server-kit.md`, "Dice and steals"). It is
 in `gm-service`'s `SINK_REASONS` beside `table_fee`, `carry_over` and `shop`, so the money view counts it (`ledger.reason.chaos_dice`,
-"Xúc xắc hỗn loạn", names it). Transfers between players (duels, Thuế thắng, Ép chia thưởng, Bom nổ chậm, the Thần's duel) and Mạo hiểm gia's
+"Thẻ xúc xắc", names it, like "Thẻ nổ hũ" for the jackpot — Ruling 23). Transfers between players (duels, Thuế thắng, Ép chia thưởng, Bom nổ chậm, the Thần's duel) and Mạo hiểm gia's
 dead money stay inside the hand's stacks and write nothing of their own.
 
 **Hands, statistics, reputation (spec §9).** `stats/chaos-hand.ts` `isChaosHand(summary)`: `patchForHand` still counts `gamesCompleted`,

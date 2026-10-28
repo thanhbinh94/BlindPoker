@@ -945,6 +945,9 @@ async function godReigns({ id, who, phone }: { id: string; who: Player; phone: b
   const note = page.locator('[data-no-fold]')
   await expect(note, 'the decision comes, without "Bỏ bài"').toBeVisible({ timeout: 60_000 })
   await expect(note).toHaveText('Không được bỏ bài ván này')
+  // Two lines at most, at every size (Ruling 26: three cramped lines at 780 × 360 before).
+  const noteLines = await note.evaluate((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)))
+  expect(noteLines, `${id}: the note's lines`).toBeLessThanOrEqual(2)
   await expect(page.locator('button:not([aria-pressed])').filter({ hasText: /^Bỏ bài$/ }), 'no "Bỏ bài" to press').toHaveCount(0)
   const play = page.locator('[data-no-fold] + button')
   await expect(play, '"Chơi" stands beside the note').toBeEnabled()

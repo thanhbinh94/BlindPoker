@@ -41,7 +41,7 @@ describe('LedgerPanel', () => {
     expect(screen.getByText('Thẻ thần tài')).toBeInTheDocument()
     expect(screen.getByText('Thẻ hỗn loạn lên bàn')).toBeInTheDocument()
     expect(screen.getByText('Thẻ nổ hũ')).toBeInTheDocument()
-    expect(screen.getByText('Xúc xắc hỗn loạn')).toBeInTheDocument()
+    expect(screen.getByText('Thẻ xúc xắc')).toBeInTheDocument()
     expect(screen.queryByText(viNormal.ledger.reason.other)).toBeNull()
   })
 

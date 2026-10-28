@@ -1,4 +1,5 @@
 import { Badge, Button, Panel, formatPoints, type Language } from '@bp/ui-kit'
+import { Fragment } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import type { AchievementProgressDto, NormalApi } from '../api.js'
@@ -9,20 +10,27 @@ import { useAsync } from './useAsync.js'
 
 /** The earned row's tick, a named value rather than a literal in the markup (`react/jsx-no-literals`). */
 const CHECK_GLYPH = '✓'
+/** Between a reward's points and its item. */
+const REWARD_SEP = ' · '
 
 /** `apps/normal-server/data/achievements.json` — the five buckets, in the order the screen reads best. */
 export const CATEGORY_ORDER = ['login', 'holdem', 'blind', 'social', 'chaos']
 
 /** A reward is points, an item, or both (reputation, which an achievement may also name, is its own badge). Anything with neither is a definition bug, and prints nothing. */
 export function rewardText(row: AchievementProgressDto, lang: Language, t: TFunction): string {
+  return rewardParts(row, lang, t).join(REWARD_SEP)
+}
+
+/** The reward's parts, points then item: the badge keeps each whole, so a line breaks between them, never inside a name. */
+export function rewardParts(row: AchievementProgressDto, lang: Language, t: TFunction): string[] {
   const parts: string[] = []
   if (row.reward.points !== undefined) parts.push(`${formatPoints(row.reward.points, lang)} ${t('common:units.pointsShort')}`)
   if (row.reward.itemId !== undefined) parts.push(itemName(row.reward.itemId, t))
-  return parts.join(' · ')
+  return parts
 }
 
 /**
- * A category order that a server-side addition cannot fall out of: the four known buckets first, in order,
+ * A category order that a server-side addition cannot fall out of: the five known buckets first, in order,
  * then anything else in the order it arrived.
  */
 export function categoriesOf(rows: AchievementProgressDto[]): string[] {
@@ -99,6 +107,7 @@ export function AchievementsScreen({ api, lang }: AchievementsScreenProps) {
                 // degenerate case reads as "there was nothing to do" rather than as a broken bar.
                 const filled = row.threshold === 0 ? 100 : (done / row.threshold) * 100
                 const reward = rewardText(row, lang, t)
+                const parts = rewardParts(row, lang, t)
                 // Grouped like every other number on screen — "0 trên 100.000", not "0 trên 100000" (layout
                 // audit L7); `formatPoints` is the kit's integer formatter, points or not.
                 const counter = t('achievements.ui.progress', {
@@ -146,7 +155,12 @@ export function AchievementsScreen({ api, lang }: AchievementsScreenProps) {
                       {reward === '' ? null : (
                         <Badge tone={unlocked ? 'gold' : 'muted'} className={s.achBadge}>
                           <span className="visually-hidden">{t('achievements.ui.reward')}</span>
-                          {reward}
+                          {parts.map((part, i) => (
+                            <Fragment key={part}>
+                              {i === 0 ? null : REWARD_SEP}
+                              <span className={s.achPart}>{part}</span>
+                            </Fragment>
+                          ))}
                         </Badge>
                       )}
                       {row.reputation === undefined ? null : (

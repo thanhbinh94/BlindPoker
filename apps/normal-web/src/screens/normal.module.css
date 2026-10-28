@@ -1147,6 +1147,11 @@
   white-space: normal;
 }
 
+/* …between its parts only: "300.000 điểm" and "Hóa Thần" each stay whole (BP-41 Task 10 review). */
+.achPart {
+  white-space: nowrap;
+}
+
 @media (max-width: 640px) {
   .achievement {
     grid-template-columns: minmax(0, 1fr) auto;

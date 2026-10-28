@@ -5,6 +5,7 @@ import { ApiError, type AchievementProgressDto, type NormalApi } from '../api.js
 import viNormal from '../locales/vi/normal.json'
 import { makeI18n, renderWithI18n } from '../test-i18n.js'
 import { AchievementsScreen } from './AchievementsScreen.js'
+import s from './normal.module.css'
 
 const ROWS: AchievementProgressDto[] = [
   {
@@ -122,17 +123,22 @@ describe('AchievementsScreen', () => {
 
   it('files the chaos titles under their own heading, last, with the reputation they pay beside points and title', async () => {
     renderScreen()
-    await screen.findByText(viNormal.achievements.chaos_godslayer.name)
+    // The title the achievement pays shares its name: the row is the first match.
+    await screen.findAllByText(viNormal.achievements.chaos_godslayer.name)
 
     const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)
     expect(headings.at(-1)).toBe(viNormal.achievements.ui.category.chaos)
 
-    const row = screen.getByText(viNormal.achievements.chaos_godslayer.name).closest('li')!
+    const row = screen.getAllByText(viNormal.achievements.chaos_godslayer.name)[0]!.closest('li')!
     expect(within(row).getByText(viNormal.achievements.chaos_godslayer.desc)).toBeInTheDocument()
-    expect(within(row).getByText(`500.000 điểm · ${viNormal.items.title_godslayer}`)).toBeInTheDocument()
+    // Points and title, each kept whole: a line may break between them, never inside the title.
+    const points = within(row).getByText('500.000 điểm')
+    const title = within(points.parentElement!).getByText(viNormal.items.title_godslayer)
+    for (const part of [points, title]) expect(part).toHaveClass(s.achPart!)
+    expect(points.parentElement).toHaveTextContent(`500.000 điểm · ${viNormal.items.title_godslayer}`)
     expect(within(row).getByText('500 danh vọng')).toBeInTheDocument()
     expect(screen.getByText(viNormal.achievements.ui.progress.replace('{{progress}}', '1').replace('{{threshold}}', '2'))).toBeInTheDocument()
-    const demigod = screen.getByText(viNormal.achievements.chaos_demigod.name).closest('li')!
+    const demigod = screen.getAllByText(viNormal.achievements.chaos_demigod.name)[0]!.closest('li')!
     expect(demigod).toHaveAttribute('data-unlocked', 'true')
     expect(demigod).toHaveTextContent('150 danh vọng')
   })
@@ -210,7 +216,9 @@ describe('AchievementsScreen', () => {
     const points = `5.000 ${i18n.t('common:units.pointsShort')}`
     expect(screen.getByText(points)).toBeInTheDocument()
     expect(screen.getByText(viNormal.items.head_crown_gold01)).toBeInTheDocument()
-    expect(screen.getByText(`3.000 ${i18n.t('common:units.pointsShort')} · ${viNormal.items.badge_bronze}`)).toBeInTheDocument()
+    // Both: one badge, the two parts each kept whole.
+    const both = screen.getByText(viNormal.items.badge_bronze).parentElement!
+    expect(both).toHaveTextContent(`3.000 ${i18n.t('common:units.pointsShort')} · ${viNormal.items.badge_bronze}`)
 
     const done = screen.getByText(viNormal.achievements.login_days_7.name).closest('li')
     expect(done).not.toBeNull()

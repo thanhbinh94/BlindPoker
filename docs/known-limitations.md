@@ -928,7 +928,8 @@ strings took the entry chunk to about 136 KB gzip of a 140 KB budget (under 4 KB
 (Ruling 13). BP-31's bet panel and phone tray took it to 140.3 KB, and the budget rose again to 150 KB (the SRS's own
 limit in §24 is 500 KB). Plan 37's chaos table (the 47 cards' vi and en texts, the draft, the banner, the icons and the GM tab)
 took it to 152.0 KB, and the budget rose to 160 KB (a Task 8 ruling, accepted in the final review). BP-39 (toasts, the result strip, "Bỏ qua", the bonus hand) took it to 160.9 KB, and the budget rose to 170 KB
-(fix-wave Ruling FW-8).
+(fix-wave Ruling FW-8). BP-41 (the 39 new cards' texts, the herald, the dice, the seat marks) took it to 171.5 KB, and the budget rose
+to 180 KB (fix-wave Ruling 27).
 *Why it stays:* splitting namespaces per lazy screen is a change to the i18n bootstrap for about 10 KB.
 *Tracked:* `apps/normal-web/test/footprint.test.ts`.
 
