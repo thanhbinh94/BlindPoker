@@ -321,7 +321,8 @@
       "useOn": "{{name}} plays {{card}} → {{targets}}",
       "more_one": "+{{count}} more card",
       "more_other": "+{{count}} more cards",
-      "all": "Cards played this hand"
+      "all": "Cards played this hand",
+      "godslain": "{{slayer}} dethroned {{god}}"
     },
     "result": {
       "skip": "Skip",
@@ -392,8 +393,10 @@
     },
     "detail": {
       "transfer": "{{from}} → {{to}}: {{amount}}",
-      "wagers_one": "{{count}} wager due",
-      "wagers_other": "{{count}} wagers due",
+      "wagers_one": "{{name}} pays {{count}} wager",
+      "wagers_other": "{{name}} pays {{count}} wagers",
+      "wagersDue_one": "{{count}} wager due",
+      "wagersDue_other": "{{count}} wagers due",
       "stake": "Stake ×{{stake}}",
       "dice": "Dice: {{dice}}",
       "holeUp_one": "+{{count}} card",
@@ -649,7 +652,7 @@
       },
       "s_neighbour_swap": {
         "name": "Neighbour Swap",
-        "desc": "At the reveal, 1 random hole card of yours is swapped with one of the player on your left, if still in the hand."
+        "desc": "At the reveal, 1 random hole card of yours is swapped with 1 random card of the player on your left still in the hand."
       },
       "s_spoiler": {
         "name": "Spoiler",
@@ -669,7 +672,7 @@
       },
       "g_flip_flop": {
         "name": "Flip-Flop",
-        "desc": "Alternates 1 extra hole card and 1 fewer, starting with the extra; in a short hand nobody can take your cards, for 4 hands."
+        "desc": "For 4 hands: 1 extra hole card, then 1 fewer, and so on, starting with the extra; in a hand with one fewer, nobody can take your cards."
       },
       "g_big_table": {
         "name": "High Stakes",

@@ -1,5 +1,5 @@
 import type {
-  Card, ChaosBonusPayload, ChaosCreditReason, ChaosCritMultiplier, ChaosDiceResult, ChaosEffectKind, ChaosOutcome, ChaosReignKind, ChaosTableView, ChaosTier,
+  Card, ChaosBonusPayload, ChaosCreditReason, ChaosCritMultiplier, ChaosDiceResult, ChaosEffectKind, ChaosGodCurse, ChaosOutcome, ChaosReignKind, ChaosTableView, ChaosTier,
   ChaosTransfer, Decision, ErrorCode, GameMode, HeldCardView, LegalActions, PlayerAction, RoomSummary, RoomView, ServerMessage, ShowdownHand,
 } from '@bp/core'
 import type { PreActionKind } from './preaction.js'
@@ -118,6 +118,8 @@ export interface AppliedChaosView {
   reign?: ChaosReignKind
   /** BP-41 §5: what this seat's Xúc xắc vận may gave (the roll itself is `dice`). */
   roll?: ChaosDiceResult
+  /** BP-41: the Thần's curse a curse line told (`carp` with no `reign`), taken when it came. */
+  curse?: ChaosGodCurse
   /** The client clock at the roll's arrival (`roll` lines only): the toast keeps the faces back until the dice land (Ruling 22). */
   rolledAt?: number
   /** BP-41 Trộm điểm: the chaos points it moved (`from`/`to` null and `amount` 0 when blocked or fizzled). */

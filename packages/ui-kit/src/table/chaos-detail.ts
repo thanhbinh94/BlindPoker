@@ -57,7 +57,10 @@ export function chaosDetail(
   if (item.transfers !== undefined && item.transfers.length > 0) {
     for (const x of item.transfers) parts.push(t('chaos.detail.transfer', { from: nameOf(x.from), to: nameOf(x.to), amount: formatPoints(x.amount, lang) }))
   } else if (item.wagers !== undefined && item.wagers > 0) {
-    parts.push(t('chaos.detail.wagers', { count: item.wagers }))
+    // Who pays (fix wave 30): a duel's loser — its target, or its user when a mirror or Gậy ông turned it round. The Thần's
+    // curse names every seat it reached, each paying or paid by its own result: the wagers are said as due.
+    const payer = item.effect === 'duel' && item.targets.length === 1 ? (item.outcome === 'reflected' ? item.seat : item.targets[0]!) : null
+    parts.push(payer === null ? t('chaos.detail.wagersDue', { count: item.wagers }) : t('chaos.detail.wagers', { name: nameOf(payer), count: item.wagers }))
   }
   if (item.stake !== undefined && item.stake > 1) parts.push(t('chaos.detail.stake', { stake: item.stake }))
   if (item.dice !== undefined && item.dice.length > 0) parts.push(t('chaos.detail.dice', { dice: diceText(item.dice) }))
@@ -67,9 +70,11 @@ export function chaosDetail(
   }
   if (item.wild !== undefined) parts.push(t('chaos.detail.wild', { card: cardLabel(item.wild, t) }))
   if (item.off !== undefined) parts.push(t('chaos.detail.off', { card: t(`chaos.cards.${item.off}.name`, { defaultValue: item.off }) }))
-  // The Thần's curse is told as Cá chép with no reign: which curse it is, from the table's state.
-  if (item.effect === 'carp' && (item.transfers === undefined || item.transfers.length === 0) && curse !== null) {
-    parts.push(t('chaos.reign.curse', { curse: t(`chaos.reign.curses.${curse}`) }))
+  // The Thần's curse is told as Cá chép with no reign: which curse it is — the one the line took when it came (Task 9 M4),
+  // else the table's now.
+  const told = item.curse ?? curse
+  if (item.effect === 'carp' && (item.transfers === undefined || item.transfers.length === 0) && told !== null) {
+    parts.push(t('chaos.reign.curse', { curse: t(`chaos.reign.curses.${told}`) }))
   }
   return parts.length === 0 ? null : parts.join(' · ')
 }

@@ -318,7 +318,10 @@ function applyHandEvent(state: ClientState, hand: ClientHand, event: GameEvent &
     // Poker hỗn loạn: the table reads the cards that acted from `state.chaos`. A card that re-deals the board
     // (redealBoard, the storm) carries the new board: it lands like a street, so the cards come out of the deck again.
     case 'CHAOS_APPLIED': {
-      const { type: _type, privateTo: _private, ...applied } = event
+      const { type: _type, privateTo: _private, ...told } = event
+      // BP-41: the Thần's curse line (Cá chép with no reign) keeps the curse it told, whatever the table holds later (Task 9 M4).
+      const curse = event.effect === 'carp' && event.reign === undefined ? (state.chaos.table?.god?.curse ?? null) : null
+      const applied: AppliedChaosView = curse === null ? told : { ...told, curse }
       const reverse = state.chaos.reverse || (event.effect === 'reverseRank' && event.outcome === 'applied')
       // BP-41 Lá ma: the wild card reaches its owner alone (`filterEvent`); it stays wild while the owner holds it.
       const wild = event.wild !== undefined && event.seat === hand.mySeat && event.outcome === 'applied' ? event.wild : state.chaos.wild
@@ -479,7 +482,17 @@ function applyChaosRoomEvent(chaos: ClientChaos, event: RoomEvent, ctx: ChaosRoo
     }
     case 'CHAOS_CREDIT': {
       const { type: _type, stack: _stack, ...credit } = event
-      return { ...chaos, credits: [...chaos.credits, credit] }
+      // BP-41: a 6-6-6 jackpot cut by the daily cap — the seat's dice herald (it comes just before, and shows only once the
+      // dice land) says what was paid, or no amount at all when the cap left nothing (Task 9 M3).
+      const lastDice = event.reason === 'chaos_jackpot' && event.capped
+        ? chaos.heralds.reduce((last, h, i) => (h.kind === 'dice' && h.seat === event.seat ? i : last), -1)
+        : -1
+      const heralds = lastDice < 0 ? chaos.heralds : chaos.heralds.map((h, i) => {
+        if (i !== lastDice) return h
+        const { amount: _was, ...rest } = h
+        return event.amount > 0 ? { ...rest, amount: event.amount } : rest
+      })
+      return { ...chaos, credits: [...chaos.credits, credit], heralds }
     }
     case 'CHAOS_AWARDED':
       return { ...chaos, awarded: [...chaos.awarded, { seat: event.seat, cardIds: event.cardIds }] }

@@ -241,6 +241,7 @@ export function ChaosToasts({ applied, handId, restored, nameOf, layout, reverse
   /** The line as plain words, for the "+N" list. */
   const lineOf = (item: AppliedChaosView): string => {
     const name = nameOf(item.seat)
+    if (item.reign === 'godslain') return t('chaos.toast.godslain', { slayer: item.targets.map(nameOf).join(', '), god: name })
     const card = cardName(item.cardId)
     const aimed = targetsOf(item)
     const text =
@@ -258,6 +259,27 @@ export function ChaosToasts({ applied, handId, restored, nameOf, layout, reverse
     if (item === undefined) return []
     const name = nameOf(item.seat)
     const targets = targetsOf(item).map(nameOf)
+    // The fall of a Thần is its own line, "Bình hạ Thần Bài Lan" (the event's seat is the Thần, its targets who beat it), not
+    // a card played on someone (BP-41 fix wave 28).
+    if (item.reign === 'godslain') {
+      return [
+        <div
+          key={`t${toast.index}`}
+          className={cx(s.chaosToast, !reduce && s.chaosToastIn)}
+          data-chaos-toast=""
+          data-tier={tierOfCardId(item.cardId)}
+          data-outcome={item.outcome}
+          data-reign="godslain"
+          data-pinned={toast.pinned ? 'true' : undefined}
+          onClick={(event) => togglePin(toast.index, event)}
+        >
+          {fill(t('chaos.toast.godslain', { slayer: '{{slayer}}', god: '{{god}}' }), {
+            slayer: <strong className={s.chaosToastName}>{targets.join(', ')}</strong>,
+            god: <strong className={s.chaosToastName}>{name}</strong>,
+          })}
+        </div>,
+      ]
+    }
     const template =
       targets.length === 0
         ? t('chaos.toast.use', { name: '{{name}}', card: '{{card}}' })

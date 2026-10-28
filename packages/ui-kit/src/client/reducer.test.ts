@@ -962,6 +962,12 @@ describe('Poker hỗn loạn', () => {
       s = at(s, 14, { type: 'CHAOS_DICE', seat: 2, cardId: 'd_dice', dice: [6, 6, 6], result: jackpot, stack: 20_000 }, 800)
       expect(s.chaos.rolls.map((r) => r.id)).toEqual([1, 2])
       expect(s.chaos.heralds).toEqual([{ id: 3, kind: 'dice', seat: 2, name: 'P2', dice: [6, 6, 6], amount: 60_000, at: 800 }])
+      // The daily cap cut the jackpot: the herald says what was paid (Task 9 M3)…
+      const capped = room(s, 15, { type: 'CHAOS_CREDIT', seat: 2, amount: 25_000, stack: 45_000, reason: 'chaos_jackpot', capped: true })
+      expect(capped.chaos.heralds).toEqual([{ id: 3, kind: 'dice', seat: 2, name: 'P2', dice: [6, 6, 6], amount: 25_000, at: 800 }])
+      // …no amount when it left nothing, and an uncapped credit leaves the herald as it is.
+      expect(room(s, 15, { type: 'CHAOS_CREDIT', seat: 2, amount: 0, stack: 20_000, reason: 'chaos_jackpot', capped: true }).chaos.heralds[0]).not.toHaveProperty('amount')
+      expect(room(s, 15, { type: 'CHAOS_CREDIT', seat: 2, amount: 60_000, stack: 80_000, reason: 'chaos_jackpot', capped: false }).chaos.heralds).toEqual(s.chaos.heralds)
     })
 
     it('a Trộm điểm received is a line in the toasts with the points it moved', () => {
@@ -988,6 +994,18 @@ describe('Poker hỗn loạn', () => {
       s = game(s, 14, { type: 'CHAOS_APPLIED', seat: 2, cardId: 'd_carp', effect: 'carp', targets: [1], outcome: 'applied', amount: 1000, transfers: [{ from: 1, to: 2, amount: 1000 }] })
       expect(s.chaos.applied).toHaveLength(1)
       expect(s.chaos.applied[0]!.transfers).toEqual([{ from: 0, to: 1, amount: 1000 }, { from: 1, to: 2, amount: 1000 }])
+    })
+
+    it('the curse line keeps the curse the table had when it came, whatever the table holds later (Task 9 M4)', () => {
+      let s = room(inChaosRoom(), 11, { type: 'CHAOS_TABLE', table: { god: { seat: 1, handsLeft: 5, curse: 2 }, demigods: [], bombs: [] } })
+      s = game(s, 12, started)
+      s = game(s, 13, { type: 'CHAOS_APPLIED', seat: 1, cardId: 'd_carp', effect: 'carp', targets: [0, 2], outcome: 'applied' })
+      expect(s.chaos.applied.at(-1)).toMatchObject({ effect: 'carp', curse: 2 })
+      s = room(s, 14, { type: 'CHAOS_TABLE', table: { god: null, demigods: [], bombs: [] } })
+      expect(s.chaos.applied.at(-1)).toMatchObject({ curse: 2 })
+      // A reign line carries none.
+      s = game(s, 15, { type: 'CHAOS_APPLIED', seat: 1, cardId: 'd_carp', effect: 'carp', targets: [], outcome: 'applied', reign: 'demigod' })
+      expect(s.chaos.applied.at(-1)).not.toHaveProperty('curse')
     })
 
     it('"Thẻ đã dùng" says a card that hit several seats in several entries (Cướp đoạt) once, with every target', () => {

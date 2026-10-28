@@ -328,8 +328,13 @@ describe('ChaosToasts, BP-41 lines', () => {
     expect(line(applied(0, 'g_duel', { effect: 'duel', targets: [2], wagers: 2, transfers: [{ from: 2, to: 0, amount: 2000 }] }))).toBe('Ann dùng Thách đấu vàng → Chi · Chi → Ann: 2.000')
   })
 
-  it('a duel not yet paid says the wagers due', () => {
-    expect(line(applied(0, 's_duel', { effect: 'duel', targets: [1], wagers: 2 }))).toContain('Phải trả 2 mức cược')
+  it('a duel not yet paid says who pays the wagers due: the target, or the user when it was turned round (fix wave 30)', () => {
+    expect(line(applied(0, 's_duel', { effect: 'duel', targets: [1], wagers: 2 }))).toContain('Bảo trả 2 mức cược')
+    document.body.innerHTML = ''
+    expect(line(applied(0, 's_duel', { effect: 'duel', targets: [1], wagers: 2, outcome: 'reflected' }))).toContain('Ann trả 2 mức cược')
+    document.body.innerHTML = ''
+    // The Thần's curse reaches several seats: the wagers are said as due.
+    expect(line(applied(2, 'd_carp', { effect: 'carp', targets: [0, 1], wagers: 1 }))).toContain('Phải trả 1 mức cược')
   })
 
   it('says a bomb going off with its payment', () => {
@@ -347,6 +352,9 @@ describe('ChaosToasts, BP-41 lines', () => {
     document.body.innerHTML = ''
     // The curse falls on the whole table: the line does not list it.
     expect(line(applied(2, 'd_carp', { effect: 'carp', targets: [0, 1] }), 3)).toBe('Chi dùng Cá chép hóa rồng · Lời nguyền của Thần: Thần tráo bài')
+    document.body.innerHTML = ''
+    // The curse the line took when it came wins over the table's now (Task 9 M4).
+    expect(line(applied(2, 'd_carp', { effect: 'carp', targets: [0, 1], curse: 1 }), 3)).toBe('Chi dùng Cá chép hóa rồng · Lời nguyền của Thần: Thần rút bài')
   })
 
   it('says a dice roll and a Trộm điểm, which the room tells outside the hand', () => {
@@ -363,6 +371,12 @@ describe('ChaosToasts, BP-41 lines', () => {
     expect(texts()[0]).not.toContain('6-6-6')
     advance(120)
     expect(texts()[0]).toBe('Bảo dùng Xúc xắc vận may kim cương · Xúc xắc: 6-6-6 · Bộ ba! · Nổ hũ 60.000')
+  })
+
+  it('the fall of a Thần is a line of its own: who beat it, then the Thần; several slayers joined (fix wave 28)', () => {
+    expect(line(applied(0, 'd_carp', { effect: 'carp', targets: [1], reign: 'godslain' }))).toBe('Bảo hạ Thần Bài Ann')
+    document.body.innerHTML = ''
+    expect(line(applied(0, 'd_carp', { effect: 'carp', targets: [1, 3], reign: 'godslain' }))).toBe('Bảo, Dũng hạ Thần Bài Ann')
   })
 
   it('a plain card says nothing more', () => {

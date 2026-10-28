@@ -32,7 +32,9 @@ describe('the playground’s chaos table', () => {
   })
 
   it('takes my pick, hands every seat a card, and deals the hand', async () => {
-    const mock = open()
+    // Seeded (BP-41 fix wave 39): with the 86 cards a random draft can hand a seat a Trộm điểm, which is never held and may
+    // find no point to take, so an unseeded run failed now and then.
+    const mock = open(41)
     await flush(0)
     const offer = mock.api.state.chaos.draft!.offer!
     expect((await mock.api.pickChaos(offer.offerId, offer.cardIds[1]!)).t).toBe('ACK')
@@ -41,7 +43,7 @@ describe('the playground’s chaos table', () => {
     const state = mock.api.state
     expect(state.chaos.draft).toBeNull()
     expect(Object.keys(state.chaos.seats)).toHaveLength(4)
-    // A "Tích lũy" (chaosPoints) is a card that holds nothing: it adds its points. The draw is `Math.random`, so either may come.
+    // A "Tích lũy" (chaosPoints) is a card that holds nothing: it adds its points.
     expect(Object.values(state.chaos.seats).every((s) => s.cards.length >= 1 || s.points > 0)).toBe(true)
     expect(state.hand).not.toBeNull()
   })
@@ -55,11 +57,11 @@ describe('the playground’s chaos table', () => {
   })
 
   it('picks for me when the 15 s run out', async () => {
-    const mock = open()
+    const mock = open(41)
     await flush(0)
     await flush(15_100)
     expect(mock.api.state.chaos.draft).toBeNull()
-    // a "Tích lũy" card holds nothing and adds points instead; the draw is Math.random
+    // a "Tích lũy" card holds nothing and adds points instead
     const mine = mock.api.state.chaos.seats[0]!
     expect(mine.cards.length >= 1 || mine.points > 0).toBe(true)
   })

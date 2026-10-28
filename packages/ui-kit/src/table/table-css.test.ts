@@ -102,3 +102,22 @@ describe('desktop table CSS (BP-31 P7, P10)', () => {
     )
   })
 })
+
+describe('the no-fold note in the corner of a phone on its side (BP-41 Ruling 26, ops F-14b at 780 × 360)', () => {
+  it('takes a width of its own there — two lines beside "Chơi" — instead of a third of a row as wide as itself', () => {
+    const rule = ruleIn(TABLE_CSS, '.trayRight .noFoldNote')
+    expect(rule).toMatch(/flex:\s*0 1 8\.5rem/)
+    expect(rule).toMatch(/max-width:\s*8\.5rem/)
+    // The base rule keeps its cap for the stack and the ring, where the row spans the tray.
+    expect(TABLE_CSS).toMatch(/\n\.noFoldNote \{[^}]*max-width:\s*min\(11rem,\s*34%\)/)
+  })
+})
+
+describe('a hand of four cards or more (BP-41 Task 9 M5)', () => {
+  it('overlaps card after card only, so nothing else in the row is pulled under a card', () => {
+    for (const n of ['4', '5', '6']) {
+      expect(ruleIn(TABLE_CSS, `.seatCards[data-count='${n}'] > .card + .card`), n).toMatch(/margin-left:\s*calc\(var\(--card-w, 46px\) \* -0\.\d+\)/)
+      expect(TABLE_CSS).not.toContain(`.seatCards[data-count='${n}'] > * + *`)
+    }
+  })
+})

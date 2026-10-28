@@ -2159,6 +2159,14 @@
   gap: var(--space-1);
 }
 
+/* The corner's row is as wide as what it holds, so the note's 34 % cap resolved against itself and wrapped "Không được bỏ
+   bài ván này" to three lines at 780 × 360 (BP-41 Ruling 26). Here it takes a width of its own: two lines beside "Chơi",
+   and it still shrinks on a corner narrower than both. */
+.trayRight .noFoldNote {
+  flex: 0 1 8.5rem;
+  max-width: 8.5rem;
+}
+
 /* `overflow: hidden` is the last resort for a figure no query foresaw: a clipped label, never one over the plate. */
 .trayRight .trayRow > button {
   flex: 0 1 auto;
@@ -4520,16 +4528,16 @@
 }
 
 /* Four hole cards or more (BP-41: Liều ăn nhiều, Hên xui, Đảo bài, Thêm lá together) overlap, so a hand of five takes the
-   width of three; one card stands alone. */
-.seatCards[data-count='4'] > * + * {
+   width of three; one card stands alone. Card after card only (Task 9 M5): nothing else that ever joins the row is pulled in. */
+.seatCards[data-count='4'] > .card + .card {
   margin-left: calc(var(--card-w, 46px) * -0.33);
 }
 
-.seatCards[data-count='5'] > * + * {
+.seatCards[data-count='5'] > .card + .card {
   margin-left: calc(var(--card-w, 46px) * -0.5);
 }
 
-.seatCards[data-count='6'] > * + * {
+.seatCards[data-count='6'] > .card + .card {
   margin-left: calc(var(--card-w, 46px) * -0.6);
 }
 

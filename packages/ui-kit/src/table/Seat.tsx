@@ -179,7 +179,7 @@ export interface SeatProps {
   chaosCards?: readonly HeldCardView[]
   /** The viewer's own cards are face down because "Bịt mắt" hit them: the seat says so instead of leaving a bare back. */
   blindfolded?: boolean
-  /** "Bạo kích ×2!" for the seat that won with it (2 or 3), drawn with its payout. */
+  /** "Bạo kích ×2!" for the seat that won with it (×2 to ×5 since BP-41), drawn with its payout. */
   critMultiplier?: ChaosCritMultiplier | null
   /** The dense strip of opponents (seven or more, on a phone): the seat's cards are one icon with their number, not a row of them. */
   chaosSummary?: boolean

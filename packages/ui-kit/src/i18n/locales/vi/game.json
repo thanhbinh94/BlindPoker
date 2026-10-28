@@ -321,7 +321,8 @@
       "useOn": "{{name}} dùng {{card}} → {{targets}}",
       "more_one": "+{{count}} thẻ khác",
       "more_other": "+{{count}} thẻ khác",
-      "all": "Các thẻ đã dùng ván này"
+      "all": "Các thẻ đã dùng ván này",
+      "godslain": "{{slayer}} hạ Thần Bài {{god}}"
     },
     "result": {
       "skip": "Bỏ qua",
@@ -392,8 +393,10 @@
     },
     "detail": {
       "transfer": "{{from}} → {{to}}: {{amount}}",
-      "wagers_one": "Phải trả {{count}} mức cược",
-      "wagers_other": "Phải trả {{count}} mức cược",
+      "wagers_one": "{{name}} trả {{count}} mức cược",
+      "wagers_other": "{{name}} trả {{count}} mức cược",
+      "wagersDue_one": "Phải trả {{count}} mức cược",
+      "wagersDue_other": "Phải trả {{count}} mức cược",
       "stake": "Mức cược ×{{stake}}",
       "dice": "Xúc xắc: {{dice}}",
       "holeUp_one": "+{{count}} lá",
@@ -649,7 +652,7 @@
       },
       "s_neighbour_swap": {
         "name": "Đổi lá hàng xóm",
-        "desc": "Khi lật bài, đổi 1 lá riêng ngẫu nhiên của bạn với 1 lá của người ngồi bên trái còn trong ván."
+        "desc": "Khi lật bài, đổi 1 lá riêng ngẫu nhiên của bạn với 1 lá ngẫu nhiên của người ngồi bên trái còn trong ván."
       },
       "s_spoiler": {
         "name": "Kẻ phá đám",
