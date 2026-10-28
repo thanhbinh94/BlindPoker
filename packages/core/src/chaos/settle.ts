@@ -2,10 +2,13 @@ import type { Rng } from '../cards/rng.js'
 import type { BlindRules } from '../hand/types.js'
 import { drawOffer, drawTier } from './draw.js'
 import { needsNoPress, returnToBonus } from './bonus.js'
-import { farmHandsOf, receiveCard, tierFromParam, toHeld } from './hold.js'
+import { rollFortuneDice } from './dice.js'
+import { farmHandsOf, liftTier, receiveCard, tierFromParam, toHeld } from './hold.js'
+import { stealPoints, type ChaosSteal } from './steal.js'
 import {
   BONUS_HAND_MAX, EMPTY_CHAOS_TABLE,
-  type ChaosBomb, type ChaosCardDef, type ChaosConfig, type ChaosCredit, type ChaosDebit, type ChaosHandOutcomes, type ChaosHandPlan, type ChaosMark, type ChaosMode,
+  type ChaosBomb, type ChaosCardDef, type ChaosConfig, type ChaosCredit, type ChaosCritMultiplier, type ChaosDebit, type ChaosDiceResult,
+  type ChaosHandOutcomes, type ChaosHandPlan, type ChaosMark, type ChaosMode,
   type ChaosEffectKind, type ChaosSeat, type ChaosTableState, type ChaosTier, type HeldCard, type PlannedEffect,
 } from './types.js'
 
@@ -33,6 +36,13 @@ export interface AfterHandResult {
   awarded: { seat: number; cards: ChaosCardDef[] }[]
   /** Bonus cards that went into a human's bonus hand (BP-39): private, told only to their owner. */
   bonusAwarded: { seat: number; cards: ChaosCardDef[] }[]
+  /**
+   * BP-41 §5: each Xúc xắc vận may rolled at the end of this hand, in order, for the room's public `CHAOS_DICE` (it adds
+   * the seat's stack after the debits). `result` names prize cards by tier and count only (A7).
+   */
+  dice: { seat: number; cardId: string; uid: number; dice: number[]; result: ChaosDiceResult }[]
+  /** BP-41 Trộm điểm cards the seats received here (prizes, bonus cards), resolved over the seats given (`stealPoints`). */
+  steals: ChaosSteal[]
 }
 
 /** Thần tài's row for a loss streak of `len` hands (spec §5.5): 2–3, 4–5, 6 and more. */
@@ -61,6 +71,12 @@ const fortuneRow = (len: number): 2 | 4 | 6 => (len >= 6 ? 6 : len >= 4 ? 4 : 2)
  *   on a lost hand — flat, never doubled; Cao thủ (unless idle) is spent by a won or lost hand, `points` on a win;
  *   a fired Mạo hiểm gia leaves on a win, else steps its stake on (`charge` + 1); a `noFold` mark (Cấm bỏ bài) becomes
  *   `noFoldNextHand`, which lasts the table's next hand only.
+ * - BP-41 Task 5c (unless idle): a held Mạo hiểm gia's win pays its jackpot (`chaos_jackpot`) and chaos points; Bạo kích,
+ *   Liều ăn nhiều (×3/×4/×5) and Xúc xắc định mệnh (`outcomes.fateCrit`) crit on a win with `net` > 0, the highest one
+ *   only (Ruling 6); each held Xúc xắc vận may rolls (`dice`): chaos points, prize cards (a human's to the bonus hand,
+ *   dropped when full — A7, Ruling 3), a lost wager as a `ChaosDebit` (at most the stack), a jackpot as a credit; a held
+ *   Nâng tầm uy lực lifts the tier of the seat's next card drawn here and is spent (`liftTier`); a Trộm điểm received
+ *   here is resolved over the seats given once all are settled (`steals`).
  * The input is never changed; every draw goes through `rng` and `weights`.
  *
  * BP-41 A3: `table` is the table's chaos state as `planHand` returned it (absent = `EMPTY_CHAOS_TABLE`), and `outcomes`
@@ -93,7 +109,12 @@ export function afterHand(input: {
   const recorded = input.recorded ?? new Set<number>()
   const mode: ChaosMode = rules.decisionMode
   const wager = rules.fixedWager
-  const result: AfterHandResult = { seats: new Map(), credits: [], debits: [], table: countBombs(input.table ?? EMPTY_CHAOS_TABLE, plan, input.outcomes), awarded: [], bonusAwarded: [] }
+  const result: AfterHandResult = {
+    seats: new Map(), credits: [], debits: [], table: countBombs(input.table ?? EMPTY_CHAOS_TABLE, plan, input.outcomes), awarded: [], bonusAwarded: [],
+    dice: [], steals: [],
+  }
+  /** Trộm điểm cards received below, resolved once every seat is settled (they act on another seat). */
+  const thefts: { seat: number; card: ChaosCardDef }[] = []
   // BP-41 Mồi lửa: every seat in the hand takes each fired one's points (spec §6.3 "mọi người ngồi bàn").
   const kindling = plan.seats.reduce((sum, p) => sum + p.effects.reduce((n, e) => n + (e.effect === 'kindling' ? (e.params.points ?? 0) : 0), 0), 0)
 
@@ -150,20 +171,48 @@ export function afterHand(input: {
     if (flip) cards = cards.map((c) => (c.uid === flip.uid ? { ...c, charge: (c.charge ?? 0) + 1 } : c))
     const risky = firedKind('riskyHand')
     if (risky && outcome === 'win') cards = cards.filter((c) => c.uid !== risky.uid)
-    // BP-41 Mạo hiểm gia (Task 5a): "tới khi thắng" — a win ends it (Task 5c pays its jackpot here); any other hand it
+    // BP-41 Mạo hiểm gia (Task 5a): "tới khi thắng" — a win ends it and pays its jackpot (Task 5c: `jackpot` × the fixed
+    // wager as new points, `points` chaos points, flat) — only for a card the seat held, never a roll; any other hand it
     // played moves its stake one step on (×2 → ×4 …); its `hands` count it out after the 5th.
     const adventurer = firedKind('adventurer')
-    if (adventurer && outcome === 'win') cards = cards.filter((c) => c.uid !== adventurer.uid)
-    else if (adventurer) cards = cards.map((c) => (c.uid === adventurer.uid ? { ...c, charge: (c.charge ?? 0) + 1 } : c))
+    if (adventurer && outcome === 'win') {
+      cards = cards.filter((c) => c.uid !== adventurer.uid)
+      if (chaos.cards.some((c) => c.uid === adventurer.uid)) {
+        const amount = (adventurer.params.jackpot ?? 0) * wager
+        if (amount > 0) result.credits.push({ seat: s.seat, amount, reason: 'chaos_jackpot', cardId: adventurer.cardId, uid: adventurer.uid })
+        points += adventurer.params.points ?? 0
+      }
+    } else if (adventurer) cards = cards.map((c) => (c.uid === adventurer.uid ? { ...c, charge: (c.charge ?? 0) + 1 } : c))
 
     const prizes: { tier: ChaosTier; count: number }[] = []
+    /** BP-41 Xúc xắc vận may's prize cards, one tier per card (A7: a human's go to the private bonus hand). */
+    const dicePrizes: ChaosTier[] = []
     if (!idle) {
-      const crit = fired.find((e) => e.effect === 'crit')
-      if (crit && outcome === 'win' && s.net > 0) {
-        const r = rng.int(100)
-        const p3 = crit.params.p3 ?? 0
-        const k = r < p3 ? 3 : r < p3 + (crit.params.p2 ?? 0) ? 2 : 0
-        if (k > 0) result.credits.push({ seat: s.seat, amount: (k - 1) * s.net, reason: 'chaos_crit', cardId: crit.cardId, uid: crit.uid, multiplier: k as 2 | 3 })
+      // Bạo kích (BP-37), Liều ăn nhiều (×3/×4/×5 on `p3`/`p4`/`p5`) and Xúc xắc định mệnh's 5–6 (× `multiplier`) each
+      // pay (k − 1) × net on a win with `net` > 0. Two of them never multiply (Ruling 6): each rolls, in that order, and
+      // only the highest multiplier pays (the first on a tie). Each rolls only when it fired, so a hand without the
+      // round-three cards draws as before.
+      const crits: { k: number; e: PlannedEffect }[] = []
+      if (outcome === 'win' && s.net > 0) {
+        const crit = firedKind('crit')
+        if (crit) {
+          const r = rng.int(100)
+          const p3 = crit.params.p3 ?? 0
+          crits.push({ k: r < p3 ? 3 : r < p3 + (crit.params.p2 ?? 0) ? 2 : 0, e: crit })
+        }
+        if (risky) {
+          const r = rng.int(100)
+          const p5 = risky.params.p5 ?? 0
+          const p4 = p5 + (risky.params.p4 ?? 0)
+          crits.push({ k: r < p5 ? 5 : r < p4 ? 4 : r < p4 + (risky.params.p3 ?? 0) ? 3 : 0, e: risky })
+        }
+        const fate = firedKind('fateDie')
+        if (fate && input.outcomes?.fateCrit?.includes(s.seat)) crits.push({ k: fate.params.multiplier ?? 2, e: fate })
+      }
+      const best = crits.reduce<{ k: number; e: PlannedEffect } | null>((b, c) => (c.k >= 2 && (b === null || c.k > b.k) ? c : b), null)
+      if (best) {
+        const k = Math.min(5, best.k) as ChaosCritMultiplier
+        result.credits.push({ seat: s.seat, amount: (k - 1) * s.net, reason: 'chaos_crit', cardId: best.e.cardId, uid: best.e.uid, multiplier: k })
       }
 
       const fortune = cards.find((c) => c.effect === 'fortune')
@@ -190,6 +239,38 @@ export function afterHand(input: {
       if (master && outcome !== 'none') {
         if (outcome === 'win') points += master.params.points ?? 0
         cards = cards.filter((c) => c !== master)
+      }
+
+      // BP-41 §5 Xúc xắc vận may (Ruling 5): every one the seat held through the hand rolls now, won, lost or carried
+      // over, once, and leaves; one received below waits for the next hand the seat plays. Chaos points are flat; a lost
+      // wager is a debit (the sink) of at most what the stack still has; a jackpot is a credit (new points); prize cards
+      // follow the bonus-card rule below.
+      let debited = 0
+      for (const die of cards.filter((c) => c.effect === 'fortuneDice')) {
+        const roll = rollFortuneDice(die.params, rng)
+        const res: ChaosDiceResult = {}
+        if (roll.points > 0) {
+          points += roll.points
+          res.points = roll.points
+        }
+        if (roll.cards.length > 0) {
+          res.cards = roll.cards
+          for (const c of roll.cards) for (let i = 0; i < c.count; i++) dicePrizes.push(c.tier)
+        }
+        if (roll.lose > 0) {
+          const amount = Math.min(roll.lose * wager, Math.max(0, s.stackAfter - debited))
+          debited += amount
+          res.burned = amount
+          if (amount > 0) result.debits.push({ seat: s.seat, amount, reason: 'chaos_dice', cardId: die.cardId, uid: die.uid })
+        }
+        if (roll.jackpot > 0) {
+          res.jackpot = roll.jackpot * wager
+          result.credits.push({ seat: s.seat, amount: res.jackpot, reason: 'chaos_jackpot', cardId: die.cardId, uid: die.uid })
+        }
+        if (roll.triple) res.triple = true
+        if (roll.herald) res.herald = true
+        result.dice.push({ seat: s.seat, cardId: die.cardId, uid: die.uid, dice: roll.dice, result: res })
+        cards = cards.filter((c) => c.uid !== die.uid)
       }
     }
 
@@ -224,11 +305,35 @@ export function afterHand(input: {
       next = r.seat
       got.push(...r.received)
     }
+    // BP-41 Nâng tầm uy lực: the seat's next card drawn here (a prize, a bonus card) comes a tier up, and the card is spent.
+    const lift = (tier: ChaosTier): ChaosTier => {
+      const r = liftTier(next, tier)
+      next = r.seat
+      return r.tier
+    }
     const give = (tier: ChaosTier): void => {
-      const card = drawOffer(pool, tier, mode, rng, 1, weights)[0]
+      const card = drawOffer(pool, lift(tier), mode, rng, 1, weights)[0]
       if (card) receive(card)
     }
+    const hasRoom = (): boolean => next.bonus.length + (next.armed ? 1 : 0) < BONUS_HAND_MAX
+    const drawn: ChaosCardDef[] = []
     for (const p of prizes) for (let i = 0; i < p.count; i++) give(p.tier)
+    // The dice's prize cards (A7): a bot's act at once; a human's go to its private bonus hand, or to the seat when they
+    // need no press, and one that finds the bonus hand full is dropped (Ruling 3). They come before the points' bonus
+    // cards, which wait as points when the hand is full.
+    for (const tier of dicePrizes) {
+      if (s.isBot) {
+        give(tier)
+        continue
+      }
+      const card = drawOffer(pool, lift(tier), mode, rng, 1, weights)[0]
+      if (!card) continue
+      if (needsNoPress(card)) receive(card)
+      else if (hasRoom()) {
+        next = { ...next, bonus: [...next.bonus, toHeld(card, nextUid())] }
+        drawn.push(card)
+      }
+    }
     if (!frozen) {
       for (let i = 0; i < pendingBonus; i++) give(drawTier(config.tierWeights, rng))
       next = { ...next, pendingBonus: 0 }
@@ -238,12 +343,11 @@ export function afterHand(input: {
     // that needs no press goes to the seat as today and takes no room. Only the points the hand ended with convert: a
     // Tích lũy drawn here adds points for a later hand, so a low threshold cannot loop. A draw that finds no card (an
     // empty tier) costs nothing.
-    const drawn: ChaosCardDef[] = []
     if (toBonusHand && config.pointsThreshold > 0) {
       let spendable = next.points
-      while (spendable >= config.pointsThreshold && next.bonus.length + (next.armed ? 1 : 0) < BONUS_HAND_MAX) {
+      while (spendable >= config.pointsThreshold && hasRoom()) {
         spendable -= config.pointsThreshold
-        const card = drawOffer(pool, drawTier(config.tierWeights, rng), mode, rng, 1, weights)[0]
+        const card = drawOffer(pool, lift(drawTier(config.tierWeights, rng)), mode, rng, 1, weights)[0]
         if (!card) continue
         next = { ...next, points: next.points - config.pointsThreshold }
         if (needsNoPress(card)) receive(card)
@@ -255,11 +359,19 @@ export function afterHand(input: {
     }
     if (got.length > 0) result.awarded.push({ seat: s.seat, cards: got })
     if (drawn.length > 0) result.bonusAwarded.push({ seat: s.seat, cards: drawn })
+    for (const card of got) if (card.effect === 'stealPoints') thefts.push({ seat: s.seat, card })
 
     result.seats.set(s.seat, {
       ...withoutNoFold(next), farmHandsLeft: farmHandsOf(next.cards), frozenNextHand: frozenMark, blindfoldedNextHand: blindMark,
       ...(noFoldMark ? { noFoldNextHand: true as const } : {}),
     })
+  }
+  // BP-41 Trộm điểm received here acts once every seat is settled, over the seats given, in the order received; it is
+  // not held, so it gets its uid now.
+  for (const t of thefts) {
+    const r = stealPoints({ seats: result.seats, holder: t.seat, card: { cardId: t.card.id, uid: nextUid(), params: t.card.params }, rng })
+    result.seats = r.seats
+    result.steals.push(r.steal)
   }
   return result
 }

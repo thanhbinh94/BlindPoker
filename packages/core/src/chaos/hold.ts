@@ -54,7 +54,8 @@ export function stackHeld(cards: readonly HeldCard[], card: HeldCard): HeldCard[
 
 /**
  * A seat receives a card (a draft pick, a bonus card, a Thần tài prize). "Now" cards act at once — Cấp độ turns into
- * its cards (spec §5.6, never another Cấp độ), Tích lũy adds its points — and the rest are held, under spec §3.4's
+ * its cards (spec §5.6, never another Cấp độ), Tích lũy adds its points, BP-41's Trộm điểm is only listed in `received`
+ * for the caller to resolve — and the rest are held, under spec §3.4's
  * rule for duration cards of the same effect: a higher tier replaces the held one, the same card adds its hands, another
  * card of the same tier replaces it (with its own params), a lower tier is dropped. `received` lists every card that reached the seat, a Cấp độ first and then what it became; a
  * dropped card is not in it. The input seat is never changed.
@@ -83,6 +84,12 @@ export function receiveCard(
       received.push(d)
       return
     }
+    // BP-41 Trộm điểm acts on receipt against another seat: the caller, which sees every seat, resolves it
+    // (`stealPoints`, steal.ts). It is never held.
+    if (d.effect === 'stealPoints') {
+      received.push(d)
+      return
+    }
     const hands = d.params.hands
     if (hands !== undefined) {
       const rule = stackRule(cards, { effect: d.effect, tier: d.tier, cardId: d.id })
@@ -104,6 +111,22 @@ export function receiveCard(
   take(def)
   return { seat: { ...seat, cards, points, farmHandsLeft: farmHandsOf(cards) }, received }
 }
+
+/**
+ * BP-41 Nâng tầm uy lực (spec §6.3): the seat's next card received — a draft offer or a bonus / prize card — comes `steps`
+ * tiers above `tier` (Kim cương stays Kim cương). The oldest held one is used up by it: the returned seat no longer holds
+ * it (the same object when the seat holds none, and `tier` comes back as it was). The draft reads the tier for the seat's
+ * own offer here (`draftTierFor`) and keeps the returned seat once the offer is made.
+ */
+export function liftTier(seat: ChaosSeat, tier: ChaosTier): { seat: ChaosSeat; tier: ChaosTier; spent?: HeldCard } {
+  const card = seat.cards.find((c) => c.effect === 'tierUp')
+  if (!card) return { seat, tier }
+  const rank = Math.min(CHAOS_TIERS.length, TIER_RANK[tier] + Math.max(0, card.params.steps ?? 1))
+  return { seat: { ...seat, cards: seat.cards.filter((c) => c.uid !== card.uid) }, tier: CHAOS_TIERS[rank - 1]!, spent: card }
+}
+
+/** The tier of the seat's own draft offer (BP-41 Nâng tầm uy lực): the table's, or higher when it holds one. Pure. */
+export const draftTierFor = (seat: ChaosSeat, tableTier: ChaosTier): ChaosTier => liftTier(seat, tableTier).tier
 
 export const toHeldCardView = (card: HeldCard): HeldCardView => ({
   uid: card.uid, cardId: card.cardId, tier: card.tier, handsLeft: card.handsLeft,
