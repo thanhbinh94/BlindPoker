@@ -157,8 +157,12 @@ export class HandRunner {
       else if (s.phase === 'SQUEEZE') seat = s.players.find((p) => !p.revealed && this.autoFold.has(p.seat))?.seat ?? null
       if (seat === null) return
       // A seat that left or stood up has nobody to turn its cards, so the squeeze round must not wait for it (§6). It
-      // forfeits rather than folds (BP-41 A2): a no-fold hand (Cấm bỏ bài, a Thần) refuses a `fold`, never a `FORFEIT`.
-      this.submit(s.phase === 'SQUEEZE' ? { type: 'REVEALED', seat } : { type: 'FORFEIT', seat })
+      // forfeits rather than folds (BP-41 A2): a no-fold hand refuses a `fold`, never a `FORFEIT`. Ruling 14: at a
+      // play-or-fold decision where the seat may not fold (Cấm bỏ bài, a Thần), it plays instead, as a timeout does —
+      // spec G11 "luôn có người đối đầu" — so leaving is no way out of the rule.
+      const kinds = s.phase === 'DECISION' ? legalActions(s, seat).kinds : []
+      const noFold = kinds.includes('play') && !kinds.includes('fold')
+      this.submit(s.phase === 'SQUEEZE' ? { type: 'REVEALED', seat } : noFold ? { type: 'ACTION', seat, action: { kind: 'play' } } : { type: 'FORFEIT', seat })
     }
   }
 

@@ -749,6 +749,23 @@ describe('Poker hỗn loạn', () => {
     expect(s.notifications).toEqual([])
   })
 
+  it('BP-41 Nâng tầm uy lực: an offer a tier above the draft frame keeps its own tier, whichever arrives first', () => {
+    const silverFrame: RoomEvent = { ...draftFrame, tier: 'silver' } as RoomEvent
+    const mine = { offerId: 'o1', tier: 'gold' as const, cardIds: OFFER.cardIds }
+    for (const s of [room(offer(inChaosRoom()), 11, silverFrame), offer(room(inChaosRoom(), 11, silverFrame))]) {
+      expect(s.chaos.draft).toEqual({ tier: 'gold', deadlineAt: 50_000, totalMs: 30_000, offer: { offerId: mine.offerId, cardIds: mine.cardIds }, picked: false })
+    }
+  })
+
+  it('BP-41: a dice roll sets the seat\'s stack (after its loss); the table state and a steal leave the roster alone', () => {
+    let s = room(inChaosRoom(), 11, { type: 'CHAOS_DICE', seat: 1, cardId: 'g_dice', dice: [1, 1], result: { burned: 1000 }, stack: 19000 })
+    expect(s.room!.players.find((p) => p.seat === 1)!.stack).toBe(19000)
+    const before = s.room
+    s = room(s, 12, { type: 'CHAOS_TABLE', table: { god: { seat: 1, handsLeft: 5, curse: 2 }, demigods: [], bombs: [] } })
+    s = room(s, 13, { type: 'CHAOS_STEAL', seat: 0, cardId: 'g_steal_points', outcome: 'applied', targets: [1], from: 1, to: 0, amount: 3, spent: [] })
+    expect(s.room).toEqual(before)
+  })
+
   it('a draft frame alone is a draft with no offer of mine (a spectator, or a seat drafted with nothing to pick)', () => {
     const s = room(inChaosRoom(), 11, { type: 'CHAOS_DRAFT', tier: 'silver', deadlineAt: 40_000, draftMs: 15_000, seats: [1] })
     expect(s.chaos.draft).toEqual({ tier: 'silver', deadlineAt: 40_000, totalMs: 15_000, offer: null, picked: false })

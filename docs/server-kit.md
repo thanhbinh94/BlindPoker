@@ -401,9 +401,30 @@ calls `startHand()` at once, which cancels the timer (a timer that fires after t
 `nextHandTimer`). `ROOM_SNAPSHOT.resultSkips` (`{ skipped, total, mine }`, `mine` per viewer, false for a spectator) restores the
 tally during a wait and is absent otherwise. A new wait clears the presses.
 
+**The table's own state (BP-41).** `ChaosTable.table` (`ChaosTableState`: the Thần, the Bán Thần, the bombs) lives as long as the
+room and is threaded through `planHand` and `afterHand`; its public face is `toChaosTableView` (seats and hands left, never a player id
+or uid). It rides on `CHAOS_STATE.table` (after a draft and after a hand; absent = none) and `ROOM_SNAPSHOT.chaos.table`, and on its own
+`CHAOS_TABLE { table }` whenever it changes outside those: at `planHand`, before the hand's first event (an ascension, a bomb passed on),
+and when a seat leaves. `CHAOS_TABLE` never carries a seat's cards, so it may go out mid-hand, unlike `CHAOS_STATE` (a bonus card armed
+for the hand joins the seat's cards at the plan). A bomb planted this hand joins the table only at `afterHand`, after `CHAOS_SUMMARY`
+named its owner and carrier: until then the plant is private to those two. `CHAOS_HERALD { kind, seat, playerId }` goes to the whole room
+at `planHand` for an ascension (`plan.god.ascended`) and for each Bán Thần crowned at the previous settlement (the first hand of its
+reign; one whose seat left in between is not heralded), and at the settlement for each seat that beat the Thần (`outcomes.dethroned`).
+`seatCleared(p, had, seat)` (from `standUpNow`, so after the hand a dealt seat was in) ends the seat's reigns (`endReign`), drops the
+bombs it planted (unpaid) and hands a bomb it carried to a random other seated player who is not its owner, or drops it when there is none.
+**Dice and steals.** After `afterHand`, each Xúc xắc vận may goes out as `CHAOS_DICE { seat, cardId, dice, result, stack }` in roll
+order, its loss (`settled.debits`, matched by uid) taken off the stack first (`payDebit`, never below 0; a bot's virtual stack the same
+way), then the steals (`CHAOS_STEAL`), then the credits (a jackpot is `chaos_jackpot`), then `CHAOS_AWARDED` and `CHAOS_STATE`.
+Trộm điểm received in a draft is resolved in `endDraft` over every seated player once all picks are handed out (`stealPoints`). Every
+seated player who sat the hand out goes into `afterHand` too, as `inHand: false` (Cấm bỏ bài's mark ends; a theft can reach them).
+**Per-seat draft tier.** A drafting seat holding Nâng tầm uy lực gets its offer at `liftTier(seat, tier)` (the card is spent then):
+`CHAOS_OFFER.tier` and the viewer's `ROOM_SNAPSHOT.chaos.draft.tier` say its own tier; `CHAOS_DRAFT.tier` stays the table's.
+**No fold for a seat that left (Ruling 14).** `HandRunner`'s auto-fold submits `ACTION play` (not `FORFEIT`) for a seat at a decision
+whose legal actions hold `play` but not `fold` (Cấm bỏ bài, a Thần): it is not a timeout.
+
 **Wire.** `ClientMessage` `CHAOS_PICK { offerId, cardId }` (`Room.pickChaos`: a stale, foreign or second pick is `CHAOS_NO_OFFER`, a card
 that was not offered is `ILLEGAL_ACTION`), `CHAOS_USE { uid }` (above) and `RESULT_SKIP` (no body but the optional `reqId`). Room events `CHAOS_DRAFT` (tier, deadline, `draftMs` — the GM's window, for the client's ring — and the drafted seats), `CHAOS_PICKED`, `CHAOS_STATE`,
-`CHAOS_CREDIT`, `CHAOS_AWARDED`, `RESULT_SKIPS`; the private `CHAOS_OFFER` and `CHAOS_BONUS` notifications; `ROOM_SNAPSHOT.chaos` restores the
+`CHAOS_CREDIT`, `CHAOS_AWARDED`, `RESULT_SKIPS`, and BP-41's `CHAOS_TABLE`, `CHAOS_HERALD`, `CHAOS_DICE`, `CHAOS_STEAL`; the private `CHAOS_OFFER` and `CHAOS_BONUS` notifications; `ROOM_SNAPSHOT.chaos` restores the
 viewer's draft and bonus hand after a reconnect, and `ROOM_SNAPSHOT.resultSkips` the "Bỏ qua" tally; `RoomPlayerView.chaos` carries a seat's cards, points and `bonusCount`. Game events (from the engine): `CHAOS_APPLIED`,
 `CHAOS_PEEK`, `CHAOS_SUMMARY` (each use with its `targets`). Error code `CHAOS_CANNOT_USE` answers every refused `CHAOS_USE`.
 

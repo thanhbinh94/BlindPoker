@@ -24,6 +24,8 @@ describe('BP-41 protocol fixtures', () => {
       { type: 'CHAOS_STATE', seats: [{ seat: 0, cards: [{ uid: 1, cardId: 'd_carp', tier: 'diamond', handsLeft: null, charge: 35 }], points: 0, bonusCount: 0 }], table: toChaosTableView(table) },
       { type: 'CHAOS_CREDIT', seat: 1, amount: 4_000, stack: 12_000, reason: 'chaos_crit', capped: false, multiplier: 5 },
       { type: 'CHAOS_CREDIT', seat: 0, amount: 30_000, stack: 40_000, reason: 'chaos_jackpot', capped: false },
+      { type: 'CHAOS_TABLE', table: toChaosTableView(table) },
+      { type: 'CHAOS_STEAL', seat: 2, cardId: 'g_steal_points', outcome: 'reflected', targets: [1], from: 2, to: 1, amount: 5, spent: [{ seat: 1, cardId: 'd_mirror' }] },
     ]
     const frames: ServerMessage[] = events.map((event, seq) => ({ t: 'ROOM_EVENT', seq, event }))
     expect(JSON.parse(JSON.stringify(frames))).toEqual(frames)

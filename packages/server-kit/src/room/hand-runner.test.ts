@@ -134,13 +134,25 @@ describe('HandRunner — blind mode B', () => {
       seats: seats.map((seat) => ({ seat, effects: [], shield: null, blindfolded: false })), reverse: false, noFoldSeats: seats,
     })
 
-    it('a seat that left still folds (FORFEIT); the timer plays the seats still there', () => {
+    it('Ruling 14: a no-fold seat that left plays (not a timeout); the timer plays the seats still there', () => {
       const { clock, runner, all } = setup(BLIND_B, [0, 1, 2].map((seat) => ({ seat, stack: 20000, isBot: false })), { turnTimerMs: 15_000 }, noFold([0, 1, 2]))
       runner.markAutoFold(1)
-      expect(runner.state.players[1]!.decision).toBe('fold')
+      expect(runner.state.players[1]!.decision).toBe('play')
       clock.advance(15_000)
       const acted = all().filter((e): e is Extract<GameEvent, { type: 'PLAYER_ACTED' }> => e.type === 'PLAYER_ACTED')
-      expect(acted.map((e) => [e.seat, e.action.kind, e.timedOut])).toEqual([[0, 'play', true], [1, 'fold', false], [2, 'play', true]])
+      expect(acted.map((e) => [e.seat, e.action.kind, e.timedOut])).toEqual([[0, 'play', true], [1, 'play', false], [2, 'play', true]])
+      while (!runner.isComplete) clock.advance(1_500)
+    })
+
+    it('a seat that left and may fold (the Cấm bỏ bài holder) still folds (FORFEIT)', () => {
+      const { clock, runner, all } = setup(BLIND_B, [0, 1, 2].map((seat) => ({ seat, stack: 20000, isBot: false })), { turnTimerMs: 15_000 }, noFold([0, 2]))
+      runner.markAutoFold(1)
+      expect(runner.state.players[1]!.decision).toBe('fold')
+      runner.markAutoFold(0)
+      expect(runner.state.players[0]!.decision).toBe('play')
+      clock.advance(15_000)
+      const acted = all().filter((e): e is Extract<GameEvent, { type: 'PLAYER_ACTED' }> => e.type === 'PLAYER_ACTED')
+      expect(acted.map((e) => [e.seat, e.action.kind, e.timedOut])).toEqual([[0, 'play', false], [1, 'fold', false], [2, 'play', true]])
       while (!runner.isComplete) clock.advance(1_500)
     })
 

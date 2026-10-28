@@ -1245,7 +1245,7 @@ export class Room {
     // cycle's draft is not given back.
     const had = p.chaos
     p.chaos = undefined
-    this.chaos?.seatCleared(p, had)
+    this.chaos?.seatCleared(p, had, seat)
     this.chaos?.dropOffer(p.identity.playerId)
     p.ready = false
     p.standAfterHand = false

@@ -1,8 +1,9 @@
 import {
-  DEFAULT_CHAOS_CONFIG, EMPTY_CHAOS_SEAT, EMPTY_CHAOS_TABLE, addRevealEffect, afterHand, armBonus, clearUnsettledHand, drawOffer, drawTier, planHand, receiveCard,
-  toHeldCardView,
-  type ArmWhen, type BlindRules, type ChaosBonusPayload, type ChaosCardDef, type ChaosConfig, type ChaosCredit, type ChaosHandPlan,
-  type ChaosSeat, type ChaosSnapshot, type ChaosTableState, type ChaosTier, type HandState, type HeldCardView, type RoomEvent,
+  DEFAULT_CHAOS_CONFIG, EMPTY_CHAOS_SEAT, EMPTY_CHAOS_TABLE, addRevealEffect, afterHand, armBonus, clearUnsettledHand, drawOffer, drawTier, endReign,
+  liftTier, planHand, receiveCard, stealPoints, toChaosTableView, toHeldCardView,
+  type AfterHandSeat, type ArmWhen, type BlindRules, type ChaosBonusPayload, type ChaosCardDef, type ChaosConfig, type ChaosCredit, type ChaosDebit, type ChaosHandPlan,
+  type ChaosReignKind, type ChaosSeat, type ChaosSnapshot, type ChaosSteal, type ChaosTableState, type ChaosTableView, type ChaosTier, type HandState,
+  type HeldCardView, type RoomEvent,
 } from '@bp/core'
 import type { ChaosPort } from '../chaos-port.js'
 import type { TimerHandle } from '../infra/clock.js'
@@ -27,6 +28,8 @@ interface DraftEntry {
   playerId: string
   seat: number
   offerId: string
+  /** The tier of this seat's own offer: the draft's, or higher when it held a Nâng tầm uy lực (BP-41, `liftTier`). */
+  tier: ChaosTier
   cardIds: string[]
   /** The card taken; `null` while the player is still choosing. An empty offer counts as taken (nothing to give). */
   picked: string | null
@@ -67,8 +70,19 @@ export class ChaosTable {
   private readonly pending = new Map<string, { credit: ChaosCredit; request: Parameters<ChaosPort['credit']>[0] }[]>()
   private uid = 0
   private readonly cycleLength: number
-  /** The table's own chaos state (BP-41: the Thần, the Bán Thần, the bombs), threaded through `planHand` and `afterHand`. */
+  /**
+   * The table's own chaos state (BP-41: the Thần, the Bán Thần, the bombs), threaded through `planHand` and `afterHand`
+   * across hands, kept for the life of the room (a closed room drops it with the table). A seat that leaves ends its
+   * reigns and its bombs (`seatCleared`).
+   */
   table: ChaosTableState = EMPTY_CHAOS_TABLE
+  /** The table view the clients were last told (`CHAOS_TABLE`, `CHAOS_STATE.table`), to tell it again only on a change. */
+  private toldTable = JSON.stringify(toChaosTableView(EMPTY_CHAOS_TABLE))
+  /**
+   * Bán Thần crowned at a settlement, heralded at the next deal — the first hand of the reign (spec §4.5 "hiện đầu ván").
+   * By the card's uid, so a seat that left in between (its reign ended) is not heralded.
+   */
+  private demigodHeralds: number[] = []
 
   constructor(
     private readonly port: ChaosPort,
@@ -110,9 +124,13 @@ export class ChaosTable {
       this.draftedCycle.set(id, c)
       // Tay bạc lasts a cycle: it leaves when its holder drafts again (spec §5.3).
       const held = p.chaos ?? EMPTY_CHAOS_SEAT
-      p.chaos = held.cards.some((x) => x.effect === 'gambler') ? { ...held, cards: held.cards.filter((x) => x.effect !== 'gambler') } : held
-      const cardIds = drawOffer(this.cards, tier, mode, rng, 3, this.weights).map((x) => x.id)
-      const entry: DraftEntry = { playerId: id, seat: p.seat!, offerId: newId(), cardIds, picked: null }
+      const kept = held.cards.some((x) => x.effect === 'gambler') ? { ...held, cards: held.cards.filter((x) => x.effect !== 'gambler') } : held
+      // BP-41 Nâng tầm uy lực: this seat's own offer comes a tier up, and the card is spent by it (spec §6.3). The draft
+      // frame keeps the table's tier; only the seat's offer names its own.
+      const lifted = liftTier(kept, tier)
+      p.chaos = lifted.seat
+      const cardIds = drawOffer(this.cards, lifted.tier, mode, rng, 3, this.weights).map((x) => x.id)
+      const entry: DraftEntry = { playerId: id, seat: p.seat!, offerId: newId(), tier: lifted.tier, cardIds, picked: null }
       // Bots, and humans who are not there to choose, are picked for at once.
       if (cardIds.length > 0 && (p.identity.isBot || !p.connected)) entry.picked = cardIds[rng.int(cardIds.length)]!
       entries.push(entry)
@@ -122,7 +140,7 @@ export class ChaosTable {
     this.draft = draft
     for (const e of entries) {
       if (done(e)) continue
-      this.host.deps.outbox.send(e.playerId, { t: 'NOTIFICATION', kind: 'CHAOS_OFFER', payload: { offerId: e.offerId, tier, cardIds: e.cardIds, deadlineAt, draftMs } })
+      this.host.deps.outbox.send(e.playerId, { t: 'NOTIFICATION', kind: 'CHAOS_OFFER', payload: { offerId: e.offerId, tier: e.tier, cardIds: e.cardIds, deadlineAt, draftMs } })
     }
     this.host.broadcast({ type: 'CHAOS_DRAFT', tier, deadlineAt, draftMs, seats: entries.map((e) => e.seat).sort((a, b) => a - b) })
     if (entries.every(done)) {
@@ -160,6 +178,7 @@ export class ChaosTable {
     const { rng } = this.host.deps
     const mode = this.host.rules.decisionMode
     const defs = new Map(this.cards.map((c) => [c.id, c]))
+    const thefts: { seat: number; card: ChaosCardDef }[] = []
     for (const e of draft.entries) {
       if (e.picked === null && e.cardIds.length > 0) e.picked = e.cardIds[rng.int(e.cardIds.length)]!
       const p = this.host.players.get(e.playerId)
@@ -168,8 +187,41 @@ export class ChaosTable {
       const r = receiveCard(p.chaos ?? EMPTY_CHAOS_SEAT, def, () => this.nextUid(), this.cards, mode, rng, this.weights, this.config.tierWeights)
       p.chaos = r.seat
       this.host.broadcast({ type: 'CHAOS_PICKED', seat: e.seat, cardIds: r.received.map((x) => x.id) })
+      for (const card of r.received) if (card.effect === 'stealPoints') thefts.push({ seat: e.seat, card })
     }
+    // BP-41 Trộm điểm acts on receipt, once every pick is handed out (as `afterHand` does), over every seated player.
+    for (const t of thefts) this.steal(t.seat, t.card)
     this.broadcastState()
+  }
+
+  /**
+   * BP-41 Trộm điểm received between hands (a draft pick): resolved over every seated player's chaos points (`stealPoints`;
+   * no Gậy ông stands between hands), the changed seats written back, and the table told (`CHAOS_STEAL`).
+   */
+  private steal(holder: number, card: ChaosCardDef): void {
+    const seated = this.seated()
+    const r = stealPoints({
+      seats: new Map(seated.map((p) => [p.seat!, p.chaos ?? EMPTY_CHAOS_SEAT])),
+      holder,
+      card: { cardId: card.id, uid: this.nextUid(), params: card.params },
+      rng: this.host.deps.rng,
+    })
+    for (const p of seated) {
+      const next = r.seats.get(p.seat!)
+      if (next && next !== (p.chaos ?? EMPTY_CHAOS_SEAT)) p.chaos = next
+    }
+    this.tellSteal(r.steal)
+  }
+
+  private tellSteal(s: ChaosSteal): void {
+    this.host.broadcast({
+      type: 'CHAOS_STEAL', seat: s.seat, cardId: s.cardId, outcome: s.outcome, targets: s.targets, from: s.from, to: s.to, amount: s.amount,
+      spent: s.spent.map((x) => ({ seat: x.seat, cardId: x.cardId, ...(x.passedTo === undefined ? {} : { passedTo: x.passedTo }) })),
+    })
+  }
+
+  private seated(): RoomPlayer[] {
+    return [...this.host.players.values()].filter((p) => p.seat !== null).sort((a, b) => a.seat! - b.seat!)
   }
 
   /**
@@ -204,7 +256,37 @@ export class ChaosTable {
     this.table = table
     this.tellBonusChanges(before)
     this.tableHands += 1
+    // BP-41: before the hand's first event — the reign and the bombs as this hand plays them (a bomb passed on, a new
+    // Thần), then the banners of the reigns that start now (spec §4.5 "đầu ván").
+    this.tellTable()
+    if (plan.god?.ascended) this.herald('god', plan.god.seat, table.god?.playerId)
+    for (const uid of this.demigodHeralds) {
+      const d = table.demigods.find((x) => x.uid === uid)
+      if (d) this.herald('demigod', d.seat, d.playerId)
+    }
+    this.demigodHeralds = []
     return plan
+  }
+
+  /** `CHAOS_HERALD` to the whole room; the player id is the seat's player now, else the one the reign was made for. */
+  private herald(kind: ChaosReignKind, seat: number, fallbackId: string | undefined): void {
+    const playerId = this.seated().find((p) => p.seat === seat)?.identity.playerId ?? fallbackId
+    if (playerId !== undefined) this.host.broadcast({ type: 'CHAOS_HERALD', kind, seat, playerId })
+  }
+
+  /** The table's public view, or undefined when nobody reigns and no bomb is in play (`CHAOS_STATE.table` absent). */
+  private tableView(): ChaosTableView | undefined {
+    const t = this.table
+    return t.god === null && t.demigods.length === 0 && t.bombs.length === 0 ? undefined : toChaosTableView(t)
+  }
+
+  /** `CHAOS_TABLE` when the public view changed since the clients were last told. Never a seat's cards. */
+  private tellTable(): void {
+    const view = toChaosTableView(this.table)
+    const json = JSON.stringify(view)
+    if (json === this.toldTable) return
+    this.toldTable = json
+    this.host.broadcast({ type: 'CHAOS_TABLE', table: view })
   }
 
   /**
@@ -240,9 +322,32 @@ export class ChaosTable {
     return { cards: chaos.bonus.map(toHeldCardView), armed: armed ? { uid: armed.card.uid, cardId: armed.card.cardId, hand: armed.hand } : null }
   }
 
-  /** The seat's chaos is gone (a stand-up or a Leave): an owner who held bonus cards is told its hand is empty. */
-  seatCleared(p: RoomPlayer, had: ChaosSeat | undefined): void {
+  /**
+   * The seat's chaos is gone (a stand-up or a Leave, `seat` the one it left; a seat dealt into the hand in play is only
+   * cleared after that hand settled, so a bomb or a reign in play is always settled first): an owner who held bonus cards
+   * is told its hand is empty, and the table's state lets the seat go (BP-41) —
+   * - its Thần or Bán Thần reign ends now (spec §4.2 "rời bàn thì mất ngôi", `endReign`);
+   * - a bomb it planted is gone, unpaid: its owner is not there to be paid, and a newcomer on the seat must not be;
+   * - a bomb it carried passes now to another seated player (not its owner), at random, as `planHand` would pass it; with
+   *   nobody to take it, it is gone. A newcomer on the seat never inherits it.
+   * The table is told (`CHAOS_TABLE`) when its view changed.
+   */
+  seatCleared(p: RoomPlayer, had: ChaosSeat | undefined, seat: number): void {
     if (had && (had.bonus.length > 0 || had.armed)) this.sendBonus(p)
+    let table = endReign(this.table, seat)
+    if (table.bombs.some((b) => b.owner === seat || b.carrier === seat)) {
+      const others = this.seated().map((x) => x.seat!).filter((s) => s !== seat)
+      const { rng } = this.host.deps
+      const bombs = table.bombs.flatMap((b) => {
+        if (b.owner === seat) return []
+        if (b.carrier !== seat) return [b]
+        const to = others.filter((s) => s !== b.owner)
+        return to.length > 0 ? [{ ...b, carrier: to[rng.int(to.length)]! }] : []
+      })
+      table = { ...table, bombs }
+    }
+    this.table = table
+    this.tellTable()
   }
 
   /**
@@ -259,7 +364,12 @@ export class ChaosTable {
       const p = seatPlayer(hp.seat)
       return p ? [{ hp, p }] : []
     })
-    const before = this.bonusKeys(inHand.map(({ p }) => p))
+    // Ruling (5c-8): every other seated player with chaos goes in too, as not in the hand — Cấm bỏ bài's mark ends for a
+    // seat that sat its hand out (5a-5), and a Trộm điểm won here can reach the richest seat even when it sat out.
+    const dealt = new Set(inHand.map(({ hp }) => hp.seat))
+    const sittingOut = this.seated().filter((p) => !dealt.has(p.seat!) && p.chaos !== undefined)
+    const before = this.bonusKeys([...inHand.map(({ p }) => p), ...sittingOut])
+    const demigodsBefore = new Set(this.table.demigods.map((d) => d.uid))
     const settled = afterHand({
       rules: this.host.rules,
       config: this.config,
@@ -275,29 +385,64 @@ export class ChaosTable {
       weights: this.weights,
       table: this.table,
       ...(chaos.outcomes ? { outcomes: chaos.outcomes } : {}),
-      seats: inHand.map(({ hp, p }) => ({
-        seat: hp.seat,
-        playerId: hp.playerId,
-        isBot: hp.isBot,
-        chaos: p.chaos ?? EMPTY_CHAOS_SEAT,
-        stackAfter: hp.stack,
-        // From the stacks, not the payouts: a free fold's or an insurance refund is in the stack only.
-        net: hp.stack - (stacksBefore.get(hp.seat) ?? hp.stack),
-        inHand: true,
-        outcome: carryOverOnly ? 'none' : winners.has(hp.seat) ? 'win' : 'loss',
-      })),
+      seats: [
+        ...inHand.map(({ hp, p }): AfterHandSeat => ({
+          seat: hp.seat,
+          playerId: hp.playerId,
+          isBot: hp.isBot,
+          chaos: p.chaos ?? EMPTY_CHAOS_SEAT,
+          stackAfter: hp.stack,
+          // From the stacks, not the payouts: a free fold's or an insurance refund is in the stack only.
+          net: hp.stack - (stacksBefore.get(hp.seat) ?? hp.stack),
+          inHand: true,
+          outcome: carryOverOnly ? 'none' : winners.has(hp.seat) ? 'win' : 'loss',
+        })),
+        ...sittingOut.map((p): AfterHandSeat => ({
+          seat: p.seat!, playerId: p.identity.playerId, isBot: p.identity.isBot, chaos: p.chaos!, stackAfter: p.stack, net: 0, inHand: false, outcome: 'none',
+        })),
+      ],
     })
     for (const { hp, p } of inHand) p.chaos = settled.seats.get(hp.seat) ?? p.chaos
+    for (const p of sittingOut) p.chaos = settled.seats.get(p.seat!) ?? p.chaos
     this.table = settled.table
     // A bonus card drawn, a played card spent or given back: told to its owner only (`settled.bonusAwarded` is never
     // broadcast). The table sees the count change in `CHAOS_STATE`.
     this.tellBonusChanges(before)
+    // BP-41 §4.5: each seat that beat the Thần, now (the settlement); a Bán Thần crowned here is heralded at the next deal.
+    for (const seat of chaos.plan.god ? (chaos.outcomes?.dethroned ?? []) : []) {
+      this.herald('godslain', seat, state.players.find((hp) => hp.seat === seat)?.playerId)
+    }
+    for (const d of settled.table.demigods) if (!demigodsBefore.has(d.uid)) this.demigodHeralds.push(d.uid)
+    // BP-41 §5: the dice, in the order they rolled, each with the stack after its loss — the losses first (A6), then the
+    // credits (a jackpot among them).
+    const debits = settled.debits.slice()
+    for (const roll of settled.dice) {
+      const p = seatPlayer(roll.seat)
+      if (!p) continue
+      const i = debits.findIndex((d) => d.uid === roll.uid && d.seat === roll.seat)
+      if (i >= 0) this.payDebit(p, debits.splice(i, 1)[0]!)
+      this.host.broadcast({ type: 'CHAOS_DICE', seat: roll.seat, cardId: roll.cardId, dice: roll.dice, result: roll.result, stack: p.stack })
+    }
+    for (const debit of debits) {
+      const p = seatPlayer(debit.seat)
+      if (p) this.payDebit(p, debit)
+    }
+    for (const s of settled.steals) this.tellSteal(s)
     for (const credit of settled.credits) {
       const p = seatPlayer(credit.seat)
       if (p) await this.payCredit(state.handId, p, credit)
     }
     for (const a of settled.awarded) this.host.broadcast({ type: 'CHAOS_AWARDED', seat: a.seat, cardIds: a.cards.map((x) => x.id) })
     this.broadcastState()
+  }
+
+  /**
+   * BP-41 §5 (A6): points a card takes from the seat's stack (the dice), never more than the stack. The stack is lowered
+   * at once, a bot's as a human's (a bot's stack is virtual: nothing else is written for it). A human's sink row is the
+   * table-fee-like write of Task 7b.
+   */
+  private payDebit(p: RoomPlayer, debit: ChaosDebit): void {
+    p.stack -= Math.min(Math.max(0, debit.amount), p.stack)
   }
 
   /**
@@ -323,18 +468,22 @@ export class ChaosTable {
   snapshotFor(viewerId: string | null): ChaosSnapshot {
     const viewer = viewerId === null ? undefined : this.host.players.get(viewerId)
     const bonus = viewer && viewer.seat !== null && !viewer.identity.isBot ? { bonus: this.bonusFor(viewer) } : {}
+    const view = this.tableView()
+    const table = view ? { table: view } : {}
     const draft = this.draft
-    if (!draft) return { draft: null, ...bonus }
+    if (!draft) return { draft: null, ...bonus, ...table }
     const mine = draft.entries.find((e) => e.playerId === viewerId)
     return {
       draft: {
-        tier: draft.tier,
+        // The viewer's own offer's tier (BP-41 Nâng tầm uy lực), as its `CHAOS_OFFER` said; the table's otherwise.
+        tier: mine?.tier ?? draft.tier,
         deadlineAt: draft.deadlineAt,
         draftMs: draft.draftMs,
         offer: mine && mine.cardIds.length > 0 ? { offerId: mine.offerId, cardIds: mine.cardIds } : null,
         picked: mine !== undefined && mine.picked !== null,
       },
       ...bonus,
+      ...table,
     }
   }
 
@@ -344,11 +493,13 @@ export class ChaosTable {
     return { cards: chaos.cards.map(toHeldCardView), points: chaos.points, bonusCount: chaos.bonus.length + (chaos.armed ? 1 : 0) }
   }
 
-  /** The room is closing: no draft outlives it. */
+  /** The room is closing: no draft outlives it, nor the table's reigns and bombs. */
   cancel(): void {
     this.draftTimer?.cancel()
     this.draftTimer = null
     this.draft = null
+    this.table = EMPTY_CHAOS_TABLE
+    this.demigodHeralds = []
   }
 
   /** Whether this player has a credit whose write was never acknowledged (`pendingCredits`). */
@@ -412,7 +563,10 @@ export class ChaosTable {
       .filter((p) => p.seat !== null)
       .sort((a, b) => a.seat! - b.seat!)
       .map((p) => ({ seat: p.seat!, ...this.seatView(p) }))
-    this.host.broadcast({ type: 'CHAOS_STATE', seats })
+    // BP-41: the table's state rides along (absent = none), and counts as told.
+    const table = this.tableView()
+    this.toldTable = JSON.stringify(toChaosTableView(this.table))
+    this.host.broadcast({ type: 'CHAOS_STATE', seats, ...(table ? { table } : {}) })
   }
 
   private sendBonus(p: RoomPlayer): void {

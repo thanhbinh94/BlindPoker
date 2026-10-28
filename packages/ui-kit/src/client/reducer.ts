@@ -332,14 +332,17 @@ function applyRoomEvent(room: RoomView, event: RoomEvent): RoomView {
       return room
     // Poker hỗn loạn: these live in `ClientState.chaos` (`applyChaosRoomEvent`), not in the roster.
     // A credit raises the seat's stack (absolute, from the server): between hands the roster is what the next deal reads.
+    // BP-41: a dice loss lowers it the same way (`stack` is after the loss).
     case 'CHAOS_CREDIT':
+    case 'CHAOS_DICE':
       return { ...room, players: room.players.map((p) => (p.seat === event.seat ? { ...p, stack: event.stack } : p)) }
     case 'CHAOS_DRAFT':
     case 'CHAOS_PICKED':
     case 'CHAOS_STATE':
     case 'CHAOS_AWARDED':
     case 'CHAOS_HERALD':
-    case 'CHAOS_DICE':
+    case 'CHAOS_TABLE':
+    case 'CHAOS_STEAL':
     case 'RESULT_SKIPS': // the count lives in `ClientState.resultSkips`
       return room
   }
@@ -350,8 +353,9 @@ function applyChaosRoomEvent(chaos: ClientChaos, event: RoomEvent, mySeat: numbe
   switch (event.type) {
     case 'CHAOS_DRAFT': {
       const open = chaos.draft
-      // The offer may have beaten the draft frame here (they travel on different paths): same draft, keep it.
-      if (open && open.tier === event.tier && open.deadlineAt === event.deadlineAt) return chaos
+      // The offer may have beaten the draft frame here (they travel on different paths): same draft, keep it — and its
+      // tier, which may be above the table's (BP-41 Nâng tầm uy lực: the seat's own offer names its own tier).
+      if (open && open.deadlineAt === event.deadlineAt) return chaos
       return { ...chaos, draft: { tier: event.tier, deadlineAt: event.deadlineAt, totalMs: event.draftMs, offer: null, picked: false } }
     }
     case 'CHAOS_PICKED':
@@ -456,7 +460,7 @@ function applyChaosOffer(chaos: ClientChaos, payload: unknown): ClientChaos {
   if (!Array.isArray(p.cardIds) || !p.cardIds.every((c) => typeof c === 'string')) return chaos
   const offer = { offerId: p.offerId, cardIds: p.cardIds as string[] }
   const open = chaos.draft
-  const same = open !== null && open.tier === p.tier && open.deadlineAt === p.deadlineAt
+  const same = open !== null && open.deadlineAt === p.deadlineAt
   const picked = same && open.offer?.offerId === offer.offerId ? open.picked : false
   // The window's length rides on the offer too (it may beat the draft frame here); without it, the draft frame's, else the default.
   const totalMs = typeof p.draftMs === 'number' && p.draftMs > 0 ? p.draftMs : same ? open.totalMs : DEFAULT_DRAFT_MS
