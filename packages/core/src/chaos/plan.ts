@@ -107,9 +107,26 @@ export function planHand(input: {
         if (f.params.all) targets = opponents.slice()
         else if (opponents.length > 0) targets = [opponents[rng.int(opponents.length)]!]
       }
-      out.effects.push({ uid: f.uid, cardId: f.cardId, effect: f.effect, params: f.params, timing: f.timing, debuff: f.debuff, targets })
+      out.effects.push({
+        uid: f.uid, cardId: f.cardId, effect: f.effect, params: f.params, timing: f.timing, debuff: f.debuff, targets,
+        ...(f.charge === undefined ? {} : { charge: f.charge }),
+      })
       kinds.add(f.effect)
       if (f.debuff) debuffFired = true
+    }
+
+    // BP-41: the charge a firing card carries into this hand. Siêu cộng dồn's chance grows by a random whole
+    // `stepMin`..`stepMax` percent, up to `cap`, before this hand's roll (spec §6.1 "mỗi ván +5..7 %"); the grown card is
+    // what the seat keeps. Đảo bài's phase goes as it is (`afterHand` moves it on). Other cards carry none.
+    const grown = new Map<number, HeldCard>()
+    const chargeUp = (card: HeldCard): HeldCard => {
+      if (card.effect === 'flipFlop') return { ...card, charge: card.charge ?? 0 }
+      if (card.effect !== 'acesCharge') return card
+      const lo = card.params.stepMin ?? 0
+      const step = lo + rng.int(Math.max(1, (card.params.stepMax ?? lo) - lo + 1))
+      const next = { ...card, charge: Math.min(card.params.cap ?? 100, (card.charge ?? 0) + step) }
+      grown.set(card.uid, next)
+      return next
     }
 
     if (lead) fire(lead)
@@ -127,8 +144,12 @@ export function planHand(input: {
           out.shield = { uid: card.uid, cardId: card.cardId, kind: card.effect, ...(lasting ? { lasting: true as const } : {}) }
         }
       } else if (card.timing !== 'wait' && card.timing !== 'now' && card.timing !== 'end' && !(card.debuff && debuffFired) && !kinds.has(card.effect)) {
-        fire(card)
+        fire(chargeUp(card))
       }
+    }
+    if (grown.size > 0) {
+      chaos = { ...chaos, cards: chaos.cards.map((c) => grown.get(c.uid) ?? c) }
+      seats.set(seat, chaos)
     }
 
     let points = chaos.points

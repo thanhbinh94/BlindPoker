@@ -4,6 +4,7 @@ import type { Pot } from '../betting/pots.js'
 import { dealCards, getPlayer, seatsClockwiseFrom, type SettleHooks } from '../hand/common.js'
 import type { GameEvent, HandPlayer, HandState } from '../hand/types.js'
 import { canInsertThisHand } from './bonus.js'
+import { evaluateAny, evaluateWild } from './evaluate.js'
 import type { ChaosEffectKind, ChaosHandPlan, ChaosHandState, ChaosOutcome, PlannedEffect } from './types.js'
 
 /**
@@ -12,19 +13,34 @@ import type { ChaosEffectKind, ChaosHandPlan, ChaosHandState, ChaosOutcome, Plan
  * hand without `state.chaos`; the Blind engine only calls them when the hand has a plan.
  */
 
-/** Cards a deal-time draw must leave in the deck: the 5-card board plus a full storm re-deal (spec §3.5, amendment). */
+/**
+ * Cards a deal-time draw must leave in the deck: the 5-card board plus a full storm re-deal (spec §3.5, amendment).
+ * BP-41 A9 raised it to 11 for the sixth board card; Ruling (Task 3a): only a hand that has the sixth card keeps the
+ * extra one (`reserveOf`), so every hand without it draws exactly as before.
+ */
 export const DEAL_RESERVE = 10
+const reserveOf = (state: HandState): number => DEAL_RESERVE + (state.chaos?.sixthBoard ? 1 : 0)
 
 /**
  * Deal-time effects told only to their owner (and, for a debuff, its targets) when they happen: the table learns of
- * them from `CHAOS_SUMMARY` at the settlement. `reverseRank` is the one deal-time card the whole table is told at once.
+ * them from `CHAOS_SUMMARY` at the settlement. `reverseRank` is the one deal-time card the whole table is told at once,
+ * and BP-41's Lá chung thứ sáu is public too (the river shows it). BP-41 A8 adds Siêu cộng dồn, Lá ma, Liều ăn nhiều,
+ * Đảo bài and Hên xui.
  */
 export const PRIVATE_AT_DEAL: ReadonlySet<ChaosEffectKind> = new Set([
   'swapLowest', 'redealWeak', 'swapAll', 'bestOfN', 'highCard', 'suited', 'extraHole', 'freeze', 'blindfold',
+  'acesCharge', 'wildCard', 'riskyHand', 'flipFlop', 'coinFlip',
 ])
 
-/** The order a seat's deal-time buffs act in. Luck that picks a set comes before the promises that must hold at the end. */
-const DEAL_BUFFS: readonly ChaosEffectKind[] = ['swapLowest', 'redealWeak', 'swapAll', 'bestOfN', 'highCard', 'suited', 'extraHole']
+/**
+ * The order a seat's deal-time buffs act in. Luck that picks a set comes before the promises that must hold at the end.
+ * BP-41: Liều ăn nhiều's sets after "Giữ bộ tốt hơn", and Lá ma last, on the cards the seat ends the deal with.
+ */
+const DEAL_BUFFS: readonly ChaosEffectKind[] = [
+  'swapLowest', 'redealWeak', 'swapAll', 'bestOfN', 'riskyHand', 'highCard', 'suited', 'extraHole', 'wildCard',
+]
+/** Deal buffs that would replace a card of a seat Siêu cộng dồn (or the Thần) just dealt its Aces to: they fizzle there. */
+const BREAK_ACES: ReadonlySet<ChaosEffectKind> = new Set(['swapLowest', 'suited'])
 const DEAL_DEBUFFS: ReadonlySet<ChaosEffectKind> = new Set(['freeze', 'blindfold'])
 const HAND_DEBUFFS: readonly ChaosEffectKind[] = ['stealHole', 'lowerHole', 'swapHands']
 
@@ -76,15 +92,19 @@ const effectOf = (chaos: ChaosHandState, seat: number, kind: ChaosEffectKind): P
 const addUid = (list: number[], uid: number): void => {
   if (!list.includes(uid)) list.push(uid)
 }
+/** BP-41 spec §3: `seat` is immune to the steal family this hand (Liều ăn nhiều, Đảo bài on a −1 hand). */
+export const isImmune = (chaos: ChaosHandState, seat: number): boolean => chaos.immune?.includes(seat) ?? false
 
 /** Records one effect's result: its event, its line in the summary, and whether its card is used up. */
 function record(
   chaos: ChaosHandState, events: GameEvent[], seat: number, e: PlannedEffect, targets: number[], outcome: ChaosOutcome,
-  extra: { community?: Card[]; amount?: number; consume?: 'applied' | 'blocked' | null } = {},
+  extra: { community?: Card[]; amount?: number; holeDelta?: number; wild?: Card; consume?: 'applied' | 'blocked' | null } = {},
 ): void {
   const ev: Applied = { type: 'CHAOS_APPLIED', seat, cardId: e.cardId, effect: e.effect, targets, outcome }
   if (extra.community) ev.community = extra.community
   if (extra.amount !== undefined) ev.amount = extra.amount
+  if (extra.holeDelta !== undefined) ev.holeDelta = extra.holeDelta
+  if (extra.wild !== undefined) ev.wild = extra.wild
   events.push(ev)
   chaos.used.push({ seat, cardId: e.cardId, effect: e.effect, outcome, targets: targets.slice() })
   addUid(chaos.recorded, e.uid)
@@ -115,11 +135,13 @@ const lowestIndex = (cards: readonly Card[]): number => cards.reduce((lo, c, i) 
 const highestIndex = (cards: readonly Card[]): number => cards.reduce((hi, c, i) => (rankOf(c) > rankOf(cards[hi]!) ? i : hi), 0)
 const noPair = (cards: readonly Card[]): boolean => new Set(cards.map(rankOf)).size === cards.length
 const topRank = (cards: readonly Card[]): number => Math.max(...cards.map(rankOf))
-const canDealAtDeal = (state: HandState, n: number): boolean => remaining(state) - n >= DEAL_RESERVE
+const canDealAtDeal = (state: HandState, n: number): boolean => remaining(state) - n >= reserveOf(state)
 
 /** One deal-time buff on `p`; returns its outcome (`fizzled` when the reserve or its condition says no). */
-function dealBuff(state: HandState, p: HandPlayer, e: PlannedEffect, keepTopRank: number | null): ChaosOutcome {
+function dealBuff(state: HandState, p: HandPlayer, e: PlannedEffect, keepTopRank: number | null, rng: Rng): ChaosOutcome {
   const hole = p.holeCards
+  const chaos = state.chaos!
+  if (BREAK_ACES.has(e.effect) && chaos.outcomes?.acesDealt?.includes(p.seat)) return 'fizzled'
   switch (e.effect) {
     case 'swapLowest': {
       if (!canDealAtDeal(state, 1)) return 'fizzled'
@@ -133,7 +155,9 @@ function dealBuff(state: HandState, p: HandPlayer, e: PlannedEffect, keepTopRank
       p.holeCards = dealCards(state, hole.length)
       return 'applied'
     }
-    case 'bestOfN': {
+    // Liều ăn nhiều (BP-41) keeps the best of its `sets` sets of the one-fewer cards it was dealt, as "Giữ bộ tốt hơn".
+    case 'bestOfN':
+    case 'riskyHand': {
       const extra = Math.max(0, (e.params.sets ?? 1) - 1)
       const n = extra * hole.length
       if (n === 0 || !canDealAtDeal(state, n)) return 'fizzled'
@@ -180,17 +204,133 @@ function dealBuff(state: HandState, p: HandPlayer, e: PlannedEffect, keepTopRank
       hole.push(...dealCards(state, n))
       return 'applied'
     }
+    case 'wildCard': {
+      if (hole.length === 0) return 'fizzled'
+      ;(chaos.wild ??= []).push({ seat: p.seat, card: hole[rng.int(hole.length)]! })
+      return 'applied'
+    }
     default:
       return 'fizzled'
   }
 }
 
 /**
+ * BP-41 spec §3 "Lá A có hạn" (A4): takes `n` cards for one seat out of the undealt deck before the hole cards are
+ * dealt — an Ace while one is left, else the highest card left (the first of its rank in deck order). Each card moves
+ * to the deck's dealt end, so the deck stays all 52 cards and the deal goes on from the rest.
+ */
+function takeAces(state: HandState, n: number): Card[] {
+  const out: Card[] = []
+  for (let k = 0; k < n && remaining(state) > 0; k++) {
+    let at = state.deckIndex
+    for (let i = state.deckIndex; i < state.deck.length; i++) {
+      if (rankOf(state.deck[i]!) > rankOf(state.deck[at]!)) at = i
+      if (rankOf(state.deck[at]!) === 12) break
+    }
+    const [card] = state.deck.splice(at, 1)
+    state.deck.splice(state.deckIndex, 0, card!)
+    state.deckIndex += 1
+    out.push(card!)
+  }
+  return out
+}
+
+const markImmune = (chaos: ChaosHandState, seat: number): void => addUid((chaos.immune ??= []), seat)
+
+/**
+ * The deal of a chaos hand (A4), in place of the plain deal: what decides the hole cards before they are dealt, the
+ * deal, then the deal-time cards (`applyDealEffects`). A hand whose plan holds no round-three deal card deals exactly as
+ * a plain hand and draws nothing more from `rng`. In order:
+ * 1. Lá chung thứ sáu: the board gets a sixth card (the river deals two) when the deck can spare it above the reserve
+ *    once every seat is dealt (spec §3 "thiếu lá": else it fizzles); from then on the reserve is 11.
+ * 2. Each seat's hole count, clockwise from the button: Liều ăn nhiều −`count`, Đảo bài ±`count` by its phase, Hên xui
+ *    ±`count` on a coin of `odds` %. A −1 that would leave no hole card fizzles; a +1 the deck cannot spare above the
+ *    reserve fizzles. Liều ăn nhiều, and Đảo bài on a −1 hand, make the seat immune to the steal family this hand.
+ * 3. The Aces (spec §3 "Lá A có hạn"): the Thần's first (Task 6 plugs its claim in here, before every other), then each
+ *    Siêu cộng dồn, clockwise, that rolls under its charge — all its hole cards (`all`) or `aces` of them — taken out of
+ *    the deck before anyone is dealt (`takeAces`). A seat that got them is in `outcomes.acesDealt`.
+ * 4. The deal, round by round as a plain hand, each seat up to its count (Aces already in hand count).
+ * 5. `applyDealEffects`.
+ */
+export function dealChaosHand(state: HandState, events: GameEvent[], rng: Rng): void {
+  const chaos = state.chaos
+  if (!chaos) throw new Error('dealChaosHand: not a chaos hand')
+  const base = state.rules.mode === 'blind' ? state.rules.holeCards : 2
+  const order = seatsClockwiseFrom(state, state.button)
+  let toDeal = base * order.length
+
+  const sixth = order.flatMap((p) => {
+    const e = effectOf(chaos, p.seat, 'sixthBoard')
+    return e ? [{ seat: p.seat, e }] : []
+  })
+  if (sixth.length > 0) {
+    const ok = remaining(state) - toDeal >= DEAL_RESERVE + 1
+    if (ok) chaos.sixthBoard = true
+    // One sixth card for the whole board, however many seats hold the card: each holder's card acted.
+    for (const { seat, e } of sixth) record(chaos, events, seat, e, [], ok ? 'applied' : 'fizzled')
+  }
+
+  const counts = new Map<number, number>()
+  const riskyDelta = new Map<number, number>()
+  for (const p of order) {
+    let n = base
+    const change = (delta: number): ChaosOutcome => {
+      if (delta < 0 ? n + delta < 1 : remaining(state) - toDeal - delta < reserveOf(state)) return 'fizzled'
+      n += delta
+      toDeal += delta
+      return 'applied'
+    }
+    const risky = effectOf(chaos, p.seat, 'riskyHand')
+    if (risky) {
+      markImmune(chaos, p.seat)
+      const delta = -(risky.params.count ?? 1)
+      riskyDelta.set(p.seat, change(delta) === 'applied' ? delta : 0)
+    }
+    const flip = effectOf(chaos, p.seat, 'flipFlop')
+    if (flip) {
+      const c = flip.params.count ?? 1
+      const delta = (flip.charge ?? 0) % 2 === 0 ? c : -c
+      if (delta < 0) markImmune(chaos, p.seat)
+      record(chaos, events, p.seat, flip, [], change(delta), { holeDelta: delta })
+    }
+    const coin = effectOf(chaos, p.seat, 'coinFlip')
+    if (coin) {
+      const c = coin.params.count ?? 1
+      const delta = rng.int(100) < (coin.params.odds ?? 50) ? c : -c
+      record(chaos, events, p.seat, coin, [], change(delta), { holeDelta: delta })
+    }
+    counts.set(p.seat, n)
+  }
+
+  // Task 6: the Thần's Aces are claimed here, before any Siêu cộng dồn.
+  for (const p of order) {
+    const e = effectOf(chaos, p.seat, 'acesCharge')
+    if (!e) continue
+    if (rng.int(100) >= (e.charge ?? 0)) {
+      record(chaos, events, p.seat, e, [], 'fizzled')
+      continue
+    }
+    const n = counts.get(p.seat)!
+    p.holeCards = takeAces(state, e.params.all ? n : Math.min(e.params.aces ?? 2, n))
+    chaos.outcomes = { ...chaos.outcomes, acesDealt: [...(chaos.outcomes?.acesDealt ?? []), p.seat] }
+    record(chaos, events, p.seat, e, [], 'applied')
+  }
+
+  const rounds = Math.max(...counts.values())
+  for (let round = 0; round < rounds; round++) {
+    for (const p of order) if (p.holeCards.length <= round && round < counts.get(p.seat)!) p.holeCards.push(...dealCards(state, 1))
+  }
+  applyDealEffects(state, events, rng, riskyDelta)
+}
+
+/**
  * The deal-time cards (spec §3.5.1), once every seat holds its dealt cards and before `CARDS_DEALT`: seat by seat
  * clockwise from the button, each seat's buffs in `DEAL_BUFFS` order, then its freeze or blindfold through the debuff
- * resolver; then every "Thế giới đảo ngược", told to the whole table.
+ * resolver; then every "Thế giới đảo ngược", told to the whole table. `riskyDelta`: the hole cards each Liều ăn nhiều
+ * took before the deal (`dealChaosHand`), told with its event. Lá ma tells its owner the wild card, unless the owner is
+ * blindfolded (it would show a card the seat must not see).
  */
-export function applyDealEffects(state: HandState, events: GameEvent[]): void {
+export function applyDealEffects(state: HandState, events: GameEvent[], rng: Rng, riskyDelta: ReadonlyMap<number, number> = new Map()): void {
   const chaos = state.chaos
   if (!chaos) return
   for (const p of seatsClockwiseFrom(state, state.button)) {
@@ -200,9 +340,14 @@ export function applyDealEffects(state: HandState, events: GameEvent[]): void {
     for (const kind of DEAL_BUFFS) {
       const e = effects.find((x) => x.effect === kind)
       if (!e) continue
-      const outcome = dealBuff(state, p, e, keepTopRank)
+      const outcome = dealBuff(state, p, e, keepTopRank, rng)
       if (kind === 'highCard' && outcome === 'applied') keepTopRank = e.params.minRank ?? 0
-      record(chaos, events, p.seat, e, [], outcome)
+      if (kind === 'riskyHand') {
+        // The card acts (one card fewer, immunity) even when the deck could not spare its extra sets.
+        record(chaos, events, p.seat, e, [], 'applied', { holeDelta: riskyDelta.get(p.seat) ?? 0 })
+      } else if (kind === 'wildCard' && outcome === 'applied' && !isBlindfolded(chaos.plan, p.seat)) {
+        record(chaos, events, p.seat, e, [], outcome, { wild: chaos.wild!.find((w) => w.seat === p.seat)!.card })
+      } else record(chaos, events, p.seat, e, [], outcome)
     }
     for (const e of effects) {
       if (!DEAL_DEBUFFS.has(e.effect)) continue
@@ -332,7 +477,11 @@ export function applyRevealEffects(state: HandState, events: GameEvent[], rng: R
         }
         targets = [fresh[rng.int(fresh.length)]!]
       }
-      for (const target of targets) resolveDebuff(state, events, user.seat, e, target, (victim) => handDebuff(state, kind, user.seat, victim, rng))
+      for (const target of targets) {
+        // BP-41 "miễn nhiễm rút bài": the card is spent on an immune seat and does nothing; the seat is not counted hit.
+        if (isImmune(chaos, target)) record(chaos, events, user.seat, e, [target], 'fizzled')
+        else resolveDebuff(state, events, user.seat, e, target, (victim) => handDebuff(state, kind, user.seat, victim, rng))
+      }
     }
   }
 
@@ -368,6 +517,7 @@ export function applyRevealEffects(state: HandState, events: GameEvent[], rng: R
 /** Steal, lower or swap on `victim`; false when nothing could change (a last card is never stolen). */
 function handDebuff(state: HandState, kind: ChaosEffectKind, user: number, victim: number, rng: Rng): boolean {
   const v = getPlayer(state, victim)
+  if (isImmune(state.chaos!, victim)) return false // a mirror turning it back on an immune user
   switch (kind) {
     case 'stealHole': {
       if (v.holeCards.length <= 1) return false
@@ -430,6 +580,11 @@ export function chaosSettleHooks(state: HandState): SettleHooks | undefined {
   return {
     reverse: chaos.plan.reverse,
     borrowed: (seat) => chaos.borrowed.find((b) => b.seat === seat)?.card ?? null,
+    // A9 / Ruling 4: any number of cards, and Lá ma's wild card while its seat still holds it.
+    evaluateSeat: (seat, cards) => {
+      const wild = chaos.wild?.find((w) => w.seat === seat)?.card
+      return wild !== undefined && getPlayer(state, seat).holeCards.includes(wild) ? evaluateWild(cards, wild) : evaluateAny(cards)
+    },
     beforePayout: (pots, winners) => insure(state, pots, winners),
     beforeSettlement: () => [{ type: 'CHAOS_SUMMARY', used: chaos.used.map((u) => ({ ...u })) }],
   }

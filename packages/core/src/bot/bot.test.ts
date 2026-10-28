@@ -17,6 +17,10 @@ describe('chenScore', () => {
     expect(chenScore(parseCards('As Ah 2c'))).toBe(22)      // pair of aces + 2
     expect(chenScore(parseCards('7s 7h 7c'))).toBe(14)     // pair of 7s = 3.5 × 2 = 7, + 2 (pair) + 5 (trips)
   })
+  it('scores a one-card chaos hand (Liều ăn nhiều, Hên xui, Đảo bài) on its card alone', () => {
+    expect(chenScore(parseCards('As'))).toBe(10)
+    expect(chenScore(parseCards('7d'))).toBe(4)
+  })
   it('scores a chaos "Thêm lá" hand of four on its first three cards', () => {
     expect(chenScore(parseCards('As Ah 2c Kd'))).toBe(chenScore(parseCards('As Ah 2c')))
   })

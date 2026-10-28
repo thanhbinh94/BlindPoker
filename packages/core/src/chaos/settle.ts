@@ -6,7 +6,7 @@ import { farmHandsOf, receiveCard, tierFromParam, toHeld } from './hold.js'
 import {
   BONUS_HAND_MAX, EMPTY_CHAOS_TABLE,
   type ChaosCardDef, type ChaosConfig, type ChaosCredit, type ChaosDebit, type ChaosHandOutcomes, type ChaosHandPlan, type ChaosMark, type ChaosMode,
-  type ChaosSeat, type ChaosTableState, type ChaosTier, type HeldCard,
+  type ChaosEffectKind, type ChaosSeat, type ChaosTableState, type ChaosTier, type HeldCard, type PlannedEffect,
 } from './types.js'
 
 export interface AfterHandSeat {
@@ -120,6 +120,16 @@ export function afterHand(input: {
       if (fired.some((e) => e.effect === 'farm')) gain *= 2
       points += gain
     }
+
+    // BP-41 charge cards (Ruling: their state moves here, after the hand they played): Siêu cộng dồn is spent once it
+    // dealt its Aces (spec §6.1 "nổ xong về 0, thẻ hết": the card leaves, so its charge goes with it); Đảo bài's phase
+    // moves on one for each hand it fired; Liều ăn nhiều ends with a win ("tới khi thắng" — Task 5c rolls its crit here).
+    const firedKind = (kind: ChaosEffectKind): PlannedEffect | undefined => fired.find((e) => e.effect === kind)
+    if (input.outcomes?.acesDealt?.includes(s.seat)) cards = cards.filter((c) => c.effect !== 'acesCharge')
+    const flip = firedKind('flipFlop')
+    if (flip) cards = cards.map((c) => (c.uid === flip.uid ? { ...c, charge: (c.charge ?? 0) + 1 } : c))
+    const risky = firedKind('riskyHand')
+    if (risky && outcome === 'win') cards = cards.filter((c) => c.uid !== risky.uid)
 
     const prizes: { tier: ChaosTier; count: number }[] = []
     if (!frozen) {

@@ -98,6 +98,12 @@ export interface ShowdownHand {
   best: Card[]
   /** Poker hỗn loạn "Mượn lá": the opponent's card this seat also ranked with (a copy). */
   borrowed?: Card
+  /**
+   * BP-41 Lá ma: the seat's wild hole card `card` ranked as `as`. `cards` and `best` show the real card (`card`, in the
+   * slot `as` filled); `rank` and `category` are the ranking with `as`. Absent when the wild card ranked as itself or
+   * did not make the best five.
+   */
+  wild?: { card: Card; as: Card }
 }
 
 export interface HandResult {
@@ -168,9 +174,13 @@ export type GameEvent =
   /**
    * A chaos card acted. Deal-time buffs and debuffs reach only their owner and targets (`filterEvent`); `reverseRank` and
    * the rest are public. `amount`: a refund (freeFold, refundStake). `dice`: the faces a card rolled in the hand (BP-41
-   * Xúc xắc định mệnh, A15).
+   * Xúc xắc định mệnh, A15). `holeDelta`: the hole cards a card adds (+) or takes (−) at the deal (BP-41 Hên xui, Đảo
+   * bài, Liều ăn nhiều; on `fizzled`, what it would have done). `wild`: the hole card Lá ma made wild (its owner only).
    */
-  | { type: 'CHAOS_APPLIED'; seat: number; cardId: string; effect: ChaosEffectKind; targets: number[]; outcome: ChaosOutcome; community?: Card[]; amount?: number; dice?: number[] }
+  | {
+    type: 'CHAOS_APPLIED'; seat: number; cardId: string; effect: ChaosEffectKind; targets: number[]; outcome: ChaosOutcome; community?: Card[]
+    amount?: number; dice?: number[]; holeDelta?: number; wild?: Card
+  }
   /** "Nhìn trộm": the next board cards, for `seat` only (`filterEvent` blanks them for everyone else). */
   | { type: 'CHAOS_PEEK'; seat: number; cards: Card[] }
   /** Every card the hand used, public, just before `SETTLEMENT`. */

@@ -317,3 +317,49 @@ describe('planHand', () => {
     })
   })
 })
+
+describe('planHand — BP-41 charge cards', () => {
+  const chargeOf = (r: ReturnType<typeof plan>, seat: number, cardId: string) => r.seats.get(seat)!.cards.find((c) => c.cardId === cardId)!.charge
+  it('Siêu cộng dồn grows its chance by 5..7 % each hand before it rolls; the plan and the seat carry the grown charge', () => {
+    let chaos = holding(['d_aces_charge'])
+    expect(chaos.cards[0]!.charge).toBeUndefined()
+    let last = 0
+    for (let hand = 0; hand < 5; hand++) {
+      const r = plan({ 0: chaos, 1: EMPTY_CHAOS_SEAT }, RULES, 10 + hand)
+      const now = chargeOf(r, 0, 'd_aces_charge')!
+      expect(now - last).toBeGreaterThanOrEqual(5)
+      expect(now - last).toBeLessThanOrEqual(7)
+      expect(effectsOf(r, 0).effects[0]).toMatchObject({ cardId: 'd_aces_charge', charge: now })
+      last = now
+      chaos = r.seats.get(0)!
+    }
+  })
+  it('the charge stops at the card cap: 60 % for the Vàng card, 100 % for the Kim cương', () => {
+    const gold = holding(['g_aces_charge'])
+    const r = plan({ 0: { ...gold, cards: [{ ...gold.cards[0]!, charge: 58 }] }, 1: EMPTY_CHAOS_SEAT })
+    expect(chargeOf(r, 0, 'g_aces_charge')).toBe(60)
+    const diamond = holding(['d_aces_charge'])
+    const d = plan({ 0: { ...diamond, cards: [{ ...diamond.cards[0]!, charge: 97 }] }, 1: EMPTY_CHAOS_SEAT })
+    expect(chargeOf(d, 0, 'd_aces_charge')).toBe(100)
+  })
+  it('a frozen seat neither rolls nor grows', () => {
+    const chaos = holding(['d_aces_charge'], { frozenNextHand: true })
+    const r = plan({ 0: chaos, 1: EMPTY_CHAOS_SEAT })
+    expect(chargeOf(r, 0, 'd_aces_charge')).toBeUndefined()
+    expect(effectsOf(r, 0).effects).toEqual([])
+  })
+  it('Đảo bài goes into the plan with its phase (0 before its first hand); a card with no charge carries none', () => {
+    const r = plan({ 0: holding(['g_flip_flop', 's_luck_1']), 1: EMPTY_CHAOS_SEAT })
+    expect(effectsOf(r, 0).effects.find((e) => e.effect === 'flipFlop')!.charge).toBe(0)
+    expect(effectsOf(r, 0).effects.find((e) => e.effect === 'bestOfN')).not.toHaveProperty('charge')
+    // The phase itself moves in afterHand, not here.
+    expect(chargeOf(r, 0, 'g_flip_flop')).toBeUndefined()
+  })
+  it('a second copy of a charge card adds its hands and keeps the held card\'s charge (Ruling 6)', () => {
+    const held = holding(['d_aces_charge'])
+    const charged = { ...held, cards: [{ ...held.cards[0]!, charge: 30, handsLeft: 4 }] }
+    const got = receiveCard(charged, card('d_aces_charge'), counter(7_000), pool, 'playOrFold', seededRng(1)).seat
+    expect(got.cards).toHaveLength(1)
+    expect(got.cards[0]).toMatchObject({ charge: 30, handsLeft: 24 })
+  })
+})

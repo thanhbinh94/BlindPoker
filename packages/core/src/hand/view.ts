@@ -43,8 +43,9 @@ export interface HandView {
   /**
    * Poker hỗn loạn, on a chaos hand only: the reversed ranking (public from the deal), the board cards the viewer
    * peeked at (theirs only, `[]` otherwise), and whether the viewer is blindfolded (their own cards are then null).
+   * `wild` (BP-41 Lá ma): the viewer's own wild hole card while they hold it, for a reconnect; absent otherwise.
    */
-  chaos?: { reverse: boolean; peek: Card[]; blindfolded: boolean }
+  chaos?: { reverse: boolean; peek: Card[]; blindfolded: boolean; wild?: Card }
 }
 
 function viewerLegal(state: HandState, viewerSeat: number | null): LegalActions | null {
@@ -115,6 +116,9 @@ export function playerView(state: HandState, viewerSeat: number | null): HandVie
       peek: state.chaos.peek.find((x) => x.seat === viewerSeat)?.cards.slice() ?? [],
       blindfolded: viewerSeat !== null && isBlindfolded(plan, viewerSeat),
     }
+    const wild = state.chaos.wild?.find((w) => w.seat === viewerSeat)?.card
+    const holds = state.players.find((p) => p.seat === viewerSeat)?.holeCards.includes(wild ?? -1) ?? false
+    if (wild !== undefined && holds && !view.chaos.blindfolded) view.chaos.wild = wild
   }
   return view
 }

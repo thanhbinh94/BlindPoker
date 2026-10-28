@@ -25,8 +25,10 @@ function chen2(a: Card, b: Card): number {
  */
 export function chenScore(cards: readonly Card[]): number {
   if (cards.length > 3) return chenScore(cards.slice(0, 3))
+  // BP-41: a chaos seat left one card (Liều ăn nhiều, Hên xui, Đảo bài on a 2-card table) is scored on that card alone.
+  if (cards.length === 1) return Math.round(cardPoints(rankOf(cards[0]!)))
   if (cards.length === 2) return chen2(cards[0]!, cards[1]!)
-  if (cards.length !== 3) throw new Error('chenScore supports 2 or 3 cards')
+  if (cards.length !== 3) throw new Error('chenScore supports 1 to 3 cards')
   let best = -Infinity
   for (const [a, b] of combinations(cards, 2)) best = Math.max(best, chen2(a!, b!))
   const ranks = cards.map(rankOf)

@@ -1,6 +1,6 @@
 import type { Card } from '../cards/cards.js'
 import { computePots, distributePots, tableFee, type Pot } from '../betting/pots.js'
-import { evaluate } from '../evaluator/evaluator.js'
+import { evaluate, type HandEvaluation } from '../evaluator/evaluator.js'
 import { EngineError, type GameEvent, type HandPlayer, type HandState, type ShowdownHand, type Street } from './types.js'
 
 export function clone<T>(s: T): T {
@@ -46,7 +46,8 @@ const STREET_CARDS: Record<Street, number> = { PREFLOP: 0, FLOP: 3, TURN: 1, RIV
 export function revealNext(state: HandState, events: GameEvent[]): void {
   const street = state.revealQueue.shift()
   if (!street) throw new EngineError('INVALID_COMMAND', 'nothing to reveal')
-  const cards = dealCards(state, STREET_CARDS[street])
+  // BP-41 Lá chung thứ sáu: on a chaos hand that set it, the river deals two cards.
+  const cards = dealCards(state, STREET_CARDS[street] + (street === 'RIVER' && state.chaos?.sixthBoard ? 1 : 0))
   state.community.push(...cards)
   state.street = street
   events.push({ type: 'COMMUNITY_REVEALED', street, cards, community: state.community.slice() })
@@ -82,11 +83,13 @@ export function returnUncalled(state: HandState): { seat: number; amount: number
  * What a chaos hand changes in the settlement (Poker hỗn loạn; built by `chaos/engine.ts`, absent for a plain hand):
  * a borrowed card a seat ranks with, the reversed ranking, a step after the ranks are known and before the pots are
  * paid (insurance, which may move points from `pots` to stacks — its events follow `SHOWDOWN`), and events told just
- * before `SETTLEMENT` (the summary).
+ * before `SETTLEMENT` (the summary). `evaluateSeat` (BP-41 A9) ranks a seat's cards in place of `evaluate`: more than
+ * ten cards (a sixth board card, extra hole cards) and Lá ma's wild card; the plain evaluator is never changed.
  */
 export interface SettleHooks {
   reverse: boolean
   borrowed(seat: number): Card | null
+  evaluateSeat?(seat: number, cards: readonly Card[]): HandEvaluation & { wild?: { card: Card; as: Card } }
   beforePayout(pots: Pot[], winners: ReadonlySet<number>): GameEvent[]
   beforeSettlement(): GameEvent[]
 }
@@ -114,11 +117,12 @@ export function settle(state: HandState, events: GameEvent[], opts: { showdown: 
     showdown = live.map((p) => {
       const borrowed = hooks?.borrowed(p.seat) ?? null
       const cards = borrowed === null ? [...p.holeCards, ...state.community] : [...p.holeCards, ...state.community, borrowed]
-      const ev = evaluate(cards)
+      const ev: HandEvaluation & { wild?: { card: Card; as: Card } } = hooks?.evaluateSeat ? hooks.evaluateSeat(p.seat, cards) : evaluate(cards)
       // "Thế giới đảo ngược": the weakest hand wins every pot it is in; the shown ranks stay the real ones.
       rankBySeat.set(p.seat, hooks?.reverse ? -ev.rank : ev.rank)
       const hand: ShowdownHand = { seat: p.seat, cards: p.holeCards.slice(), rank: ev.rank, category: ev.category, best: ev.best }
       if (borrowed !== null) hand.borrowed = borrowed
+      if (ev.wild) hand.wild = ev.wild
       return hand
     })
   } else {

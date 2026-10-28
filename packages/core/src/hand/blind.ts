@@ -1,7 +1,7 @@
 import { createDeck } from '../cards/cards.js'
 import type { Rng } from '../cards/rng.js'
 import { shuffle } from '../cards/shuffle.js'
-import { applyDealEffects, applyRevealEffects, chaosSettleHooks, emitPeeks, initialChaosState, isBlindfolded, refundFreeFolds } from '../chaos/engine.js'
+import { applyRevealEffects, dealChaosHand, chaosSettleHooks, emitPeeks, initialChaosState, isBlindfolded, refundFreeFolds } from '../chaos/engine.js'
 import type { ChaosHandPlan } from '../chaos/types.js'
 import { ECONOMY } from '../constants/economy.js'
 import { cancelHand, carryOverAll, clone, commit, dealCards, getPlayer, revealNext, seatsClockwiseFrom, settle } from './common.js'
@@ -84,9 +84,13 @@ export function createBlindHand(input: CreateBlindInput, rng: Rng): EngineResult
   events.push({ type: 'BLINDS_POSTED', posts })
   events.push({ type: 'POT_UPDATED', pot: state.pot })
 
-  const order = seatsClockwiseFrom(state, state.button)
-  for (let round = 0; round < input.rules.holeCards; round++) for (const p of order) p.holeCards.push(...dealCards(state, 1))
-  applyDealEffects(state, events)
+  // A chaos hand deals through its pre-deal hook (BP-41 A4: Aces and hole counts before the deal, then the deal-time
+  // cards); a plain hand deals here.
+  if (state.chaos) dealChaosHand(state, events, rng)
+  else {
+    const order = seatsClockwiseFrom(state, state.button)
+    for (let round = 0; round < input.rules.holeCards; round++) for (const p of order) p.holeCards.push(...dealCards(state, 1))
+  }
   // A blindfolded seat is dealt face down even to itself.
   for (const p of state.players) events.push({ type: 'CARDS_DEALT', seat: p.seat, cards: isBlindfolded(input.chaos, p.seat) ? [] : p.holeCards.slice(), cardCount: p.holeCards.length })
 

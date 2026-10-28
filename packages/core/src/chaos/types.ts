@@ -175,6 +175,11 @@ export interface PlannedEffect {
   debuff: boolean
   /** Deal-time debuffs only (`freeze`, `blindfold`); reveal debuffs pick their target in the engine. */
   targets: number[]
+  /**
+   * BP-41: the held card's `charge` as this hand plays it — Siêu cộng dồn's chance in percent after this hand's growth,
+   * Đảo bài's phase (hands it has played: even = +1 card, odd = −1). Absent on every card that keeps none.
+   */
+  charge?: number
 }
 
 export interface ChaosHandPlan {
@@ -247,6 +252,22 @@ export interface ChaosHandState {
   hit: number[]
   /** Seats whose one-shot shield or mirror is spent this hand. */
   shieldSpent: number[]
+  /**
+   * BP-41 Lá chung thứ sáu: the board has six cards this hand (the river deals two). Absent = five. Set at the deal only
+   * when the deck can spare the sixth card above the reserve.
+   */
+  sixthBoard?: true
+  /**
+   * BP-41 Lá ma: the hole card each seat ranks as wild this hand. It stays itself on every screen (clients show the real
+   * card); only the showdown's ranking treats it as any card (`ShowdownHand.wild`). It is wild only while its seat still
+   * holds it: a card stolen or swapped away loses the wildness, and the seat it goes to does not gain it.
+   */
+  wild?: { seat: number; card: Card }[]
+  /**
+   * BP-41 spec §3 "miễn nhiễm rút bài": the seats no card may take, lower, swap or redeal a hole card of this hand
+   * (Liều ăn nhiều while it lasts, Đảo bài on a −1 hand). A debuff of that family aimed at one fizzles. Absent = none.
+   */
+  immune?: number[]
   /**
    * BP-41 A3: what the hand did that `afterHand` settles on — the room copies it into `afterHand`'s `outcomes`. Absent
    * until a round-three card or the Thần writes it.

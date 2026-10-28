@@ -398,3 +398,31 @@ describe('afterHand — BP-41 plumbing', () => {
     expect(r.seats.get(0)).toEqual(plain.seats.get(0))
   })
 })
+
+describe('afterHand — BP-41 charge cards', () => {
+  const big = { config: { ...DEFAULT_CHAOS_CONFIG, pointsThreshold: 1_000 } }
+  it('Siêu cộng dồn leaves once it dealt its Aces; otherwise it keeps its charge and loses a hand', () => {
+    const held = holding(['d_aces_charge'])
+    const charged = { ...held, cards: [{ ...held.cards[0]!, charge: 40 }] }
+    const effects = { 0: [{ ...fired(charged, 'd_aces_charge'), charge: 40 }] }
+    const kept = settle([seat(charged, { outcome: 'loss' })], { ...big, plan: planOf(effects) })
+    expect(kept.seats.get(0)!.cards).toEqual([{ ...charged.cards[0]!, handsLeft: 19 }])
+    const spent = settle([seat(charged, { outcome: 'win', net: 100 })], { ...big, plan: planOf(effects), outcomes: { acesDealt: [0] } })
+    expect(spent.seats.get(0)!.cards).toEqual([])
+  })
+  it('Đảo bài moves its phase on by one for each hand it fired, and not in a hand it did not', () => {
+    const held = holding(['g_flip_flop'])
+    const once = settle([seat(held, { outcome: 'loss' })], { ...big, plan: planOf({ 0: [fired(held, 'g_flip_flop')] }) }).seats.get(0)!
+    expect(once.cards[0]).toMatchObject({ charge: 1, handsLeft: 3 })
+    const twice = settle([seat(once, { outcome: 'win', net: 10 })], { ...big, plan: planOf({ 0: [fired(once, 'g_flip_flop')] }) }).seats.get(0)!
+    expect(twice.cards[0]).toMatchObject({ charge: 2, handsLeft: 2 })
+    const out = settle([seat(once, { inHand: false })], big).seats.get(0)!
+    expect(out.cards[0]).toMatchObject({ charge: 1, handsLeft: 3 })
+  })
+  it('Liều ăn nhiều lasts until a win: a loss keeps it, a win ends it', () => {
+    const held = holding(['d_risky_hand'])
+    const p = { ...big, plan: planOf({ 0: [fired(held, 'd_risky_hand')] }) }
+    expect(settle([seat(held, { outcome: 'loss' })], p).seats.get(0)!.cards[0]).toMatchObject({ cardId: 'd_risky_hand', handsLeft: 9 })
+    expect(settle([seat(held, { outcome: 'win', net: 500 })], p).seats.get(0)!.cards).toEqual([])
+  })
+})
