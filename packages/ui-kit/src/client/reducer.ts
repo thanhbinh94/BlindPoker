@@ -208,10 +208,13 @@ function applyHandEvent(state: ClientState, hand: ClientHand, event: GameEvent &
       const seat = mine === null ? undefined : hand.seats.find((s) => s.seat === mine)
       // A seat the ante emptied is played for it (plan 27 D1) and never asked; a short one plays what it has left,
       // as `blindLegalActions` says: min(stack, wager), which the button reads as "Tất tay N".
+      // BP-41 (chaos): a card may have multiplied the seat's stake (`calls`, A1) or taken its fold away (`noFold`, A2);
+      // the server says so per seat, and the client mirrors `blindLegalActions` rather than assume the fixed wager.
       const undecided = mine !== null && seat !== undefined && event.seats.includes(mine) && !seat.hasDecided && !seat.allIn
-      const wager = state.room?.config.blind?.fixedWager ?? 0
+      const wager = event.calls?.find((c) => c.seat === mine)?.amount ?? state.room?.config.blind?.fixedWager ?? 0
+      const kinds: LegalActions['kinds'] = mine !== null && event.noFold?.includes(mine) === true ? ['play'] : ['play', 'fold']
       const legal: LegalActions | null = undecided
-        ? { seat: mine, kinds: ['play', 'fold'], callAmount: Math.min(seat.stack, wager), minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 }
+        ? { seat: mine, kinds, callAmount: Math.min(seat.stack, wager), minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 }
         : null
       return { ...state, deadlineAt: event.deadlineAt ?? null, hand: { ...hand, phase: 'DECISION', actingSeat: null, legal } }
     }

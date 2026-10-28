@@ -89,6 +89,12 @@ export type HandCommand =
   | { type: 'ADVANCE' }
   | { type: 'REVEALED'; seat: number }
   | { type: 'CANCEL'; reason: string }
+  /**
+   * BP-41 A2: `seat` gives up this hand — it left or stood up, so nobody is there to choose. Folds it even where the rules
+   * forbid folding (Cấm bỏ bài, a Thần), which a `fold` action or a `TIMEOUT` (it plays there) never does. Hold'em: a
+   * `fold` on the seat's turn.
+   */
+  | { type: 'FORFEIT'; seat: number }
 
 export interface ShowdownHand {
   seat: number
@@ -157,7 +163,8 @@ export type GameEvent =
   /**
    * BP-41 (chaos tables only; absent = as before): `noFold` — the seats that may only "Chơi" this hand (Cấm bỏ bài, a
    * Thần, A2); `calls` — what "Chơi" costs each seat when a card multiplied its stake (Mạo hiểm gia, Sới lớn, A1),
-   * instead of the table's fixed wager.
+   * instead of the table's fixed wager: the stake × the wager, at most the seat's stack (its `callAmount`). Seats with a
+   * plain stake are not listed; either field is absent when nobody is.
    */
   | { type: 'DECISION_PHASE'; seats: number[]; turnSeq: number; noFold?: number[]; calls?: { seat: number; amount: number }[] }
   | { type: 'DECISION_MADE'; seat: number }
@@ -179,11 +186,12 @@ export type GameEvent =
    * `off`: the card id Kẻ phá đám switched off for the hand (BP-41; its owner and target only, never a bonus card).
    * `holeDelta` also tells what Xúc xắc định mệnh's die did at the reveal (−1, 0 or +count). `wagers` (BP-41 Thách đấu):
    * the fixed wagers the duel's loser owes (0 = the challenger's hand did not win or the roll paid nothing); on a
-   * `reflected` duel the target challenged the holder, so the holder owes them.
+   * `reflected` duel the target challenged the holder, so the holder owes them. `stake` (BP-41 Mạo hiểm gia, Sới lớn, told
+   * at the ante): the multiple of the fixed wager the card makes the seat's stake this hand (Sới lớn: the whole table's).
    */
   | {
     type: 'CHAOS_APPLIED'; seat: number; cardId: string; effect: ChaosEffectKind; targets: number[]; outcome: ChaosOutcome; community?: Card[]
-    amount?: number; dice?: number[]; holeDelta?: number; wild?: Card; off?: string; wagers?: number
+    amount?: number; dice?: number[]; holeDelta?: number; wild?: Card; off?: string; wagers?: number; stake?: number
   }
   /** "Nhìn trộm": the next board cards, for `seat` only (`filterEvent` blanks them for everyone else). */
   | { type: 'CHAOS_PEEK'; seat: number; cards: Card[] }

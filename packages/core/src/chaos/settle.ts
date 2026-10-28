@@ -58,7 +58,9 @@ const fortuneRow = (len: number): 2 | 4 | 6 => (len >= 6 ? 6 : len >= 4 ? 4 : 2)
  * - next hand's freeze and blindfold come from `marks` only;
  * - BP-41: a seat Nhật thực switched off (`eclipsed`) keeps its durations and wait cards as a frozen seat does; each
  *   fired Mồi lửa gives every seat in the hand its `points`, and a fired Tích tiểu thành đại gives its holder `points`
- *   on a lost hand — flat, never doubled; Cao thủ (unless idle) is spent by a won or lost hand, `points` on a win.
+ *   on a lost hand — flat, never doubled; Cao thủ (unless idle) is spent by a won or lost hand, `points` on a win;
+ *   a fired Mạo hiểm gia leaves on a win, else steps its stake on (`charge` + 1); a `noFold` mark (Cấm bỏ bài) becomes
+ *   `noFoldNextHand`, which lasts the table's next hand only.
  * The input is never changed; every draw goes through `rng` and `weights`.
  *
  * BP-41 A3: `table` is the table's chaos state as `planHand` returned it (absent = `EMPTY_CHAOS_TABLE`), and `outcomes`
@@ -96,10 +98,13 @@ export function afterHand(input: {
     const chaos = s.chaos
     const frozenMark = marks.some((m) => m.seat === s.seat && m.kind === 'freeze')
     const blindMark = marks.some((m) => m.seat === s.seat && m.kind === 'blindfold')
+    const noFoldMark = marks.some((m) => m.seat === s.seat && m.kind === 'noFold')
     if (!s.inHand) {
+      // BP-41 Cấm bỏ bài is for the table's next hand only: a seat that sat that hand out is free again (Ruling 5a-5).
+      const kept = chaos.noFoldNextHand ? withoutNoFold(chaos) : chaos
       result.seats.set(s.seat, frozenMark || blindMark
-        ? { ...chaos, frozenNextHand: chaos.frozenNextHand || frozenMark, blindfoldedNextHand: chaos.blindfoldedNextHand || blindMark }
-        : chaos)
+        ? { ...kept, frozenNextHand: chaos.frozenNextHand || frozenMark, blindfoldedNextHand: chaos.blindfoldedNextHand || blindMark }
+        : kept)
       continue
     }
 
@@ -142,6 +147,11 @@ export function afterHand(input: {
     if (flip) cards = cards.map((c) => (c.uid === flip.uid ? { ...c, charge: (c.charge ?? 0) + 1 } : c))
     const risky = firedKind('riskyHand')
     if (risky && outcome === 'win') cards = cards.filter((c) => c.uid !== risky.uid)
+    // BP-41 Mạo hiểm gia (Task 5a): "tới khi thắng" — a win ends it (Task 5c pays its jackpot here); any other hand it
+    // played moves its stake one step on (×2 → ×4 …); its `hands` count it out after the 5th.
+    const adventurer = firedKind('adventurer')
+    if (adventurer && outcome === 'win') cards = cards.filter((c) => c.uid !== adventurer.uid)
+    else if (adventurer) cards = cards.map((c) => (c.uid === adventurer.uid ? { ...c, charge: (c.charge ?? 0) + 1 } : c))
 
     const prizes: { tier: ChaosTier; count: number }[] = []
     if (!idle) {
@@ -244,8 +254,16 @@ export function afterHand(input: {
     if (drawn.length > 0) result.bonusAwarded.push({ seat: s.seat, cards: drawn })
 
     result.seats.set(s.seat, {
-      ...next, farmHandsLeft: farmHandsOf(next.cards), frozenNextHand: frozenMark, blindfoldedNextHand: blindMark,
+      ...withoutNoFold(next), farmHandsLeft: farmHandsOf(next.cards), frozenNextHand: frozenMark, blindfoldedNextHand: blindMark,
+      ...(noFoldMark ? { noFoldNextHand: true as const } : {}),
     })
   }
   return result
+}
+
+/** The seat without its Cấm bỏ bài mark (the hand it was for is over). */
+function withoutNoFold(seat: ChaosSeat): ChaosSeat {
+  if (seat.noFoldNextHand === undefined) return seat
+  const { noFoldNextHand: _gone, ...rest } = seat
+  return rest
 }

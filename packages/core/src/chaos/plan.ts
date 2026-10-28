@@ -48,7 +48,8 @@ type Firing = Omit<PlannedEffect, 'targets'>
  * `table` is what it becomes for this hand. Absent, it is `EMPTY_CHAOS_TABLE`. End-of-hand cards (`end`, the dice) are
  * never fired here, like wait cards (A10). BP-41's deal-time debuffs (Cướp đoạt, Lời nguyền, Kẻ phá đám) get
  * `targets: []`: the engine aims them at the deal. A bonus card that fires from `armed` is marked `fromBonus`. Once every
- * seat is planned, a second pass applies Nhật thực (`eclipse`).
+ * seat is planned, a second pass applies Nhật thực (`eclipse`), then each seat's stake is set (`stakes`: Mạo hiểm gia,
+ * Sới lớn; Task 5a) and, on a "Chơi hoặc bỏ" table, the seats Cấm bỏ bài marked last hand go into `noFoldSeats`.
  */
 export function planHand(input: {
   seats: readonly PlanSeatInput[]
@@ -123,7 +124,7 @@ export function planHand(input: {
     // what the seat keeps. Đảo bài's phase goes as it is (`afterHand` moves it on). Other cards carry none.
     const grown = new Map<number, HeldCard>()
     const chargeUp = (card: HeldCard): HeldCard => {
-      if (card.effect === 'flipFlop') return { ...card, charge: card.charge ?? 0 }
+      if (card.effect === 'flipFlop' || card.effect === 'adventurer') return { ...card, charge: card.charge ?? 0 }
       if (card.effect !== 'acesCharge') return card
       const lo = card.params.stepMin ?? 0
       const step = lo + rng.int(Math.max(1, (card.params.stepMax ?? lo) - lo + 1))
@@ -178,7 +179,28 @@ export function planHand(input: {
   }
 
   eclipse(planSeats, seats, input.seats, rng)
-  return { plan: { seats: planSeats, reverse: planSeats.some((s) => s.effects.some((e) => e.effect === 'reverseRank')) }, seats, table }
+  stakes(planSeats)
+  const plan: ChaosHandPlan = { seats: planSeats, reverse: planSeats.some((s) => s.effects.some((e) => e.effect === 'reverseRank')) }
+  // BP-41 A2 Cấm bỏ bài: last hand's marks, on a "Chơi hoặc bỏ" table only (the card is ✱; there is no fold elsewhere).
+  const noFold = mode === 'playOrFold' ? input.seats.filter((s) => s.chaos.noFoldNextHand === true).map((s) => s.seat) : []
+  if (noFold.length > 0) plan.noFoldSeats = noFold
+  return { plan, seats, table }
+}
+
+/**
+ * BP-41 A1, each seat's stake this hand (`stake`, absent = ×1), once Nhật thực has switched cards off: Sới lớn makes the
+ * whole table's ×`stake` (one table rule however many seats fire it: the highest), Mạo hiểm gia its holder's
+ * ×`stake`^k on the card's k-th hand (`charge` = hands it has played; k at most `hands`, so a second copy that adds hands
+ * never goes past ×32). The two multiply (Ruling 1). Draws nothing.
+ */
+function stakes(planSeats: PlanSeat[]): void {
+  const table = planSeats.reduce((m, s) => Math.max(m, ...s.effects.filter((e) => e.effect === 'bigTable').map((e) => e.params.stake ?? 1)), 1)
+  for (const s of planSeats) {
+    const adv = s.effects.find((e) => e.effect === 'adventurer')
+    const own = adv ? (adv.params.stake ?? 1) ** Math.min((adv.charge ?? 0) + 1, adv.params.hands ?? 1) : 1
+    const stake = table * own
+    if (stake > 1) s.stake = stake
+  }
 }
 
 /**

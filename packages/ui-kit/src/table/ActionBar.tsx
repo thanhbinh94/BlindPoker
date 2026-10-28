@@ -315,7 +315,10 @@ export function ActionBar({
   // Plan 27 D2: a seat short of the wager plays all in for what the ante left (`callAmount` is min(stack, wager)), and
   // the button says so with the stable "Tất tay" — still a `play` on the wire.
   const fixedWager = room.config.blind?.fixedWager ?? 0
-  const playsAllIn = legal !== null && legal.callAmount > 0 && legal.callAmount < fixedWager
+  // BP-41 A1: a multiplied stake (Mạo hiểm gia, Sới lớn) calls more than the fixed wager; it is all in when it takes
+  // the whole stack.
+  const playsAllIn = legal !== null && legal.callAmount > 0
+    && (legal.callAmount < fixedWager || (legal.callAmount > fixedWager && mine !== undefined && legal.callAmount >= mine.stack))
   const play = labelled(t(playsAllIn ? 'actions.allIn' : 'actions.play'), wager)
   const call = labelled(t('actions.call'), callAmount > 0 ? callAmount : null)
   const sizeVerb = t(canRaise ? 'actions.raise' : 'actions.bet')
@@ -346,11 +349,12 @@ export function ActionBar({
     </Button>
   )
 
-  // Blind mode's play-or-fold decision: no sizing, no call. The stack puts "Tự động chơi" in the same row (P11).
+  // Blind mode's play-or-fold decision: no sizing, no call. The stack puts "Tự động chơi" in the same row (P11). A seat
+  // that may not fold (BP-41 Cấm bỏ bài, a Thần) is offered "Chơi" alone.
   const playRow = (
     <div className={s.trayRow}>
       {stack ? autoPlayToggle : null}
-      {foldButton}
+      {kinds.includes('fold') ? foldButton : null}
       <Button variant="gold" size={buttonSize} disabled={disabled} className={s.grow} aria-label={play.label} onClick={() => emit({ kind: 'play' })}>
         {play.children}
       </Button>

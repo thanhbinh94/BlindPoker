@@ -128,6 +128,12 @@ export function applyHoldemCommand(input: HandState, cmd: HandCommand, _rng: Rng
       applyAction(state, events, cmd.seat, cmd.action, false)
       return { state, events }
     }
+    // BP-41 A2: Hold'em has no no-fold rule, so a seat that left folds on its turn exactly as a `fold` action did.
+    case 'FORFEIT': {
+      assertTurn(state, cmd.seat)
+      applyAction(state, events, cmd.seat, { kind: 'fold' }, false)
+      return { state, events }
+    }
   }
 }
 

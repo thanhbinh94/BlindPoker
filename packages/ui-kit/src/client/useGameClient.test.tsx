@@ -160,6 +160,15 @@ describe('useGameClient pre-actions', () => {
     act(() => sock().receive({ t: 'GAME_EVENT', seq: 11, event: { type: 'DECISION_PHASE', seats: [0, 1], turnSeq: 1 } }))
     expect(actions(sock)).toHaveLength(1)
   })
+
+  it('BP-41: auto-play plays a hand the seat may not fold, at the stake it was told', () => {
+    const { result, sock } = seatedInHand()
+    act(() => result.current.setAutoPlay(true))
+    act(() => sock().receive({ t: 'GAME_EVENT', seq: 9, event: { type: 'DECISION_PHASE', seats: [0, 1], turnSeq: 1, noFold: [0, 1], calls: [{ seat: 0, amount: 2000 }] } }))
+    expect(result.current.state.hand!.legal).toMatchObject({ kinds: ['play'], callAmount: 2000 })
+    expect(actions(sock)).toHaveLength(1)
+    expect(actions(sock)[0]).toMatchObject({ action: { kind: 'play' } })
+  })
 })
 
 describe('useGameClient squeeze mode', () => {

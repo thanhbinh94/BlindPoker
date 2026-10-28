@@ -131,6 +131,12 @@ export interface ChaosSeat {
   farmHandsLeft: number
   /** Bonus cards earned in a frozen hand, handed over at the end of the seat's next unfrozen hand. */
   pendingBonus: number
+  /**
+   * BP-41 Cấm bỏ bài (A2): another seat's card says this seat may not fold the table's next hand. Set by `afterHand` from
+   * a `noFold` mark, read by `planHand` (`ChaosHandPlan.noFoldSeats`), gone after that hand whether the seat played it or
+   * sat it out. Absent otherwise.
+   */
+  noFoldNextHand?: true
 }
 
 export interface ChaosConfig {
@@ -206,6 +212,12 @@ export interface ChaosHandPlan {
      * Absent when the seat holds none, is frozen or eclipsed.
      */
     scapegoat?: { uid: number; cardId: string }
+    /**
+     * BP-41 A1: the multiple of the fixed wager this seat stakes this hand, ante and "Chơi" alike — Mạo hiểm gia's step
+     * (×2 … ×32) times Sới lớn's whole-table ×2 (Ruling 1: they multiply). The part above one wager is dead money
+     * (`ChaosHandState.deadMoney`). Absent = 1.
+     */
+    stake?: number
   }[]
   reverse: boolean
   /**
@@ -306,6 +318,13 @@ export interface ChaosHandState {
    * into `HandSummary.players[].chaosTitles`. Absent when nobody earned one.
    */
   titles?: ({ seat: number } & ChaosTitles)[]
+  /**
+   * BP-41 A1: the multiplied part of each seat's stake (`plan.seats[].stake` − 1 wagers, at the ante and at "Chơi"),
+   * taken from its stack into the pot but never into `totalCommitted`: nobody has to match it and nothing hands it back
+   * as uncalled; `settle` adds it to the main pot (whoever wins that takes it), a hand where everyone folds carries it
+   * over, `cancelHand` refunds it. "Bỏ không mất" and "Bảo hiểm" never touch it (Ruling 1). Absent until a seat pays some.
+   */
+  deadMoney?: { seat: number; amount: number }[]
 }
 
 /**

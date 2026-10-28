@@ -156,8 +156,9 @@ export class HandRunner {
       else if (s.phase === 'DECISION') seat = s.players.find((p) => p.decision === null && this.autoFold.has(p.seat))?.seat ?? null
       else if (s.phase === 'SQUEEZE') seat = s.players.find((p) => !p.revealed && this.autoFold.has(p.seat))?.seat ?? null
       if (seat === null) return
-      // A seat that left or stood up has nobody to turn its cards, so the squeeze round must not wait for it (§6).
-      this.submit(s.phase === 'SQUEEZE' ? { type: 'REVEALED', seat } : { type: 'ACTION', seat, action: { kind: 'fold' } })
+      // A seat that left or stood up has nobody to turn its cards, so the squeeze round must not wait for it (§6). It
+      // forfeits rather than folds (BP-41 A2): a no-fold hand (Cấm bỏ bài, a Thần) refuses a `fold`, never a `FORFEIT`.
+      this.submit(s.phase === 'SQUEEZE' ? { type: 'REVEALED', seat } : { type: 'FORFEIT', seat })
     }
   }
 
@@ -193,7 +194,8 @@ export class HandRunner {
     if (s.phase !== 'BETTING' && s.phase !== 'DECISION') return
     const legal = legalActions(s, seat)
     if (legal.kinds.length === 0) return
-    const safe: PlayerAction = { kind: legal.kinds.includes('check') ? 'check' : 'fold' }
+    // BP-41 A2: a bot that may not fold plays (as "Tự động chơi" does) — the only safe choice it was offered.
+    const safe: PlayerAction = { kind: legal.kinds.includes('check') ? 'check' : legal.kinds.includes('fold') ? 'fold' : 'play' }
     let action: PlayerAction
     try {
       action = this.deps.bot.decide(playerView(s, seat), legal, this.deps.rng)

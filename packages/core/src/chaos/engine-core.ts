@@ -28,6 +28,7 @@ export interface RecordExtra {
   off?: string
   dice?: number[]
   wagers?: number
+  stake?: number
   consume?: 'applied' | 'blocked' | null
 }
 
@@ -75,6 +76,7 @@ export function record(chaos: ChaosHandState, events: GameEvent[], seat: number,
   if (extra.off !== undefined) ev.off = extra.off
   if (extra.dice !== undefined) ev.dice = extra.dice.slice()
   if (extra.wagers !== undefined) ev.wagers = extra.wagers
+  if (extra.stake !== undefined) ev.stake = extra.stake
   events.push(ev)
   chaos.used.push({ seat, cardId: e.cardId, effect: e.effect, outcome, targets: targets.slice() })
   addUid(chaos.recorded, e.uid)

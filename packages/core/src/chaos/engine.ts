@@ -10,6 +10,7 @@ import {
 } from './engine-core.js'
 import { applyHoleDebuffs, emitHawkEyes, recordEclipse, resolveSpoilers } from './engine-round3.js'
 import { recordBackfires } from './engine-reveal.js'
+import { markNoFold } from './engine-stake.js'
 import type { ChaosEffectKind, ChaosHandPlan, ChaosHandState, ChaosOutcome, PlannedEffect } from './types.js'
 
 export { DEAL_RESERVE, isImmune } from './engine-core.js'
@@ -39,7 +40,7 @@ export const PRIVATE_AT_DEAL: ReadonlySet<ChaosEffectKind> = new Set([
  * BP-41: Liều ăn nhiều's sets after "Giữ bộ tốt hơn", and Lá ma last, on the cards the seat ends the deal with.
  */
 const DEAL_BUFFS: readonly ChaosEffectKind[] = [
-  'swapLowest', 'redealWeak', 'swapAll', 'bestOfN', 'riskyHand', 'highCard', 'suited', 'extraHole', 'wildCard',
+  'swapLowest', 'redealWeak', 'swapAll', 'bestOfN', 'riskyHand', 'bigTable', 'highCard', 'suited', 'extraHole', 'wildCard',
 ]
 /** Deal buffs that would replace a card of a seat Siêu cộng dồn (or the Thần) just dealt its Aces to: they fizzle there. */
 const BREAK_ACES: ReadonlySet<ChaosEffectKind> = new Set(['swapLowest', 'suited'])
@@ -124,9 +125,11 @@ function dealBuff(state: HandState, p: HandPlayer, e: PlannedEffect, keepTopRank
       p.holeCards = dealCards(state, hole.length)
       return 'applied'
     }
-    // Liều ăn nhiều (BP-41) keeps the best of its `sets` sets of the one-fewer cards it was dealt, as "Giữ bộ tốt hơn".
+    // Liều ăn nhiều (BP-41) keeps the best of its `sets` sets of the one-fewer cards it was dealt, as "Giữ bộ tốt hơn";
+    // so does Sới lớn's holder (BP-41 §6.2, `sets` 2).
     case 'bestOfN':
-    case 'riskyHand': {
+    case 'riskyHand':
+    case 'bigTable': {
       const extra = Math.max(0, (e.params.sets ?? 1) - 1)
       const n = extra * hole.length
       if (n === 0 || !canDealAtDeal(state, n)) return 'fizzled'
@@ -319,6 +322,8 @@ export function applyDealEffects(state: HandState, events: GameEvent[], rng: Rng
       if (kind === 'riskyHand') {
         // The card acts (one card fewer, immunity) even when the deck could not spare its extra sets.
         record(chaos, events, p.seat, e, [], 'applied', { holeDelta: riskyDelta.get(p.seat) ?? 0 })
+      } else if (kind === 'bigTable') {
+        // Sới lớn was told at the ante (`recordStakes`); its sets are part of the same card and tell nothing more.
       } else if (kind === 'wildCard' && outcome === 'applied' && !isBlindfolded(chaos.plan, p.seat)) {
         record(chaos, events, p.seat, e, [], outcome, { wild: chaos.wild!.find((w) => w.seat === p.seat)!.card })
       } else record(chaos, events, p.seat, e, [], outcome)
@@ -341,6 +346,8 @@ export function applyDealEffects(state: HandState, events: GameEvent[], rng: Rng
     const e = effectOf(chaos, p.seat, 'reverseRank')
     if (e) record(chaos, events, p.seat, e, [], 'applied')
   }
+  // BP-41 Cấm bỏ bài: marks for the next hand, told to the table.
+  markNoFold(state, events)
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

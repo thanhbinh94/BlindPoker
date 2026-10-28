@@ -876,6 +876,19 @@ describe('Poker hỗn loạn', () => {
     expect(s.hand!.legal).toMatchObject({ seat: 0, kinds: ['play', 'fold'], callAmount: 1000 })
   })
 
+  it('BP-41: the decision takes the seat’s own call (a multiplied stake) and drops "fold" for a seat that may not fold', () => {
+    let s = room(inChaosRoom(), 11, { type: 'PLAYER_SAT', playerId: 'p0', seat: 0, stack: 10_000 })
+    s = game(s, 12, started)
+    s = game(s, 13, { type: 'BLINDS_POSTED', posts: [{ seat: 0, amount: 4000, kind: 'ANTE' }, { seat: 1, amount: 1000, kind: 'ANTE' }, { seat: 2, amount: 1000, kind: 'ANTE' }] })
+    const decision = (event: GameEvent) => reduceClient(s, { type: 'server', msg: { t: 'GAME_EVENT', seq: 14, event }, now: 1 }).hand!.legal
+    expect(decision({ type: 'DECISION_PHASE', seats: [0, 1, 2], turnSeq: 1, calls: [{ seat: 0, amount: 4000 }] })).toMatchObject({ kinds: ['play', 'fold'], callAmount: 4000 })
+    // Capped at the stack, as the engine caps it.
+    expect(decision({ type: 'DECISION_PHASE', seats: [0, 1, 2], turnSeq: 1, calls: [{ seat: 0, amount: 32_000 }] })).toMatchObject({ callAmount: 6000 })
+    // Another seat's call or no-fold is not mine.
+    expect(decision({ type: 'DECISION_PHASE', seats: [0, 1, 2], turnSeq: 1, calls: [{ seat: 1, amount: 4000 }], noFold: [1, 2] })).toMatchObject({ kinds: ['play', 'fold'], callAmount: 1000 })
+    expect(decision({ type: 'DECISION_PHASE', seats: [0, 1, 2], turnSeq: 1, noFold: [0, 1, 2] })).toMatchObject({ kinds: ['play'], callAmount: 1000 })
+  })
+
   it('a credit after a finished hand raises that seat on the hand still shown too', () => {
     let s = game(inChaosRoom(), 11, started)
     s = game(s, 12, { ...settlement, stacks: [{ seat: 1, stack: 0 }] } as GameEvent)

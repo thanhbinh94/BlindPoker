@@ -1,5 +1,6 @@
 import type { Card } from '../cards/cards.js'
 import { computePots, distributePots, tableFee, type Pot } from '../betting/pots.js'
+import { deadMoneyOf } from '../chaos/engine-stake.js'
 import { evaluate, type HandEvaluation } from '../evaluator/evaluator.js'
 import { EngineError, type GameEvent, type HandPlayer, type HandState, type ShowdownHand, type Street } from './types.js'
 
@@ -104,7 +105,8 @@ export function settle(state: HandState, events: GameEvent[], opts: { showdown: 
     if (!hooks) throw new EngineError('INVALID_SETUP', 'no pot to settle')
     pots.push({ amount: 0, eligibleSeats: unfolded(state).map((p) => p.seat) })
   }
-  pots[0]!.amount += state.carryOverIn
+  // BP-41 A1: a stake card's dead money goes with what carried in, to whoever wins the main pot.
+  pots[0]!.amount += state.carryOverIn + deadMoneyOf(state)
 
   const total = pots.reduce((a, p) => a + p.amount, 0)
   const fee = Math.min(tableFee(total, state.rules.tableFeeRate, opts.feeCap), pots[0]!.amount)
@@ -154,19 +156,21 @@ export function settle(state: HandState, events: GameEvent[], opts: { showdown: 
 
 /**
  * Aborts the hand: every chip committed this hand goes back to its owner and anything carried in stays carried out,
- * so no money is created or destroyed and no fee is charged.
+ * so no money is created or destroyed and no fee is charged. A stake card's dead money (BP-41 A1) goes back with it.
  */
 export function cancelHand(state: HandState, events: GameEvent[], reason: string): void {
   const refunds: { seat: number; amount: number }[] = []
   for (const p of state.players) {
-    if (p.totalCommitted > 0) {
-      p.stack += p.totalCommitted
-      refunds.push({ seat: p.seat, amount: p.totalCommitted })
+    const back = p.totalCommitted + (state.chaos?.deadMoney?.find((d) => d.seat === p.seat)?.amount ?? 0)
+    if (back > 0) {
+      p.stack += back
+      refunds.push({ seat: p.seat, amount: back })
     }
     p.totalCommitted = 0
     p.betThisStreet = 0
     p.allIn = false
   }
+  if (state.chaos?.deadMoney) delete state.chaos.deadMoney
   const carryOverOut = state.carryOverIn
   state.pot = 0
   const stacks = state.players.map((p) => ({ seat: p.seat, stack: p.stack }))

@@ -21,6 +21,8 @@ const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x
 function decideBlind(view: HandView, legal: LegalActions, rng: Rng): PlayerAction {
   const me = view.seats.find((s) => s.seat === view.mySeat)
   if (!me || !legal.kinds.includes('play')) return { kind: legal.kinds[0] ?? 'fold' } as PlayerAction
+  // BP-41 Cấm bỏ bài / a Thần: no fold to choose, so nothing to weigh.
+  if (!legal.kinds.includes('fold')) return { kind: 'play' }
   // Blindfolded (Poker hỗn loạn "Che mắt"): the bot cannot see its own cards either, so it plays half its hands.
   if (!me.holeCards) return { kind: rng.int(2) === 0 ? 'play' : 'fold' }
   const opponents = view.seats.filter((s) => s.seat !== view.mySeat && !s.folded).length
