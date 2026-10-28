@@ -35,7 +35,8 @@ draft after the first was cut short and scrolled inside. Branch `bugfix/BP-40-dr
 - **Operations, same day.** At the user's request the VPS's `chaos_config` row was written by hand with `dailyCapPoints` 10,000,000
   (was the 100,000 default; every other number at its default, 3 rescues a day kept), so Thần tài is in effect unlimited for now —
   backup `bp-2026-10-28-0737` first. A direct database write, so it is not in "Nhật ký"; a GM puts it back in "Thẻ hỗn loạn".
-- **Deployed.** DEPLOYED
+- **Deployed.** On the VPS since 2026-10-28, by git bundle ahead of the push (`e5ec884..828c11c`; backup `bp-2026-10-28-0807`;
+  no migration; rooms 0; health ok; the raised daily cap survived the restart). The LAN host is not touched.
 - **Still open.** Upright, the last hand's cards still fly in again under the opening draft (visual only; the panel measures
   through it). A real phone on its side with long gold cards is the user's check.
 
