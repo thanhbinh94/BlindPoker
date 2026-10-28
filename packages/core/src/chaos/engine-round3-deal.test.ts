@@ -146,6 +146,17 @@ describe('Siêu cộng dồn and the Aces rule (spec §3 "Lá A có hạn", A4)'
     t.assertDeck()
   })
 
+  it('a blindfolded owner is not told (Ruling 9): no event, only its line in "Thẻ đã dùng"', () => {
+    const t = new Table({ chaos: plan(2, { 0: { effects: [fx('d_aces_charge', 100)], blindfolded: true } }), rng: seededRng(5) })
+    expect(t.hole(0).every(isAce)).toBe(true)
+    expect(t.applied('acesCharge')).toEqual([])
+    expect(t.state.chaos!.used).toContainEqual({ seat: 0, cardId: 'd_aces_charge', effect: 'acesCharge', outcome: 'applied', targets: [] })
+    // A miss is not told either.
+    const miss = new Table({ chaos: plan(2, { 0: { effects: [fx('d_aces_charge', 0)], blindfolded: true } }), rng: deckRng('7h 8d 9c Tc') })
+    expect(miss.applied('acesCharge')).toEqual([])
+    expect(miss.state.chaos!.used.map((u) => u.outcome)).toEqual(['fizzled'])
+  })
+
   it('a card that would replace one of the Aces ("Đổi lá", "Đồng hoa") fizzles on that seat', () => {
     const t = new Table({ chaos: plan(2, { 0: { effects: [fx('d_aces_charge', 100), fx('s_swap_one'), fx('s_suited')] } }), rng: seededRng(3) })
     expect(t.hole(0).every(isAce)).toBe(true)

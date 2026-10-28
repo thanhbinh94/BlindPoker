@@ -70,11 +70,11 @@ class Stage {
   state: HandState
   events: GameEvent[] = []
   readonly start: number
-  constructor(o: { chaos: ChaosHandPlan; holes: string[]; board?: string; stacks?: number[]; folded?: number[]; rules?: Partial<BlindRules> }) {
+  constructor(o: { chaos: ChaosHandPlan; holes: string[]; board?: string; stacks?: number[]; folded?: number[]; rules?: Partial<BlindRules>; carryOverIn?: number }) {
     const rules = { ...RULES, ...o.rules }
     const seats = o.chaos.seats.map(({ seat }) => ({ seat, playerId: `p${seat}`, stack: o.stacks?.[seat] ?? 5000, isBot: seat % 2 === 1 }))
-    this.start = seats.reduce((a, s) => a + s.stack, 0)
-    const res = createBlindHand({ handId: 't5b', rules, seats, button: 0, carryOverIn: 0, chaos: o.chaos }, seededRng(1))
+    this.start = seats.reduce((a, s) => a + s.stack, 0) + (o.carryOverIn ?? 0)
+    const res = createBlindHand({ handId: 't5b', rules, seats, button: 0, carryOverIn: o.carryOverIn ?? 0, chaos: o.chaos }, seededRng(1))
     this.state = res.state
     this.events.push(...res.events)
     const holes = o.holes.map((h) => parseCards(h))
@@ -248,6 +248,18 @@ describe('Thuế thắng', () => {
     expect(t.applied('winTax')).toEqual([expect.objectContaining({ seat: 2, targets: [0], amount: 200, transfers: [{ from: 0, to: 2, amount: 200 }] })])
     expect(t.stack(2)).toBe(4200)
     t.conserved()
+  })
+
+  it('a pot carried in counts as the winner’s profit (Ruling 16): Thuế thắng and Ép chia thưởng take their share of it too', () => {
+    // Pot 3 000 + 3 000 carried in; seat 0 put in 1 000, so its net win is 5 000: 10 % to the tax holder.
+    const tax = new Stage({ chaos: plan(3, { 2: { effects: [fx('g_win_tax')] } }), holes: [STRONG, MID, WEAK], folded: [2], carryOverIn: 3000 }).reveal()
+    expect(tax.payout(0)).toBe(6000)
+    expect(tax.applied('winTax')[0]!.transfers).toEqual([{ from: 0, to: 2, amount: 500 }])
+    tax.conserved()
+    const share = new Stage({ chaos: plan(3, { 2: { effects: [fx('d_share_winnings')] } }), holes: [STRONG, MID, WEAK], carryOverIn: 3000 }).reveal()
+    const pct = def('d_share_winnings').params.percent!
+    expect(share.applied('shareWinnings')[0]!.transfers).toEqual([{ from: 0, to: 2, amount: Math.floor((5000 * pct) / 100) }])
+    share.conserved()
   })
 
   it('a holder who wins pays itself nothing; another winner of a split still pays it', () => {

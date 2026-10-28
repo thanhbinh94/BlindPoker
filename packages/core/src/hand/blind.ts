@@ -132,7 +132,8 @@ function decisionRules(state: HandState): { noFold?: number[]; calls?: { seat: n
   const noFold = state.players.filter((p) => mayNotFold(state.chaos, p.seat)).map((p) => p.seat)
   if (noFold.length > 0) out.noFold = noFold
   const calls = state.players
-    .filter((p) => stakeOf(state.chaos, p.seat) > 1)
+    // A seat the ante left all in has nothing more to put in: it is not asked, so it has no call to read (5a).
+    .filter((p) => !p.allIn && stakeOf(state.chaos, p.seat) > 1)
     .map((p) => ({ seat: p.seat, amount: Math.min(p.stack, rulesOf(state).fixedWager * stakeOf(state.chaos, p.seat)) }))
   if (calls.length > 0) out.calls = calls
   return out

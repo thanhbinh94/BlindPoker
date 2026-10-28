@@ -58,7 +58,8 @@ export const CHAOS_DEBUFF_EFFECTS: ReadonlySet<ChaosEffectKind> = new Set<ChaosE
 /**
  * One catalogue row. `params` holds every number of the card (spec §6.1), as integers:
  * - `hands`: a duration in hands — a card with `hands` is a duration card, one without fires once or waits;
- * - `all: 1`: a debuff on every opponent instead of one at random;
+ * - `all: 1`: a debuff on every opponent instead of one at random; BP-41 also reads it as "all of them" on two buffs —
+ *   Siêu cộng dồn kim cương deals every hole card as an Ace, Mắt diều hâu vàng sees all of its target's cards;
  * - `minRank`: a rank threshold in `rankOf` terms (0 = 2 … 12 = A);
  * - `p2`/`p3`: Bạo kích odds of ×2/×3 in percent; `multiplier`: Cấp cứu, × the fixed wager;
  * - Thần tài: `mN` × wager, `cN` prize cards of tier `tN` (1 silver, 2 gold, 3 diamond), for a loss streak of
@@ -407,8 +408,6 @@ export interface ChaosHandOutcomes {
   planted?: { owner: number; carrier: number; fuse: number; wagers: number; cardId: string; uid: number }[]
   /** Xúc xắc định mệnh rolled 5–6: Bạo kích ×2 if the seat wins. */
   fateCrit?: number[]
-  /** Seats that won a Thách đấu (or a Thần thách đấu) this hand: a payment is due to them (`ChaosHandState.duels`). */
-  duelWins?: number[]
   /** Seats that beat the Thần this hand (spec §4.2 "hạ Thần"): each takes 2 Kim cương cards and a count. */
   dethroned?: number[]
   /** Seats dealt their Aces by Siêu cộng dồn this hand: its charge goes back to 0 and the card is spent. */

@@ -227,6 +227,39 @@ describe('Mạo hiểm gia and Sới lớn: dead money (engine)', () => {
     t.conserved()
   })
 
+  it('a seat the ante left all in has no call in DECISION_PHASE: it is never asked (5a)', () => {
+    const t = new Table({ chaos: plan(3, { 0: { stake: 2 }, 1: { effects: [fx('g_big_table')], stake: 2 }, 2: { stake: 2 } }), stacks: [50_000, 1_000, 50_000] })
+    expect(t.p(1)).toMatchObject({ stack: 0, allIn: true })
+    expect(t.of('DECISION_PHASE')[0]!.calls).toEqual([0, 2].map((seat) => ({ seat, amount: 2000 })))
+    t.decide('play', 'play', 'play')
+    t.advanceAll()
+    t.conserved()
+  })
+
+  it('a non-holder all in for its ante that wins the main pot takes the holder’s dead money with it (5a)', () => {
+    // Seat 0 plays ×4 (3 000 dead at the ante, 3 000 more with "Chơi"); seat 1 is all in for its 1 000 ante. Find a deal
+    // where seat 1 holds the best hand.
+    const run = (seed: number) => {
+      const t = new Table({ chaos: plan(3, { 0: { effects: [fx('d_adventurer', { charge: 1 })], stake: 4 } }), stacks: [50_000, 1_000, 50_000], rng: seededRng(seed) })
+      t.decide('play', 'play', 'play')
+      t.advanceAll()
+      return t
+    }
+    const seed = Array.from({ length: 60 }, (_, i) => i + 1).find((s) => {
+      const pots = run(s).state.result!.pots
+      return pots[0]!.winners.length === 1 && pots[0]!.winners[0]!.seat === 1
+    })
+    expect(seed, 'a deal where the short seat wins the main pot').toBeDefined()
+    const t = run(seed!)
+    const r = t.state.result!
+    expect(t.state.chaos!.deadMoney).toEqual([{ seat: 0, amount: 6000 }])
+    // The main pot: three antes of 1 000 and all of the dead money; the side pot is seat 0's and seat 2's "Chơi".
+    expect(r.pots[0]!.amount).toBe(3000 + 6000)
+    expect(r.payouts.find((x) => x.seat === 1)!.amount).toBe(9000)
+    expect(t.p(1).stack).toBe(9000)
+    t.conserved()
+  })
+
   it('Kẻ phá đám cannot switch off a stake card: the ante already acted on it', () => {
     const t = new Table({ chaos: plan(2, { 0: { effects: [fx('d_adventurer')], stake: 2 }, 1: { effects: [fx('s_spoiler')] } }), rules: { decisionMode: 'none' } })
     expect(t.of('CHAOS_APPLIED').find((e) => e.effect === 'spoiler')).toMatchObject({ outcome: 'fizzled' })

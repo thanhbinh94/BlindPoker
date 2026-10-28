@@ -7,7 +7,7 @@ import { CHAOS_CARDS_SPEC } from './fixtures.js'
 import { draftTierFor, liftTier, receiveCard, toHeld } from './hold.js'
 import { planHand } from './plan.js'
 import { afterHand, type AfterHandSeat } from './settle.js'
-import { stealPoints } from './steal.js'
+import { standingShield, stealPoints } from './steal.js'
 import {
   DEFAULT_CHAOS_CONFIG, EMPTY_CHAOS_SEAT, EMPTY_CHAOS_TABLE,
   type ChaosCardDef, type ChaosHandPlan, type ChaosSeat, type ChaosTableState, type ChaosTier, type HeldCard, type PlannedEffect,
@@ -273,17 +273,20 @@ describe('afterHand — crits ×3/×4/×5 and the highest one only', () => {
     expect(settle([at(seatWith([]), { outcome: 'loss', net: -500 })], { plan, outcomes: { fateCrit: [0] } }).credits).toEqual([])
   })
 
-  it('two crits never multiply: each rolls, the highest pays, the first on a tie (Ruling 6)', () => {
+  it('two crits never multiply: each rolls, the highest pays; on a tie the round-three card, not Bạo kích (Rulings 6, 17)', () => {
     const [crit, risky] = held('g_crit', 'd_risky_hand')
     const [fate] = held('g_fate_die')
     const both = planOf({ 0: [fx(crit!), fx(risky!)] })
     const five = settle([at(seatWith([crit!, risky!]), win)], { rng: script(9, 0), plan: both })
     expect(five.credits).toEqual([{ seat: 0, amount: 4_000, reason: 'chaos_crit', cardId: 'd_risky_hand', uid: risky!.uid, multiplier: 5 }])
     const tie = settle([at(seatWith([crit!, risky!]), win)], { rng: script(9, 60), plan: both })
-    expect(tie.credits).toMatchObject([{ cardId: 'g_crit', multiplier: 3, amount: 2_000 }])
+    expect(tie.credits).toMatchObject([{ cardId: 'd_risky_hand', multiplier: 3, amount: 2_000 }])
     const withFate = planOf({ 0: [fx(crit!), fx(fate!)] })
     expect(settle([at(seatWith([crit!]), win)], { rng: script(9), plan: withFate, outcomes: { fateCrit: [0] } }).credits)
       .toMatchObject([{ cardId: 'g_crit', multiplier: 3 }])
+    // Bạo kích ×2 against Xúc xắc định mệnh's ×2: the die is credited.
+    expect(settle([at(seatWith([crit!]), win)], { rng: script(20), plan: withFate, outcomes: { fateCrit: [0] } }).credits)
+      .toMatchObject([{ cardId: 'g_fate_die', multiplier: 2, amount: 1_000 }])
     expect(settle([at(seatWith([crit!]), win)], { rng: script(50), plan: withFate, outcomes: { fateCrit: [0] } }).credits)
       .toMatchObject([{ cardId: 'g_fate_die', multiplier: 2, amount: 1_000 }])
   })
@@ -341,6 +344,18 @@ describe('Nâng tầm uy lực', () => {
     expect(r.bonusAwarded[0]!.cards.map((c) => c.id)).toEqual(['g_luck_3'])
     expect(r.seats.get(0)!.cards).toEqual([])
   })
+
+  it('is spent only when the lifted card is kept: not by a prize dropped on a full bonus hand, nor by a tier with no card (5c M2)', () => {
+    // The bonus hand is full: the dice's prize card is dropped, so Nâng tầm uy lực waits for the next card.
+    const full = held('s_shield', 's_shield', 's_shield')
+    const dropped = settle([at(seatWith(held('s_tier_up', 's_dice'), { bonus: full }))], { rng: faces(5), pool: only('s_luck_1', 'g_luck_3') })
+    expect(dropped.bonusAwarded).toEqual([])
+    expect(dropped.seats.get(0)!.cards.map((c) => c.effect)).toContain('tierUp')
+    // No tier has a card (an empty pool; a lifted draw falls back to lower tiers): nothing is drawn, nothing spent.
+    const empty = settle([at(seatWith(held('s_tier_up', 's_dice')))], { rng: faces(5), pool: [] })
+    expect(empty.bonusAwarded).toEqual([])
+    expect(empty.seats.get(0)!.cards.map((c) => c.effect)).toContain('tierUp')
+  })
 })
 
 describe('Trộm điểm', () => {
@@ -386,6 +401,23 @@ describe('Trộm điểm', () => {
     const back = stealPoints({ seats: table([3, 9], { 1: { cards: [mirror!] } }), holder: 0, card, rng: script() })
     expect(back.steal).toMatchObject({ outcome: 'reflected', targets: [1], from: 0, to: 1, amount: 3 })
     expect(pointsOf(back.seats)).toEqual([0, 12])
+  })
+
+  it('the shield that stands is the one planHand would stand: a lasting shield or mirror first, then the oldest, in this mode (5c M4)', () => {
+    const [oneShot, other] = held('s_shield', 's_shield')
+    const [mirror] = held('d_mirror')
+    const lastingMirror = { ...mirror!, handsLeft: 2 }
+    const pick = (cards: HeldCard[], validHere?: (id: string) => boolean) => standingShield(cards, validHere)?.uid ?? null
+    const planned = (cards: HeldCard[]) =>
+      planHand({ seats: [{ seat: 0, isBot: false, chaos: seatWith(cards) }, { seat: 1, isBot: false, chaos: EMPTY_CHAOS_SEAT }], rules: RULES, pool: ENABLED, rng: seededRng(1), nextUid: () => 9_000 })
+        .plan.seats[0]!.shield?.uid ?? null
+    for (const cards of [[oneShot!, lastingMirror], [oneShot!, other!], [lastingMirror, oneShot!], [{ ...oneShot!, handsLeft: 0 }, other!]]) {
+      expect(pick(cards), cards.map((c) => `${c.cardId}/${c.handsLeft}`).join(' ')).toBe(planned(cards))
+    }
+    expect(pick([oneShot!, lastingMirror])).toBe(lastingMirror.uid)
+    // A card the table's mode does not allow does not stand.
+    expect(pick([lastingMirror, oneShot!], (id) => id !== 'd_mirror')).toBe(oneShot!.uid)
+    expect(pick([])).toBeNull()
   })
 
   it('Bia đỡ đạn hands it to another seat at random and is spent; with nobody to take it, it lands and waits', () => {
@@ -444,8 +476,12 @@ describe('Conservation with every round-three money card (seeded)', () => {
     const start = total()
     const resolveSteals = (holder: Seated, received: readonly ChaosCardDef[]): void => {
       for (const c of received.filter((x) => x.effect === 'stealPoints')) {
+        const pointsBefore = seated.reduce((a, s) => a + s.chaos.points, 0)
         const r = stealPoints({ seats: new Map(seated.map((s) => [s.seat, s.chaos])), holder: holder.seat, card: { cardId: c.id, uid: nextUid(), params: c.params }, rng })
         for (const s of seated) s.chaos = r.seats.get(s.seat)!
+        // A steal only moves chaos points (5c M6): the table's sum is the same, and it takes no more than the card says.
+        expect(seated.reduce((a, s) => a + s.chaos.points, 0)).toBe(pointsBefore)
+        expect(r.steal.amount).toBeLessThanOrEqual(c.params.points ?? 0)
         seen.steals++
       }
     }
@@ -518,8 +554,16 @@ describe('Conservation with every round-three money card (seeded)', () => {
         seated.find((x) => x.seat === c.seat)!.stack += c.amount
         outside += c.amount
         if (c.reason === 'chaos_jackpot') {
-          if (c.cardId === 'd_adventurer') seen.advJackpots++
-          else seen.diceJackpots++
+          // Each jackpot is what its card's params say, in fixed wagers (5c M6).
+          if (c.cardId === 'd_adventurer') {
+            expect(c.amount).toBe((def('d_adventurer').params.jackpot ?? 0) * WAGER)
+            seen.advJackpots++
+          } else {
+            const roll = after.dice.find((d) => d.uid === c.uid)!
+            expect(c.amount).toBe(roll.result.jackpot)
+            expect(c.amount).toBe(rollFortuneDice(def(c.cardId).params, script(...roll.dice.map((f) => f - 1))).jackpot * WAGER)
+            seen.diceJackpots++
+          }
         }
         if ((c.multiplier ?? 0) >= 4) seen.crit4++
       }
@@ -528,6 +572,7 @@ describe('Conservation with every round-three money card (seeded)', () => {
         // What the event says was lost is exactly the debit the room writes.
         expect(d.result.burned ?? 0).toBe(after.debits.filter((x) => x.uid === d.uid).reduce((a, x) => a + x.amount, 0))
       }
+      for (const st of after.steals) expect(st.amount).toBeLessThanOrEqual(def(st.cardId).params.points ?? 0)
       seen.steals += after.steals.length
       outside -= r.fee
       table = after.table

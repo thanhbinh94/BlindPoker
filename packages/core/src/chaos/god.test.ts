@@ -446,6 +446,19 @@ describe('Review Focus 1: the Thần at the table', () => {
     expect(back.off).toBeUndefined()
     expect(mirrored.state.chaos!.plan.seats[0]!.effects.map((e) => e.cardId)).toEqual(['g_luck_3', 's_spoiler'])
   })
+
+  it('a Bia đỡ đạn never hands Kẻ phá đám to the Thần: with nobody else to take it, the card waits and the debuff lands', () => {
+    const seats = [0, 1, 2].map((seat) => ({ seat, playerId: `p${seat}`, stack: 10_000, isBot: false }))
+    const p = plan(3, { 0: { effects: [fx('g_luck_3')] }, 1: { effects: [fx('s_coin_flip')] }, 2: { effects: [fx('s_spoiler')] } }, { god: godOf(0) })
+    p.seats[1] = { ...p.seats[1]!, scapegoat: { uid: 4_501, cardId: 'g_scapegoat' } }
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const r = createBlindHand({ handId: `sg${seed}`, rules: RULES, seats, button: 2, carryOverIn: 0, chaos: p }, seededRng(seed))
+      const applied = r.events.filter((e): e is Applied => e.type === 'CHAOS_APPLIED')
+      expect(applied.filter((e) => e.effect === 'scapegoat'), 'no hand-off').toEqual([])
+      expect(applied.find((e) => e.effect === 'spoiler')).toMatchObject({ seat: 2, targets: [1], outcome: 'applied', off: 's_coin_flip' })
+      expect(r.state.chaos!.plan.seats[0]!.effects.map((e) => e.cardId)).toEqual(['g_luck_3'])
+    }
+  })
 })
 
 describe('the curse (the first three hands)', () => {
@@ -524,7 +537,6 @@ describe('the curse (the first three hands)', () => {
     // The card's duel (seat 3 vs a random opponent) pays first.
     const order = t.events.filter((e): e is Applied => e.type === 'CHAOS_APPLIED' && !!e.transfers).map((e) => e.effect)
     expect(order.indexOf('duel')).toBeLessThan(order.indexOf('carp'))
-    expect(t.state.chaos!.outcomes!.duelWins).toEqual(expect.arrayContaining([0, 2]))
     t.conserved()
   })
 

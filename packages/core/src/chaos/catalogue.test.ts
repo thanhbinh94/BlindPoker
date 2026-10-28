@@ -92,7 +92,11 @@ describe('the spec catalogue (fixtures)', () => {
       'g_duel', 'g_swap_hands', 'g_win_tax', 'g_fate_die',
       'd_share_winnings', 'd_shuffle_holes', 'd_swap_leader', 'd_backfire', 'd_deluge',
     ])
-    expect(timing('deal')).toHaveLength(39 - 4 - 1 - 3 - 2 - 12)
+    expect(timing('deal')).toEqual([
+      's_no_fold', 's_coin_flip', 's_loss_points', 's_spoiler', 's_kindling',
+      'g_aces_charge', 'g_flip_flop', 'g_big_table', 'g_sixth_board', 'g_curse',
+      'd_aces_charge', 'd_risky_hand', 'd_adventurer', 'd_plunder', 'd_eclipse', 'd_wild_card', 'd_time_bomb',
+    ])
   })
 
   it('BP-41: pins every number of spec §4–§6 in params', () => {

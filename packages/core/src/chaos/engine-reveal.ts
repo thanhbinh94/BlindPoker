@@ -326,7 +326,7 @@ function swapLeader(state: HandState, events: GameEvent[], user: number, e: Plan
  * debuff resolver (a shield blocks, Bia đỡ đạn hands it on; no immunity — it touches no card). When the challenger's
  * hand beats the challenged one's, ranked as the showdown will, a roll under `p3` makes the loser owe 3 fixed wagers,
  * under `p3 + p2` 2, else nothing; a tie or a loss owes nothing. A mirror or a Gậy ông turns it round: the target
- * challenges the holder. A duel that pays goes into `ChaosHandState.duels` and its winner into `outcomes.duelWins`;
+ * challenges the holder. A duel that pays goes into `ChaosHandState.duels` (paid at the settlement);
  * the event's `wagers` tells the table (0 when nothing is owed).
  */
 function duel(state: HandState, events: GameEvent[], user: number, e: PlannedEffect, rng: Rng): void {
@@ -343,12 +343,7 @@ function duel(state: HandState, events: GameEvent[], user: number, e: PlannedEff
     const r = rng.int(100)
     const p3 = e.params.p3 ?? 0
     const wagers = r < p3 ? 3 : r < p3 + (e.params.p2 ?? 0) ? 2 : 0
-    if (wagers > 0) {
-      ;(chaos.duels ??= []).push({ winner, payer, wagers, cardId: e.cardId, uid: e.uid })
-      const wins = chaos.outcomes?.duelWins ?? []
-      addUid(wins, winner)
-      chaos.outcomes = { ...chaos.outcomes, duelWins: wins }
-    }
+    if (wagers > 0) (chaos.duels ??= []).push({ winner, payer, wagers, cardId: e.cardId, uid: e.uid })
     return { wagers }
   }, { rng })
 }

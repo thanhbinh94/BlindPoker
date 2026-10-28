@@ -344,6 +344,22 @@ describe('planHand — BP-41 charge cards', () => {
     const d = plan({ 0: { ...diamond, cards: [{ ...diamond.cards[0]!, charge: 97 }] }, 1: EMPTY_CHAOS_SEAT })
     expect(chargeOf(d, 0, 'd_aces_charge')).toBe(100)
   })
+  it('the reigning Thần’s Siêu cộng dồn does not grow (Ruling 25), and the other seats’ plans draw as before', () => {
+    const god: ChaosTableState = {
+      god: { seat: 0, playerId: 'p0', isBot: false, handsLeft: 4, curse: null, cardId: 'd_carp', uid: 99, params: {} }, demigods: [], bombs: [],
+    }
+    const held = holding(['d_aces_charge'])
+    const chaos = { ...held, cards: [{ ...held.cards[0]!, charge: 20 }] }
+    const run = (table?: ChaosTableState) =>
+      planHand({ seats: [{ seat: 0, isBot: false, chaos }, { seat: 1, isBot: false, chaos }], rules: RULES, pool, rng: seededRng(7), nextUid: counter(1), ...(table ? { table } : {}) })
+    const reigning = run(god)
+    expect(reigning.seats.get(0)!.cards[0]!.charge).toBe(20)
+    expect(effectsOf(reigning, 0).effects.find((e) => e.effect === 'acesCharge')).toMatchObject({ charge: 20 })
+    // The seat beside it grows as ever, by the same draw it would make with no Thần at the table.
+    const plain = run()
+    expect(reigning.seats.get(1)!.cards[0]!.charge).toBe(plain.seats.get(1)!.cards[0]!.charge)
+    expect(plain.seats.get(0)!.cards[0]!.charge).toBeGreaterThan(20)
+  })
   it('a frozen seat neither rolls nor grows', () => {
     const chaos = holding(['d_aces_charge'], { frozenNextHand: true })
     const r = plan({ 0: chaos, 1: EMPTY_CHAOS_SEAT })

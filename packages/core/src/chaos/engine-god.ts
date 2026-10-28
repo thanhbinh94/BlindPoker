@@ -1,7 +1,7 @@
 import type { Rng } from '../cards/rng.js'
 import { seatsClockwiseFrom } from '../hand/common.js'
 import type { GameEvent, HandState } from '../hand/types.js'
-import { addUid, blockForSeat, dealRound, isImmune, markTitle, record, showdownScore } from './engine-core.js'
+import { blockForSeat, dealRound, isImmune, markTitle, record, showdownScore } from './engine-core.js'
 import { reignEffect } from './god.js'
 import type { ChaosGodCurse } from './types.js'
 
@@ -23,7 +23,7 @@ import type { ChaosGodCurse } from './types.js'
  * 1. Rút bài: each such seat with two cards or more loses one at random (never the last).
  * 2. Thách đấu (🔓): the Thần's hand against each seat's, ranked as the showdown will: the loser owes the winner
  *    `curseWagers` fixed wagers (a tie owes nothing), pushed into `ChaosHandState.duels` marked `god` and paid at the
- *    settlement after every card's duel, stack to stack (`payTransfers`); each winner joins `outcomes.duelWins`. A seat's
+ *    settlement after every card's duel, stack to stack (`payTransfers`). A seat's
  *    Khiên blocks its duel even when that seat would have won it (Ruling 18: it blocks as for any debuff).
  * 3. Tráo bài: the hole hands of those seats are dealt round among them at random (each hand moves whole); fewer than two
  *    to move and it fizzles.
@@ -62,9 +62,6 @@ export function applyGodCurse(state: HandState, events: GameEvent[], rng: Rng, c
       if (mine === theirs || wagers <= 0) continue
       const [winner, payer] = mine > theirs ? [god.seat, p.seat] : [p.seat, god.seat]
       ;(chaos.duels ??= []).push({ winner, payer, wagers, cardId: god.cardId, uid: god.uid, god: true })
-      const wins = chaos.outcomes?.duelWins ?? []
-      addUid(wins, winner)
-      chaos.outcomes = { ...chaos.outcomes, duelWins: wins }
     }
     tell(reached, { wagers })
     return

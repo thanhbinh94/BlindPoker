@@ -1,5 +1,8 @@
 import type { Card } from '../cards/cards.js'
 import { computePots, distributePots, tableFee, type Pot } from '../betting/pots.js'
+// The one runtime import of a chaos module here (BP-41 5a): `deadMoneyOf` reads `state.chaos` and is 0 on a plain hand, and
+// `engine-stake` imports nothing of `hand/common`, so there is no cycle. Passing it through `SettleHooks` would split the
+// pot's build in two for one sum; kept as it is.
 import { deadMoneyOf } from '../chaos/engine-stake.js'
 import { evaluate, type HandEvaluation } from '../evaluator/evaluator.js'
 import { EngineError, type GameEvent, type HandPlayer, type HandState, type ShowdownHand, type Street } from './types.js'

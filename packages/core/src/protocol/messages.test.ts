@@ -44,7 +44,7 @@ describe('BP-41 protocol fixtures', () => {
     expect(events).toHaveLength(3)
     const debit: ChaosDebit = { seat: 0, amount: 1_000, reason: 'chaos_dice', cardId: 'g_dice', uid: 7 }
     const titles: NonNullable<ChaosHandState['titles']> = [{ seat: 1, ascended: true }, { seat: 2, slew: 1 }]
-    const outcomes: NonNullable<ChaosHandState['outcomes']> = { fateCrit: [0], duelWins: [], dethroned: [2], acesDealt: [] }
+    const outcomes: NonNullable<ChaosHandState['outcomes']> = { fateCrit: [0], dethroned: [2], acesDealt: [] }
     expect([debit, titles, outcomes]).toHaveLength(3)
   })
 })

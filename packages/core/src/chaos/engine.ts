@@ -2,7 +2,7 @@ import { rankOf, suitOf, type Card } from '../cards/cards.js'
 import type { Rng } from '../cards/rng.js'
 import type { Pot } from '../betting/pots.js'
 import { dealCards, seatsClockwiseFrom, type SettleHooks } from '../hand/common.js'
-import type { GameEvent, HandPlayer, HandState } from '../hand/types.js'
+import { EngineError, type GameEvent, type HandPlayer, type HandState } from '../hand/types.js'
 import { canInsertThisHand } from './bonus.js'
 import {
   DEAL_RESERVE, addUid, canDealAtDeal, effectOf, effectsOf, evaluateChaosSeat, isGodSeat, lowestIndex, markTitle, record, remaining,
@@ -25,7 +25,6 @@ export { applyRevealEffects } from './engine-reveal.js'
  * hand without `state.chaos`; the Blind engine only calls them when the hand has a plan. What the appliers share lives
  * in `engine-core.ts`; BP-41's hole-card debuffs, Kẻ phá đám, Nhật thực's event and Mắt diều hâu in `engine-round3.ts`.
  */
-
 
 /**
  * The order a seat's deal-time buffs act in. Luck that picks a set comes before the promises that must hold at the end.
@@ -231,7 +230,7 @@ const markImmune = (chaos: ChaosHandState, seat: number): void => addUid((chaos.
  */
 export function dealChaosHand(state: HandState, events: GameEvent[], rng: Rng): void {
   const chaos = state.chaos
-  if (!chaos) throw new Error('dealChaosHand: not a chaos hand')
+  if (!chaos) throw new EngineError('INVALID_SETUP', 'dealChaosHand: not a chaos hand')
   recordEclipse(state, events)
   recordBackfires(state, events)
   resolveSpoilers(state, events, rng)
@@ -294,17 +293,20 @@ export function dealChaosHand(state: HandState, events: GameEvent[], rng: Rng): 
   }
   for (const p of order) {
     const e = effectOf(chaos, p.seat, 'acesCharge')
-    // The Thần holds Aces already: its own Siêu cộng dồn does not roll (silent; the card keeps its charge and counts the
-    // hand down as any duration card).
+    // The Thần holds Aces already: its own Siêu cộng dồn does not roll (silent; the card keeps the charge it came in with —
+    // `planHand` does not grow it while the seat reigns, Ruling 25 — and counts the hand down as any duration card).
     if (!e || isGodSeat(chaos, p.seat)) continue
+    // A blindfolded owner is not told (its event is private to it): whether its Aces came would show cards it must not see
+    // (Ruling 9). The line still reaches "Thẻ đã dùng" at the settlement.
+    const told = isBlindfolded(chaos.plan, p.seat) ? { silent: true as const } : {}
     if (rng.int(100) >= (e.charge ?? 0)) {
-      record(chaos, events, p.seat, e, [], 'fizzled')
+      record(chaos, events, p.seat, e, [], 'fizzled', told)
       continue
     }
     const n = counts.get(p.seat)!
     p.holeCards = takeAces(state, e.params.all ? n : Math.min(e.params.aces ?? 2, n))
     chaos.outcomes = { ...chaos.outcomes, acesDealt: [...(chaos.outcomes?.acesDealt ?? []), p.seat] }
-    record(chaos, events, p.seat, e, [], 'applied')
+    record(chaos, events, p.seat, e, [], 'applied', told)
   }
 
   const rounds = Math.max(...counts.values())
@@ -452,6 +454,7 @@ function insure(state: HandState, pots: Pot[], winners: ReadonlySet<number>): Ga
 export function chaosSettleHooks(state: HandState): SettleHooks | undefined {
   const chaos = state.chaos
   if (!chaos) return undefined
+  let paidTo: ReadonlyMap<number, number> = new Map()
   return {
     reverse: chaos.plan.reverse,
     borrowed: (seat) => chaos.borrowed.find((b) => b.seat === seat)?.card ?? null,
@@ -460,7 +463,33 @@ export function chaosSettleHooks(state: HandState): SettleHooks | undefined {
     beforePayout: (pots, winners) => insure(state, pots, winners),
     // BP-41 A5: duels, Ép chia thưởng, Thuế thắng and the bombs, stack to stack once the pots are paid; then (Task 6) a
     // Bán Thần made and a Thần dethroned, on who won a pot.
-    afterPayout: (payouts) => [...payTransfers(state, payouts), ...settleReigns(state, payouts)],
-    beforeSettlement: () => [{ type: 'CHAOS_SUMMARY', used: chaos.used.map((u) => ({ ...u })) }],
+    afterPayout: (payouts) => {
+      paidTo = payouts
+      return [...payTransfers(state, payouts), ...settleReigns(state, payouts)]
+    },
+    beforeSettlement: () => {
+      summarisePoints(state, paidTo)
+      return [{ type: 'CHAOS_SUMMARY', used: chaos.used.map((u) => ({ ...u })) }]
+    },
+  }
+}
+
+/**
+ * BP-41 fix wave: the two chaos-point cards that act in `afterHand`, where no event is told, get their line in "Thẻ đã dùng"
+ * here — Mồi lửa whenever it fired (every seat at the table takes its points), Tích tiểu thành đại when its holder won no
+ * pot of a hand that paid one (`afterHand` pays it on a loss; a hand carried over is no loss). The line only: no event,
+ * and the card is not marked used (a duration card counts itself down in `afterHand`).
+ */
+function summarisePoints(state: HandState, paidTo: ReadonlyMap<number, number>): void {
+  const chaos = state.chaos!
+  const paid = [...paidTo.values()].some((v) => v > 0)
+  for (const p of state.players) {
+    for (const kind of ['kindling', 'lossPoints'] as const) {
+      const e = effectOf(chaos, p.seat, kind)
+      if (!e) continue
+      if (kind === 'lossPoints' && (!paid || (paidTo.get(p.seat) ?? 0) > 0)) continue
+      if (chaos.used.some((u) => u.seat === p.seat && u.effect === kind)) continue
+      chaos.used.push({ seat: p.seat, cardId: e.cardId, effect: e.effect, outcome: 'applied', targets: [] })
+    }
   }
 }

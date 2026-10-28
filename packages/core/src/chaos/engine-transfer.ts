@@ -54,9 +54,9 @@ export function plantBombs(state: HandState, events: GameEvent[], rng: Rng): voi
  * A seat's net win is what the hand gave it so far: its payout, minus what it put in (`totalCommitted` and the dead money
  * of a stake card), plus or minus what the steps before moved (so a second Ép chia thưởng takes half of what the first
  * left). A winner is a seat that won a pot and whose net win is still above 0 (a seat ahead only by what a card paid it
- * is none: Ép chia thưởng and Thuế thắng never take from each other's takings). Every payment is floored to a whole point and capped at the
- * payer's stack. Each card that moved points tells it on `CHAOS_APPLIED.transfers` (a duel's own line in the summary was
- * written at the reveal; Ép chia thưởng, Thuế thắng and the bomb add theirs here).
+ * is none: Ép chia thưởng and Thuế thắng never take from each other's takings). Every payment is floored to a whole point
+ * and capped at the payer's stack. Each card that moved points tells it on `CHAOS_APPLIED.transfers` (a duel's own line
+ * in the summary was written at the reveal; Ép chia thưởng, Thuế thắng and the bomb add theirs here).
  */
 export function payTransfers(state: HandState, payoutBySeat: ReadonlyMap<number, number>): GameEvent[] {
   const chaos = state.chaos

@@ -415,6 +415,31 @@ describe('Mồi lửa and Tích tiểu thành đại', () => {
     expect([0, 1, 2].map((s) => r.seats.get(s)!.points)).toEqual([3, 3, 1])
   })
 
+  it('Mồi lửa reaches a seat sitting the hand out too: "mọi người ngồi bàn" (Ruling 24)', () => {
+    const away: AfterHandSeat = { ...seat(3, 'none'), chaos: { ...EMPTY_CHAOS_SEAT, points: 4 }, inHand: false }
+    const r = settle([fx('s_kindling')], [seat(0, 'loss'), seat(1, 'win'), away])
+    expect(r.seats.get(3)!.points).toBe(5)
+    // Without a Mồi lửa, a seat sitting out gains nothing.
+    expect(settle([], [seat(0, 'loss'), seat(1, 'win'), away]).seats.get(3)!.points).toBe(4)
+  })
+
+  it('both get their line in "Thẻ đã dùng": Mồi lửa when it fired, Tích tiểu thành đại for a holder that won no pot', () => {
+    const t = new Table({
+      chaos: plan(3, { 0: { effects: [fx('s_kindling')] }, 1: { effects: [fx('s_loss_points')] }, 2: { effects: [fx('s_loss_points')] } }),
+      rng: deckRng('Ah 2c 3d Ad 7c 8d'),
+    })
+    t.advanceAll()
+    const settlement = t.events.find((x): x is Extract<GameEvent, { type: 'SETTLEMENT' }> => x.type === 'SETTLEMENT')!
+    const won = new Set(settlement.payouts.filter((x) => x.amount > 0).map((x) => x.seat))
+    expect(won.size).toBeGreaterThan(0)
+    const summary = t.events.find((x): x is Extract<GameEvent, { type: 'CHAOS_SUMMARY' }> => x.type === 'CHAOS_SUMMARY')!
+    expect(summary.used.filter((u) => u.effect === 'kindling')).toEqual([{ seat: 0, cardId: 's_kindling', effect: 'kindling', outcome: 'applied', targets: [] }])
+    expect(summary.used.filter((u) => u.effect === 'lossPoints').map((u) => u.seat)).toEqual([1, 2].filter((s) => !won.has(s)))
+    // No event for either: they act in afterHand.
+    expect(t.applied('kindling')).toEqual([])
+    expect(t.applied('lossPoints')).toEqual([])
+  })
+
   it('Tích tiểu thành đại gives its holder a point on a lost hand only', () => {
     expect(settle([fx('s_loss_points')], [seat(0, 'loss'), seat(1, 'loss')]).seats.get(0)!.points).toBe(3)
     expect(settle([fx('s_loss_points')], [seat(0, 'win'), seat(1, 'loss')]).seats.get(0)!.points).toBe(1)

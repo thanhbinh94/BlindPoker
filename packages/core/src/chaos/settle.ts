@@ -127,7 +127,8 @@ export function afterHand(input: {
   const slain = plan.god ? (input.outcomes?.dethroned ?? []) : []
   /** Trộm điểm cards received below, resolved once every seat is settled (they act on another seat). */
   const thefts: { seat: number; card: ChaosCardDef }[] = []
-  // BP-41 Mồi lửa: every seat in the hand takes each fired one's points (spec §6.3 "mọi người ngồi bàn").
+  // BP-41 Mồi lửa: every seat at the table — in the hand or sitting it out — takes each fired one's points (spec §6.3
+  // "mọi người ngồi bàn", Ruling 24).
   const kindling = plan.seats.reduce((sum, p) => sum + p.effects.reduce((n, e) => n + (e.effect === 'kindling' ? (e.params.points ?? 0) : 0), 0), 0)
 
   for (const s of input.seats) {
@@ -137,7 +138,9 @@ export function afterHand(input: {
     const noFoldMark = marks.some((m) => m.seat === s.seat && m.kind === 'noFold')
     if (!s.inHand) {
       // BP-41 Cấm bỏ bài is for the table's next hand only: a seat that sat that hand out is free again (Ruling 5a-5).
-      const kept = chaos.noFoldNextHand ? withoutNoFold(chaos) : chaos
+      // Mồi lửa reaches it all the same: "mọi người ngồi bàn mỗi ván +1" (spec §6.3, Ruling 24).
+      const freed = chaos.noFoldNextHand ? withoutNoFold(chaos) : chaos
+      const kept = kindling > 0 ? { ...freed, points: freed.points + kindling } : freed
       result.seats.set(s.seat, frozenMark || blindMark
         ? { ...kept, frozenNextHand: chaos.frozenNextHand || frozenMark, blindfoldedNextHand: chaos.blindfoldedNextHand || blindMark }
         : kept)
@@ -236,7 +239,10 @@ export function afterHand(input: {
         const demigod = plan.demigods?.find((d) => d.seat === s.seat)
         if (demigod) crits.push({ k: reignCrit('demigod', demigod.params, rng), e: reignEffect(demigod) })
       }
-      const best = crits.reduce<{ k: number; e: PlannedEffect } | null>((b, c) => (c.k >= 2 && (b === null || c.k > b.k) ? c : b), null)
+      // On a tie the round-three source is credited — Liều ăn nhiều, Xúc xắc định mệnh, a reign — before Bạo kích, so the card
+      // that promised the crit is the one the toast names (Ruling 17). The rolls above keep their order (same draws).
+      const ranked = [...crits.filter((c) => c.e.effect !== 'crit'), ...crits.filter((c) => c.e.effect === 'crit')]
+      const best = ranked.reduce<{ k: number; e: PlannedEffect } | null>((b, c) => (c.k >= 2 && (b === null || c.k > b.k) ? c : b), null)
       if (best) {
         const k = Math.min(5, best.k) as ChaosCritMultiplier
         result.credits.push({ seat: s.seat, amount: (k - 1) * s.net, reason: 'chaos_crit', cardId: best.e.cardId, uid: best.e.uid, multiplier: k })
@@ -334,18 +340,33 @@ export function afterHand(input: {
       next = r.seat
       got.push(...r.received)
     }
-    // BP-41 Nâng tầm uy lực: the seat's next card drawn here (a prize, a bonus card) comes a tier up, and the card is spent.
-    const lift = (tier: ChaosTier): ChaosTier => {
+    const drawn: ChaosCardDef[] = []
+    /** A human's card to its private bonus hand, told to it alone (`bonusAwarded`). */
+    const bank = (card: ChaosCardDef): void => {
+      next = { ...next, bonus: [...next.bonus, toHeld(card, nextUid())] }
+      drawn.push(card)
+    }
+    /**
+     * BP-41 Nâng tầm uy lực: the seat's next card drawn here (a prize, a bonus card) is drawn a tier up. The card is spent
+     * only when that card is kept — received or banked (`spend`, called first) — not when the tier had no card or the
+     * bonus hand was full and the card was dropped (5c M2).
+     */
+    const draw = (tier: ChaosTier): { card: ChaosCardDef | undefined; spend: () => void } => {
       const r = liftTier(next, tier)
-      next = r.seat
-      return r.tier
+      const card = drawOffer(pool, r.tier, mode, rng, 1, weights)[0]
+      const spend = (): void => {
+        const used = r.spent
+        if (used) next = { ...next, cards: next.cards.filter((x) => x.uid !== used.uid) }
+      }
+      return { card, spend }
     }
     const give = (tier: ChaosTier): void => {
-      const card = drawOffer(pool, lift(tier), mode, rng, 1, weights)[0]
-      if (card) receive(card)
+      const { card, spend } = draw(tier)
+      if (!card) return
+      spend()
+      receive(card)
     }
     const hasRoom = (): boolean => next.bonus.length + (next.armed ? 1 : 0) < BONUS_HAND_MAX
-    const drawn: ChaosCardDef[] = []
     for (const p of prizes) for (let i = 0; i < p.count; i++) give(p.tier)
     // The dice's prize cards (A7): a bot's act at once; a human's go to its private bonus hand, or to the seat when they
     // need no press, and one that finds the bonus hand full is dropped (Ruling 3). They come before the points' bonus
@@ -355,12 +376,14 @@ export function afterHand(input: {
         give(tier)
         continue
       }
-      const card = drawOffer(pool, lift(tier), mode, rng, 1, weights)[0]
+      const { card, spend } = draw(tier)
       if (!card) continue
-      if (needsNoPress(card)) receive(card)
-      else if (hasRoom()) {
-        next = { ...next, bonus: [...next.bonus, toHeld(card, nextUid())] }
-        drawn.push(card)
+      if (needsNoPress(card)) {
+        spend()
+        receive(card)
+      } else if (hasRoom()) {
+        spend()
+        bank(card)
       }
     }
     if (!frozen) {
@@ -376,14 +399,12 @@ export function afterHand(input: {
       let spendable = next.points
       while (spendable >= config.pointsThreshold && hasRoom()) {
         spendable -= config.pointsThreshold
-        const card = drawOffer(pool, lift(drawTier(config.tierWeights, rng)), mode, rng, 1, weights)[0]
+        const { card, spend } = draw(drawTier(config.tierWeights, rng))
         if (!card) continue
+        spend()
         next = { ...next, points: next.points - config.pointsThreshold }
         if (needsNoPress(card)) receive(card)
-        else {
-          next = { ...next, bonus: [...next.bonus, toHeld(card, nextUid())] }
-          drawn.push(card)
-        }
+        else bank(card)
       }
     }
     if (got.length > 0) result.awarded.push({ seat: s.seat, cards: got })
@@ -397,8 +418,11 @@ export function afterHand(input: {
   }
   // BP-41 Trộm điểm received here acts once every seat is settled, over the seats given, in the order received; it is
   // not held, so it gets its uid now.
+  // A shield stands against it as `planHand` would stand it (5c M4): with hands left, in a mode the card allows.
+  const defs = new Map(pool.map((c) => [c.id, c]))
+  const validHere = (cardId: string): boolean => defs.get(cardId)?.modes.includes(mode) ?? true
   for (const t of thefts) {
-    const r = stealPoints({ seats: result.seats, holder: t.seat, card: { cardId: t.card.id, uid: nextUid(), params: t.card.params }, rng })
+    const r = stealPoints({ seats: result.seats, holder: t.seat, card: { cardId: t.card.id, uid: nextUid(), params: t.card.params }, rng, validHere })
     result.seats = r.seats
     result.steals.push(r.steal)
   }

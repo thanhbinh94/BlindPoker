@@ -50,6 +50,8 @@ export interface RecordExtra {
   /** BP-41 Cá chép hóa rồng: the line tells a reign (on the event and in the summary). */
   reign?: ChaosReignKind
   consume?: 'applied' | 'blocked' | null
+  /** The line in the summary only, no event: what the event would tell must not reach even its owner yet (Ruling 9). */
+  silent?: true
 }
 
 export const remaining = (state: HandState): number => state.deck.length - state.deckIndex
@@ -133,7 +135,7 @@ export function record(chaos: ChaosHandState, events: GameEvent[], seat: number,
   if (extra.privateTo !== undefined) ev.privateTo = extra.privateTo.slice()
   if (extra.transfers !== undefined) ev.transfers = extra.transfers.map((t) => ({ ...t }))
   if (extra.reign !== undefined) ev.reign = extra.reign
-  events.push(ev)
+  if (extra.silent !== true) events.push(ev)
   chaos.used.push({ seat, cardId: e.cardId, effect: e.effect, outcome, targets: targets.slice(), ...(extra.reign === undefined ? {} : { reign: extra.reign }) })
   addUid(chaos.recorded, e.uid)
   const consume = extra.consume === undefined ? 'applied' : extra.consume
@@ -226,8 +228,10 @@ export function resolveDebuff(state: HandState, events: GameEvent[], user: numbe
   const sg = opts.rng ? scapegoatOf(chaos, target) : null
   if (sg) {
     const passed = [...(opts.passed ?? []), target]
+    // Kẻ phá đám never reaches the Thần (G11), handed on or not: it is no candidate, as it is no target.
     const others = state.players
-      .filter((p) => !p.folded && p.seat !== user && !passed.includes(p.seat) && !chaos.hit.includes(p.seat) && !(opts.holes && isImmune(chaos, p.seat)))
+      .filter((p) => !p.folded && p.seat !== user && !passed.includes(p.seat) && !chaos.hit.includes(p.seat)
+        && !(opts.holes && isImmune(chaos, p.seat)) && !(e.effect === 'spoiler' && isGodSeat(chaos, p.seat)))
       .map((p) => p.seat)
     if (others.length > 0) {
       const to = others[opts.rng!.int(others.length)]!
@@ -297,7 +301,8 @@ export function evaluateChaosSeat(state: HandState, seat: number, cards: readonl
   const chaos = state.chaos!
   const wild = chaos.wild?.find((w) => w.seat === seat)?.card
   const holds = state.players.find((p) => p.seat === seat)?.holeCards.includes(wild ?? -1) ?? false
-  return wild !== undefined && holds ? evaluateWild(cards, wild) : evaluateAny(cards)
+  // Under "Thế giới đảo ngược" the wild card makes the hand that wins there, the weakest (Ruling 10).
+  return wild !== undefined && holds ? evaluateWild(cards, wild, chaos.plan.reverse) : evaluateAny(cards)
 }
 
 /**

@@ -303,7 +303,6 @@ describe('Thách đấu (duel)', () => {
     expect(three.applied('duel')[0]).toMatchObject({ seat: 0, targets: [1], outcome: 'applied', wagers: 3 })
     expect(three.chaos.duels).toEqual([{ winner: 0, payer: 1, wagers: 3, cardId: 'g_duel', uid: e.uid }])
     expect(three.chaos.hit).toEqual([1])
-    expect(three.chaos.outcomes?.duelWins).toEqual([0])
 
     const two = new Stage({ chaos: plan(2, { 0: { effects: [fx('g_duel')] } }), holes: [strong, weak], board: BOARD }).reveal(script(0, 39))
     expect(two.chaos.duels?.[0]).toMatchObject({ winner: 0, payer: 1, wagers: 2 })
@@ -311,7 +310,6 @@ describe('Thách đấu (duel)', () => {
     const none = new Stage({ chaos: plan(2, { 0: { effects: [fx('g_duel')] } }), holes: [strong, weak], board: BOARD }).reveal(script(0, 40))
     expect(none.applied('duel')[0]).toMatchObject({ outcome: 'applied', wagers: 0 })
     expect(none.chaos.duels).toBeUndefined()
-    expect(none.chaos.outcomes?.duelWins).toBeUndefined()
   })
 
   it('Bạc pays only two wagers, at 25 %; a losing or tied hand owes nothing and rolls nothing', () => {

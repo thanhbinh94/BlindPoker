@@ -40,12 +40,13 @@ type Firing = Omit<PlannedEffect, 'targets'>
 /**
  * Picks the effects that fire this hand (spec §3.4–§3.5) for the seats dealt in. A frozen seat fires nothing, not even
  * its shield (and its armed bonus card waits, untouched). Otherwise a played bonus card fires first (see below), then,
- * in the order the cards were received: duration cards fire while they have hands left; one-shot
- * buffs fire once per effect kind; at most one debuff fires (the oldest); shields and mirrors are exposed as `shield`
- * for the engine, and a held Bia đỡ đạn as `scapegoat` (BP-41); Cấp cứu, Thần tài and Cao thủ wait for `afterHand`;
- * a card whose modes exclude the table's never fires. Each Tay bạc then rolls one effect under the same rules. Deal-time debuffs get their targets here (one other seat at
- * random, or every other seat with `all`); reveal debuffs get `targets: []`. The input seats are never changed: the
- * returned map holds each seat as it goes into the hand (a rolled Tích lũy adds its points there).
+ * in the order the cards were received: duration cards fire while they have hands left; one-shot buffs fire once per
+ * effect kind; at most one debuff fires (the oldest); shields and mirrors are exposed as `shield` for the engine, and a
+ * held Bia đỡ đạn as `scapegoat` (BP-41); Cấp cứu, Thần tài and Cao thủ wait for `afterHand`; a card whose modes
+ * exclude the table's never fires. Each Tay bạc then rolls one effect under the same rules. Deal-time debuffs get their
+ * targets here (one other seat at random, or every other seat with `all`); reveal debuffs get `targets: []`. The input
+ * seats are never changed: the returned map holds each seat as it goes into the hand (a rolled Tích lũy adds its points
+ * there).
  *
  * `table` (BP-41 A3) is the table's chaos state going into the hand (the Thần, the Bán Thần, the bombs); the returned
  * `table` is what it becomes for this hand. Absent, it is `EMPTY_CHAOS_TABLE`. End-of-hand cards (`end`, the dice) are
@@ -54,9 +55,9 @@ type Firing = Omit<PlannedEffect, 'targets'>
  * seat is planned, a second pass applies Nhật thực (`eclipse`; never on the Thần), then the reigns (`planReigns`, Task 6:
  * a Cá chép may ascend, the Thần, the Bán Thần and the live Cá chép go into the plan), then each seat's stake is set
  * (`stakes`: Mạo hiểm gia, Sới lớn; Task 5a) and, on a "Chơi hoặc bỏ" table, the seats Cấm bỏ bài marked last hand —
- * every seat while the Thần acts — go into `noFoldSeats`. Last,
- * each Bom nổ chậm on the table whose owner is dealt in is passed to another seat (`passBombs`, Task 5b) and goes into
- * `plan.bombs`; the returned `table` carries the new carriers.
+ * every seat while the Thần acts — go into `noFoldSeats`. Last, each Bom nổ chậm on the table whose owner is dealt in is
+ * passed to another seat (`passBombs`, Task 5b) and goes into `plan.bombs`; the returned `table` carries the new
+ * carriers.
  */
 export function planHand(input: {
   seats: readonly PlanSeatInput[]
@@ -76,6 +77,8 @@ export function planHand(input: {
 
   const planSeats: PlanSeat[] = []
   const seats = new Map<number, ChaosSeat>()
+  /** Each Siêu cộng dồn grown this hand, as it was before (by uid): the Thần's is put back (Ruling 25). */
+  const ungrown = new Map<number, HeldCard>()
   for (const { seat, chaos: given } of input.seats) {
     // What a hand that never settled (cancelled) left behind: a card armed for it goes back to the bonus hand unfired
     // (spec §3.4), and its "played" marker is cleared. The room does this when the hand is cancelled (M4); this is the
@@ -128,7 +131,9 @@ export function planHand(input: {
 
     // BP-41: the charge a firing card carries into this hand. Siêu cộng dồn's chance grows by a random whole
     // `stepMin`..`stepMax` percent, up to `cap`, before this hand's roll (spec §6.1 "mỗi ván +5..7 %"); the grown card is
-    // what the seat keeps. Đảo bài's phase goes as it is (`afterHand` moves it on). Other cards carry none.
+    // what the seat keeps — unless the seat reigns as the Thần this hand, whose card neither rolls nor grows (Ruling 25:
+    // the growth is undone once the reigns are known, below). Đảo bài's phase goes as it is (`afterHand` moves it on).
+    // Other cards carry none.
     const grown = new Map<number, HeldCard>()
     const chargeUp = (card: HeldCard): HeldCard => {
       if (card.effect === 'flipFlop' || card.effect === 'adventurer') return { ...card, charge: card.charge ?? 0 }
@@ -137,6 +142,7 @@ export function planHand(input: {
       const step = lo + rng.int(Math.max(1, (card.params.stepMax ?? lo) - lo + 1))
       const next = { ...card, charge: Math.min(card.params.cap ?? 100, (card.charge ?? 0) + step) }
       grown.set(card.uid, next)
+      ungrown.set(card.uid, card)
       return next
     }
 
@@ -198,6 +204,23 @@ export function planHand(input: {
     mode,
     rng,
   })
+  // Ruling 25: the Thần holds Aces already — its Siêu cộng dồn does not roll (the engine) and does not grow (here) while it
+  // reigns. The rng draws stay as they were, so no other seat's plan changes.
+  if (reigns.god) {
+    const g = reigns.god.seat
+    const back = (card: HeldCard): HeldCard => ungrown.get(card.uid) ?? card
+    const held = seats.get(g)
+    if (held) seats.set(g, { ...held, cards: held.cards.map(back) })
+    const planned = planSeats.find((p) => p.seat === g)
+    if (planned) {
+      planned.effects = planned.effects.map((e) => {
+        const was = ungrown.get(e.uid)
+        if (!was) return e
+        const { charge: _grown, ...rest } = e
+        return was.charge === undefined ? rest : { ...rest, charge: was.charge }
+      })
+    }
+  }
   stakes(planSeats)
   const plan: ChaosHandPlan = { seats: planSeats, reverse: planSeats.some((s) => s.effects.some((e) => e.effect === 'reverseRank')) }
   if (reigns.god) plan.god = reigns.god

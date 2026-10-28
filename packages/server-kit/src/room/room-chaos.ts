@@ -231,6 +231,8 @@ export class ChaosTable {
       // A uid of its own: a card that acts on receipt is never held, so no held card's uid names it.
       card: { cardId: card.id, uid: this.nextUid(), params: card.params },
       rng: this.host.deps.rng,
+      // A shield stands as it would at the deal: only in a mode its card allows (a card the GM took out still stands).
+      validHere: (cardId) => this.cards.find((c) => c.id === cardId)?.modes.includes(this.host.rules.decisionMode) ?? true,
     })
     for (const p of seated) {
       const next = r.seats.get(p.seat!)

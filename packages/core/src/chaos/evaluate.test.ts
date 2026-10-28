@@ -54,6 +54,27 @@ describe('evaluateWild (Lá ma)', () => {
     expect(ev.wild).toBeUndefined()
     expect(ev).toEqual(evaluate(cards))
   })
+  it('under "Thế giới đảo ngược" it stands for the card that makes the weakest hand — the one that wins there (Ruling 10)', () => {
+    // A pair of Aces as dealt; the wild Ace becomes a card that pairs nothing, so the hand falls to Ace-less high card.
+    const cards = parseCards('Ah As 2c 4d 7h 9s Jc')
+    const wild = parseCards('As')[0]!
+    const natural = evaluate(cards)
+    expect(natural.category).toBe(HandCategory.PAIR)
+    const ev = evaluateWild(cards, wild, true)
+    expect(ev.category).toBe(HandCategory.HIGH_CARD)
+    expect(ev.rank).toBeLessThan(natural.rank)
+    expect(ev.wild?.card).toBe(wild)
+    expect(rankOf(ev.wild!.as)).not.toBe(12)
+    // No substitute can make it weaker still.
+    for (let s = 0; s < 52; s++) {
+      if (cards.includes(s)) continue
+      const trial = cards.slice()
+      trial[1] = s
+      expect(evaluateAny(trial).rank).toBeGreaterThanOrEqual(ev.rank)
+    }
+    // Without the reverse it still makes the strongest.
+    expect(evaluateWild(cards, wild).rank).toBeGreaterThanOrEqual(natural.rank)
+  })
   it('works on 12 cards', () => {
     const cards = deal(7, 12)
     const ev = evaluateWild(cards, cards[0]!)

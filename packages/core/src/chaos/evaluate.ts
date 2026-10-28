@@ -28,8 +28,12 @@ export function evaluateAny(cards: readonly Card[]): HandEvaluation {
  * among `cards` — never a duplicate, so never five of a kind. The card ranked as itself is tried first and a substitute
  * wins only by a strictly better rank, so the result is deterministic and `wild` is reported only when it changed the
  * hand. `best` always shows the real wild card in the slot its substitute filled.
+ *
+ * `lowest` ("Thế giới đảo ngược", Ruling 10): the weakest hand wins, so the wild card stands for the card that makes the
+ * hand weakest — the set that wins there — and a substitute wins by a strictly lower rank. It may then lie outside the five
+ * that rank (it took away what the real card added): `best` is those five, and `wild` still says what it stood for.
  */
-export function evaluateWild(cards: readonly Card[], wild: Card): HandEvaluation & { wild?: { card: Card; as: Card } } {
+export function evaluateWild(cards: readonly Card[], wild: Card, lowest = false): HandEvaluation & { wild?: { card: Card; as: Card } } {
   const at = cards.indexOf(wild)
   const natural = evaluateAny(cards)
   if (at < 0) return natural
@@ -41,12 +45,13 @@ export function evaluateWild(cards: readonly Card[], wild: Card): HandEvaluation
     const trial = cards.slice()
     trial[at] = s
     const ev = evaluateAny(trial)
-    if (ev.rank > top.rank) {
+    if (lowest ? ev.rank < top.rank : ev.rank > top.rank) {
       top = ev
       as = s
     }
   }
-  if (as === null || !top.best.includes(as)) return natural
+  if (as === null) return natural
+  if (!top.best.includes(as)) return lowest ? { rank: top.rank, category: top.category, best: top.best, wild: { card: wild, as } } : natural
   const sub = as
   return { rank: top.rank, category: top.category, best: top.best.map((c) => (c === sub ? wild : c)), wild: { card: wild, as: sub } }
 }

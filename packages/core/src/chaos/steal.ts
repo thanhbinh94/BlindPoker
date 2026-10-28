@@ -20,12 +20,18 @@ export interface ChaosSteal {
 }
 
 /**
- * The shield a seat holds up against a debuff outside a hand, by `planHand`'s rule: a lasting shield (a duration card)
- * before a one-shot one, else the oldest shield or mirror held. Null when it holds none.
+ * The shield a seat holds up against a debuff outside a hand, by `planHand`'s rule exactly: among the shields and mirrors
+ * with hands left that the table's mode allows (`validHere`, default all), the oldest, unless a lasting one (a duration
+ * card, shield or mirror) comes later — a lasting one is preferred, as it is not used up by what it stops. Null when none.
  */
-export function standingShield(cards: readonly HeldCard[]): HeldCard | null {
-  const shields = cards.filter((c) => c.effect === 'shield' || c.effect === 'mirror')
-  return shields.find((c) => c.effect === 'shield' && c.handsLeft !== null) ?? shields[0] ?? null
+export function standingShield(cards: readonly HeldCard[], validHere: (cardId: string) => boolean = () => true): HeldCard | null {
+  let up: HeldCard | null = null
+  for (const c of cards) {
+    if ((c.effect !== 'shield' && c.effect !== 'mirror') || !validHere(c.cardId)) continue
+    if (c.handsLeft !== null && c.handsLeft <= 0) continue
+    if (up === null || (c.handsLeft !== null && up.handsLeft === null)) up = c
+  }
+  return up
 }
 
 /**
@@ -47,6 +53,8 @@ export function stealPoints(input: {
   card: { cardId: string; uid: number; params: Readonly<Record<string, number>> }
   rng: Rng
   backfire?: readonly number[]
+  /** Whether the table's mode allows a held card (a shield the GM took out of this mode does not stand). Default all. */
+  validHere?: (cardId: string) => boolean
 }): { seats: Map<number, ChaosSeat>; steal: ChaosSteal } {
   const { holder, card, rng } = input
   const seats = new Map(input.seats)
@@ -82,7 +90,7 @@ export function stealPoints(input: {
   const passed: number[] = []
   for (;;) {
     steal.targets = [target]
-    const shield = standingShield(seats.get(target)!.cards)
+    const shield = standingShield(seats.get(target)!.cards, input.validHere)
     if (shield) {
       if (shield.handsLeft === null) {
         drop(target, shield)
