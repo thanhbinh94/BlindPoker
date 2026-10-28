@@ -37,6 +37,12 @@ import {
  * above the tray with "Bỏ qua" dealing at once (F-13d/e), and two cases that need the cards forced through the GM console —
  * eight seats firing at one reveal (F-13f) and a bonus card played with "Dùng" (F-13g). Those two run last and put the
  * console's chaos settings back in a `finally`.
+ *
+ * BP-41 (spec 2026-10-28), round three: the 86 cards are all in play for F-13…F-13e. F-14a/b force a Thần Bài — the GM rules
+ * leave only Cá chép hóa rồng and two waiting cards in the diamond draft, and the pack's cards (`chaos-cards.ops.json`, set in
+ * `ops.config.ts`) start Cá chép at 100 % energy, which the rules alone cannot (A-ops) — and check the herald, the crown and the
+ * tray's "no fold" at the desktop and the S25's sizes; F-14c/d force Xúc xắc vận may kim cương the same way and watch the roll.
+ * They run last, after F-13f/g, and put the console's diamond rules and settings back.
  */
 
 test.describe.configure({ mode: 'serial' })
@@ -251,7 +257,7 @@ async function draftFitsPhone({ id, who, phones, via }: { id: string; who: Playe
   // Measured as it opens — the cards' toasts may still stand beside it — and again once they have left (4 s): neither scrolls
   // the stage (BP-39 final wave, I2).
   await expectRoomFits(page, `${id}, the chaos result as it opens`, [screen])
-  await expect(cardToasts(page)).toHaveCount(0, { timeout: 10_000 })
+  await expect(passingToasts(page)).toHaveCount(0, { timeout: 10_000 })
   await expectRoomFits(page, `${id}, the chaos result`, [screen])
   const name = winnerCard(page).getByText(who.who.displayName, { exact: true })
   await expect(name, 'the viewer’s row on the result strip').toBeVisible()
@@ -348,6 +354,12 @@ const S25_SIDEWAYS: Screen = { width: 780, height: 360 }
 /** The cards' toast band (`ChaosToasts`) and, in it, the "+N thẻ khác" toast's button. */
 const toastBand = (page: Page): Locator => page.locator('[data-chaos-toasts]')
 const cardToasts = (page: Page): Locator => toastBand(page).locator('[data-chaos-toast]')
+/**
+ * The toasts that leave by themselves, 4 s after they came: every card toast and "+N", but not "Thế giới đảo ngược"'s note, which is
+ * pinned for the whole hand by design (BP-39) and so stands beside the result until the next hand. With 15 % diamond drafts since
+ * BP-41 a table meets that card often enough that a wait for "no toast at all" ran into the next hand's (BP-41 Task 11).
+ */
+const passingToasts = (page: Page): Locator => toastBand(page).locator('[data-chaos-toast]:not([data-chaos-note])')
 
 /** What `watchChaos` saw, frame by frame, until `readWatch`. */
 interface Watch {
@@ -501,7 +513,7 @@ async function stripAtS25({ id, who, screen }: { id: string; who: Player; screen
   await expectNoTextOverlapAt(page, `${id}, the chaos result`)
   // The stage fits with the cards' toasts still up beside the strip, and again once they have left (BP-39 final wave, I2).
   await expectRoomFits(page, `${id}, the chaos result as it opens`, [screen])
-  await expect(cardToasts(page)).toHaveCount(0, { timeout: 10_000 })
+  await expect(passingToasts(page)).toHaveCount(0, { timeout: 10_000 })
   await expectRoomFits(page, `${id}, the chaos result`, [screen])
 
   await skipDealsAtOnce(page, 'tap')
@@ -572,9 +584,9 @@ async function forceRevealGold(page: Page, before: GmChaos, config: Record<strin
   expect(set.status, `PUT /api/gm/chaos/config: ${JSON.stringify(set.body)}`).toBe(200)
 }
 
-/** Puts back what `readChaos` read: each gold card's rule (none → cleared) and the settings. */
-async function restoreChaos(page: Page, before: GmChaos): Promise<void> {
-  const changes = before.cards.filter((c) => c.tier === 'gold').map((c) => (c.rule === null ? { cardId: c.id, clear: true } : { cardId: c.id, ...c.rule }))
+/** Puts back what `readChaos` read: each card's rule of `tier` — the tier the case changed — (none → cleared) and the settings. */
+async function restoreChaos(page: Page, before: GmChaos, tier: string): Promise<void> {
+  const changes = before.cards.filter((c) => c.tier === tier).map((c) => (c.rule === null ? { cardId: c.id, clear: true } : { cardId: c.id, ...c.rule }))
   const rules = await putApi(page, '/api/gm/chaos/rules', { changes, reason: 'ops F-13: trả lại như cũ' })
   const set = await putApi(page, '/api/gm/chaos/config', { config: before.config, reason: 'ops F-13: trả lại như cũ' })
   expect([rules.status, set.status], `the chaos settings are put back: ${JSON.stringify([rules.body, set.body])}`).toEqual([200, 200])
@@ -587,9 +599,9 @@ async function restoreChaos(page: Page, before: GmChaos): Promise<void> {
  * fails, and a restore that fails after the case itself has failed is logged rather than thrown, so the case's own error is
  * the one reported (P6).
  */
-async function restoreAndClose(page: Page, before: GmChaos | null, players: Player[], failed: boolean): Promise<void> {
+async function restoreAndClose(page: Page, before: GmChaos | null, players: Player[], failed: boolean, tier = 'gold'): Promise<void> {
   try {
-    if (before !== null) await restoreChaos(page, before)
+    if (before !== null) await restoreChaos(page, before, tier)
   } catch (err) {
     if (!failed) throw err
     console.error('ops F-13: the chaos settings could not be put back after the case failed', err)
@@ -622,7 +634,7 @@ async function burstAtS25({ id, who, screen, cap }: { id: string; who: Player; s
   await expectNoPageScroll(page, `${id}, eight cards at one reveal`)
   await expectNoTextOverlapAt(page, `${id}, eight cards at one reveal`)
   // Watch until the batch has left (4 s from its arrival), so every frame the toasts shared with the strip is counted.
-  await expect(cardToasts(page)).toHaveCount(0, { timeout: 10_000 })
+  await expect(passingToasts(page)).toHaveCount(0, { timeout: 10_000 })
   const watch = await readWatch(page)
 
   expect(watch.maxCards, `at most ${cap} card toasts at once (${watch.texts.join(' | ')})`).toBeLessThanOrEqual(cap)
@@ -715,5 +727,332 @@ test('F-13g: @s25p a bonus card earned at the table — tap it, "Dùng", and it 
     failed = false
   } finally {
     await restoreAndClose(page, before, [phone], failed)
+  }
+})
+
+/* ── BP-41, round three: a Thần forced on the table, and the dice of fortune (spec 2026-10-28 §4.5, §5) ─────────────── */
+
+/** Two diamond cards that only wait in the hand: neither fires unless a debuff or a bust comes, and none can come from the three. */
+const DIAMOND_WAITERS = [
+  { id: 'd_mirror', name: 'Gương phản chiếu' },
+  { id: 'd_rescue', name: 'Cấp cứu kim cương' },
+]
+const CARP = { id: 'd_carp', name: 'Cá chép hóa rồng' }
+const DIAMOND_DICE = { id: 'd_dice', name: 'Xúc xắc vận may kim cương' }
+
+/**
+ * Only `card` and `DIAMOND_WAITERS` can be drawn: diamond is the only tier drafted (`{ silver: 0, gold: 0, diamond: 100 }`) and
+ * every other diamond card is off — three, the least a tier may keep — so every draft offers exactly those three. The rule
+ * turns `card` on even where the pack's cards ship it off: Cá chép, which `chaos-cards.ops.json` starts at 100 % energy
+ * (A-ops), so the seat holding it becomes the Thần at the first hand it is dealt.
+ */
+async function forceDiamond(page: Page, before: GmChaos, card: string): Promise<void> {
+  const keep = [card, ...DIAMOND_WAITERS.map((c) => c.id)]
+  const changes = before.cards
+    .filter((c) => c.tier === 'diamond')
+    .map((c) => ({ cardId: c.id, enabled: keep.includes(c.id), weight: keep.includes(c.id) ? 1 : 0, startsAt: null, endsAt: null }))
+  const reason = `ops F-14: chỉ ba thẻ kim cương (${card})`
+  const rules = await putApi(page, '/api/gm/chaos/rules', { changes, reason })
+  expect(rules.status, `PUT /api/gm/chaos/rules: ${JSON.stringify(rules.body)}`).toBe(200)
+  const set = await putApi(page, '/api/gm/chaos/config', { config: { ...before.config, tierWeights: { silver: 0, gold: 0, diamond: 100 } }, reason })
+  expect(set.status, `PUT /api/gm/chaos/config: ${JSON.stringify(set.body)}`).toBe(200)
+}
+
+/** The draft's card named `name` (its own name part, not the button's longer label), pressed; waits for the draft to close. */
+async function pickNamed(page: Page, name: string, how: 'click' | 'tap'): Promise<void> {
+  const card = draftCards(page).getByRole('button').filter({ has: page.locator('[data-part="name"]').getByText(name, { exact: true }) })
+  await expect(card, `"${name}" is on offer`).toHaveCount(1)
+  await (how === 'tap' ? card.tap() : card.click())
+  await expect(draftCards(page), 'the draft is over once this seat has chosen').toHaveCount(0, { timeout: 10_000 })
+}
+
+/** What `watchMoments` saw of the room's moment layer (the herald and the dice, `RoomScreen`'s `.moments`), frame by frame. */
+interface Moments {
+  /** Each herald line's text, as it showed. */
+  heralds: string[]
+  heraldFrames: number
+  /** Each roll's row by name: whether its dice were seen tumbling, then the faces they landed on and the result, in words. */
+  rolls: { name: string; tumbled: boolean; faces: string; result: string }[]
+  diceFrames: number
+  /** The herald's band or the dice panel reaching past the screen's edge: "<part>: <box>". */
+  outside: string[]
+  /** The most the page scrolled, either way, while a herald or the dice were up. */
+  scroll: { down: number; across: number }
+}
+
+/**
+ * Watches the moment layer on every animation frame until `readMoments`. A herald and a roll stand 3 s each, too short to look
+ * at only now and then; this keeps what they said, whether the dice tumbled before they landed, and whether either reached
+ * past the screen or made the page scroll while it stood.
+ */
+async function watchMoments(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const w = { heralds: [] as string[], heraldFrames: 0, rolls: [] as { name: string; tumbled: boolean; faces: string; result: string }[], diceFrames: 0, outside: [] as string[], scroll: { down: 0, across: 0 }, stop: false }
+    Object.assign(window, { __moments: w })
+    const root = document.documentElement
+    const measure = (part: string, el: Element): void => {
+      const r = el.getBoundingClientRect()
+      if (r.left < -0.5 || r.top < -0.5 || r.right > root.clientWidth + 0.5 || r.bottom > root.clientHeight + 0.5) {
+        const line = `${part}: ${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}×${Math.round(r.height)}`
+        if (w.outside.length < 20 && !w.outside.includes(line)) w.outside.push(line)
+      }
+      w.scroll.down = Math.max(w.scroll.down, root.scrollHeight - root.clientHeight)
+      w.scroll.across = Math.max(w.scroll.across, root.scrollWidth - root.clientWidth)
+    }
+    const tick = (): void => {
+      if (w.stop) return
+      const band = document.querySelector('button[data-herald]')
+      // The band's own shake is clipped by the layer (`overflow: hidden`): measured once it stands.
+      if (band !== null && band.getBoundingClientRect().height > 0) {
+        w.heraldFrames += 1
+        for (const line of Array.from(band.querySelectorAll('[data-kind]'))) {
+          const text = line.textContent?.trim() ?? ''
+          if (text !== '' && !w.heralds.includes(text)) w.heralds.push(text)
+        }
+        if (band.getAnimations().length === 0) measure('the herald', band)
+      }
+      const panel = document.querySelector('section[aria-label="Xúc xắc vận may"]')
+      if (panel !== null) {
+        w.diceFrames += 1
+        measure('the dice', panel)
+        for (const row of Array.from(panel.children)) {
+          const name = row.querySelector('strong')?.textContent?.trim() ?? ''
+          let seen = w.rolls.find((r) => r.name === name)
+          if (seen === undefined) {
+            seen = { name, tumbled: false, faces: '', result: '' }
+            w.rolls.push(seen)
+          }
+          if (row.getAttribute('data-rolling') === 'true') seen.tumbled = true
+          else {
+            seen.faces = row.querySelector('[role="img"]')?.getAttribute('aria-label') ?? ''
+            seen.result = row.querySelector('[role="status"]')?.textContent?.trim() ?? ''
+          }
+        }
+      }
+      requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  })
+}
+
+async function readMoments(page: Page): Promise<Moments> {
+  return page.evaluate(() => {
+    const w = (window as unknown as { __moments: Moments & { stop: boolean } }).__moments
+    w.stop = true
+    return { heralds: w.heralds, heraldFrames: w.heraldFrames, rolls: w.rolls, diceFrames: w.diceFrames, outside: w.outside, scroll: w.scroll }
+  })
+}
+
+/** `text` as a regular expression that matches it literally. */
+const escapeRe = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const GOD_HERALD = /^Cảnh báo: (.+) đã tích luỹ đủ năng lượng và trở thành Thần Bài!$/
+
+/**
+ * F-14a / F-14b: a "Chơi hoặc bỏ" table of one human and three bots where every draft offers Cá chép hóa rồng at 100 % energy
+ * (`forceDiamond`). The human takes it — a bot may too, and then any of them may win the throne, so the herald's name is read,
+ * not assumed. Before the first hand the herald crosses the screen with the spec's words (§4.5) and makes nothing scroll or
+ * overlap; the Thần's seat wears the crown with its hands left, and is the seat the herald named; while it reigns nobody may
+ * fold (G11): where "Bỏ bài" stands, the tray says "Không được bỏ bài ván này", and "Chơi" plays the hand.
+ *
+ * Under reduced motion from the start: the herald stands 3 s, and the text-overlap rule (which measures under reduced motion
+ * anyway) must not first wait out its entrance. The motion itself is the ui-kit's tests' (`ChaosHerald.test.tsx`).
+ */
+async function godReigns({ id, who, phone }: { id: string; who: Player; phone: boolean }): Promise<void> {
+  const page = who.page
+  const screen = page.viewportSize()!
+  const how = phone ? 'tap' : 'click'
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  // 30 s a decision: time to measure the tray before the clock plays the hand for the seat.
+  await createBlind(page, { name: unique(`Bàn ${id} `), bots: 3, mode: 'Chơi hoặc bỏ', timer: '30 giây', chaos: 5 })
+  await takeSeat(page, 0, undefined, phone ? { via: 'menu' } : undefined)
+  await ready(page)
+  await start(page)
+  const opened = await readDraft(page)
+  expect(opened.title).toBe('Chọn một thẻ Kim cương')
+  expect([...opened.names].sort(), 'only Cá chép and the two waiting cards are drawn').toEqual([CARP.name, ...DIAMOND_WAITERS.map((c) => c.name)].sort())
+  await watchMoments(page)
+  await pickNamed(page, CARP.name, how)
+
+  // The herald, before the first hand: the spec's words, a name in them.
+  const herald = page.locator('button[data-herald="god"]')
+  await expect(herald, 'the Thần’s herald crosses the screen').toBeVisible({ timeout: 30_000 })
+  await expectNoPageScroll(page, `${id}, the Thần's herald`)
+  await expectNoTextOverlapAt(page, `${id}, the Thần's herald`)
+  await expect(herald, 'the herald still stood when the overlap rule had measured it (3 s)').toHaveCount(1, { timeout: 100 })
+  await shot(page, `chaos-${id}-herald`)
+  const line = (await herald.locator('[data-kind="god"]').first().textContent())?.trim() ?? ''
+  const godName = GOD_HERALD.exec(line)?.[1]
+  expect(godName, `the herald reads "Cảnh báo: … trở thành Thần Bài!" (${line})`).toBeDefined()
+
+  // The crown on the Thần's seat, with the hands left of its five, and it is the seat the herald named.
+  const god = page.locator('[data-seat][data-reign="god"]')
+  await expect(god, 'one seat reigns').toHaveCount(1, { timeout: 15_000 })
+  await expect(god.getByRole('img', { name: /^Thần Bài · còn [1-5] ván$/ }), 'the crown with the hands left').toBeVisible()
+  expect(await god.evaluate((el) => el.textContent ?? ''), 'the crowned seat is the one the herald named').toContain(godName!)
+
+  // No fold while the Thần reigns: the tray's note where "Bỏ bài" stood, and "Chơi" beside it.
+  const note = page.locator('[data-no-fold]')
+  await expect(note, 'the decision comes, without "Bỏ bài"').toBeVisible({ timeout: 60_000 })
+  await expect(note).toHaveText('Không được bỏ bài ván này')
+  await expect(page.locator('button:not([aria-pressed])').filter({ hasText: /^Bỏ bài$/ }), 'no "Bỏ bài" to press').toHaveCount(0)
+  const play = page.locator('[data-no-fold] + button')
+  await expect(play, '"Chơi" stands beside the note').toBeEnabled()
+  await expect(god, 'the Thần still reigns over this decision').toHaveCount(1)
+  await expectNoPageScroll(page, `${id}, the decision under the Thần`)
+  await expectRoomFits(page, `${id}, the decision under the Thần`, [screen])
+  await expectNoTextOverlapAt(page, `${id}, the decision under the Thần`)
+  await shot(page, `chaos-${id}-no-fold`)
+  await (how === 'tap' ? play.tap() : play.click())
+  await expect(note, 'the seat has played').toHaveCount(0, { timeout: 10_000 })
+
+  await expect(resultCard(page), 'the hand is played to its result').toBeVisible({ timeout: 90_000 })
+  const moments = await readMoments(page)
+  expect(moments.heraldFrames, 'the herald was watched').toBeGreaterThan(0)
+  expect(moments.heralds.filter((text) => GOD_HERALD.test(text)), `the Thần's herald, once (${moments.heralds.join(' | ')})`).toEqual([line])
+  expect(moments.outside, `${id}: the herald stays inside the screen`).toEqual([])
+  expect(moments.scroll, `${id}: nothing scrolled the page while the herald stood`).toEqual({ down: 0, across: 0 })
+  await leave(page)
+}
+
+test('F-14a: a Thần Bài forced on a "Chơi hoặc bỏ" table — the herald across the screen, the crown on its seat, and nobody may fold while it reigns', async ({ browser }) => {
+  test.setTimeout(300_000)
+  const player = await newPlayer(browser, 'Ca')
+  const page = player.page
+  let before: GmChaos | null = null
+  let failed = true
+  try {
+    await promoteToGm(page, player.who.email)
+    before = await readChaos(page)
+    await forceDiamond(page, before, CARP.id)
+    await godReigns({ id: 'F14a', who: player, phone: false })
+    failed = false
+  } finally {
+    await restoreAndClose(page, before, [player], failed, 'diamond')
+  }
+})
+
+test('F-14b: @s25p @s25l a Thần Bài on the Galaxy S25 — the herald fits the phone, the crown shows, and the tray says nobody may fold', async ({ browser }) => {
+  test.setTimeout(300_000)
+  const phone = await newPlayer(browser, 'Cp')
+  const page = phone.page
+  let before: GmChaos | null = null
+  let failed = true
+  try {
+    expect([S25_UPRIGHT, S25_SIDEWAYS], 'an S25 project').toContainEqual(page.viewportSize())
+    await promoteToGm(page, phone.who.email)
+    before = await readChaos(page)
+    await forceDiamond(page, before, CARP.id)
+    const sideways = page.viewportSize()!.width > page.viewportSize()!.height
+    await godReigns({ id: `F14b-${sideways ? '780x360' : '360x780'}`, who: phone, phone: true })
+    failed = false
+  } finally {
+    await restoreAndClose(page, before, [phone], failed, 'diamond')
+  }
+})
+
+/**
+ * F-14c / F-14d: a pure-luck table where every draft offers Xúc xắc vận may kim cương; the human takes it, so it rolls at the
+ * end of the first hand (Ruling 5). The dice panel names the human, its three dice tumble ("Đang gieo…") and land on faces it
+ * says in words, with what they gave; the panel stays inside the screen and scrolls nothing; and the roll's line joins the
+ * cards' toasts — a toast of its own, or, since it comes after the settlement while the result is open (BP-39), under
+ * "+N thẻ khác", whose list names it.
+ */
+async function diceRoll({ id, who, phone }: { id: string; who: Player; phone: boolean }): Promise<void> {
+  const page = who.page
+  const me = who.who.displayName
+  const how = phone ? 'tap' : 'click'
+  await createBlind(page, { name: unique(`Bàn ${id} `), bots: 3, mode: 'Hoàn toàn may rủi', chaos: 5 })
+  await takeSeat(page, 0, undefined, phone ? { via: 'menu' } : undefined)
+  await ready(page)
+  await start(page)
+  const opened = await readDraft(page)
+  expect(opened.title).toBe('Chọn một thẻ Kim cương')
+  expect([...opened.names].sort(), 'only the diamond dice and the two waiting cards are drawn').toEqual([DIAMOND_DICE.name, ...DIAMOND_WAITERS.map((c) => c.name)].sort())
+  await watchChaos(page)
+  await watchMoments(page)
+  await pickNamed(page, DIAMOND_DICE.name, how)
+
+  // The roll at the hand's end, for the whole table: the panel with a row for this seat. It stands 3 s and the roll's toast 4 s,
+  // so the page is measured first, then the toast is read, and what the panel showed is taken from `watchMoments` afterwards.
+  const panel = page.getByRole('region', { name: 'Xúc xắc vận may', exact: true })
+  await expect(panel, 'the dice roll at the end of the first hand').toBeVisible({ timeout: 90_000 })
+  await expect(panel.locator(':scope > div').filter({ has: page.locator('strong').getByText(me, { exact: true }) }), `a row for ${me}`).toHaveCount(1)
+  await expectNoPageScroll(page, `${id}, the dice`)
+  // The overlap rule measures under reduced motion, which lands the dice at once: what it measures is the landed panel.
+  await expectNoTextOverlapAt(page, `${id}, the dice`)
+  await expect(panel, 'the panel still stood when the overlap rule had measured it (3 s)').toHaveCount(1, { timeout: 100 })
+  await shot(page, `chaos-${id}-dice`)
+
+  // The roll's line among the cards' toasts: its own toast, or "+N thẻ khác"'s list. The toast watch stops before the list
+  // opens, since the open list is meant to lie over the room.
+  const mineSaid = new RegExp(`^${escapeRe(me)} dùng ${DIAMOND_DICE.name}`)
+  const own = cardToasts(page).filter({ hasText: mineSaid })
+  const more = toastBand(page).locator('[data-more] button')
+  await expect(own.or(more).first(), 'the roll is told among the cards').toBeVisible({ timeout: 5_000 })
+  const watch = await readWatch(page)
+  let line: string
+  if ((await own.count()) > 0) line = (await own.first().textContent())?.trim() ?? ''
+  else {
+    await (how === 'tap' ? more.tap() : more.click())
+    const listed = toastBand(page).getByRole('list', { name: 'Các thẻ đã dùng ván này' }).getByRole('listitem').filter({ hasText: mineSaid })
+    await expect(listed.first(), '"+N thẻ khác" lists the roll').toBeVisible()
+    line = (await listed.first().textContent())?.trim() ?? ''
+    await shot(page, `chaos-${id}-dice-list`)
+    await page.keyboard.press('Escape')
+  }
+  // On a phone the result is the strip, which keeps clear of the board and the tray too; the desktop's result is the card in
+  // the felt's middle, over the board by design, so there only the toasts are held to it.
+  const hits = phone ? watch.hits : watch.hits.filter((hit) => hit.startsWith('toast ×'))
+  expect(hits, `${id}: no toast meets the result, the board or the tray`).toEqual([])
+
+  const moments = await readMoments(page)
+  const roll = moments.rolls.find((r) => r.name === me)
+  expect(roll, `the panel's rows: ${JSON.stringify(moments.rolls)}`).toBeDefined()
+  expect(roll!.tumbled, 'the dice tumbled before they landed').toBe(true)
+  expect(roll!.faces, 'three dice, said in words').toMatch(/^Xúc xắc: [1-6]-[1-6]-[1-6]$/)
+  expect(roll!.result, 'what the roll gave').toMatch(/\S/)
+  expect(roll!.result).not.toBe('Đang gieo…')
+  expect(moments.outside, `${id}: the dice panel stays inside the screen`).toEqual([])
+  expect(moments.scroll, `${id}: nothing scrolled the page while the dice stood`).toEqual({ down: 0, across: 0 })
+  // The toast tells the same roll: its faces, then what it gave.
+  const faces = roll!.faces.replace(/^Xúc xắc: /, '')
+  expect(line, 'the roll told among the cards, with its faces and result').toMatch(new RegExp(`^${escapeRe(me)} dùng ${DIAMOND_DICE.name}( — .+)? · Xúc xắc: ${faces} · .+$`))
+  await leave(page)
+}
+
+test('F-14c: the dice of fortune — a diamond dice drafted, three dice tumble for the table at the hand’s end, land, and the roll is told among the cards', async ({ browser }) => {
+  test.setTimeout(300_000)
+  const player = await newPlayer(browser, 'Xx')
+  const page = player.page
+  let before: GmChaos | null = null
+  let failed = true
+  try {
+    await promoteToGm(page, player.who.email)
+    before = await readChaos(page)
+    await forceDiamond(page, before, DIAMOND_DICE.id)
+    await diceRoll({ id: 'F14c', who: player, phone: false })
+    failed = false
+  } finally {
+    await restoreAndClose(page, before, [player], failed, 'diamond')
+  }
+})
+
+test('F-14d: @s25p @s25l the dice of fortune on the Galaxy S25 — the panel fits the phone and the roll is told', async ({ browser }) => {
+  test.setTimeout(300_000)
+  const phone = await newPlayer(browser, 'Xp')
+  const page = phone.page
+  let before: GmChaos | null = null
+  let failed = true
+  try {
+    expect([S25_UPRIGHT, S25_SIDEWAYS], 'an S25 project').toContainEqual(page.viewportSize())
+    await promoteToGm(page, phone.who.email)
+    before = await readChaos(page)
+    await forceDiamond(page, before, DIAMOND_DICE.id)
+    const sideways = page.viewportSize()!.width > page.viewportSize()!.height
+    await diceRoll({ id: `F14d-${sideways ? '780x360' : '360x780'}`, who: phone, phone: true })
+    failed = false
+  } finally {
+    await restoreAndClose(page, before, [phone], failed, 'diamond')
   }
 })

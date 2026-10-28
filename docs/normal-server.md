@@ -27,7 +27,8 @@ src/
   grant-gm-cli.ts    operator tool: make an account a GM, or take the role back (--revoke); DATABASE_URL only
   reputation-backfill-cli.ts  operator tool, once per Plan 27 upgrade: credit every account the reputation its
                      history earned (--dry-run first); DATABASE_URL only — see "Reputation, the shop and the welcome gift"
-  e2e-entry.ts       the e2e server's own entry; e2e-promote.ts is its one extra route (never in dist/)
+  e2e-entry.ts       the e2e server's own entry; e2e-promote.ts is its one extra route, e2e-options.ts its env knobs
+                     (E2E_READ_LIMIT; BP-41's E2E_CHAOS_CARDS, changes laid over the chaos cards) — never in dist/
   app.ts             buildApp(): wiring, in the one order that works (below)
   config.ts          loadConfig(env) — reports every problem at once, then throws
   trust-proxy.ts     TRUST_PROXY parsing, and the client address for the WS upgrade Fastify never sees
@@ -744,16 +745,24 @@ fewer than three drawable cards for either mode **now or at any start/end bounda
 that a date would turn into a broken one. `setConfig` checks each number against `LIMITS` (threshold 1–100, draft 5–60 s, cap 0–10,000,000,
 rescues 0–20, tier weights whole and not all zero; `INVALID_CHAOS_CONFIG`).
 
-**`credit` (the only chaos code that moves points).** One call per card payout (`chaos_rescue`, `chaos_crit`, `chaos_fortune`), in one
+**`credit` (the chaos code that makes points).** One call per card payout (`chaos_rescue`, `chaos_crit`, `chaos_fortune`, and BP-41's
+`chaos_jackpot` for a dice or Mạo hiểm gia jackpot; every crit, ×2 to ×5, stays `chaos_crit`), in one
 transaction: lock the `players` row, claim the `ledger_keys` key (`chaos:<roomId>:<handId>:<seat>:<uid>:<reason>`), sum today's chaos rows
 and count today's rescues in `[dayStart, nextDayStart)` of the economy day, cut the amount to what the cap leaves (0 for a rescue past
 `dailyRescues`), and write **two rows** with `creditWithin`: `+credited` under the reason and `-credited` as `chaos_to_table` (the transfer
-from balance to the table stack). The player's balance is therefore unchanged and the room puts the points on the stack. The three
+from balance to the table stack). The player's balance is therefore unchanged and the room puts the points on the stack. The four
 reasons are **sources** (`gm-service`'s `SOURCE_REASONS`, so Plan 26's sources-and-sinks table counts them) and `chaos_to_table` is in
 neither set. A replay of a key returns the amount already written under that `refId` (and `capped` when it was cut); the key is claimed
 even for a payout cut to 0, so a retry cannot pass the cap after midnight; `ledger_keys` are pruned at boot, so replay protection lasts
 one process lifetime, as for every keyed write. Conservation (a credit leaves `Σ balances + Σ sinks` unchanged; Σ sources = −Σ
 `chaos_to_table`) is pinned in `chaos-service.test.ts`, `gm-service.test.ts` and `app.test.ts`.
+
+**The dice sink (BP-41).** A human's Xúc xắc vận may loss is not a chaos-service call: the room writes it like a table fee,
+`balances.apply([], { refId, fee, kind: 'chaos_dice' })` under the key `chaos_dice:<room>:<hand>:<seat>:<uid>` (one `chaos_dice` ledger
+row on no player, the sum the stack lost), retried once and logged if it fails twice (`docs/server-kit.md`, "Dice and steals"). It is
+in `gm-service`'s `SINK_REASONS` beside `table_fee`, `carry_over` and `shop`, so the money view counts it (`ledger.reason.chaos_dice`,
+"Xúc xắc hỗn loạn", names it). Transfers between players (duels, Thuế thắng, Ép chia thưởng, Bom nổ chậm, the Thần's duel) and Mạo hiểm gia's
+dead money stay inside the hand's stacks and write nothing of their own.
 
 **Hands, statistics, reputation (spec §9).** `stats/chaos-hand.ts` `isChaosHand(summary)`: `patchForHand` still counts `gamesCompleted`,
 `handsPlayed*` and `botHands`, and skips `handsWonBlind`, `biggestWin`, `bestHandRank` and both streaks (no increment and no reset);
@@ -761,7 +770,7 @@ one process lifetime, as for every keyed write. Conservation (a credit leaves `�
 be earned at a chaos table. `history-repo.recordHand` writes `summary.chaosUsed ?? null`; `HistoryEntry.chaosUsed` is present only for a
 hand that has it, so an ordinary hand's wire shape is unchanged, and the profile page prints it as "Thẻ đã dùng".
 
-**GM routes (behind `requireGm`, a reason of 3–200 characters first).** `GET /api/gm/chaos` (the 47 cards with `activeNow`, the rules and
+**GM routes (behind `requireGm`, a reason of 3–200 characters first).** `GET /api/gm/chaos` (the 86 cards with `activeNow`, the rules and
 the config), `PUT /api/gm/chaos/rules` `{ changes, reason }` (a change is a whole rule — `cardId`, `enabled`, `weight`, `startsAt`,
 `endsAt` — or `{ cardId, clear: true }`; only `clear === true` clears), `PUT /api/gm/chaos/config` `{ config, reason }`. Each write and its
 `gm_actions` row (`set_chaos_rules` / `set_chaos_config`) are one transaction. The web tab is "Thẻ hỗn loạn" (`docs/normal-web.md`).

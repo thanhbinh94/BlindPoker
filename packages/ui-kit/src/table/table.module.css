@@ -4407,6 +4407,19 @@
   left: -3px;
 }
 
+/* The viewer's own strip is the last thing in the room's scroll box (see `.meStrip .timerText`): a mark or an aura hanging below
+   its plate scrolled the stage by 6 px at 360 × 780 when the viewer reigned (BP-41 Task 11, ops F-14b). Both stay inside the
+   plate there; the aura's glow is a shadow, which scrolls nothing. */
+.meStrip .seatMarks {
+  bottom: 2px;
+  left: 0;
+}
+
+.meStrip.seatGod .plate::after,
+.meStrip.seatDemigod .plate::after {
+  inset: 0;
+}
+
 .markTrigger {
   border-radius: var(--radius-pill);
 }
@@ -4591,6 +4604,9 @@
   background:
     linear-gradient(90deg, transparent, rgba(255, 210, 110, 0.18) 50%, transparent),
     linear-gradient(180deg, rgba(122, 18, 25, 0.94), rgba(70, 8, 14, 0.94));
+  /* Under the gradients, the band's own colour: it hides the seat names it passes over, and says so to the text-overlap rule,
+     which reads a gradient with a clear stop as see-through (BP-41 Task 11, ops F-14). */
+  background-color: rgba(96, 13, 20, 0.94);
   box-shadow:
     0 0 24px 4px rgba(240, 180, 67, 0.45),
     0 0 60px 12px rgba(200, 50, 60, 0.35);
