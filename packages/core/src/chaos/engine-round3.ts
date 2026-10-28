@@ -37,10 +37,11 @@ const ACTED_AT_PLAN: ReadonlySet<ChaosEffectKind> = new Set(['chaosPoints', 'ecl
 
 /**
  * What Kẻ phá đám may switch off on `seat`: a card firing this hand that has not acted yet — never a bonus card pressed
- * for this hand (A8: private until it fires, and the event names the card), never `except` (the Kẻ phá đám acting).
+ * for this hand (A8: private until it fires, and the event names the card), never `except` (the Kẻ phá đám acting), never
+ * a card the table was already told of this hand (`recorded`: it acted, so there is nothing left to switch off).
  */
 const switchable = (chaos: ChaosHandState, seat: number, except: number): PlannedEffect[] =>
-  effectsOf(chaos, seat).filter((e) => e.uid !== except && !e.fromBonus && !ACTED_AT_PLAN.has(e.effect))
+  effectsOf(chaos, seat).filter((e) => e.uid !== except && !e.fromBonus && !ACTED_AT_PLAN.has(e.effect) && !chaos.recorded.includes(e.uid))
 
 /**
  * Kẻ phá đám (a debuff): each holder, clockwise from the button, picks at random an opponent not hit yet that has a card

@@ -4,6 +4,8 @@ import { seededRng, type Rng } from '../cards/rng.js'
 import { applyBlindCommand, createBlindHand } from '../hand/blind.js'
 import type { BlindRules, GameEvent, HandCommand, HandState } from '../hand/types.js'
 import { filterEvent, playerView } from '../hand/view.js'
+import { armBonus, canInsertThisHand } from './bonus.js'
+import { addRevealEffect } from './engine.js'
 import { CHAOS_CARDS_SPEC } from './fixtures.js'
 import { toHeld } from './hold.js'
 import { planHand } from './plan.js'
@@ -250,6 +252,25 @@ describe('Kẻ phá đám (spoiler)', () => {
     expect(t.applied('coinFlip')).toHaveLength(1)
   })
 
+  it('a mirror turns it on a card of the holder: the event names that card, to holder and target only', () => {
+    const t = new Table({
+      chaos: plan(3, { 0: { effects: [fx('s_spoiler'), fx('s_coin_flip')] }, 1: { effects: [fx('s_coin_flip')], shield: 'mirror' } }), rng: seededRng(7),
+    })
+    const [ev] = t.applied('spoiler')
+    expect(ev).toMatchObject({ seat: 0, targets: [1], outcome: 'reflected', off: 's_coin_flip' })
+    expect([sees(ev!, 0), sees(ev!, 1), sees(ev!, 2), sees(ev!, null)]).toEqual([true, true, false, false])
+    expect(t.applied('coinFlip').map((e) => e.seat)).toEqual([1])
+    expect(t.state.chaos!.plan.seats[0]!.effects.map((e) => e.cardId)).toEqual(['s_spoiler'])
+    expect(t.state.chaos!.blocked).toContain(701)
+  })
+
+  it('never switches off a card that already acted this hand', () => {
+    // Seat 1's Kẻ phá đám acts first and is blocked by seat 2's shield; seat 2's then finds nothing that has not acted.
+    const t = new Table({ chaos: plan(3, { 1: { effects: [fx('s_spoiler')] }, 2: { effects: [fx('s_spoiler')], shield: 'shield' } }), rng: seededRng(9) })
+    expect(t.applied('spoiler').map((e) => [e.seat, e.targets, e.outcome])).toEqual([[1, [2], 'blocked'], [2, [], 'fizzled']])
+    expect(t.state.chaos!.plan.seats[1]!.effects.map((e) => e.cardId)).toEqual(['s_spoiler'])
+  })
+
   it('switching off a "Thế giới đảo ngược" or a "Bỏ không mất" takes back what the plan had promised', () => {
     const rev = new Table({ chaos: plan(2, { 0: { effects: [fx('s_spoiler')] }, 1: { effects: [fx('d_reverse')] } }, true), rng: seededRng(6) })
     expect(rev.state.chaos!.plan.reverse).toBe(false)
@@ -338,6 +359,43 @@ describe('Mắt diều hâu (hawk eye)', () => {
       rules: { mode: 'blind', holeCards: 2, decisionMode: 'none', fixedWager: 1000, tableFeeRate: 0 }, pool: CHAOS_CARDS_SPEC, rng: seededRng(1), nextUid: () => 50,
     })
     expect(r.plan.seats[0]!.effects).toEqual([])
+  })
+})
+
+describe('bonus cards pressed during the choice (BP-39 × round three)', () => {
+  const withBonus = (id: string): ChaosSeat => ({ ...EMPTY_CHAOS_SEAT, bonus: [toHeld(def(id), 4242)] })
+  const live = (by: Record<number, SeatPlan>) => new Table({ chaos: plan(2, by), rng: deckRng('Kd 2c Qs 3c'), rules: { decisionMode: 'playOrFold' } })
+
+  it('a seat Nhật thực switched off arms for the next hand, and addRevealEffect refuses it', () => {
+    const t = live({ 0: { effects: [fx('d_eclipse')] }, 1: { eclipsed: true } })
+    const dark = t.state.chaos!.plan.seats[1]!
+    expect(canInsertThisHand(dark, 'stealHole')).toBe(false)
+    const r = armBonus(withBonus('s_steal_one'), 4242, { phase: 'decision', frozen: false, planSeat: dark })
+    expect(r).toMatchObject({ armed: { hand: 'next' } })
+    expect(() => addRevealEffect(t.state, 1, fx('s_steal_one'))).toThrow()
+    // The eclipse holder itself still plays a card into this hand.
+    expect(armBonus(withBonus('s_steal_one'), 4242, { phase: 'decision', frozen: false, planSeat: t.state.chaos!.plan.seats[0]! })).toMatchObject({ armed: { hand: 'this' } })
+  })
+
+  it('the round-three one-shot reveal cards may join this hand (controller Ruling 12); a fired deal-time debuff still sends them to the next', () => {
+    for (const kind of ['redealHole', 'neighbourSwap', 'shuffleHoles', 'swapLeader', 'deluge', 'fateDie', 'duel'] as const) {
+      expect(canInsertThisHand(undefined, kind), kind).toBe(true)
+      expect(canInsertThisHand({ effects: [fx('d_plunder')] }, kind), kind).toBe(false)
+    }
+  })
+
+  it('Xúc xắc định mệnh pressed during the choice fires at this hand\'s reveal', () => {
+    const t = live({})
+    const r = armBonus(withBonus('g_fate_die'), 4242, { phase: 'decision', frozen: false, planSeat: t.state.chaos!.plan.seats[0]! })
+    expect(r).toMatchObject({ armed: { hand: 'this' } })
+    addRevealEffect(t.state, 0, { ...fx('g_fate_die'), uid: 4242 })
+    t.apply({ type: 'ACTION', seat: 0, action: { kind: 'play' } })
+    t.apply({ type: 'ACTION', seat: 1, action: { kind: 'play' } })
+    t.advanceAll()
+    const [ev] = t.applied('fateDie')
+    expect(ev).toMatchObject({ seat: 0, outcome: 'applied' })
+    expect(ev!.dice).toHaveLength(1)
+    expect(t.state.chaos!.applied).toContain(4242)
   })
 })
 

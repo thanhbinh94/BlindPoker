@@ -350,11 +350,11 @@ export function applyDealEffects(state: HandState, events: GameEvent[], rng: Rng
  * "Nhìn trộm" (spec §3.5.2): each peeking seat sees the next `count` board cards, privately; kept for a reconnect. Then
  * BP-41's Mắt diều hâu (`emitHawkEyes`, which alone draws from `rng`, and only when a seat holds it).
  */
-export function emitPeeks(state: HandState, events: GameEvent[], rng?: Rng): void {
+export function emitPeeks(state: HandState, events: GameEvent[], rng: Rng): void {
   const chaos = state.chaos
   if (!chaos || state.phase !== 'DECISION') return
   emitBoardPeeks(state, chaos, events)
-  if (rng) emitHawkEyes(state, events, rng)
+  emitHawkEyes(state, events, rng)
 }
 
 function emitBoardPeeks(state: HandState, chaos: ChaosHandState, events: GameEvent[]): void {

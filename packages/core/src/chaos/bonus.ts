@@ -9,9 +9,16 @@ import type { ArmedBonus, ChaosCardDef, ChaosEffectKind, ChaosHandPlan, ChaosSea
 
 /**
  * The one-shot reveal cards a player may press during the play/fold choice for this hand's reveal (spec §3.4: debuffs,
- * board re-deals, borrowed cards). Bảo hiểm and Bạo kích pressed mid-hand apply from the next hand (Ruling 3).
+ * board re-deals, borrowed cards). Bảo hiểm and Bạo kích pressed mid-hand apply from the next hand (Ruling 3). BP-41
+ * (controller Ruling 12) adds the round-three one-shot reveal cards that act on the hands at the reveal: Xào bài
+ * (`redealHole`), Đổi lá hàng xóm (`neighbourSwap`), Hoán vị định mệnh (`shuffleHoles`), Ngược dòng (`swapLeader`), Đại
+ * hồng thủy (`deluge`), Xúc xắc định mệnh (`fateDie`) and Thách đấu (`duel`); Đổi bài liều is `swapHands`, already here.
+ * `addRevealEffect` puts them in the seat's plan, where `applyRevealEffects` reads them.
  */
-export const MID_HAND_EFFECTS: ReadonlySet<ChaosEffectKind> = new Set(['stealHole', 'lowerHole', 'swapHands', 'redealBoard', 'borrowHole'])
+export const MID_HAND_EFFECTS: ReadonlySet<ChaosEffectKind> = new Set<ChaosEffectKind>([
+  'stealHole', 'lowerHole', 'swapHands', 'redealBoard', 'borrowHole',
+  'redealHole', 'neighbourSwap', 'shuffleHoles', 'swapLeader', 'deluge', 'fateDie', 'duel',
+])
 
 /**
  * Cards that need no press (Cấp cứu, Thần tài, Khiên, Gương wait for their condition; Tích lũy, Cấp độ act on receipt):
@@ -56,10 +63,11 @@ export function clearUnsettledHand(seat: ChaosSeat, recorded: ReadonlySet<number
 /**
  * Whether a card of `effect` can join this hand's reveal on a seat whose live plan is `planSeat`: a one-shot reveal card
  * (`MID_HAND_EFFECTS`), on a seat that has fired no deal-time debuff (freeze, blindfold: one debuff per seat per hand) and
- * plans no effect of the same kind (A2). A planned reveal debuff is no conflict: the played one replaces it.
+ * plans no effect of the same kind (A2). A planned reveal debuff is no conflict: the played one replaces it. Never on a
+ * seat Nhật thực switched off this hand (BP-41 `eclipsed`): its cards do not act, so the press arms for the next hand.
  */
-export function canInsertThisHand(planSeat: Pick<ChaosHandPlan['seats'][number], 'effects'> | undefined, effect: ChaosEffectKind): boolean {
-  if (!MID_HAND_EFFECTS.has(effect)) return false
+export function canInsertThisHand(planSeat: Pick<ChaosHandPlan['seats'][number], 'effects' | 'eclipsed'> | undefined, effect: ChaosEffectKind): boolean {
+  if (!MID_HAND_EFFECTS.has(effect) || planSeat?.eclipsed) return false
   const effects = planSeat?.effects ?? []
   return !effects.some((e) => (e.debuff && e.timing === 'deal') || e.effect === effect)
 }

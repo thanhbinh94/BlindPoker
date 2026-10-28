@@ -47,7 +47,11 @@ describe('armBonus', () => {
       const seat = withBonus([id])
       expect(armBonus(seat, seat.bonus[0]!.uid, DECISION), id).toMatchObject({ armed: { hand: 'next' } })
     }
-    expect([...MID_HAND_EFFECTS].sort()).toEqual(['borrowHole', 'lowerHole', 'redealBoard', 'stealHole', 'swapHands'])
+    // BP-41 controller Ruling 12 adds the round-three one-shot reveal cards that act on the hands.
+    expect([...MID_HAND_EFFECTS].sort()).toEqual([
+      'borrowHole', 'deluge', 'duel', 'fateDie', 'lowerHole', 'neighbourSwap', 'redealBoard', 'redealHole', 'shuffleHoles', 'stealHole',
+      'swapHands', 'swapLeader',
+    ])
   })
 
   it('applies next hand when the live plan seat fired a deal-time debuff or plans the same effect (A2)', () => {
