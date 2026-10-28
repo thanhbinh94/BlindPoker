@@ -55,7 +55,10 @@ const fortuneRow = (len: number): 2 | 4 | 6 => (len >= 6 ? 6 : len >= 4 ? 4 : 2)
  *   `pendingBonus` for the end of its next unfrozen hand and then act as today. A bot's bonus cards act at once
  *   (`receiveCard`); a human's go to the bonus hand (`bonusAwarded`) while it holds fewer than `BONUS_HAND_MAX` cards,
  *   the armed one included — when it is full the points wait — except a card that needs no press, which acts as today;
- * - next hand's freeze and blindfold come from `marks` only.
+ * - next hand's freeze and blindfold come from `marks` only;
+ * - BP-41: a seat Nhật thực switched off (`eclipsed`) keeps its durations and wait cards as a frozen seat does; each
+ *   fired Mồi lửa gives every seat in the hand its `points`, and a fired Tích tiểu thành đại gives its holder `points`
+ *   on a lost hand — flat, never doubled.
  * The input is never changed; every draw goes through `rng` and `weights`.
  *
  * BP-41 A3: `table` is the table's chaos state as `planHand` returned it (absent = `EMPTY_CHAOS_TABLE`), and `outcomes`
@@ -86,6 +89,8 @@ export function afterHand(input: {
   const mode: ChaosMode = rules.decisionMode
   const wager = rules.fixedWager
   const result: AfterHandResult = { seats: new Map(), credits: [], debits: [], table: input.table ?? EMPTY_CHAOS_TABLE, awarded: [], bonusAwarded: [] }
+  // BP-41 Mồi lửa: every seat in the hand takes each fired one's points (spec §6.3 "mọi người ngồi bàn").
+  const kindling = plan.seats.reduce((sum, p) => sum + p.effects.reduce((n, e) => n + (e.effect === 'kindling' ? (e.params.points ?? 0) : 0), 0), 0)
 
   for (const s of input.seats) {
     const chaos = s.chaos
@@ -99,10 +104,13 @@ export function afterHand(input: {
     }
 
     const frozen = chaos.frozenNextHand
-    const fired = plan.seats.find((p) => p.seat === s.seat)?.effects ?? []
+    const planSeat = plan.seats.find((p) => p.seat === s.seat)
+    const fired = planSeat?.effects ?? []
+    // BP-41 Nhật thực (A11): a seat whose cards were off this hand loses no hand of them and fires no wait card, as frozen.
+    const idle = frozen || planSeat?.eclipsed === true
 
     let cards: HeldCard[] = chaos.cards.filter((c) => !(c.handsLeft === null && consumed.has(c.uid)))
-    if (!frozen) {
+    if (!idle) {
       cards = cards
         .map((c) => (c.handsLeft === null ? c : { ...c, handsLeft: c.handsLeft - 1 }))
         .filter((c) => c.handsLeft === null || c.handsLeft > 0)
@@ -120,6 +128,10 @@ export function afterHand(input: {
       if (fired.some((e) => e.effect === 'farm')) gain *= 2
       points += gain
     }
+    // BP-41 Mồi lửa and Tích tiểu thành đại: flat chaos points, outside the streak and Cày điểm's ×2.
+    points += kindling
+    const lossPoints = fired.find((e) => e.effect === 'lossPoints')
+    if (lossPoints && outcome === 'loss') points += lossPoints.params.points ?? 0
 
     // BP-41 charge cards (Ruling: their state moves here, after the hand they played): Siêu cộng dồn is spent once it
     // dealt its Aces (spec §6.1 "nổ xong về 0, thẻ hết": the card leaves, so its charge goes with it); Đảo bài's phase
@@ -132,7 +144,7 @@ export function afterHand(input: {
     if (risky && outcome === 'win') cards = cards.filter((c) => c.uid !== risky.uid)
 
     const prizes: { tier: ChaosTier; count: number }[] = []
-    if (!frozen) {
+    if (!idle) {
       const crit = fired.find((e) => e.effect === 'crit')
       if (crit && outcome === 'win' && s.net > 0) {
         const r = rng.int(100)

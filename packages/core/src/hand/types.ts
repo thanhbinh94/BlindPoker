@@ -176,13 +176,19 @@ export type GameEvent =
    * the rest are public. `amount`: a refund (freeFold, refundStake). `dice`: the faces a card rolled in the hand (BP-41
    * Xúc xắc định mệnh, A15). `holeDelta`: the hole cards a card adds (+) or takes (−) at the deal (BP-41 Hên xui, Đảo
    * bài, Liều ăn nhiều; on `fizzled`, what it would have done). `wild`: the hole card Lá ma made wild (its owner only).
+   * `off`: the card id Kẻ phá đám switched off for the hand (BP-41; its owner and target only, never a bonus card).
    */
   | {
     type: 'CHAOS_APPLIED'; seat: number; cardId: string; effect: ChaosEffectKind; targets: number[]; outcome: ChaosOutcome; community?: Card[]
-    amount?: number; dice?: number[]; holeDelta?: number; wild?: Card
+    amount?: number; dice?: number[]; holeDelta?: number; wild?: Card; off?: string
   }
   /** "Nhìn trộm": the next board cards, for `seat` only (`filterEvent` blanks them for everyone else). */
   | { type: 'CHAOS_PEEK'; seat: number; cards: Card[] }
+  /**
+   * BP-41 Mắt diều hâu: `seat` saw `cards` of `target`'s hole cards (one, or all of them) before choosing; for `seat`
+   * only — `filterEvent` blanks the cards for everyone else, who learn only that `target` was looked at.
+   */
+  | { type: 'CHAOS_HAWK'; seat: number; target: number; cards: Card[] }
   /** Every card the hand used, public, just before `SETTLEMENT`. */
   | { type: 'CHAOS_SUMMARY'; used: ChaosUse[] }
 

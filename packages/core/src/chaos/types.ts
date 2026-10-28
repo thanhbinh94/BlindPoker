@@ -180,6 +180,11 @@ export interface PlannedEffect {
    * Đảo bài's phase (hands it has played: even = +1 card, odd = −1). Absent on every card that keeps none.
    */
   charge?: number
+  /**
+   * BP-41 A8: a bonus card the player pressed for this hand that fires from `armed` (a decision card, a one-shot reveal
+   * card): private until it fires, so Kẻ phá đám never switches it off (its event would name it). Absent otherwise.
+   */
+  fromBonus?: true
 }
 
 export interface ChaosHandPlan {
@@ -189,6 +194,12 @@ export interface ChaosHandPlan {
     /** `lasting`: a duration shield (Khiên sắt) that blocks every debuff while it lasts; otherwise it is spent on one. */
     shield: { uid: number; cardId: string; kind: 'shield' | 'mirror'; lasting?: true } | null
     blindfolded: boolean
+    /**
+     * BP-41 Nhật thực (A11): another seat's eclipse switched every card of this seat off for the hand — it fires nothing
+     * (`effects` empty, no shield), and `afterHand` neither counts its durations down nor fires its wait cards. Absent
+     * otherwise.
+     */
+    eclipsed?: true
   }[]
   reverse: boolean
   /**
@@ -242,6 +253,11 @@ export interface ChaosHandState {
   recorded: number[]
   /** "Nhìn trộm": the board cards each seat saw, kept so a reconnect shows them again. */
   peek: { seat: number; cards: Card[] }[]
+  /**
+   * BP-41 Mắt diều hâu: the hole cards of `target` that `seat` saw at the decision (one, or the whole hand), kept so a
+   * reconnect shows them again. Absent until one fires.
+   */
+  hawk?: { seat: number; target: number; cards: Card[] }[]
   freeFoldSeats: number[]
   insured: { seat: number; percent: number }[]
   /** "Mượn lá": a copy of an opponent's hole card the seat ranks with. */

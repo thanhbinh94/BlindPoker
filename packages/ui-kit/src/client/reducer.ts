@@ -272,6 +272,9 @@ function applyHandEvent(state: ClientState, hand: ClientHand, event: GameEvent &
     case 'CHAOS_PEEK':
       if (event.seat !== hand.mySeat) return state
       return { ...state, chaos: { ...state.chaos, peek: { seat: event.seat, cards: event.cards.slice() } } }
+    // BP-41 Mắt diều hâu: the table shows it in Task 9; until then it changes nothing on the client.
+    case 'CHAOS_HAWK':
+      return state
     case 'CHAOS_SUMMARY':
       return withHand(state, hand, { result: { ...(hand.result ?? NO_RESULT), chaosUsed: event.used.map((u) => ({ seat: u.seat, cardId: u.cardId, outcome: u.outcome, targets: u.targets })) } })
   }

@@ -46,7 +46,9 @@ type Firing = Omit<PlannedEffect, 'targets'>
  *
  * `table` (BP-41 A3) is the table's chaos state going into the hand (the Thần, the Bán Thần, the bombs); the returned
  * `table` is what it becomes for this hand. Absent, it is `EMPTY_CHAOS_TABLE`. End-of-hand cards (`end`, the dice) are
- * never fired here, like wait cards (A10).
+ * never fired here, like wait cards (A10). BP-41's deal-time debuffs (Cướp đoạt, Lời nguyền, Kẻ phá đám) get
+ * `targets: []`: the engine aims them at the deal. A bonus card that fires from `armed` is marked `fromBonus`. Once every
+ * seat is planned, a second pass applies Nhật thực (`eclipse`).
  */
 export function planHand(input: {
   seats: readonly PlanSeatInput[]
@@ -101,7 +103,7 @@ export function planHand(input: {
     const opponents = input.seats.filter((s) => s.seat !== seat).map((s) => s.seat)
     const kinds = new Set<ChaosEffectKind>()
     let debuffFired = false
-    const fire = (f: Firing): void => {
+    const fire = (f: Firing, fromBonus = false): void => {
       let targets: number[] = []
       if (DEAL_DEBUFFS.has(f.effect)) {
         if (f.params.all) targets = opponents.slice()
@@ -110,6 +112,7 @@ export function planHand(input: {
       out.effects.push({
         uid: f.uid, cardId: f.cardId, effect: f.effect, params: f.params, timing: f.timing, debuff: f.debuff, targets,
         ...(f.charge === undefined ? {} : { charge: f.charge }),
+        ...(fromBonus ? { fromBonus: true as const } : {}),
       })
       kinds.add(f.effect)
       if (f.debuff) debuffFired = true
@@ -129,7 +132,7 @@ export function planHand(input: {
       return next
     }
 
-    if (lead) fire(lead)
+    if (lead) fire(lead, true)
     let gamblers = 0
     for (const card of chaos.cards) {
       if (!validHere(card.cardId)) continue
@@ -171,5 +174,26 @@ export function planHand(input: {
     if (points !== chaos.points) seats.set(seat, { ...chaos, points })
   }
 
+  eclipse(planSeats, seats, input.seats, rng)
   return { plan: { seats: planSeats, reverse: planSeats.some((s) => s.effects.some((e) => e.effect === 'reverseRank')) }, seats, table }
+}
+
+/**
+ * BP-41 Nhật thực, the plan's second pass (A11): when a seat fires it, every other seat's cards are off for the hand —
+ * "không áp, không mất". Such a seat fires nothing and stands no shield (`eclipsed`), and goes into the hand exactly as it
+ * came (`clearUnsettledHand` only): a bonus card pressed for this hand stays armed for the next, a Siêu cộng dồn does not
+ * grow, a Tay bạc rolls nothing. Two seats firing it in one hand: one of them, at random, is the eclipse (Ruling 3b-1);
+ * the other is switched off with everyone else's cards and keeps its card. Draws from `rng` only then.
+ */
+function eclipse(planSeats: PlanSeat[], seats: Map<number, ChaosSeat>, input: readonly PlanSeatInput[], rng: Rng): void {
+  const holders = planSeats.filter((s) => s.effects.some((e) => e.effect === 'eclipse'))
+  if (holders.length === 0) return
+  const sun = holders.length === 1 ? holders[0]! : holders[rng.int(holders.length)]!
+  for (const s of planSeats) {
+    if (s === sun) continue
+    s.effects = []
+    s.shield = null
+    s.eclipsed = true
+    seats.set(s.seat, clearUnsettledHand(input.find((x) => x.seat === s.seat)!.chaos))
+  }
 }

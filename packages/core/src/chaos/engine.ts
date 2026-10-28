@@ -4,32 +4,33 @@ import type { Pot } from '../betting/pots.js'
 import { dealCards, getPlayer, seatsClockwiseFrom, type SettleHooks } from '../hand/common.js'
 import type { GameEvent, HandPlayer, HandState } from '../hand/types.js'
 import { canInsertThisHand } from './bonus.js'
+import {
+  DEAL_RESERVE, addUid, canDealAtDeal, effectOf, effectsOf, highestIndex, lowestIndex, record, remaining, reserveOf, resolveDebuff,
+  resolveHoleDebuff, takeFromDeck,
+} from './engine-core.js'
+import { applyHoleDebuffs, emitHawkEyes, recordEclipse, resolveSpoilers } from './engine-round3.js'
 import { evaluateAny, evaluateWild } from './evaluate.js'
 import type { ChaosEffectKind, ChaosHandPlan, ChaosHandState, ChaosOutcome, PlannedEffect } from './types.js'
+
+export { DEAL_RESERVE, isImmune } from './engine-core.js'
 
 /**
  * The chaos effect appliers of a Blind hand (spec 2026-10-26 §3.5), called from `hand/blind.ts` at the deal, the
  * decision round and the reveal, and from `settle` through `chaosSettleHooks`. Every function here is a no-op for a
- * hand without `state.chaos`; the Blind engine only calls them when the hand has a plan.
+ * hand without `state.chaos`; the Blind engine only calls them when the hand has a plan. What the appliers share lives
+ * in `engine-core.ts`; BP-41's hole-card debuffs, Kẻ phá đám, Nhật thực's event and Mắt diều hâu in `engine-round3.ts`.
  */
-
-/**
- * Cards a deal-time draw must leave in the deck: the 5-card board plus a full storm re-deal (spec §3.5, amendment).
- * BP-41 A9 raised it to 11 for the sixth board card; Ruling (Task 3a): only a hand that has the sixth card keeps the
- * extra one (`reserveOf`), so every hand without it draws exactly as before.
- */
-export const DEAL_RESERVE = 10
-const reserveOf = (state: HandState): number => DEAL_RESERVE + (state.chaos?.sixthBoard ? 1 : 0)
 
 /**
  * Deal-time effects told only to their owner (and, for a debuff, its targets) when they happen: the table learns of
  * them from `CHAOS_SUMMARY` at the settlement. `reverseRank` is the one deal-time card the whole table is told at once,
- * and BP-41's Lá chung thứ sáu is public too (the river shows it). BP-41 A8 adds Siêu cộng dồn, Lá ma, Liều ăn nhiều,
- * Đảo bài and Hên xui.
+ * and BP-41's Lá chung thứ sáu is public too (the river shows it), as is Nhật thực (every other seat's cards are off).
+ * BP-41 A8 adds Siêu cộng dồn, Lá ma, Liều ăn nhiều, Đảo bài, Hên xui and Cướp đoạt; Task 3b the other two deal-time
+ * debuffs, Lời nguyền and Kẻ phá đám (their target is told, as for a freeze).
  */
 export const PRIVATE_AT_DEAL: ReadonlySet<ChaosEffectKind> = new Set([
   'swapLowest', 'redealWeak', 'swapAll', 'bestOfN', 'highCard', 'suited', 'extraHole', 'freeze', 'blindfold',
-  'acesCharge', 'wildCard', 'riskyHand', 'flipFlop', 'coinFlip',
+  'acesCharge', 'wildCard', 'riskyHand', 'flipFlop', 'coinFlip', 'plunder', 'curse', 'spoiler',
 ])
 
 /**
@@ -43,8 +44,6 @@ const DEAL_BUFFS: readonly ChaosEffectKind[] = [
 const BREAK_ACES: ReadonlySet<ChaosEffectKind> = new Set(['swapLowest', 'suited'])
 const DEAL_DEBUFFS: ReadonlySet<ChaosEffectKind> = new Set(['freeze', 'blindfold'])
 const HAND_DEBUFFS: readonly ChaosEffectKind[] = ['stealHole', 'lowerHole', 'swapHands']
-
-type Applied = Extract<GameEvent, { type: 'CHAOS_APPLIED' }>
 
 export function initialChaosState(plan: ChaosHandPlan): ChaosHandState {
   const effects = (kind: ChaosEffectKind) => plan.seats.flatMap((s) => s.effects.filter((e) => e.effect === kind).map((e) => ({ seat: s.seat, e })))
@@ -86,33 +85,6 @@ export function isBlindfolded(plan: ChaosHandPlan | undefined, seat: number): bo
   return plan?.seats.some((s) => s.seat === seat && s.blindfolded) ?? false
 }
 
-const remaining = (state: HandState): number => state.deck.length - state.deckIndex
-const effectsOf = (chaos: ChaosHandState, seat: number): PlannedEffect[] => chaos.plan.seats.find((s) => s.seat === seat)?.effects ?? []
-const effectOf = (chaos: ChaosHandState, seat: number, kind: ChaosEffectKind): PlannedEffect | undefined => effectsOf(chaos, seat).find((e) => e.effect === kind)
-const addUid = (list: number[], uid: number): void => {
-  if (!list.includes(uid)) list.push(uid)
-}
-/** BP-41 spec §3: `seat` is immune to the steal family this hand (Liều ăn nhiều, Đảo bài on a −1 hand). */
-export const isImmune = (chaos: ChaosHandState, seat: number): boolean => chaos.immune?.includes(seat) ?? false
-
-/** Records one effect's result: its event, its line in the summary, and whether its card is used up. */
-function record(
-  chaos: ChaosHandState, events: GameEvent[], seat: number, e: PlannedEffect, targets: number[], outcome: ChaosOutcome,
-  extra: { community?: Card[]; amount?: number; holeDelta?: number; wild?: Card; consume?: 'applied' | 'blocked' | null } = {},
-): void {
-  const ev: Applied = { type: 'CHAOS_APPLIED', seat, cardId: e.cardId, effect: e.effect, targets, outcome }
-  if (extra.community) ev.community = extra.community
-  if (extra.amount !== undefined) ev.amount = extra.amount
-  if (extra.holeDelta !== undefined) ev.holeDelta = extra.holeDelta
-  if (extra.wild !== undefined) ev.wild = extra.wild
-  events.push(ev)
-  chaos.used.push({ seat, cardId: e.cardId, effect: e.effect, outcome, targets: targets.slice() })
-  addUid(chaos.recorded, e.uid)
-  const consume = extra.consume === undefined ? 'applied' : extra.consume
-  if (consume === 'applied') addUid(chaos.applied, e.uid)
-  else if (consume === 'blocked') addUid(chaos.blocked, e.uid)
-}
-
 // ---------------------------------------------------------------------------------------------------------------------
 // The deal
 
@@ -131,11 +103,8 @@ function stronger(a: readonly Card[], b: readonly Card[]): boolean {
   for (let i = 0; i < Math.max(ka.length, kb.length); i++) if ((ka[i] ?? -1) !== (kb[i] ?? -1)) return (ka[i] ?? -1) > (kb[i] ?? -1)
   return false
 }
-const lowestIndex = (cards: readonly Card[]): number => cards.reduce((lo, c, i) => (rankOf(c) < rankOf(cards[lo]!) ? i : lo), 0)
-const highestIndex = (cards: readonly Card[]): number => cards.reduce((hi, c, i) => (rankOf(c) > rankOf(cards[hi]!) ? i : hi), 0)
 const noPair = (cards: readonly Card[]): boolean => new Set(cards.map(rankOf)).size === cards.length
 const topRank = (cards: readonly Card[]): number => Math.max(...cards.map(rankOf))
-const canDealAtDeal = (state: HandState, n: number): boolean => remaining(state) - n >= reserveOf(state)
 
 /** One deal-time buff on `p`; returns its outcome (`fizzled` when the reserve or its condition says no). */
 function dealBuff(state: HandState, p: HandPlayer, e: PlannedEffect, keepTopRank: number | null, rng: Rng): ChaosOutcome {
@@ -227,10 +196,7 @@ function takeAces(state: HandState, n: number): Card[] {
       if (rankOf(state.deck[i]!) > rankOf(state.deck[at]!)) at = i
       if (rankOf(state.deck[at]!) === 12) break
     }
-    const [card] = state.deck.splice(at, 1)
-    state.deck.splice(state.deckIndex, 0, card!)
-    state.deckIndex += 1
-    out.push(card!)
+    out.push(takeFromDeck(state, at))
   }
   return out
 }
@@ -251,10 +217,15 @@ const markImmune = (chaos: ChaosHandState, seat: number): void => addUid((chaos.
  *    the deck before anyone is dealt (`takeAces`). A seat that got them is in `outcomes.acesDealt`.
  * 4. The deal, round by round as a plain hand, each seat up to its count (Aces already in hand count).
  * 5. `applyDealEffects`.
+ * Before all of it (BP-41 Task 3b, the plan's second pass): Nhật thực is told (`planHand` already switched every other
+ * seat's cards off), then each Kẻ phá đám switches one card of an opponent off for this hand (`resolveSpoilers`), so
+ * the card it takes away never acts. Both draw nothing from `rng` when the plan holds neither.
  */
 export function dealChaosHand(state: HandState, events: GameEvent[], rng: Rng): void {
   const chaos = state.chaos
   if (!chaos) throw new Error('dealChaosHand: not a chaos hand')
+  recordEclipse(state, events)
+  resolveSpoilers(state, events, rng)
   const base = state.rules.mode === 'blind' ? state.rules.holeCards : 2
   const order = seatsClockwiseFrom(state, state.button)
   let toDeal = base * order.length
@@ -361,6 +332,8 @@ export function applyDealEffects(state: HandState, events: GameEvent[], rng: Rng
       }
     }
   }
+  // BP-41: Cướp đoạt and Lời nguyền, once every seat's buffs have acted, on the hole cards each seat ends the deal with.
+  applyHoleDebuffs(state, events, rng)
   for (const p of seatsClockwiseFrom(state, state.button)) {
     const e = effectOf(chaos, p.seat, 'reverseRank')
     if (e) record(chaos, events, p.seat, e, [], 'applied')
@@ -368,46 +341,20 @@ export function applyDealEffects(state: HandState, events: GameEvent[], rng: Rng
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Debuffs: shields, mirrors, one per seat (spec §3.5.3a, §3.5.4)
-
-/**
- * Resolves one debuff aimed at `target`: a seat already hit this hand lets it fizzle (the card is still used); a
- * shield blocks it (a one-shot shield is spent on it); a mirror turns it back on its user when the user has taken no
- * debuff yet (otherwise it blocks); else it lands. `apply(victim)` does the harm and says whether anything changed.
- * A reflected debuff is not shielded again, so two mirrors cannot bounce it forever.
- */
-function resolveDebuff(state: HandState, events: GameEvent[], user: number, e: PlannedEffect, target: number, apply: (victim: number) => boolean): void {
-  const chaos = state.chaos!
-  if (chaos.hit.includes(target)) {
-    record(chaos, events, user, e, [target], 'fizzled')
-    return
-  }
-  const shield = chaos.plan.seats.find((s) => s.seat === target)?.shield ?? null
-  if (shield && !chaos.shieldSpent.includes(target)) {
-    if (!shield.lasting) {
-      chaos.shieldSpent.push(target)
-      addUid(chaos.blocked, shield.uid)
-    }
-    if (shield.kind === 'mirror' && user !== target && !chaos.hit.includes(user)) {
-      chaos.hit.push(user)
-      apply(user)
-      record(chaos, events, user, e, [target], 'reflected')
-      return
-    }
-    record(chaos, events, user, e, [target], 'blocked', { consume: 'blocked' })
-    return
-  }
-  chaos.hit.push(target)
-  record(chaos, events, user, e, [target], apply(target) ? 'applied' : 'fizzled')
-}
-
-// ---------------------------------------------------------------------------------------------------------------------
 // The decision round
 
-/** "Nhìn trộm" (spec §3.5.2): each peeking seat sees the next `count` board cards, privately; kept for a reconnect. */
-export function emitPeeks(state: HandState, events: GameEvent[]): void {
+/**
+ * "Nhìn trộm" (spec §3.5.2): each peeking seat sees the next `count` board cards, privately; kept for a reconnect. Then
+ * BP-41's Mắt diều hâu (`emitHawkEyes`, which alone draws from `rng`, and only when a seat holds it).
+ */
+export function emitPeeks(state: HandState, events: GameEvent[], rng?: Rng): void {
   const chaos = state.chaos
   if (!chaos || state.phase !== 'DECISION') return
+  emitBoardPeeks(state, chaos, events)
+  if (rng) emitHawkEyes(state, events, rng)
+}
+
+function emitBoardPeeks(state: HandState, chaos: ChaosHandState, events: GameEvent[]): void {
   for (const p of seatsClockwiseFrom(state, state.button)) {
     const e = effectOf(chaos, p.seat, 'peekBoard')
     if (!e) continue
@@ -477,11 +424,8 @@ export function applyRevealEffects(state: HandState, events: GameEvent[], rng: R
         }
         targets = [fresh[rng.int(fresh.length)]!]
       }
-      for (const target of targets) {
-        // BP-41 "miễn nhiễm rút bài": the card is spent on an immune seat and does nothing; the seat is not counted hit.
-        if (isImmune(chaos, target)) record(chaos, events, user.seat, e, [target], 'fizzled')
-        else resolveDebuff(state, events, user.seat, e, target, (victim) => handDebuff(state, kind, user.seat, victim, rng))
-      }
+      // BP-41 "miễn nhiễm rút bài": the card is spent on an immune seat and does nothing; the seat is not counted hit.
+      for (const target of targets) resolveHoleDebuff(state, events, user.seat, e, target, (victim) => handDebuff(state, kind, user.seat, victim, rng))
     }
   }
 
@@ -517,7 +461,6 @@ export function applyRevealEffects(state: HandState, events: GameEvent[], rng: R
 /** Steal, lower or swap on `victim`; false when nothing could change (a last card is never stolen). */
 function handDebuff(state: HandState, kind: ChaosEffectKind, user: number, victim: number, rng: Rng): boolean {
   const v = getPlayer(state, victim)
-  if (isImmune(state.chaos!, victim)) return false // a mirror turning it back on an immune user
   switch (kind) {
     case 'stealHole': {
       if (v.holeCards.length <= 1) return false

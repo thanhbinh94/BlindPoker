@@ -97,7 +97,7 @@ export function createBlindHand(input: CreateBlindInput, rng: Rng): EngineResult
   if (state.phase === 'DECISION') {
     state.turnSeq += 1
     events.push({ type: 'DECISION_PHASE', seats: state.players.map((p) => p.seat), turnSeq: state.turnSeq })
-    emitPeeks(state, events)
+    emitPeeks(state, events, rng)
     autoPlayAllIn(state, events)
   } else if (state.phase === 'SQUEEZE') {
     state.turnSeq += 1
