@@ -5,7 +5,7 @@ import { needsNoPress, returnToBonus } from './bonus.js'
 import { farmHandsOf, receiveCard, tierFromParam, toHeld } from './hold.js'
 import {
   BONUS_HAND_MAX, EMPTY_CHAOS_TABLE,
-  type ChaosCardDef, type ChaosConfig, type ChaosCredit, type ChaosDebit, type ChaosHandOutcomes, type ChaosHandPlan, type ChaosMark, type ChaosMode,
+  type ChaosBomb, type ChaosCardDef, type ChaosConfig, type ChaosCredit, type ChaosDebit, type ChaosHandOutcomes, type ChaosHandPlan, type ChaosMark, type ChaosMode,
   type ChaosEffectKind, type ChaosSeat, type ChaosTableState, type ChaosTier, type HeldCard, type PlannedEffect,
 } from './types.js'
 
@@ -64,7 +64,10 @@ const fortuneRow = (len: number): 2 | 4 | 6 => (len >= 6 ? 6 : len >= 4 ? 4 : 2)
  * The input is never changed; every draw goes through `rng` and `weights`.
  *
  * BP-41 A3: `table` is the table's chaos state as `planHand` returned it (absent = `EMPTY_CHAOS_TABLE`), and `outcomes`
- * what the engine recorded in `ChaosHandState.outcomes`; the result's `table` is the state for the next hand.
+ * what the engine recorded in `ChaosHandState.outcomes`; the result's `table` is the state for the next hand — the bombs
+ * this hand played counted down, the ones it planted added (`countBombs`). The points the round-three cards move between
+ * players (duels, Ép chia thưởng, Thuế thắng, the bombs) moved in the engine already (`payTransfers`): `net` and
+ * `stackAfter` include them.
  */
 export function afterHand(input: {
   rules: BlindRules
@@ -90,7 +93,7 @@ export function afterHand(input: {
   const recorded = input.recorded ?? new Set<number>()
   const mode: ChaosMode = rules.decisionMode
   const wager = rules.fixedWager
-  const result: AfterHandResult = { seats: new Map(), credits: [], debits: [], table: input.table ?? EMPTY_CHAOS_TABLE, awarded: [], bonusAwarded: [] }
+  const result: AfterHandResult = { seats: new Map(), credits: [], debits: [], table: countBombs(input.table ?? EMPTY_CHAOS_TABLE, plan, input.outcomes), awarded: [], bonusAwarded: [] }
   // BP-41 Mồi lửa: every seat in the hand takes each fired one's points (spec §6.3 "mọi người ngồi bàn").
   const kindling = plan.seats.reduce((sum, p) => sum + p.effects.reduce((n, e) => n + (e.effect === 'kindling' ? (e.params.points ?? 0) : 0), 0), 0)
 
@@ -259,6 +262,23 @@ export function afterHand(input: {
     })
   }
   return result
+}
+
+/**
+ * BP-41 Bom nổ chậm (Task 5b) after a hand that settled: each bomb this hand played (`plan.bombs`) has a hand fewer and
+ * leaves at 0 (it went off in the engine, the carrier paying the owner); one whose owner sat the hand out waits; each
+ * planted this hand joins with `fuse` − 1 hands left (the plant hand was its first). The table is returned as it came
+ * when no bomb played or was planted.
+ */
+function countBombs(table: ChaosTableState, plan: ChaosHandPlan, outcomes: ChaosHandOutcomes | undefined): ChaosTableState {
+  const played = new Set((plan.bombs ?? []).map((b) => b.uid))
+  const planted = outcomes?.planted ?? []
+  if (played.size === 0 && planted.length === 0) return table
+  const bombs: ChaosBomb[] = [
+    ...table.bombs.map((b) => (played.has(b.uid) ? { ...b, handsLeft: b.handsLeft - 1 } : b)),
+    ...planted.map((b) => ({ owner: b.owner, carrier: b.carrier, handsLeft: b.fuse - 1, cardId: b.cardId, uid: b.uid, wagers: b.wagers })),
+  ].filter((b) => b.handsLeft > 0)
+  return { ...table, bombs }
 }
 
 /** The seat without its Cấm bỏ bài mark (the hand it was for is over). */

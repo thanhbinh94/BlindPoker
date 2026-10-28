@@ -3,7 +3,7 @@ import type { Rng } from '../cards/rng.js'
 import type { HandEvaluation } from '../evaluator/evaluator.js'
 import type { GameEvent, HandState } from '../hand/types.js'
 import { evaluateAny, evaluateWild } from './evaluate.js'
-import type { ChaosEffectKind, ChaosHandState, ChaosOutcome, PlannedEffect } from './types.js'
+import type { ChaosEffectKind, ChaosHandState, ChaosOutcome, ChaosTransfer, PlannedEffect } from './types.js'
 
 /**
  * What every chaos applier shares (`engine.ts`, `engine-round3.ts`): the deck reserve, the plan lookups, the record of
@@ -23,12 +23,14 @@ export const reserveOf = (state: HandState): number => DEAL_RESERVE + (state.cha
  * them from `CHAOS_SUMMARY` at the settlement. `reverseRank` is the one deal-time card the whole table is told at once,
  * and BP-41's Lá chung thứ sáu is public too (the river shows it), as is Nhật thực (every other seat's cards are off).
  * BP-41 A8 adds Siêu cộng dồn, Lá ma, Liều ăn nhiều, Đảo bài, Hên xui and Cướp đoạt; Task 3b the other two deal-time
- * debuffs, Lời nguyền and Kẻ phá đám (their target is told, as for a freeze). Kept here (re-exported by `engine.ts`) so
- * the debuff resolver can give Bia đỡ đạn's hand-off the privacy of the debuff it passes on.
+ * debuffs, Lời nguyền and Kẻ phá đám (their target is told, as for a freeze); Task 5b Bom nổ chậm's plant (who planted
+ * it stays between owner and carrier until the settlement; its going off, which moves points, is public: `filterEvent`
+ * lets every event with `transfers` through). Kept here (re-exported by `engine.ts`) so the debuff resolver can give
+ * Bia đỡ đạn's hand-off the privacy of the debuff it passes on.
  */
 export const PRIVATE_AT_DEAL: ReadonlySet<ChaosEffectKind> = new Set([
   'swapLowest', 'redealWeak', 'swapAll', 'bestOfN', 'highCard', 'suited', 'extraHole', 'freeze', 'blindfold',
-  'acesCharge', 'wildCard', 'riskyHand', 'flipFlop', 'coinFlip', 'plunder', 'curse', 'spoiler',
+  'acesCharge', 'wildCard', 'riskyHand', 'flipFlop', 'coinFlip', 'plunder', 'curse', 'spoiler', 'timeBomb',
 ])
 
 export type Applied = Extract<GameEvent, { type: 'CHAOS_APPLIED' }>
@@ -44,6 +46,7 @@ export interface RecordExtra {
   dice?: number[]
   wagers?: number
   stake?: number
+  transfers?: ChaosTransfer[]
   consume?: 'applied' | 'blocked' | null
 }
 
@@ -93,6 +96,7 @@ export function record(chaos: ChaosHandState, events: GameEvent[], seat: number,
   if (extra.wagers !== undefined) ev.wagers = extra.wagers
   if (extra.stake !== undefined) ev.stake = extra.stake
   if (extra.privateTo !== undefined) ev.privateTo = extra.privateTo.slice()
+  if (extra.transfers !== undefined) ev.transfers = extra.transfers.map((t) => ({ ...t }))
   events.push(ev)
   chaos.used.push({ seat, cardId: e.cardId, effect: e.effect, outcome, targets: targets.slice() })
   addUid(chaos.recorded, e.uid)

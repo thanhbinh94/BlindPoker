@@ -86,12 +86,16 @@ export function returnUncalled(state: HandState): { seat: number; amount: number
  * paid (insurance, which may move points from `pots` to stacks — its events follow `SHOWDOWN`), and events told just
  * before `SETTLEMENT` (the summary). `evaluateSeat` (BP-41 A9) ranks a seat's cards in place of `evaluate`: more than
  * ten cards (a sixth board card, extra hole cards) and Lá ma's wild card; the plain evaluator is never changed.
+ * `afterPayout` (BP-41 A5) runs once the pots are paid onto the stacks, showdown or not (and in `carryOverAll`, with no
+ * payouts): the points cards move between players (duels, Ép chia thưởng, Thuế thắng, a bomb going off), stack to stack,
+ * so `SETTLEMENT.stacks` include them; its events are told after `beforePayout`'s.
  */
 export interface SettleHooks {
   reverse: boolean
   borrowed(seat: number): Card | null
   evaluateSeat?(seat: number, cards: readonly Card[]): HandEvaluation & { wild?: { card: Card; as: Card } }
   beforePayout(pots: Pot[], winners: ReadonlySet<number>): GameEvent[]
+  afterPayout?(payoutBySeat: ReadonlyMap<number, number>): GameEvent[]
   beforeSettlement(): GameEvent[]
 }
 
@@ -142,6 +146,7 @@ export function settle(state: HandState, events: GameEvent[], opts: { showdown: 
   const payoutBySeat = new Map<number, number>()
   for (const r of results) for (const w of r.winners) payoutBySeat.set(w.seat, (payoutBySeat.get(w.seat) ?? 0) + w.amount)
   for (const [seat, amount] of payoutBySeat) getPlayer(state, seat).stack += amount
+  if (hooks?.afterPayout) chaosEvents = [...chaosEvents, ...hooks.afterPayout(payoutBySeat)]
 
   const payouts = [...payoutBySeat].map(([seat, amount]) => ({ seat, amount })).sort((a, b) => a.seat - b.seat)
   const stacks = state.players.map((p) => ({ seat: p.seat, stack: p.stack }))
@@ -182,11 +187,13 @@ export function cancelHand(state: HandState, events: GameEvent[], reason: string
 }
 
 export function carryOverAll(state: HandState, events: GameEvent[], hooks?: SettleHooks): void {
+  // BP-41 A5: nobody won, but a bomb on its last hand still goes off (the pot stays whole: it carries over).
+  const moved = hooks?.afterPayout?.(new Map()) ?? []
   const stacks = state.players.map((p) => ({ seat: p.seat, stack: p.stack }))
   state.result = { pots: [], fee: 0, payouts: [], stacks, showdown: null, carryOverOut: state.pot, uncalledReturned: null }
   state.phase = 'COMPLETE'
   state.actingSeat = null
-  if (hooks) events.push(...hooks.beforeSettlement())
+  if (hooks) events.push(...moved, ...hooks.beforeSettlement())
   events.push({ type: 'SETTLEMENT', payouts: [], fee: 0, pots: [], carryOverOut: state.pot, stacks, uncalledReturned: null })
   events.push({ type: 'HAND_COMPLETE' })
 }

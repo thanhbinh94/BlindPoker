@@ -69,7 +69,9 @@ export function filterEvent(event: GameEvent, viewerSeat: number | null): GameEv
   if (event.type === 'CHAOS_APPLIED' && event.privateTo) {
     // BP-41 Bia đỡ đạn passing a private deal debuff on: exactly the seats it names.
     if (viewerSeat === null || !event.privateTo.includes(viewerSeat)) return null
-  } else if (event.type === 'CHAOS_APPLIED' && PRIVATE_AT_DEAL.has(event.effect)) {
+  } else if (event.type === 'CHAOS_APPLIED' && PRIVATE_AT_DEAL.has(event.effect) && !event.transfers) {
+    // Only its owner and targets, unless it moved points at the settlement (`transfers`: BP-41 Bom nổ chậm going off),
+    // which every viewer sees in the stacks anyway.
     const party = viewerSeat !== null && (event.seat === viewerSeat || event.targets.includes(viewerSeat))
     if (!party) return null
   }

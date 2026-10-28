@@ -5,7 +5,7 @@ import { pickCard } from './draw.js'
 import { farmHandsOf, stackHeld } from './hold.js'
 import {
   EMPTY_CHAOS_TABLE,
-  type ChaosCardDef, type ChaosEffectKind, type ChaosHandPlan, type ChaosMode, type ChaosSeat, type ChaosTableState, type HeldCard, type PlannedEffect,
+  type ChaosBomb, type ChaosCardDef, type ChaosEffectKind, type ChaosHandPlan, type ChaosMode, type ChaosSeat, type ChaosTableState, type HeldCard, type PlannedEffect,
 } from './types.js'
 
 /**
@@ -49,7 +49,9 @@ type Firing = Omit<PlannedEffect, 'targets'>
  * never fired here, like wait cards (A10). BP-41's deal-time debuffs (Cướp đoạt, Lời nguyền, Kẻ phá đám) get
  * `targets: []`: the engine aims them at the deal. A bonus card that fires from `armed` is marked `fromBonus`. Once every
  * seat is planned, a second pass applies Nhật thực (`eclipse`), then each seat's stake is set (`stakes`: Mạo hiểm gia,
- * Sới lớn; Task 5a) and, on a "Chơi hoặc bỏ" table, the seats Cấm bỏ bài marked last hand go into `noFoldSeats`.
+ * Sới lớn; Task 5a) and, on a "Chơi hoặc bỏ" table, the seats Cấm bỏ bài marked last hand go into `noFoldSeats`. Last,
+ * each Bom nổ chậm on the table whose owner is dealt in is passed to another seat (`passBombs`, Task 5b) and goes into
+ * `plan.bombs`; the returned `table` carries the new carriers.
  */
 export function planHand(input: {
   seats: readonly PlanSeatInput[]
@@ -184,7 +186,11 @@ export function planHand(input: {
   // BP-41 A2 Cấm bỏ bài: last hand's marks, on a "Chơi hoặc bỏ" table only (the card is ✱; there is no fold elsewhere).
   const noFold = mode === 'playOrFold' ? input.seats.filter((s) => s.chaos.noFoldNextHand === true).map((s) => s.seat) : []
   if (noFold.length > 0) plan.noFoldSeats = noFold
-  return { plan, seats, table }
+  // BP-41 Bom nổ chậm (Task 5b): each bomb on the table passes to another seat and plays this hand.
+  if (table.bombs.length === 0) return { plan, seats, table }
+  const passed = passBombs(table.bombs, input.seats.map((s) => s.seat), rng)
+  if (passed.playing.length > 0) plan.bombs = passed.playing
+  return { plan, seats, table: { ...table, bombs: passed.bombs } }
 }
 
 /**
@@ -222,4 +228,24 @@ function eclipse(planSeats: PlanSeat[], seats: Map<number, ChaosSeat>, input: re
     s.eclipsed = true
     seats.set(s.seat, clearUnsettledHand(input.find((x) => x.seat === s.seat)!.chaos))
   }
+}
+
+/**
+ * BP-41 Bom nổ chậm before a hand (`planHand`, A3): each bomb whose owner is dealt in plays this hand, passed to a
+ * random seat dealt in that is neither its owner nor its carrier (heads-up there is none: the carrier keeps it). A bomb
+ * whose owner sits the hand out waits, untouched and not counted down (Ruling 5b-6). Returns the table's bombs with
+ * their new carriers and the ones this hand plays (`ChaosHandPlan.bombs`). Draws from `rng` only to pass a bomb.
+ */
+export function passBombs(bombs: readonly ChaosBomb[], dealt: readonly number[], rng: Rng): { bombs: ChaosBomb[]; playing: ChaosBomb[] } {
+  const playing: ChaosBomb[] = []
+  const next = bombs.map((b) => {
+    if (!dealt.includes(b.owner)) return b
+    const others = dealt.filter((s) => s !== b.owner && s !== b.carrier)
+    const carrier = others.length > 0 ? others[rng.int(others.length)]! : b.carrier
+    if (!dealt.includes(carrier)) return b
+    const moved = carrier === b.carrier ? b : { ...b, carrier }
+    playing.push({ ...moved })
+    return moved
+  })
+  return { bombs: next, playing }
 }

@@ -11,6 +11,7 @@ import {
 import { applyHoleDebuffs, emitHawkEyes, recordEclipse, resolveSpoilers } from './engine-round3.js'
 import { recordBackfires } from './engine-reveal.js'
 import { markNoFold } from './engine-stake.js'
+import { payTransfers, plantBombs } from './engine-transfer.js'
 import type { ChaosEffectKind, ChaosHandPlan, ChaosHandState, ChaosOutcome, PlannedEffect } from './types.js'
 
 export { DEAL_RESERVE, PRIVATE_AT_DEAL, isImmune } from './engine-core.js'
@@ -331,6 +332,8 @@ export function applyDealEffects(state: HandState, events: GameEvent[], rng: Rng
   }
   // BP-41: Cướp đoạt and Lời nguyền, once every seat's buffs have acted, on the hole cards each seat ends the deal with.
   applyHoleDebuffs(state, events, rng)
+  // BP-41 Bom nổ chậm (Task 5b): planted after the hole-card debuffs, on a seat not hit yet.
+  plantBombs(state, events, rng)
   for (const p of seatsClockwiseFrom(state, state.button)) {
     const e = effectOf(chaos, p.seat, 'reverseRank')
     if (e) record(chaos, events, p.seat, e, [], 'applied')
@@ -419,7 +422,7 @@ function insure(state: HandState, pots: Pot[], winners: ReadonlySet<number>): Ga
   return events
 }
 
-/** The chaos side of `settle` and `carryOverAll`, or undefined for a plain hand. */
+/** The chaos side of `settle` and `carryOverAll`, or undefined for a plain hand (so a plain hand settles as ever). */
 export function chaosSettleHooks(state: HandState): SettleHooks | undefined {
   const chaos = state.chaos
   if (!chaos) return undefined
@@ -429,6 +432,8 @@ export function chaosSettleHooks(state: HandState): SettleHooks | undefined {
     // A9 / Ruling 4: any number of cards, and Lá ma's wild card while its seat still holds it.
     evaluateSeat: (seat, cards) => evaluateChaosSeat(state, seat, cards),
     beforePayout: (pots, winners) => insure(state, pots, winners),
+    // BP-41 A5: duels, Ép chia thưởng, Thuế thắng and the bombs, stack to stack once the pots are paid.
+    afterPayout: (payouts) => payTransfers(state, payouts),
     beforeSettlement: () => [{ type: 'CHAOS_SUMMARY', used: chaos.used.map((u) => ({ ...u })) }],
   }
 }

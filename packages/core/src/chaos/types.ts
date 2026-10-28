@@ -225,6 +225,27 @@ export interface ChaosHandPlan {
    * but its holder), or every seat while a Thần reigns. Absent or empty: anyone may fold.
    */
   noFoldSeats?: number[]
+  /**
+   * BP-41 Bom nổ chậm (Task 5b): the bombs this hand plays, as `planHand` passed them on — each with the carrier it holds
+   * it this hand and the hands it still has to play, this one included (`handsLeft` 1: it goes off at this hand's
+   * settlement, the carrier paying the owner `wagers` × the fixed wager). Only a bomb whose owner is dealt in plays.
+   * Absent = none.
+   */
+  bombs?: ChaosBomb[]
+}
+
+/**
+ * One Bom nổ chậm on the table (BP-41 §6.1, A3): planted by `owner` on `carrier` (never the owner), `handsLeft` hands
+ * still to play before it goes off (the plant hand is the first of `fuse`), then the carrier pays the owner `wagers` ×
+ * the fixed wager (absent = 1). `cardId`/`uid` name the card that planted it.
+ */
+export interface ChaosBomb {
+  owner: number
+  carrier: number
+  handsLeft: number
+  cardId: string
+  uid: number
+  wagers?: number
 }
 
 /**
@@ -242,6 +263,16 @@ export interface ChaosMark {
  * already taken a debuff this hand (`fizzled`).
  */
 export type ChaosOutcome = 'applied' | 'blocked' | 'reflected' | 'fizzled'
+
+/**
+ * BP-41 §3 "chuyển tiền giữa người chơi": points a card moved at the settlement from `from`'s stack to `to`'s, as taken
+ * (never more than `from` had; creates no point). Told on `CHAOS_APPLIED.transfers`.
+ */
+export interface ChaosTransfer {
+  from: number
+  to: number
+  amount: number
+}
 
 /** One line of "Thẻ đã dùng" (the `CHAOS_SUMMARY` event at settlement). */
 export interface ChaosUse {
@@ -310,9 +341,10 @@ export interface ChaosHandState {
   /**
    * BP-41 Thách đấu: each duel the reveal settled that pays — `payer` owes `winner` `wagers` × the fixed wager (2 or 3,
    * rolled on the card's `p2`/`p3`). A mirrored or bounced duel has the target challenge the holder. Task 5b moves the
-   * points (`afterPayout`, capped at the payer's stack). Absent until one pays.
+   * points at the settlement (`payTransfers`, capped at the payer's stack). `god` (Task 6): the Thần's duel curse pushes
+   * its duels here too, marked, and they are paid after every card's duel (Ruling 2). Absent until one pays.
    */
-  duels?: { winner: number; payer: number; wagers: number; cardId: string; uid: number }[]
+  duels?: { winner: number; payer: number; wagers: number; cardId: string; uid: number; god?: true }[]
   /**
    * BP-41 A12: the title marks this hand earned, per seat (an ascension, a demigod, a dethrone). The room copies them
    * into `HandSummary.players[].chaosTitles`. Absent when nobody earned one.
@@ -329,9 +361,14 @@ export interface ChaosHandState {
 
 /**
  * BP-41 A3: the round-three results `afterHand` settles on, as the engine recorded them in `ChaosHandState.outcomes`.
- * Every list holds seats; absent = none.
+ * Every list holds seats, but `planted`; absent = none.
  */
 export interface ChaosHandOutcomes {
+  /**
+   * Bom nổ chậm planted this hand (Task 5b), as they landed (a mirrored one is planted on its holder by the seat it was
+   * aimed at): `afterHand` puts each on the table with `fuse` − 1 hands left (the plant hand was the first).
+   */
+  planted?: { owner: number; carrier: number; fuse: number; wagers: number; cardId: string; uid: number }[]
   /** Xúc xắc định mệnh rolled 5–6: Bạo kích ×2 if the seat wins. */
   fateCrit?: number[]
   /** Seats that won a Thách đấu (or a Thần thách đấu) this hand: a payment is due to them (`ChaosHandState.duels`). */
@@ -422,9 +459,10 @@ export interface ChaosTableState {
   demigods: { seat: number; playerId: string; isBot: boolean; handsLeft: number }[]
   /**
    * Every Bom nổ chậm in play (two holders may each plant one, A3): planted by `owner`, held by `carrier` (never the
-   * owner), `handsLeft` until it explodes (3 at the plant); `cardId`/`uid` name the card that planted it.
+   * owner), `handsLeft` hands still to play (the plant hand was the first of its `fuse`); `planHand` passes it to another
+   * seat each hand, `afterHand` counts it down, and it goes off inside the engine on its last hand (`ChaosBomb`).
    */
-  bombs: { owner: number; carrier: number; handsLeft: number; cardId: string; uid: number }[]
+  bombs: ChaosBomb[]
 }
 
 export const EMPTY_CHAOS_TABLE: ChaosTableState = Object.freeze({
