@@ -1924,7 +1924,8 @@ describe('Money conservation over many hands', () => {
   it('200 chaos hands, drafts and card credits included, keep the books at 0', async () => {
     // Plan 37: the spec's cards (all 86 since BP-41 Task 7b), a draft every 5 hands (every human takes the first card
     // offered), two bots. A card credit is a source row on the ledger and new points on a stack; books() takes the sources
-    // back out. A dice loss is a chaos_dice sink row, counted with every sink.
+    // back out. This seed never meets a human dice loss (a chaos_dice sink row); the round-three 120-hand test in
+    // room-chaos-round3.test.ts covers that sink.
     const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, chaosCycle: 5 } }, { seed: 37, chaos: true, players: [['h', 1_000_000], ['a', 1_000_000]] })
     const ids = ['h', 'a']
     const pickAll = async () => {

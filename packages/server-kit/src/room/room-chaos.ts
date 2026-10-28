@@ -48,15 +48,16 @@ const done = (e: DraftEntry): boolean => e.picked !== null || e.cardIds.length =
 
 /**
  * BP-41 A12 / spec §4.4 G12: the title marks a settled chaos hand earned that count for the stats, by seat — copied into
- * `HandSummary.players[].chaosTitles`. Only when at least two humans sit at the table (`humansSeated`, anti-farming);
- * never for a bot's seat (a bot has no titles); a `slew` mark only when the Thần beaten was a human (`plan.god.isBot`).
- * The room calls it for a hand that was not cancelled only: a title is earned when its hand settles — an ascension
- * whose hand is cancelled keeps its reign (and its herald, already sent) but marks nothing (Ruling 7b-1).
+ * `HandSummary.players[].chaosTitles`. Only when at least two humans were dealt into that hand (anti-farming, Ruling 19:
+ * an idle second account sitting out does not count); never for a bot's seat (a bot has no titles); a `slew` mark only
+ * when the Thần beaten was a human (`plan.god.isBot`). The room calls it for a hand that was not cancelled only: a title
+ * is earned when its hand settles — an ascension whose hand is cancelled keeps its reign (and its herald, already sent)
+ * but marks nothing (Ruling 7b-1).
  */
-export function countedTitles(state: HandState, humansSeated: number): Map<number, ChaosTitles> {
+export function countedTitles(state: HandState): Map<number, ChaosTitles> {
   const out = new Map<number, ChaosTitles>()
   const chaos = state.chaos
-  if (!chaos?.titles || humansSeated < 2) return out
+  if (!chaos?.titles || state.players.filter((hp) => !hp.isBot).length < 2) return out
   const botGod = chaos.plan.god?.isBot === true
   for (const { seat, ascended, demigod, slew } of chaos.titles) {
     if (state.players.find((hp) => hp.seat === seat)?.isBot !== false) continue

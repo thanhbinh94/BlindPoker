@@ -425,6 +425,20 @@ describe('BP-41 room: title marks into the hand summary (A12, G12)', () => {
     expect(titlesOf(h, 0)).toEqual({})
   })
 
+  it('Ruling 19: a second human seated but sitting the hand out does not count — the ascension marks nothing', async () => {
+    const h = createRoomHarness(CHAOS, { seed: 9, chaos: { cards: RESCUE_ONLY, config: SILVER_ONLY } })
+    await seat(h, ['h', 'a'])
+    await h.room.sitOut('a', true)
+    await h.room.startGame('h')
+    give(h, 'h', CARP_FULL)
+    await pickAll(h, ['h', 'a'])
+    expect(h.room.players.get('a')!.seat).toBe(1) // still at the table
+    expect(live(h).players.map((p) => p.playerId)).not.toContain('a')
+    await playOut(h)
+    expect(ofEvent(h, 'h', 'CHAOS_HERALD').filter((e) => e.kind === 'god').map((e) => e.playerId)).toEqual(['h'])
+    expect(titlesOf(h, 0)).toEqual({})
+  })
+
   it('a bot Thần: its ascension is no title, and a human who beats it is not marked slew', async () => {
     // Seed 1: a human beats the bot Thần within its reign.
     const h = createRoomHarness(CHAOS, { seed: 1, chaos: { cards: RESCUE_ONLY, config: SILVER_ONLY } })
@@ -446,6 +460,7 @@ describe('BP-41 room: title marks into the hand summary (A12, G12)', () => {
     const h = await startWith(9, [CARP_FULL], { spectator: true })
     expect(ofEvent(h, 'b', 'CHAOS_HERALD')).toEqual([{ type: 'CHAOS_HERALD', kind: 'god', seat: 0, playerId: 'h' }])
     expect(ofEvent(h, 'b', 'CHAOS_TABLE').at(-1)!.table.god).toEqual({ seat: 0, handsLeft: 5, curse: 1 })
+    // The private runner: the only public cancel is `close()`, which also clears the table, so the reign could not be seen.
     const runner = (h.room as unknown as { runner: { cancel(reason: string): unknown } }).runner
     await h.room.enqueue(() => runner.cancel('test'))
     await tick(h)

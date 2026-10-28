@@ -419,7 +419,8 @@ A human's dice loss leaves the economy like a table fee: `balances.apply([], { r
 with `key` = `chaos_dice:<room>:<hand>:<seat>:<uid>`, retried once; a second failure is logged (`chaos dice sink failed`, with the key)
 and the stack stays lowered, as for a lost fee. Nothing is written for a bot.
 **Title marks (A12, G12).** `onHandComplete` copies the engine's `state.chaos.titles` into `HandSummary.players[].chaosTitles`
-(`countedTitles`) for a hand that settled, only when at least two humans sit at the table, never on a bot's row, and `slew` only when the
+(`countedTitles`) for a hand that settled, only when at least two humans were dealt into it (a human sitting out does not count),
+never on a bot's row, and `slew` only when the
 Thần beaten was a human (`plan.god.isBot`). A cancelled hand marks nothing, though an ascension in it keeps its reign (Ruling 7b-1).
 Trộm điểm received in a draft is resolved in `endDraft` over every seated player once all picks are handed out (`stealPoints`). Every
 seated player who sat the hand out goes into `afterHand` too, as `inHand: false` (Cấm bỏ bài's mark ends; a theft can reach them).

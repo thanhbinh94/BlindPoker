@@ -928,9 +928,9 @@ export class Room {
     }
     if (state.chaos && !runner.wasCancelled) {
       summary.chaosUsed = state.chaos.used.map((u) => ({ seat: u.seat, cardId: u.cardId, outcome: u.outcome }))
-      // BP-41 A12 / G12: the hand's title marks, counted only at a table with ≥ 2 humans seated, never a bot's, never a
-      // bot Thần's fall. Earned when the hand settles: a cancelled hand marks nothing (Ruling 7b-1).
-      const titles = countedTitles(state, this.seated().filter((p) => !p.identity.isBot).length)
+      // BP-41 A12 / G12: the hand's title marks, counted only when ≥ 2 humans were dealt in (Ruling 19), never a bot's,
+      // never a bot Thần's fall. Earned when the hand settles: a cancelled hand marks nothing (Ruling 7b-1).
+      const titles = countedTitles(state)
       for (const sp of summary.players) {
         const marks = titles.get(sp.seat)
         if (marks) sp.chaosTitles = marks
