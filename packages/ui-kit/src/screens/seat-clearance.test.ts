@@ -224,3 +224,130 @@ describe('useSeatClearance', () => {
     }
   })
 })
+
+// BP-40: the chaos draft (`{ minRoom: 0, aboveHand: true }`) from the second draft on, when the last hand's fan is still on the
+// viewer's seat.
+describe('useSeatClearance for the chaos draft (BP-40)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    FakeObserver.all = []
+    document.body.innerHTML = ''
+  })
+
+  /** What the draft passes (`RoomScreen`), one object so the hook's effect sees the same options each render. */
+  const DRAFT = { minRoom: 0, aboveHand: true } as const
+
+  /** The viewer's seat from `seatTop` (plate 60 px lower) with a fan of two cards in `[data-hand]`, its box from `handTop`. */
+  function seatWithFan(seatTop: number, handTop: number) {
+    const { stage: el, seat } = stageWithSeat(seatTop)
+    const hand = document.createElement('div')
+    hand.setAttribute('data-hand', '')
+    hand.getBoundingClientRect = () => box(handTop, handTop + 90)
+    const cards = [document.createElement('div'), document.createElement('div')]
+    for (const card of cards) {
+      card.getBoundingClientRect = () => box(handTop - 3, handTop + 88)
+      hand.append(card)
+    }
+    seat.prepend(hand)
+    return { el, seat, hand, cards }
+  }
+
+  it('counts a fan card still flying in from the deck where it will lie, and measures again once it has landed', () => {
+    // Upright, the result strip hides the viewer's seat with `display: none`; the draft shows it again, which restarts its cards'
+    // deal from the deck. Measured mid-flight, the card near the deck (300 px) put the draft's foot over the board for the
+    // whole draft: nothing that a ResizeObserver watches changes size when a transform ends.
+    const { el, cards } = seatWithFan(560, 552)
+    const ref = { current: el }
+    const flying = [{ playState: 'running' }]
+    let inFlight = true
+    for (const card of cards) {
+      Object.assign(card, { getAnimations: () => (inFlight ? flying : []) })
+      card.getBoundingClientRect = () => (inFlight ? box(300, 330) : box(549, 640))
+    }
+    const hook = renderHook(() => useSeatClearance(ref, true, 2, DRAFT))
+    // the fan's own box stands where the cards will lie: 724 − 552 + 8, never 724 − 300 + 8
+    expect(hook.result.current).toBe(724 - 552 + CLEARANCE_GAP)
+
+    inFlight = false
+    act(() => {
+      cards[1]!.dispatchEvent(new Event('animationend', { bubbles: true }))
+    })
+    // landed: the fanned cards' own tops, as a draft with no deal running measures them
+    expect(hook.result.current).toBe(724 - 549 + CLEARANCE_GAP)
+  })
+
+  it('measures a resting fan the way it always has: the highest card', () => {
+    const { el } = seatWithFan(560, 552)
+    const ref = { current: el }
+    const hook = renderHook(() => useSeatClearance(ref, true, 2, DRAFT))
+    expect(hook.result.current).toBe(724 - 549 + CLEARANCE_GAP)
+  })
+
+  /** The overlay whose first child is the draft panel: it has to scroll while `overflowAt(clearance)` says so. */
+  function overlayWith(overflowAt: (clearance: string) => boolean) {
+    const overlay = document.createElement('div')
+    const panel = document.createElement('section')
+    overlay.append(panel)
+    document.body.append(overlay)
+    Object.defineProperty(panel, 'clientHeight', { configurable: true, get: () => 120 })
+    Object.defineProperty(panel, 'scrollHeight', { configurable: true, get: () => (overflowAt(overlay.dataset.clearance ?? '') ? 160 : 120) })
+    return overlay
+  }
+
+  it('steps down to the plate, then to the whole stage, while the panel would have to scroll inside', () => {
+    // On its side (the landscape frame), the last hand's fan and lines lift the viewer's seat: above them the draft had half
+    // its height, the third card cut. It stands above the fan only when the whole panel fits there.
+    const { el } = seatWithFan(560, 552)
+    const ref = { current: el }
+    const overlay = overlayWith((c) => c !== 'null')
+    const fit = { current: overlay }
+    const hook = renderHook(() => {
+      const clearance = useSeatClearance(ref, true, 2, { ...DRAFT, fit })
+      overlay.dataset.clearance = String(clearance)
+      return clearance
+    })
+    expect(hook.result.current).toBeNull()
+  })
+
+  it('stays above the fan when the panel fits there, and on the plate when it fits only there', () => {
+    const { el } = seatWithFan(560, 552)
+    const ref = { current: el }
+    const above = overlayWith(() => false)
+    const aboveOpts = { ...DRAFT, fit: { current: above } }
+    const first = renderHook(() => useSeatClearance(ref, true, 2, aboveOpts))
+    expect(first.result.current).toBe(724 - 549 + CLEARANCE_GAP)
+    first.unmount()
+
+    const plateOnly = String(724 - 620 + CLEARANCE_GAP)
+    const overlay = overlayWith((c) => c !== plateOnly && c !== 'null')
+    const plateOpts = { ...DRAFT, fit: { current: overlay } }
+    const hook = renderHook(() => {
+      const clearance = useSeatClearance(ref, true, 2, plateOpts)
+      overlay.dataset.clearance = String(clearance)
+      return clearance
+    })
+    // the plate is 60 px under the seat's top (620): the panel lies over the last hand's cards, the plate stays clear
+    expect(hook.result.current).toBe(724 - 620 + CLEARANCE_GAP)
+  })
+
+  it('starts again from above the fan for the next draft', () => {
+    const { el } = seatWithFan(560, 552)
+    const ref = { current: el }
+    let tight = true
+    const overlay = overlayWith((c) => tight && c !== 'null')
+    const opts = { ...DRAFT, fit: { current: overlay } }
+    const hook = renderHook(
+      ({ active }) => {
+        const clearance = useSeatClearance(ref, active, 2, opts)
+        overlay.dataset.clearance = String(clearance)
+        return clearance
+      },
+      { initialProps: { active: true } },
+    )
+    expect(hook.result.current).toBeNull()
+    hook.rerender({ active: false })
+    tight = false
+    hook.rerender({ active: true })
+    expect(hook.result.current).toBe(724 - 549 + CLEARANCE_GAP)
+  })
+})

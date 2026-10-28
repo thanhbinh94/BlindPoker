@@ -550,8 +550,11 @@ dialog does not change height between Hold'em and Blind. `Badge` has a `chaos` t
 **On the table.** `RoomScreen` mounts `ChaosDraft` in an overlay in `<main>` beside the result overlay and disables the action tray while
 it is up; the previous hand's result card steps aside during a draft. Since BP-39 the result is no longer held for the cards: it
 waits only for the reveal (`held = revealHeld`), and `ChaosToasts` runs beside it. `useSeatClearance(stage, active, seat, { minRoom, aboveHand })`: the draft passes
-`{ minRoom: 0, aboveHand: true }`, so it always stands just above the viewer's seat block and the highest card of the viewer's fan; the
-result card keeps its tiers. `PokerTable` takes `chaos` (and, BP-39, `feltCorner`: a zero-height anchor at the foot of the stack felt
+`{ minRoom: 0, aboveHand: true, fit }`, so it stands just above the viewer's seat block and the highest card of the viewer's fan; a fan
+card still being dealt (`getAnimations()` not empty) counts as the fan's own box, and its `animationend` measures again. `fit` is the
+draft's overlay: where the panel (its first child) would have to scroll, the hook steps down a tier — above the plate, then the whole
+stage — before paint, and starts from the top again for the next draft, a new seat or a stage of another size (BP-40). The
+result card keeps its tiers (`clearanceTiers` lists them, `clearanceFor` is the first). `PokerTable` takes `chaos` (and, BP-39, `feltCorner`: a zero-height anchor at the foot of the stack felt
 for the bonus hand): each `Seat` shows its icons (in `.tags`, and in `.stripLine` for the
 viewer's phone strip), "Bạo kích ×2!" / "×3!" beside the payout (from `CHAOS_CREDIT.multiplier`, held back while the result is pending),
 a "Bị che mắt" badge on the viewer's own blindfolded seat (`chaos.blindfolded` from a snapshot's hand view, else inferred: chaos

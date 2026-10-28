@@ -9,6 +9,38 @@ below are the real history.
 
 ---
 
+## BP-40 — from the second chaos draft on, the draft panel stands whole on a phone instead of being cut short and scrolling — merged `MERGE` (2026-10-28)
+
+The user's report, 2026-10-28, with two phone screenshots (`docs/bug-log.md` §12 H10): on a phone, upright and on its side, every
+draft after the first was cut short and scrolled inside. Branch `bugfix/BP-40-draft-after-result`.
+
+- **What a player gets.** Every draft — not only the first — shows its three cards whole above your seat. Upright it no longer stops
+  over the board; on its side, when three long cards do not fit above your last hand's cards, the panel steps down over your name
+  plate, and then over the whole table, rather than scrolling.
+- **Under it.** The first draft opens before any hand; every later one opens over the hand that just ended, its cards still on your
+  seat. Upright, BP-39's result strip had hidden your seat (`display: none`); when the draft opened the seat came back and its two
+  cards were dealt again from the deck, and `useSeatClearance` measured them in flight (a ResizeObserver does not see a transform
+  end), so the panel stopped above a card still near the deck (360×780: 324 px kept below the panel instead of 157). On its side, the
+  finished hand's fan and lines lift your seat, leaving too little room for three long cards. `seat-clearance.ts` now measures the
+  fan's own box while a card is still animating and again on `animationend`, and, for the draft, steps down (above the cards → above
+  the plate → the whole stage) before paint when the panel would scroll, starting afresh for each draft, seat or screen size.
+- **Tests.** `seat-clearance.test.ts` (5 cases), `RoomScreen.test.tsx` (strip, then a draft over cards in flight: 156 px, not 408).
+  Ops F-13b/c now press "Bỏ qua" to the second draft and check it like the first, plus no inner scroll and no card cut by the
+  panel's edge (they failed on the old code at 375×812 and 360×780).
+- **Docs.** `docs/bug-log.md` §12 H10, `docs/ui-kit.md`.
+- **Khác với spec / Deviations from the spec.** On any layout a draft that would scroll now steps down over the viewer's seat (the
+  tray is disabled during a draft anyway); before, it always stopped above the seat and scrolled.
+- **Gate.** typecheck and lint clean; unit 239 files, 4,048 passed, 14 skipped; `build:normal` ok; `build:lite` up to the Node 22
+  exe step; `avatar:check` ok; e2e Normal 24/24; e2e Lite 4/4; ops 66/66.
+- **Operations, same day.** At the user's request the VPS's `chaos_config` row was written by hand with `dailyCapPoints` 10,000,000
+  (was the 100,000 default; every other number at its default, 3 rescues a day kept), so Thần tài is in effect unlimited for now —
+  backup `bp-2026-10-28-0737` first. A direct database write, so it is not in "Nhật ký"; a GM puts it back in "Thẻ hỗn loạn".
+- **Deployed.** DEPLOYED
+- **Still open.** Upright, the last hand's cards still fly in again under the opening draft (visual only; the panel measures
+  through it). A real phone on its side with long gold cards is the user's check.
+
+---
+
 ## Plan 39 — Poker hỗn loạn, round two: toasts that never cover the winner, "Bỏ qua", bonus cards played by hand, tap-to-read cards, no table limit — merged `898f608` (2026-10-28)
 
 The players' feedback on chaos tables, `docs/bug-log.md` §12 H1–H9 (2026-10-26/27), brainstormed with the user

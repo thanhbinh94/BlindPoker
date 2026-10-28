@@ -3451,7 +3451,8 @@
 
 /* The draft. A centred panel over the felt; a sheet at the foot of the stage on a phone held upright
    (`data-layout='stack'`), a compact row on one held sideways (`data-frame='landscape'`). `RoomScreen` stops the
-   overlay it lies in above the viewer's own seat, so the panel never covers the hand fan. */
+   overlay it lies in above the viewer's own seat and hand fan when the whole panel fits there, else lower (BP-40): the
+   panel never scrolls where a lower stop would have shown it whole. */
 .draft {
   display: flex;
   flex-direction: column;
