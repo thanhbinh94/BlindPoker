@@ -1,7 +1,7 @@
 import { rankOf, type Card } from '../cards/cards.js'
 import type { Rng } from '../cards/rng.js'
 import type { HandEvaluation } from '../evaluator/evaluator.js'
-import type { GameEvent, HandState } from '../hand/types.js'
+import type { GameEvent, HandPlayer, HandState } from '../hand/types.js'
 import { evaluateAny, evaluateWild } from './evaluate.js'
 import type { ChaosEffectKind, ChaosHandState, ChaosOutcome, ChaosReignKind, ChaosTitles, ChaosTransfer, PlannedEffect } from './types.js'
 
@@ -89,6 +89,23 @@ export function markTitle(chaos: ChaosHandState, seat: number, mark: ChaosTitles
   if (mark.ascended) row.ascended = true
   if (mark.demigod) row.demigod = true
   if (mark.slew) row.slew = (row.slew ?? 0) + mark.slew
+}
+
+/**
+ * Deals the hole hands of `players` round among them at random, each hand moving whole (Fisher–Yates, one
+ * `rng.int(i + 1)` for each i from the last down to 1): Hoán vị định mệnh and the Thần's tráo bài.
+ */
+export function dealRound(players: readonly HandPlayer[], rng: Rng): void {
+  const hands = players.map((p) => p.holeCards)
+  for (let i = hands.length - 1; i > 0; i--) {
+    const j = rng.int(i + 1)
+    const tmp = hands[i]!
+    hands[i] = hands[j]!
+    hands[j] = tmp
+  }
+  players.forEach((p, k) => {
+    p.holeCards = hands[k]!
+  })
 }
 
 /**

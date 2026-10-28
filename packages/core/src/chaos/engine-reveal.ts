@@ -2,7 +2,7 @@ import type { Rng } from '../cards/rng.js'
 import { dealCards, getPlayer, seatsClockwiseFrom } from '../hand/common.js'
 import type { GameEvent, HandPlayer, HandState } from '../hand/types.js'
 import {
-  addUid, effectOf, highestIndex, isGodSeat, isImmune, record, remaining, resolveDebuff, resolveHoleDebuff, showdownScore, type DebuffHarm,
+  addUid, dealRound, effectOf, highestIndex, isGodSeat, isImmune, record, remaining, resolveDebuff, resolveHoleDebuff, showdownScore, type DebuffHarm,
 } from './engine-core.js'
 import { applyGodCurse } from './engine-god.js'
 import type { ChaosEffectKind, ChaosHandState, PlannedEffect } from './types.js'
@@ -118,6 +118,12 @@ function handDebuffs(state: HandState, events: GameEvent[], user: number, rng: R
   for (const kind of HAND_DEBUFFS) {
     const e = effectOf(chaos, user, kind)
     if (!e) continue
+    // The Thần's own swap would give its Aces away (G11): spent for nothing before it is aimed, so no seat's shield,
+    // mirror, Bia đỡ đạn or one debuff is touched (as its Ngược dòng and Cướp đoạt).
+    if ((kind === 'swapHands' || kind === 'neighbourSwap') && isGodSeat(chaos, user)) {
+      record(chaos, events, user, e, [], 'fizzled')
+      continue
+    }
     const need = kind === 'lowerHole' ? 1 : kind === 'redealHole' ? (e.params.count ?? 1) : 0
     if (need > 0 && remaining(state) < need) {
       record(chaos, events, user, e, [], 'fizzled', { consume: null })
@@ -158,8 +164,7 @@ function handDebuff(state: HandState, kind: ChaosEffectKind, e: PlannedEffect, u
       return true
     }
     case 'swapHands': {
-      // A mirrored swap would trade the hand with itself; the Thần's own swap would give its Aces away (G11).
-      if (victim === user || isGodSeat(state.chaos!, user)) return false
+      if (victim === user) return false // a mirrored swap would trade the hand with itself
       const u = getPlayer(state, user)
       const mine = u.holeCards
       u.holeCards = v.holeCards
@@ -177,7 +182,7 @@ function handDebuff(state: HandState, kind: ChaosEffectKind, e: PlannedEffect, u
     // Đổi lá hàng xóm (BP-41): one random card of the holder's for one random card of the victim's.
     case 'neighbourSwap': {
       const u = getPlayer(state, user)
-      if (victim === user || isGodSeat(state.chaos!, user) || u.holeCards.length === 0 || v.holeCards.length === 0) return false
+      if (victim === user || u.holeCards.length === 0 || v.holeCards.length === 0) return false
       const i = rng.int(u.holeCards.length)
       const j = rng.int(v.holeCards.length)
       const mine = u.holeCards[i]!
@@ -209,16 +214,7 @@ function shuffleHoles(state: HandState, events: GameEvent[], user: number, e: Pl
     record(chaos, events, user, e, [], 'fizzled')
     return
   }
-  const hands = seats.map((p) => p.holeCards)
-  for (let i = hands.length - 1; i > 0; i--) {
-    const j = rng.int(i + 1)
-    const tmp = hands[i]!
-    hands[i] = hands[j]!
-    hands[j] = tmp
-  }
-  seats.forEach((p, k) => {
-    p.holeCards = hands[k]!
-  })
+  dealRound(seats, rng)
   record(chaos, events, user, e, seats.map((p) => p.seat).filter((s) => s !== user), 'applied')
 }
 

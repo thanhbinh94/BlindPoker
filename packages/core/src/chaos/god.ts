@@ -32,8 +32,8 @@ export const carpOf = (seat: ChaosSeat): HeldCard | undefined => seat.cards.find
  * The Cá chép hóa rồng card behind a reign, as an effect to record its lines and pay its crit with (the curse, the
  * ascension, the fall): the card is spent already, so its uid in `applied` or `blocked` takes nothing more from the seat.
  */
-export const reignEffect = (r: ChaosReign): PlannedEffect => ({
-  uid: r.uid, cardId: r.cardId, effect: 'carp', params: r.params, timing: 'wait', debuff: false, targets: [],
+export const reignEffect = (r: { uid: number; cardId: string; params?: Readonly<Record<string, number>> }): PlannedEffect => ({
+  uid: r.uid, cardId: r.cardId, effect: 'carp', params: r.params ?? {}, timing: 'wait', debuff: false, targets: [],
 })
 
 const reignOf = (card: HeldCard, seat: number, isBot: boolean): ChaosReign => ({ seat, isBot, cardId: card.cardId, uid: card.uid, params: card.params })

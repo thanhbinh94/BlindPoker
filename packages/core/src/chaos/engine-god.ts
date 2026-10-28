@@ -1,7 +1,7 @@
 import type { Rng } from '../cards/rng.js'
 import { seatsClockwiseFrom } from '../hand/common.js'
 import type { GameEvent, HandState } from '../hand/types.js'
-import { addUid, blockForSeat, isImmune, markTitle, record, showdownScore } from './engine-core.js'
+import { addUid, blockForSeat, dealRound, isImmune, markTitle, record, showdownScore } from './engine-core.js'
 import { reignEffect } from './god.js'
 import type { ChaosGodCurse } from './types.js'
 
@@ -23,7 +23,8 @@ import type { ChaosGodCurse } from './types.js'
  * 1. Rút bài: each such seat with two cards or more loses one at random (never the last).
  * 2. Thách đấu (🔓): the Thần's hand against each seat's, ranked as the showdown will: the loser owes the winner
  *    `curseWagers` fixed wagers (a tie owes nothing), pushed into `ChaosHandState.duels` marked `god` and paid at the
- *    settlement after every card's duel, stack to stack (`payTransfers`); each winner joins `outcomes.duelWins`.
+ *    settlement after every card's duel, stack to stack (`payTransfers`); each winner joins `outcomes.duelWins`. A seat's
+ *    Khiên blocks its duel even when that seat would have won it (Ruling 18: it blocks as for any debuff).
  * 3. Tráo bài: the hole hands of those seats are dealt round among them at random (each hand moves whole); fewer than two
  *    to move and it fizzles.
  */
@@ -79,16 +80,7 @@ export function applyGodCurse(state: HandState, events: GameEvent[], rng: Rng, c
     tell([])
     return
   }
-  const hands = moved.map((p) => p.holeCards)
-  for (let i = hands.length - 1; i > 0; i--) {
-    const j = rng.int(i + 1)
-    const tmp = hands[i]!
-    hands[i] = hands[j]!
-    hands[j] = tmp
-  }
-  moved.forEach((p, k) => {
-    p.holeCards = hands[k]!
-  })
+  dealRound(moved, rng)
   tell(moved.map((p) => p.seat))
 }
 
@@ -110,7 +102,7 @@ export function settleReigns(state: HandState, payoutBySeat: ReadonlyMap<number,
   for (const c of chaos.plan.carps ?? []) {
     if (!won(c.seat)) continue
     markTitle(chaos, c.seat, { demigod: true })
-    record(chaos, events, c.seat, reignEffect({ seat: c.seat, isBot: false, cardId: c.cardId, uid: c.uid, params: {} }), [], 'applied', { reign: 'demigod' })
+    record(chaos, events, c.seat, reignEffect(c), [], 'applied', { reign: 'demigod' })
   }
   const god = chaos.plan.god
   const p = god ? state.players.find((x) => x.seat === god.seat) : undefined

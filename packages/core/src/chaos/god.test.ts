@@ -408,6 +408,14 @@ describe('Review Focus 1: the Thần at the table', () => {
       expect(t.hole(0)).toEqual(parseCards(GOD))
       expect(t.hole(1)).toEqual(parseCards('3c 5d'))
     }
+    // Spent before it is aimed: the opponent's one-shot Khiên is not spent, nobody is hit, the line names nobody.
+    for (const id of ['d_swap_hands', 's_neighbour_swap']) {
+      const t = new Stage({ chaos: plan(2, { 0: { effects: [fx(id)] }, 1: { shield: 'shield' } }, { god: godOf(0) }), holes: [GOD, '3c 5d'] }).reveal(never)
+      expect(t.state.chaos!.blocked).not.toContain(701)
+      expect(t.state.chaos!.hit).toEqual([])
+      expect(t.applied(def(id).effect)).toEqual([expect.objectContaining({ seat: 0, outcome: 'fizzled', targets: [] })])
+      expect(t.hole(0)).toEqual(parseCards(GOD))
+    }
     const die = new Stage({ chaos: plan(2, { 0: { effects: [fx('g_fate_die')] } }, { god: godOf(0) }), holes: [GOD, '3c 5d'] }).reveal(script(0))
     expect(die.applied('fateDie')[0]).toMatchObject({ dice: [1], holeDelta: 0 })
     expect(die.hole(0)).toEqual(parseCards(GOD))
@@ -669,7 +677,7 @@ describe('Conservation with a Thần reigning (seeded)', () => {
     let table: ChaosTableState = EMPTY_CHAOS_TABLE
     let carry = 0
     let outside = 0
-    const seen = { ascended: 0, godDuelsPaid: 0, falls: 0, demigods: 0, godCrits: 0, curses: new Set<number>() }
+    const seen = { ascended: 0, godDuelsPaid: 0, falls: 0, demigods: 0, freshDemigods: 0, godCrits: 0, curses: new Set<number>() }
     const total = (): number => seated.reduce((a, s) => a + s.stack, 0) + carry - outside
     const start = total()
     for (let h = 0; h < 300; h++) {
@@ -727,6 +735,10 @@ describe('Conservation with a Thần reigning (seeded)', () => {
       }
       // A demigod mark in the hand and a reign started by afterHand agree.
       for (const t of chaos.titles ?? []) if (t.demigod) expect(after.table.demigods.some((d) => d.seat === t.seat && d.handsLeft === CARP.params.demigodHands)).toBe(true)
+      // …and the other way: every reign afterHand started this hand has its mark.
+      const fresh = after.table.demigods.filter((d) => !planned.table.demigods.some((x) => x.seat === d.seat && x.uid === d.uid))
+      for (const d of fresh) expect(chaos.titles?.some((t) => t.seat === d.seat && t.demigod)).toBe(true)
+      seen.freshDemigods += fresh.length
       if (chaos.outcomes?.dethroned) expect(after.table.god).toBeNull()
       for (const d of after.debits) {
         seated.find((x) => x.seat === d.seat)!.stack -= d.amount
@@ -749,6 +761,7 @@ describe('Conservation with a Thần reigning (seeded)', () => {
     expect(seen.godDuelsPaid).toBeGreaterThan(0)
     expect(seen.falls).toBeGreaterThan(0)
     expect(seen.demigods).toBeGreaterThan(0)
+    expect(seen.freshDemigods).toBe(seen.demigods)
     expect(seen.godCrits).toBeGreaterThan(0)
     expect(seen.curses.size).toBe(3)
   })
