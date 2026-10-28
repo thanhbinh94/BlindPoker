@@ -435,13 +435,13 @@ describe('credit()', () => {
   it('keeps the books: balances are untouched, the sources and the table transfers cancel, and the stack gain equals the sources', async () => {
     const [a, b] = [await seedPlayer(), await seedPlayer()]
     let paid = 0
-    for (const [i, [who, amount, reason]] of ([[a, 30_000, 'chaos_crit'], [b, 80_000, 'chaos_fortune'], [a, 90_000, 'chaos_crit'], [b, 5_000, 'chaos_rescue'], [a, 2_000, 'chaos_rescue']] as const).entries()) {
+    for (const [i, [who, amount, reason]] of ([[a, 30_000, 'chaos_crit'], [b, 80_000, 'chaos_fortune'], [a, 90_000, 'chaos_crit'], [b, 5_000, 'chaos_rescue'], [a, 2_000, 'chaos_rescue'], [b, 6_000, 'chaos_jackpot']] as const).entries()) {
       paid += (await credit(who, amount, reason, `k${String(i)}`)).credited
     }
     const [totals] = rowsOf<{ balances: string | number; ledger: string | number; sources: string | number; toTable: string | number }>(
       await db.execute(sql`select (select coalesce(sum(balance), 0) from players) as balances,
         (select coalesce(sum(amount), 0) from point_transactions) as ledger,
-        (select coalesce(sum(amount), 0) from point_transactions where reason in ('chaos_rescue', 'chaos_crit', 'chaos_fortune')) as sources,
+        (select coalesce(sum(amount), 0) from point_transactions where reason in ('chaos_rescue', 'chaos_crit', 'chaos_fortune', 'chaos_jackpot')) as sources,
         (select coalesce(sum(amount), 0) from point_transactions where reason = 'chaos_to_table') as "toTable"`),
     )
     expect(Number(totals!.balances)).toBe(2 * BALANCE)
@@ -450,6 +450,7 @@ describe('credit()', () => {
     expect(Number(totals!.sources)).toBe(paid)
     expect(Number(totals!.toTable)).toBe(-paid)
     // The second Bạo kích of the first player is cut to the cap (70 000 of 90 000), and the Cấp cứu after it finds none left.
-    expect(paid).toBe(30_000 + 80_000 + 70_000 + 5_000 + 0)
+    // BP-41: a jackpot is a source like the others; the second player's cap still had 6 000 left.
+    expect(paid).toBe(30_000 + 80_000 + 70_000 + 5_000 + 0 + 6_000)
   })
 })

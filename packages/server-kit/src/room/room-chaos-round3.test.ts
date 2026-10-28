@@ -209,6 +209,53 @@ describe('BP-41 room: the Thần across hands', () => {
     expect(ofEvent(h, 'a', 'CHAOS_TABLE').at(-1)!.table).toEqual(EMPTY_VIEW)
     expect(lastIndex(h, 'a', isRoom('CHAOS_TABLE'))).toBeGreaterThan(lastIndex(h, 'a', isRoom('CHAOS_STATE')))
   })
+
+  /** A table where the guest `a` is the Thần from the first hand, in its decision. */
+  async function guestReigns(): Promise<RoomHarness> {
+    const h = createRoomHarness({ ...CHAOS, maxPlayers: 5 }, { seed: 9, chaos: { cards: RESCUE_ONLY, config: SILVER_ONLY } })
+    await seat(h, ['h', 'a'])
+    await h.room.startGame('h')
+    give(h, 'a', CARP_FULL)
+    await pickAll(h, ['h', 'a'])
+    expect(chaosOf(h).table.god?.seat).toBe(1)
+    expect(h.room.snapshot('a').hand!.phase).toBe('DECISION')
+    return h
+  }
+
+  it('Ruling 14 and a kick: the room refuses to kick a seat out of the current hand, so a Thần is never kicked out of its decision; after the hand it can be, and its reign ends', async () => {
+    const h = await guestReigns()
+    await expect(h.room.kick('h', 'a')).rejects.toMatchObject({ code: 'GAME_IN_PROGRESS' })
+    expect(live(h).players.find((p) => p.seat === 1)!.decision).toBeNull()
+    await playOut(h)
+    await h.room.kick('h', 'a')
+    expect(h.room.players.get('a')).toBeUndefined()
+    expect(ofEvent(h, 'h', 'CHAOS_TABLE').at(-1)!.table).toEqual(EMPTY_VIEW)
+  })
+
+  it('a seat sitting the hand out that leaves mid-hand: the hand settles without it, nothing is logged as an error (7a M3)', async () => {
+    const h = await guestReigns()
+    await playOut(h)
+    await h.room.sitOut('h', true)
+    await nextHand(h, ['h', 'a'])
+    expect(live(h).players.map((p) => p.playerId)).not.toContain('h')
+    // The host sitting out leaves while the hand runs (it is in no hand, so it goes at once).
+    await h.room.leave('h')
+    await playOut(h)
+    expect(h.room.players.get('h')).toBeUndefined()
+    expect(h.logs.filter((l) => l.level === 'error')).toEqual([])
+    expect(h.repos.hands.at(-1)!.players.map((p) => p.playerId)).not.toContain('h')
+  })
+
+  it('Ruling 14 by a lapsed reconnect: a Thần whose connection does not come back in time plays, not folds', async () => {
+    const h = await guestReigns()
+    await h.room.onDisconnect('a')
+    h.clock.advance(1_000) // the harness's reconnect window, well inside the 15 s decision clock
+    await tick(h)
+    expect(live(h).players.find((p) => p.seat === 1)!.decision).toBe('play')
+    await playOut(h)
+    const acted = gameEvents(h, 'h').filter((e): e is Extract<GameEvent, { type: 'PLAYER_ACTED' }> => e.type === 'PLAYER_ACTED')
+    expect(acted.find((e) => e.seat === 1)).toMatchObject({ action: { kind: 'play' }, timedOut: false })
+  })
 })
 
 describe('BP-41 room: the Bán Thần', () => {
@@ -590,6 +637,9 @@ describe('BP-41 room: bots and money with every round-three card on', () => {
     expect(diceSinks(h)).toEqual(humanBurns(h))
     expect(h.repos.entries.some((e) => e.entry.reason === 'chaos_jackpot')).toBe(true)
     expect(ofEvent(h, 'h', 'CHAOS_HERALD').some((e) => e.kind === 'god')).toBe(true)
+    // …and stack to stack: a duel, Ép chia thưởng, Thuế thắng or a bomb paid points at least once while the books held.
+    const paid = gameEvents(h, 'h').flatMap((e) => (e.type === 'CHAOS_APPLIED' ? (e.transfers ?? []) : [])).filter((x) => x.amount > 0)
+    expect(paid.length).toBeGreaterThan(0)
   })
 })
 

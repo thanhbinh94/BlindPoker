@@ -55,7 +55,14 @@ export function chaosCardsFromEnv(
   if (typeof changes !== 'object' || changes === null || Array.isArray(changes)) throw new Error(`E2E_CHAOS_CARDS ${path}: expected an object of card ids`)
   const cards = shipped()
   const known = new Set(cards.map((c) => c.id))
-  for (const id of Object.keys(changes)) if (!known.has(id)) throw new Error(`E2E_CHAOS_CARDS ${path}: not a chaos card: ${id}`)
+  for (const [id, change] of Object.entries(changes as Record<string, unknown>)) {
+    if (!known.has(id)) throw new Error(`E2E_CHAOS_CARDS ${path}: not a chaos card: ${id}`)
+    // Each entry is an object (`null`, a number or a list would fail later with a bare TypeError that names no file).
+    if (typeof change !== 'object' || change === null || Array.isArray(change)) throw new Error(`E2E_CHAOS_CARDS ${path}: ${id}: expected an object`)
+    const { enabled, params } = change as { enabled?: unknown; params?: unknown }
+    if (enabled !== undefined && typeof enabled !== 'boolean') throw new Error(`E2E_CHAOS_CARDS ${path}: ${id}.enabled: expected true or false`)
+    if (params !== undefined && (typeof params !== 'object' || params === null || Array.isArray(params))) throw new Error(`E2E_CHAOS_CARDS ${path}: ${id}.params: expected an object`)
+  }
   const merged = cards.map((c) => {
     const change = changes[c.id]
     if (change === undefined) return c

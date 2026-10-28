@@ -59,4 +59,13 @@ describe('chaosCardsFromEnv — the ops pack lays its changes over the shipped c
     const allDiamondsOff = Object.fromEntries(shipped.filter((c) => c.tier === 'diamond').map((c) => [c.id, { enabled: false }]))
     expect(() => chaosCardsFromEnv({ E2E_CHAOS_CARDS: 'c.json' }, () => shipped, files({ 'c.json': JSON.stringify(allDiamondsOff) }))).toThrow(/diamond has 0 enabled cards/)
   })
+
+  it('refuses an entry that is not an object, or whose enabled or params is the wrong kind, naming the file and the card', () => {
+    const shipped = loadChaosCatalogue()
+    const refused = (body: string) => () => chaosCardsFromEnv({ E2E_CHAOS_CARDS: 'd.json' }, () => shipped, files({ 'd.json': body }))
+    expect(refused('{"d_carp":null}')).toThrow(/E2E_CHAOS_CARDS .*d\.json: d_carp: expected an object/)
+    expect(refused('{"d_carp":[1]}')).toThrow(/d\.json: d_carp: expected an object/)
+    expect(refused('{"d_carp":{"enabled":"yes"}}')).toThrow(/d\.json: d_carp\.enabled/)
+    expect(refused('{"d_carp":{"params":null}}')).toThrow(/d\.json: d_carp\.params/)
+  })
 })
