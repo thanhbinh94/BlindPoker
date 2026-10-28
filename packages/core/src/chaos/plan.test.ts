@@ -307,13 +307,15 @@ describe('planHand', () => {
     it('takes the table state in and gives it back (A3); absent, the table is empty', () => {
       expect(plan({ 0: EMPTY_CHAOS_SEAT, 1: EMPTY_CHAOS_SEAT }).table).toEqual(EMPTY_CHAOS_TABLE)
       const table: ChaosTableState = {
-        god: { seat: 1, playerId: 'p1', isBot: false, handsLeft: 5, curse: 2 },
+        god: { seat: 1, playerId: 'p1', isBot: false, handsLeft: 5, curse: 2, cardId: 'd_carp', uid: 9, params: {} },
         demigods: [],
         bombs: [{ owner: 0, carrier: 1, handsLeft: 3, cardId: 'x_bomb', uid: 5 }],
       }
       const r = planHand({ seats: [{ seat: 0, isBot: false, chaos: EMPTY_CHAOS_SEAT }, { seat: 1, isBot: false, chaos: EMPTY_CHAOS_SEAT }], rules: RULES, pool, rng: seededRng(1), nextUid: counter(1), table })
       expect(r.table).toEqual(table)
-      expect(r.plan.noFoldSeats).toBeUndefined()
+      // Task 6: the Thần acts this hand, so nobody may fold on this "Chơi hoặc bỏ" table.
+      expect(r.plan.god).toMatchObject({ seat: 1, curse: 2 })
+      expect(r.plan.noFoldSeats).toEqual([0, 1])
     })
   })
 })

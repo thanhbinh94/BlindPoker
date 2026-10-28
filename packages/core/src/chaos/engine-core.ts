@@ -3,7 +3,7 @@ import type { Rng } from '../cards/rng.js'
 import type { HandEvaluation } from '../evaluator/evaluator.js'
 import type { GameEvent, HandState } from '../hand/types.js'
 import { evaluateAny, evaluateWild } from './evaluate.js'
-import type { ChaosEffectKind, ChaosHandState, ChaosOutcome, ChaosTransfer, PlannedEffect } from './types.js'
+import type { ChaosEffectKind, ChaosHandState, ChaosOutcome, ChaosReignKind, ChaosTitles, ChaosTransfer, PlannedEffect } from './types.js'
 
 /**
  * What every chaos applier shares (`engine.ts`, `engine-round3.ts`): the deck reserve, the plan lookups, the record of
@@ -47,6 +47,8 @@ export interface RecordExtra {
   wagers?: number
   stake?: number
   transfers?: ChaosTransfer[]
+  /** BP-41 Cá chép hóa rồng: the line tells a reign (on the event and in the summary). */
+  reign?: ChaosReignKind
   consume?: 'applied' | 'blocked' | null
 }
 
@@ -68,10 +70,26 @@ export const highestIndex = (cards: readonly Card[]): number => cards.reduce((hi
 /**
  * BP-41 spec §3 "miễn nhiễm rút bài" — the one immunity predicate. A seat it names is out of reach this hand of every
  * effect that takes, lowers, swaps, shuffles, redeals, curses or plunders its hole cards (Liều ăn nhiều while it lasts,
- * Đảo bài on a −1 hand: `ChaosHandState.immune`). Every such applier asks this, and only this: Task 6 extends it for the
- * Thần.
+ * Đảo bài on a −1 hand: `ChaosHandState.immune`), and the Thần Bài whose powers act this hand (BP-41 §4.2 G11:
+ * `plan.god`). Every such applier asks this, and only this.
  */
-export const isImmune = (chaos: ChaosHandState, seat: number): boolean => chaos.immune?.includes(seat) ?? false
+export const isImmune = (chaos: ChaosHandState, seat: number): boolean => (chaos.immune?.includes(seat) ?? false) || isGodSeat(chaos, seat)
+
+/** BP-41 §4.2: `seat` is the Thần whose powers act this hand. */
+export const isGodSeat = (chaos: ChaosHandState, seat: number): boolean => chaos.plan.god?.seat === seat
+
+/** BP-41 A12: adds a title mark for `seat` to this hand's (`ChaosHandState.titles`), merged with the seat's others. */
+export function markTitle(chaos: ChaosHandState, seat: number, mark: ChaosTitles): void {
+  const titles = (chaos.titles ??= [])
+  const row = titles.find((t) => t.seat === seat)
+  if (!row) {
+    titles.push({ seat, ...mark })
+    return
+  }
+  if (mark.ascended) row.ascended = true
+  if (mark.demigod) row.demigod = true
+  if (mark.slew) row.slew = (row.slew ?? 0) + mark.slew
+}
 
 /**
  * Moves the undealt card at `at` to the deck's dealt end and returns it: the deck stays all 52 cards and the deal goes on
@@ -97,8 +115,9 @@ export function record(chaos: ChaosHandState, events: GameEvent[], seat: number,
   if (extra.stake !== undefined) ev.stake = extra.stake
   if (extra.privateTo !== undefined) ev.privateTo = extra.privateTo.slice()
   if (extra.transfers !== undefined) ev.transfers = extra.transfers.map((t) => ({ ...t }))
+  if (extra.reign !== undefined) ev.reign = extra.reign
   events.push(ev)
-  chaos.used.push({ seat, cardId: e.cardId, effect: e.effect, outcome, targets: targets.slice() })
+  chaos.used.push({ seat, cardId: e.cardId, effect: e.effect, outcome, targets: targets.slice(), ...(extra.reign === undefined ? {} : { reign: extra.reign }) })
   addUid(chaos.recorded, e.uid)
   const consume = extra.consume === undefined ? 'applied' : extra.consume
   if (consume === 'applied') addUid(chaos.applied, e.uid)

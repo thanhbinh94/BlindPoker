@@ -391,9 +391,10 @@ describe('afterHand — BP-41 plumbing', () => {
     const plain = settle([seat(EMPTY_CHAOS_SEAT, { outcome: 'win', net: 100 })])
     expect(plain.table).toEqual(EMPTY_CHAOS_TABLE)
     expect(plain.debits).toEqual([])
-    const table: ChaosTableState = { god: null, demigods: [{ seat: 0, playerId: 'p0', isBot: false, handsLeft: 4 }], bombs: [] }
+    const table: ChaosTableState = { god: null, demigods: [{ seat: 0, playerId: 'p0', isBot: false, handsLeft: 4, cardId: 'd_carp', uid: 9, params: {} }], bombs: [] }
     const r = settle([seat(EMPTY_CHAOS_SEAT, { outcome: 'win', net: 100 })], { table, outcomes: { dethroned: [0] } })
-    expect(r.table).toEqual(table)
+    // Task 6: the reign counts the hand down; no Thần acted, so the dethrone outcome gives nothing.
+    expect(r.table).toEqual({ ...table, demigods: [{ ...table.demigods[0]!, handsLeft: 3 }] })
     // Nothing else moves: the same seat as without them.
     expect(r.seats.get(0)).toEqual(plain.seats.get(0))
   })

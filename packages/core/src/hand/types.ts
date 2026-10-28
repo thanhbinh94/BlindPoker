@@ -1,6 +1,6 @@
 import type { Card } from '../cards/cards.js'
 import type { PotResult } from '../betting/pots.js'
-import type { ChaosEffectKind, ChaosHandState, ChaosOutcome, ChaosTransfer, ChaosUse } from '../chaos/types.js'
+import type { ChaosEffectKind, ChaosHandState, ChaosOutcome, ChaosReignKind, ChaosTransfer, ChaosUse } from '../chaos/types.js'
 import type { HandCategory } from '../evaluator/evaluator.js'
 
 export interface HoldemRules {
@@ -191,12 +191,14 @@ export type GameEvent =
    * `privateTo` (BP-41 Bia đỡ đạn handing a private deal debuff on): the only seats `filterEvent` lets the event reach.
    * `transfers` (BP-41 Task 5b, told at the settlement, always public): the points the card moved from one stack to
    * another — a duel paid, Ép chia thưởng, Thuế thắng, a bomb gone off — each as taken (capped at the payer's stack,
-   * possibly 0); `amount` is then their sum. `SETTLEMENT.stacks` already include them.
+   * possibly 0); `amount` is then their sum. `SETTLEMENT.stacks` already include them. `reign` (BP-41 Cá chép hóa rồng,
+   * public, effect `carp`): `seat` became the Thần at the deal (`god`), a Bán Thần at the settlement (`demigod`), or the
+   * Thần at `seat` fell to the seats in `targets` (`godslain`). The Thần's curse is told as `carp` with no `reign`.
    */
   | {
     type: 'CHAOS_APPLIED'; seat: number; cardId: string; effect: ChaosEffectKind; targets: number[]; outcome: ChaosOutcome; community?: Card[]
     amount?: number; dice?: number[]; holeDelta?: number; wild?: Card; off?: string; wagers?: number; stake?: number; privateTo?: number[]
-    transfers?: ChaosTransfer[]
+    transfers?: ChaosTransfer[]; reign?: ChaosReignKind
   }
   /** "Nhìn trộm": the next board cards, for `seat` only (`filterEvent` blanks them for everyone else). */
   | { type: 'CHAOS_PEEK'; seat: number; cards: Card[] }

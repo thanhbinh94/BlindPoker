@@ -15,10 +15,14 @@ export const tierFromParam = (n: number | undefined): ChaosTier | undefined => (
 export const farmHandsOf = (cards: readonly HeldCard[]): number =>
   cards.find((c) => c.effect === 'farm' && c.handsLeft !== null)?.handsLeft ?? 0
 
-/** A card as a seat holds it, under `uid`: a duration card starts with its full `hands`. */
+/**
+ * A card as a seat holds it, under `uid`: a duration card starts with its full `hands`. BP-41 Cá chép hóa rồng starts with
+ * its `energy0` % of energy (0 in production data; the ops pack sets 100 to force a Thần, A-ops), at most 100.
+ */
 export const toHeld = (def: ChaosCardDef, uid: number): HeldCard => ({
   uid, cardId: def.id, tier: def.tier, effect: def.effect, params: def.params, timing: def.timing, debuff: def.debuff,
   handsLeft: def.params.hands ?? null,
+  ...(def.effect === 'carp' ? { charge: Math.max(0, Math.min(100, def.params.energy0 ?? 0)) } : {}),
 })
 
 /**

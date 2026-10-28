@@ -232,7 +232,38 @@ export interface ChaosHandPlan {
    * Absent = none.
    */
   bombs?: ChaosBomb[]
+  /**
+   * BP-41 §4.2 (Task 6): the Thần Bài whose powers act this hand — dealt in and not frozen (a Thần sitting the hand out or
+   * frozen has none that hand, though the reign still counts it). All Aces at the deal, the protection (`isImmune`), the
+   * curse while `curse` is set, the crit on a win, nobody folds on a "Chơi hoặc bỏ" table (`noFoldSeats`), and the
+   * dethrone check at the settlement. `ascended`: this is the hand the seat became the Thần. Absent = none.
+   */
+  god?: ChaosReign & { curse: ChaosGodCurse | null; ascended?: true }
+  /** BP-41 §4.3: the Bán Thần acting this hand (dealt in, neither frozen nor in Nhật thực's dark). Absent = none. */
+  demigods?: ChaosReign[]
+  /**
+   * BP-41 §4.1: each seat whose Cá chép hóa rồng is live this hand (dealt in, neither frozen nor dark, not the Thần): a
+   * pot it wins makes it a Bán Thần from the next hand (the title mark and the line in the summary are the engine's,
+   * the reign is `afterHand`'s). Absent = none.
+   */
+  carps?: { seat: number; uid: number; cardId: string }[]
 }
+
+/**
+ * BP-41 §4.2–§4.3: who reigns, and the Cá chép hóa rồng card that made it (`cardId`, `uid`; the card itself is spent) with
+ * its params — the crit odds (`p2`/`p3`/`p4` for the Thần, `b2`/`b3` for a Bán Thần), the Bán Thần's `sets`, the curse's
+ * `curseHands`/`curseWagers`, the dethrone's `slayCards`.
+ */
+export interface ChaosReign {
+  seat: number
+  isBot: boolean
+  cardId: string
+  uid: number
+  params: Readonly<Record<string, number>>
+}
+
+/** BP-41 §4.5: the three moments the whole room is told of (`CHAOS_HERALD.kind`, `CHAOS_APPLIED.reign`). */
+export type ChaosReignKind = 'god' | 'demigod' | 'godslain'
 
 /**
  * One Bom nổ chậm on the table (BP-41 §6.1, A3): planted by `owner` on `carrier` (never the owner), `handsLeft` hands
@@ -282,6 +313,11 @@ export interface ChaosUse {
   outcome: ChaosOutcome
   /** The seats the card was aimed at (empty when it has no target), so the tooltip can say who it hit. */
   targets: number[]
+  /**
+   * BP-41 Cá chép hóa rồng: this line tells a reign — the seat became the Thần (`god`, at the deal), a Bán Thần (`demigod`,
+   * at the settlement), or the Thần fell to `targets` (`godslain`, at the settlement). Absent on every other line.
+   */
+  reign?: ChaosReignKind
 }
 
 /**
@@ -451,12 +487,14 @@ export type ChaosGodCurse = 1 | 2 | 3
  */
 export interface ChaosTableState {
   /**
-   * The Thần Bài, or null. `handsLeft`: hands of the reign still to play (5 at the ascension). `curse`: drawn once at the
-   * ascension; it acts while `handsLeft > 2` (the first 3 hands) and is null afterwards.
+   * The Thần Bài, or null. `handsLeft`: hands of the reign still to play (5 at the ascension), counted by every hand the
+   * table settles while it reigns — one it sits out or is frozen in included (Task 6 ruling). `curse`: drawn once at the
+   * ascension; it acts while `handsLeft > godHands − curseHands` (the first 3 hands) and is null afterwards. The card
+   * that made it is spent; its params ride here.
    */
-  god: { seat: number; playerId: string; isBot: boolean; handsLeft: number; curse: ChaosGodCurse | null } | null
+  god: (ChaosReign & { playerId: string; handsLeft: number; curse: ChaosGodCurse | null }) | null
   /** The Bán Thần, one per seat at most, each with the hands of its reign still to play (5 at the start). */
-  demigods: { seat: number; playerId: string; isBot: boolean; handsLeft: number }[]
+  demigods: (ChaosReign & { playerId: string; handsLeft: number })[]
   /**
    * Every Bom nổ chậm in play (two holders may each plant one, A3): planted by `owner`, held by `carrier` (never the
    * owner), `handsLeft` hands still to play (the plant hand was the first of its `fuse`); `planHand` passes it to another

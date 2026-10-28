@@ -8,4 +8,5 @@ export { armBonus, canInsertThisHand, clearUnsettledHand, firesFromArmed, MID_HA
 export { addRevealEffect } from './engine.js'
 export { planHand, type PlanSeatInput } from './plan.js'
 export { afterHand, type AfterHandSeat, type AfterHandResult } from './settle.js'
+export { endReign } from './god.js'
 export { CHAOS_CARDS_SPEC } from './fixtures.js'

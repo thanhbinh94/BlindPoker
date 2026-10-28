@@ -5,9 +5,11 @@ import { dealCards, seatsClockwiseFrom, type SettleHooks } from '../hand/common.
 import type { GameEvent, HandPlayer, HandState } from '../hand/types.js'
 import { canInsertThisHand } from './bonus.js'
 import {
-  DEAL_RESERVE, addUid, canDealAtDeal, effectOf, effectsOf, evaluateChaosSeat, lowestIndex, record, remaining, reserveOf, resolveDebuff,
-  takeFromDeck,
+  DEAL_RESERVE, addUid, canDealAtDeal, effectOf, effectsOf, evaluateChaosSeat, isGodSeat, lowestIndex, markTitle, record, remaining,
+  reserveOf, resolveDebuff, takeFromDeck,
 } from './engine-core.js'
+import { settleReigns } from './engine-god.js'
+import { reignEffect } from './god.js'
 import { applyHoleDebuffs, emitHawkEyes, recordEclipse, resolveSpoilers } from './engine-round3.js'
 import { recordBackfires } from './engine-reveal.js'
 import { markNoFold } from './engine-stake.js'
@@ -101,7 +103,7 @@ const topRank = (cards: readonly Card[]): number => Math.max(...cards.map(rankOf
 function dealBuff(state: HandState, p: HandPlayer, e: PlannedEffect, keepTopRank: number | null, rng: Rng): ChaosOutcome {
   const hole = p.holeCards
   const chaos = state.chaos!
-  if (BREAK_ACES.has(e.effect) && chaos.outcomes?.acesDealt?.includes(p.seat)) return 'fizzled'
+  if (BREAK_ACES.has(e.effect) && (chaos.outcomes?.acesDealt?.includes(p.seat) || isGodSeat(chaos, p.seat))) return 'fizzled'
   switch (e.effect) {
     case 'swapLowest': {
       if (!canDealAtDeal(state, 1)) return 'fizzled'
@@ -177,6 +179,16 @@ function dealBuff(state: HandState, p: HandPlayer, e: PlannedEffect, keepTopRank
 }
 
 /**
+ * BP-41 §4.3: a Bán Thần acting this hand keeps the best of its `sets` (3) sets, as "Giữ bộ tốt hơn" — silent (the
+ * table knows its reign from the table state) and fizzling quietly when the deck cannot spare the sets.
+ */
+function demigodSets(state: HandState, p: HandPlayer, keepTopRank: number | null, rng: Rng): void {
+  const d = state.chaos!.plan.demigods?.find((x) => x.seat === p.seat)
+  if (!d) return
+  dealBuff(state, p, { ...reignEffect(d), effect: 'bestOfN', params: { sets: d.params.sets ?? 3 } }, keepTopRank, rng)
+}
+
+/**
  * BP-41 spec §3 "Lá A có hạn" (A4): takes `n` cards for one seat out of the undealt deck before the hole cards are
  * dealt — an Ace while one is left, else the highest card left (the first of its rank in deck order). Each card moves
  * to the deck's dealt end, so the deck stays all 52 cards and the deal goes on from the rest.
@@ -205,9 +217,10 @@ const markImmune = (chaos: ChaosHandState, seat: number): void => addUid((chaos.
  * 2. Each seat's hole count, clockwise from the button: Liều ăn nhiều −`count`, Đảo bài ±`count` by its phase, Hên xui
  *    ±`count` on a coin of `odds` %. A −1 that would leave no hole card fizzles; a +1 the deck cannot spare above the
  *    reserve fizzles. Liều ăn nhiều, and Đảo bài on a −1 hand, make the seat immune to the steal family this hand.
- * 3. The Aces (spec §3 "Lá A có hạn"): the Thần's first (Task 6 plugs its claim in here, before every other), then each
- *    Siêu cộng dồn, clockwise, that rolls under its charge — all its hole cards (`all`) or `aces` of them — taken out of
- *    the deck before anyone is dealt (`takeAces`). A seat that got them is in `outcomes.acesDealt`.
+ * 3. The Aces (spec §3 "Lá A có hạn"): the Thần's first — every hole card of its count (Task 6; on the hand it ascended
+ *    the table is told, `reign: 'god'`, and the seat takes its `ascended` mark) — then each Siêu cộng dồn (the Thần's own
+ *    aside), clockwise, that rolls under its charge — all its hole cards (`all`) or `aces` of them — taken out of the deck
+ *    before anyone is dealt (`takeAces`). A Siêu cộng dồn seat that got them is in `outcomes.acesDealt`.
  * 4. The deal, round by round as a plain hand, each seat up to its count (Aces already in hand count).
  * 5. `applyDealEffects`.
  * Before all of it (BP-41 Task 3b, the plan's second pass): Nhật thực is told (`planHand` already switched every other
@@ -269,10 +282,21 @@ export function dealChaosHand(state: HandState, events: GameEvent[], rng: Rng): 
     counts.set(p.seat, n)
   }
 
-  // Task 6: the Thần's Aces are claimed here, before any Siêu cộng dồn.
+  // BP-41 §4.2 (Task 6): the Thần's Aces first, all of its hole cards; on its first hand the table is told it ascended.
+  const god = chaos.plan.god
+  const godP = god ? order.find((p) => p.seat === god.seat) : undefined
+  if (god && godP) {
+    godP.holeCards = takeAces(state, counts.get(godP.seat)!)
+    if (god.ascended) {
+      markTitle(chaos, god.seat, { ascended: true })
+      record(chaos, events, god.seat, reignEffect(god), [], 'applied', { reign: 'god' })
+    }
+  }
   for (const p of order) {
     const e = effectOf(chaos, p.seat, 'acesCharge')
-    if (!e) continue
+    // The Thần holds Aces already: its own Siêu cộng dồn does not roll (silent; the card keeps its charge and counts the
+    // hand down as any duration card).
+    if (!e || isGodSeat(chaos, p.seat)) continue
     if (rng.int(100) >= (e.charge ?? 0)) {
       record(chaos, events, p.seat, e, [], 'fizzled')
       continue
@@ -305,6 +329,8 @@ export function applyDealEffects(state: HandState, events: GameEvent[], rng: Rng
     // The rank "Chất bổ" promised once it applied: "Đồng hoa" after it must not take that card away.
     let keepTopRank: number | null = null
     for (const kind of DEAL_BUFFS) {
+      // BP-41 §4.3: a Bán Thần keeps the best of its `sets` sets, right after the seat's own "Giữ bộ tốt hơn".
+      if (kind === 'riskyHand') demigodSets(state, p, keepTopRank, rng)
       const e = effects.find((x) => x.effect === kind)
       if (!e) continue
       const outcome = dealBuff(state, p, e, keepTopRank, rng)
@@ -432,8 +458,9 @@ export function chaosSettleHooks(state: HandState): SettleHooks | undefined {
     // A9 / Ruling 4: any number of cards, and Lá ma's wild card while its seat still holds it.
     evaluateSeat: (seat, cards) => evaluateChaosSeat(state, seat, cards),
     beforePayout: (pots, winners) => insure(state, pots, winners),
-    // BP-41 A5: duels, Ép chia thưởng, Thuế thắng and the bombs, stack to stack once the pots are paid.
-    afterPayout: (payouts) => payTransfers(state, payouts),
+    // BP-41 A5: duels, Ép chia thưởng, Thuế thắng and the bombs, stack to stack once the pots are paid; then (Task 6) a
+    // Bán Thần made and a Thần dethroned, on who won a pot.
+    afterPayout: (payouts) => [...payTransfers(state, payouts), ...settleReigns(state, payouts)],
     beforeSettlement: () => [{ type: 'CHAOS_SUMMARY', used: chaos.used.map((u) => ({ ...u })) }],
   }
 }

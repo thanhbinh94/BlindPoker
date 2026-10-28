@@ -10,8 +10,8 @@ import type { ChaosSnapshot, RoomEvent, ServerMessage } from './messages.js'
  */
 describe('BP-41 protocol fixtures', () => {
   const table: ChaosTableState = {
-    god: { seat: 1, playerId: 'p1', isBot: false, handsLeft: 5, curse: 1 },
-    demigods: [{ seat: 3, playerId: 'p3', isBot: true, handsLeft: 2 }],
+    god: { seat: 1, playerId: 'p1', isBot: false, handsLeft: 5, curse: 1, cardId: 'd_carp', uid: 7, params: {} },
+    demigods: [{ seat: 3, playerId: 'p3', isBot: true, handsLeft: 2, cardId: 'd_carp', uid: 8, params: {} }],
     bombs: [{ owner: 0, carrier: 2, handsLeft: 1, cardId: 'd_bomb', uid: 4 }],
   }
 

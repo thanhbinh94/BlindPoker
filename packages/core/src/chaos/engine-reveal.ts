@@ -2,8 +2,9 @@ import type { Rng } from '../cards/rng.js'
 import { dealCards, getPlayer, seatsClockwiseFrom } from '../hand/common.js'
 import type { GameEvent, HandPlayer, HandState } from '../hand/types.js'
 import {
-  addUid, effectOf, highestIndex, isImmune, record, remaining, resolveDebuff, resolveHoleDebuff, showdownScore, type DebuffHarm,
+  addUid, effectOf, highestIndex, isGodSeat, isImmune, record, remaining, resolveDebuff, resolveHoleDebuff, showdownScore, type DebuffHarm,
 } from './engine-core.js'
+import { applyGodCurse } from './engine-god.js'
 import type { ChaosEffectKind, ChaosHandState, PlannedEffect } from './types.js'
 
 /**
@@ -28,6 +29,9 @@ import type { ChaosEffectKind, ChaosHandState, PlannedEffect } from './types.js'
  * 6. Borrowed cards (`borrowHole`).
  * 7. Duels (`duel`, Thách đấu bạc / vàng): the hands are final now; each duel compares two hands as the showdown will
  *    and records what the loser owes (`ChaosHandState.duels`; the points move at the settlement, Task 5b).
+ * The Thần's curse (BP-41 §4.2, Task 6, `applyGodCurse`) takes its place among them: rút bài closes step 1, tráo bài opens
+ * step 2, thách đấu closes step 7. The Thần's own hand is out of reach of every step (`isImmune`), its own cards' too:
+ * a swap, Ngược dòng or Xúc xắc định mệnh's low roll that would change the Thần's hand changes nothing.
  * The settlement hooks (`chaosSettleHooks`: insurance, the summary) follow in `settle`; `afterHand` reads the outcomes
  * (Xúc xắc định mệnh's crit flag, the duel wins).
  */
@@ -40,6 +44,8 @@ export function applyRevealEffects(state: HandState, events: GameEvent[], rng: R
 
   recordBackfires(state, events)
   for (const user of order) handDebuffs(state, events, user.seat, rng)
+  applyGodCurse(state, events, rng, 1)
+  applyGodCurse(state, events, rng, 3)
   for (const user of order) {
     const e = effectOf(chaos, user.seat, 'shuffleHoles')
     if (e) shuffleHoles(state, events, user.seat, e, rng)
@@ -76,6 +82,7 @@ export function applyRevealEffects(state: HandState, events: GameEvent[], rng: R
     const e = effectOf(chaos, user.seat, 'duel')
     if (e) duel(state, events, user.seat, e, rng)
   }
+  applyGodCurse(state, events, rng, 2)
 }
 
 /**
@@ -151,7 +158,8 @@ function handDebuff(state: HandState, kind: ChaosEffectKind, e: PlannedEffect, u
       return true
     }
     case 'swapHands': {
-      if (victim === user) return false // a mirrored swap would trade the hand with itself
+      // A mirrored swap would trade the hand with itself; the Thần's own swap would give its Aces away (G11).
+      if (victim === user || isGodSeat(state.chaos!, user)) return false
       const u = getPlayer(state, user)
       const mine = u.holeCards
       u.holeCards = v.holeCards
@@ -169,7 +177,7 @@ function handDebuff(state: HandState, kind: ChaosEffectKind, e: PlannedEffect, u
     // Đổi lá hàng xóm (BP-41): one random card of the holder's for one random card of the victim's.
     case 'neighbourSwap': {
       const u = getPlayer(state, user)
-      if (victim === user || u.holeCards.length === 0 || v.holeCards.length === 0) return false
+      if (victim === user || isGodSeat(state.chaos!, user) || u.holeCards.length === 0 || v.holeCards.length === 0) return false
       const i = rng.int(u.holeCards.length)
       const j = rng.int(v.holeCards.length)
       const mine = u.holeCards[i]!
@@ -263,7 +271,8 @@ function fateDie(state: HandState, events: GameEvent[], user: number, e: Planned
   const die = 1 + rng.int(e.params.sides ?? 6)
   let delta = 0
   if (die <= (e.params.loseTo ?? 2)) {
-    if (hole.length > 1) {
+    // The Thần loses no card (G11 "miễn nhiễm rút bài"), even to its own die.
+    if (hole.length > 1 && !isGodSeat(chaos, user)) {
       hole.splice(rng.int(hole.length), 1)
       delta = -1
     }
@@ -296,7 +305,8 @@ function swapLeader(state: HandState, events: GameEvent[], user: number, e: Plan
   const mine = showdownScore(state, user)
   const scores = new Map(others.map((p) => [p.seat, showdownScore(state, p.seat)]))
   const best = Math.max(...scores.values())
-  if (mine >= best) {
+  // The Thần never swaps its own hand away (G11): its Ngược dòng is spent for nothing.
+  if (mine >= best || isGodSeat(chaos, user)) {
     record(chaos, events, user, e, [], 'fizzled')
     return
   }

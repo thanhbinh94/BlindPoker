@@ -3,6 +3,7 @@ import type { BlindRules } from '../hand/types.js'
 import { drawOffer, drawTier } from './draw.js'
 import { needsNoPress, returnToBonus } from './bonus.js'
 import { rollFortuneDice } from './dice.js'
+import { carpOf, chargeCarp, countReigns, crownDemigod, reignCrit, reignEffect } from './god.js'
 import { farmHandsOf, liftTier, receiveCard, tierFromParam, toHeld } from './hold.js'
 import { stealPoints, type ChaosSteal } from './steal.js'
 import {
@@ -14,6 +15,8 @@ import {
 
 export interface AfterHandSeat {
   seat: number
+  /** Who sits there (BP-41: kept on a Bán Thần's reign). Absent = ''. */
+  playerId?: string
   isBot: boolean
   /** The seat as `planHand` returned it. */
   chaos: ChaosSeat
@@ -77,6 +80,11 @@ const fortuneRow = (len: number): 2 | 4 | 6 => (len >= 6 ? 6 : len >= 4 ? 4 : 2)
  *   dropped when full — A7, Ruling 3), a lost wager as a `ChaosDebit` (at most the stack), a jackpot as a credit; a held
  *   Nâng tầm uy lực lifts the tier of the seat's next card drawn here and is spent (`liftTier`); a Trộm điểm received
  *   here is resolved over the seats given once all are settled (`steals`).
+ * - BP-41 Task 6 (§4): every reign has a hand fewer and the Thần's curse ends after its first hands (`countReigns`); a
+ *   Thần the engine saw beaten (`outcomes.dethroned`) falls, and each seat that beat it takes `slayCards` Kim cương
+ *   cards (the prize path above); unless idle, a held Cá chép hóa rồng (not the Thần's) gains energy on a lost hand and
+ *   makes its seat a Bán Thần on a won one (the card spent, the reign from the next hand); the Thần and a Bán Thần whose
+ *   powers acted crit on a win with the other sources (the highest only).
  * The input is never changed; every draw goes through `rng` and `weights`.
  *
  * BP-41 A3: `table` is the table's chaos state as `planHand` returned it (absent = `EMPTY_CHAOS_TABLE`), and `outcomes`
@@ -109,10 +117,14 @@ export function afterHand(input: {
   const recorded = input.recorded ?? new Set<number>()
   const mode: ChaosMode = rules.decisionMode
   const wager = rules.fixedWager
+  const table = input.table ?? EMPTY_CHAOS_TABLE
   const result: AfterHandResult = {
-    seats: new Map(), credits: [], debits: [], table: countBombs(input.table ?? EMPTY_CHAOS_TABLE, plan, input.outcomes), awarded: [], bonusAwarded: [],
+    seats: new Map(), credits: [], debits: [], table: countReigns(countBombs(table, plan, input.outcomes), plan, input.outcomes), awarded: [], bonusAwarded: [],
     dice: [], steals: [],
   }
+  /** BP-41 §4.2: the Thần reigning through this hand (its own Cá chép cards wait), and the seats that beat it. */
+  const reigning = table.god?.seat
+  const slain = plan.god ? (input.outcomes?.dethroned ?? []) : []
   /** Trộm điểm cards received below, resolved once every seat is settled (they act on another seat). */
   const thefts: { seat: number; card: ChaosCardDef }[] = []
   // BP-41 Mồi lửa: every seat in the hand takes each fired one's points (spec §6.3 "mọi người ngồi bàn").
@@ -183,9 +195,20 @@ export function afterHand(input: {
         points += adventurer.params.points ?? 0
       }
     } else if (adventurer) cards = cards.map((c) => (c.uid === adventurer.uid ? { ...c, charge: (c.charge ?? 0) + 1 } : c))
+    // BP-41 §4.1 Cá chép hóa rồng (unless idle; the Thần's own wait): a lost hand charges it +`stepMin`..`stepMax` %, a won
+    // one ("thắng khi chưa hóa thần") spends it and makes the seat a Bán Thần from the next hand.
+    const carp = idle || s.seat === reigning ? undefined : carpOf(chaos)
+    if (carp && outcome === 'loss') cards = cards.map((c) => (c.uid === carp.uid ? chargeCarp(c, rng) : c))
+    else if (carp && outcome === 'win') {
+      cards = cards.filter((c) => c.uid !== carp.uid)
+      result.table = crownDemigod(result.table, carp, s.seat, s.playerId ?? '', s.isBot)
+    }
 
     const prizes: { tier: ChaosTier; count: number }[] = []
-    /** BP-41 Xúc xắc vận may's prize cards, one tier per card (A7: a human's go to the private bonus hand). */
+    /**
+     * BP-41 prize cards, one tier per card (A7: a human's go to the private bonus hand, dropped when it is full): Xúc xắc
+     * vận may's, and the Kim cương cards of a seat that beat the Thần (§4.2, `slayCards`).
+     */
     const dicePrizes: ChaosTier[] = []
     if (!idle) {
       // Bạo kích (BP-37), Liều ăn nhiều (×3/×4/×5 on `p3`/`p4`/`p5`) and Xúc xắc định mệnh's 5–6 (× `multiplier`) each
@@ -208,6 +231,10 @@ export function afterHand(input: {
         }
         const fate = firedKind('fateDie')
         if (fate && input.outcomes?.fateCrit?.includes(s.seat)) crits.push({ k: fate.params.multiplier ?? 2, e: fate })
+        // BP-41 §4.2–§4.3: the Thần (×2/×3/×4) and a Bán Thần (×2/×3) whose powers acted this hand.
+        if (plan.god?.seat === s.seat) crits.push({ k: reignCrit('god', plan.god.params, rng), e: reignEffect(plan.god) })
+        const demigod = plan.demigods?.find((d) => d.seat === s.seat)
+        if (demigod) crits.push({ k: reignCrit('demigod', demigod.params, rng), e: reignEffect(demigod) })
       }
       const best = crits.reduce<{ k: number; e: PlannedEffect } | null>((b, c) => (c.k >= 2 && (b === null || c.k > b.k) ? c : b), null)
       if (best) {
@@ -273,6 +300,8 @@ export function afterHand(input: {
         cards = cards.filter((c) => c.uid !== die.uid)
       }
     }
+    // BP-41 §4.2 "hạ Thần": each seat that beat the Thần takes `slayCards` random Kim cương cards, frozen or not.
+    if (plan.god && slain.includes(s.seat)) for (let i = 0; i < (plan.god.params.slayCards ?? 2); i++) dicePrizes.push('diamond')
 
     // A bonus card played for this hand (BP-39) leaves if it was used, else goes back to the bonus hand where it was. A
     // decision card (Nhìn trộm, Bỏ không mất) that entered the plan is spent with its hand, used or not (Ruling 5); one

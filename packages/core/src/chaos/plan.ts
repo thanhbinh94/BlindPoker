@@ -2,6 +2,7 @@ import type { Rng } from '../cards/rng.js'
 import type { BlindRules } from '../hand/types.js'
 import { clearUnsettledHand, firesFromArmed, returnToBonus } from './bonus.js'
 import { pickCard } from './draw.js'
+import { activeGod, planReigns } from './god.js'
 import { farmHandsOf, stackHeld } from './hold.js'
 import {
   EMPTY_CHAOS_TABLE,
@@ -27,6 +28,8 @@ const DEAL_DEBUFFS: ReadonlySet<ChaosEffectKind> = new Set(['freeze', 'blindfold
 
 export interface PlanSeatInput {
   seat: number
+  /** Who sits there (BP-41: kept on the Thần's reign, `ChaosTableState.god.playerId`). Absent = ''. */
+  playerId?: string
   isBot: boolean
   chaos: ChaosSeat
 }
@@ -48,8 +51,10 @@ type Firing = Omit<PlannedEffect, 'targets'>
  * `table` is what it becomes for this hand. Absent, it is `EMPTY_CHAOS_TABLE`. End-of-hand cards (`end`, the dice) are
  * never fired here, like wait cards (A10). BP-41's deal-time debuffs (Cướp đoạt, Lời nguyền, Kẻ phá đám) get
  * `targets: []`: the engine aims them at the deal. A bonus card that fires from `armed` is marked `fromBonus`. Once every
- * seat is planned, a second pass applies Nhật thực (`eclipse`), then each seat's stake is set (`stakes`: Mạo hiểm gia,
- * Sới lớn; Task 5a) and, on a "Chơi hoặc bỏ" table, the seats Cấm bỏ bài marked last hand go into `noFoldSeats`. Last,
+ * seat is planned, a second pass applies Nhật thực (`eclipse`; never on the Thần), then the reigns (`planReigns`, Task 6:
+ * a Cá chép may ascend, the Thần, the Bán Thần and the live Cá chép go into the plan), then each seat's stake is set
+ * (`stakes`: Mạo hiểm gia, Sới lớn; Task 5a) and, on a "Chơi hoặc bỏ" table, the seats Cấm bỏ bài marked last hand —
+ * every seat while the Thần acts — go into `noFoldSeats`. Last,
  * each Bom nổ chậm on the table whose owner is dealt in is passed to another seat (`passBombs`, Task 5b) and goes into
  * `plan.bombs`; the returned `table` carries the new carriers.
  */
@@ -180,17 +185,35 @@ export function planHand(input: {
     if (points !== chaos.points) seats.set(seat, { ...chaos, points })
   }
 
-  eclipse(planSeats, seats, input.seats, rng)
+  // BP-41 G11: Nhật thực never darkens the Thần whose powers act this hand.
+  const frozen = (seat: number): boolean => input.seats.find((s) => s.seat === seat)!.chaos.frozenNextHand
+  eclipse(planSeats, seats, input.seats, rng, activeGod(table, input.seats.map((s) => ({ seat: s.seat, frozen: frozen(s.seat) }))))
+  // BP-41 §4 (Task 6): an ascension, and who reigns this hand.
+  const reigns = planReigns({
+    table,
+    seats: input.seats.map((s) => ({
+      seat: s.seat, playerId: s.playerId ?? '', isBot: s.isBot, frozen: frozen(s.seat), eclipsed: planSeats.find((p) => p.seat === s.seat)!.eclipsed === true,
+    })),
+    chaos: seats,
+    mode,
+    rng,
+  })
   stakes(planSeats)
   const plan: ChaosHandPlan = { seats: planSeats, reverse: planSeats.some((s) => s.effects.some((e) => e.effect === 'reverseRank')) }
-  // BP-41 A2 Cấm bỏ bài: last hand's marks, on a "Chơi hoặc bỏ" table only (the card is ✱; there is no fold elsewhere).
-  const noFold = mode === 'playOrFold' ? input.seats.filter((s) => s.chaos.noFoldNextHand === true).map((s) => s.seat) : []
+  if (reigns.god) plan.god = reigns.god
+  if (reigns.demigods) plan.demigods = reigns.demigods
+  if (reigns.carps) plan.carps = reigns.carps
+  // BP-41 A2 Cấm bỏ bài: last hand's marks, on a "Chơi hoặc bỏ" table only (the card is ✱; there is no fold elsewhere);
+  // with a Thần acting, every seat (G11, `planReigns`).
+  const marked = mode === 'playOrFold' ? input.seats.filter((s) => s.chaos.noFoldNextHand === true).map((s) => s.seat) : []
+  const noFold = input.seats.map((s) => s.seat).filter((s) => marked.includes(s) || reigns.noFold.includes(s))
   if (noFold.length > 0) plan.noFoldSeats = noFold
   // BP-41 Bom nổ chậm (Task 5b): each bomb on the table passes to another seat and plays this hand.
-  if (table.bombs.length === 0) return { plan, seats, table }
-  const passed = passBombs(table.bombs, input.seats.map((s) => s.seat), rng)
+  const after = reigns.table
+  if (after.bombs.length === 0) return { plan, seats, table: after }
+  const passed = passBombs(after.bombs, input.seats.map((s) => s.seat), rng)
   if (passed.playing.length > 0) plan.bombs = passed.playing
-  return { plan, seats, table: { ...table, bombs: passed.bombs } }
+  return { plan, seats, table: { ...after, bombs: passed.bombs } }
 }
 
 /**
@@ -214,14 +237,15 @@ function stakes(planSeats: PlanSeat[]): void {
  * "không áp, không mất". Such a seat fires nothing and stands no shield (`eclipsed`), and goes into the hand exactly as it
  * came (`clearUnsettledHand` only): a bonus card pressed for this hand stays armed for the next, a Siêu cộng dồn does not
  * grow, a Tay bạc rolls nothing. Two seats firing it in one hand: one of them, at random, is the eclipse (Ruling 3b-1);
- * the other is switched off with everyone else's cards and keeps its card. Draws from `rng` only then.
+ * the other is switched off with everyone else's cards and keeps its card. Draws from `rng` only then. `spare` (BP-41
+ * G11): the Thần whose powers act this hand — never darkened, its cards and powers stay on.
  */
-function eclipse(planSeats: PlanSeat[], seats: Map<number, ChaosSeat>, input: readonly PlanSeatInput[], rng: Rng): void {
+function eclipse(planSeats: PlanSeat[], seats: Map<number, ChaosSeat>, input: readonly PlanSeatInput[], rng: Rng, spare: number | null): void {
   const holders = planSeats.filter((s) => s.effects.some((e) => e.effect === 'eclipse'))
   if (holders.length === 0) return
   const sun = holders.length === 1 ? holders[0]! : holders[rng.int(holders.length)]!
   for (const s of planSeats) {
-    if (s === sun) continue
+    if (s === sun || s.seat === spare) continue
     s.effects = []
     s.shield = null
     delete s.scapegoat

@@ -3,7 +3,7 @@ import type { Rng } from '../cards/rng.js'
 import { dealCards, getPlayer, seatsClockwiseFrom } from '../hand/common.js'
 import type { GameEvent, HandState } from '../hand/types.js'
 import {
-  addUid, backfireAgainst, blockForSeat, canDealAtDeal, effectOf, effectsOf, highestIndex, isImmune, record, resolveDebuff, resolveHoleDebuff,
+  addUid, backfireAgainst, blockForSeat, canDealAtDeal, effectOf, effectsOf, highestIndex, isGodSeat, isImmune, record, resolveDebuff, resolveHoleDebuff,
   shieldUp, takeFromDeck, type DebuffHarm,
 } from './engine-core.js'
 import type { ChaosEffectKind, ChaosHandState, PlannedEffect } from './types.js'
@@ -56,8 +56,9 @@ export function resolveSpoilers(state: HandState, events: GameEvent[], rng: Rng)
   for (const user of seatsClockwiseFrom(state, state.button)) {
     const e = effectOf(chaos, user.seat, 'spoiler') // an earlier Kẻ phá đám may have switched this one off
     if (!e) continue
+    // BP-41 G11: Kẻ phá đám never switches the Thần off — it is no target (and `switchOff` spares it on a mirror).
     const opponents = state.players
-      .filter((p) => p.seat !== user.seat && !chaos.hit.includes(p.seat) && switchable(chaos, p.seat, e.uid).length > 0)
+      .filter((p) => p.seat !== user.seat && !isGodSeat(chaos, p.seat) && !chaos.hit.includes(p.seat) && switchable(chaos, p.seat, e.uid).length > 0)
       .map((p) => p.seat)
     if (opponents.length === 0) {
       record(chaos, events, user.seat, e, [], 'fizzled')
@@ -70,7 +71,7 @@ export function resolveSpoilers(state: HandState, events: GameEvent[], rng: Rng)
 
 /** Takes one random switchable card of `seat` out of this hand's plan (a new plan object: the caller's is never changed). */
 function switchOff(chaos: ChaosHandState, seat: number, except: number, rng: Rng): DebuffHarm {
-  const candidates = switchable(chaos, seat, except)
+  const candidates = isGodSeat(chaos, seat) ? [] : switchable(chaos, seat, except)
   if (candidates.length === 0) return false
   const off = candidates[rng.int(candidates.length)]!
   const seats = chaos.plan.seats.map((s) => (s.seat === seat ? { ...s, effects: s.effects.filter((x) => x.uid !== off.uid) } : s))
@@ -161,7 +162,8 @@ function plunder(state: HandState, events: GameEvent[], user: number, e: Planned
     record(chaos, events, user, e, [], 'reflected')
     return
   }
-  if (n === 0 || !canDealAtDeal(state, n)) {
+  // The Thần never throws its Aces away (G11): its own Cướp đoạt is spent for nothing.
+  if (n === 0 || !canDealAtDeal(state, n) || isGodSeat(chaos, user)) {
     record(chaos, events, user, e, [], 'fizzled')
     return
   }

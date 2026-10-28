@@ -192,7 +192,7 @@ export class ChaosTable {
     // A card played for this hand now names it (`armed.hand: 'this'`), or joined the held cards: its owner is told.
     const before = this.bonusKeys(eligible)
     const { plan, seats, table } = planHand({
-      seats: eligible.map((p) => ({ seat: p.seat!, isBot: p.identity.isBot, chaos: p.chaos ?? EMPTY_CHAOS_SEAT })),
+      seats: eligible.map((p) => ({ seat: p.seat!, playerId: p.identity.playerId, isBot: p.identity.isBot, chaos: p.chaos ?? EMPTY_CHAOS_SEAT })),
       rules: this.host.rules,
       pool: this.cards,
       rng: this.host.deps.rng,
@@ -277,6 +277,7 @@ export class ChaosTable {
       ...(chaos.outcomes ? { outcomes: chaos.outcomes } : {}),
       seats: inHand.map(({ hp, p }) => ({
         seat: hp.seat,
+        playerId: hp.playerId,
         isBot: hp.isBot,
         chaos: p.chaos ?? EMPTY_CHAOS_SEAT,
         stackAfter: hp.stack,

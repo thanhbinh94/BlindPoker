@@ -139,8 +139,8 @@ describe('toHeldCardView', () => {
 describe('toChaosTableView (BP-41)', () => {
   it('shows the reign, the curse and the bombs by seat, never a player id', () => {
     const table: ChaosTableState = {
-      god: { seat: 2, playerId: 'p2', isBot: false, handsLeft: 4, curse: 3 },
-      demigods: [{ seat: 0, playerId: 'p0', isBot: true, handsLeft: 5 }],
+      god: { seat: 2, playerId: 'p2', isBot: false, handsLeft: 4, curse: 3, cardId: 'd_carp', uid: 7, params: {} },
+      demigods: [{ seat: 0, playerId: 'p0', isBot: true, handsLeft: 5, cardId: 'd_carp', uid: 8, params: {} }],
       bombs: [{ owner: 1, carrier: 3, handsLeft: 2, cardId: 'd_bomb', uid: 9 }],
     }
     const view = toChaosTableView(table)
