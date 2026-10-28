@@ -137,6 +137,6 @@ describe('0004_gm', () => {
     expect(await snapshot()).toEqual(before)
     expect(await rows(`SELECT "role" FROM "users" ORDER BY "id"`)).toEqual([{ role: 'player' }, { role: 'player' }])
     await migrate(db, { migrationsFolder: migrationsFolder() }) // nothing left to apply
-    expect(await rows(`SELECT "hash" FROM "drizzle"."__drizzle_migrations"`)).toHaveLength(8)
+    expect(await rows(`SELECT "hash" FROM "drizzle"."__drizzle_migrations"`)).toHaveLength(9)
   })
 })

@@ -143,6 +143,47 @@ describe('HAND_SETTLED', () => {
       expect(await stats.get(a)).toEqual({ ...zeroStats(), handsPlayedBlind: 1, gamesCompleted: 1 })
       expect(await stats.get(b)).toEqual({ ...zeroStats(), handsPlayedBlind: 1, gamesCompleted: 1 })
     })
+
+    // BP-41 (spec 2026-10-28 §4.4): the three title counters are the exception to Q13 — counted from a chaos hand.
+    it('counts the title marks — an ascension, a Bán Thần, and every win over a human Thần — and nothing else of the win', async () => {
+      const god = await seedPlayer()
+      const half = await seedPlayer()
+      const slayer = await seedPlayer()
+      await settle(hand({
+        mode: 'blind',
+        config: CHAOS,
+        players: [
+          seat(god, { net: -1_000, chaosTitles: { ascended: true } }),
+          seat(half, { seat: 1, net: -1_000, chaosTitles: { demigod: true } }),
+          seat(slayer, { seat: 2, net: 2_000, won: true, bestCategory: HandCategory.FLUSH, chaosTitles: { slew: 1 } }),
+        ],
+      }))
+      expect(await stats.get(god)).toEqual({ ...zeroStats(), handsPlayedBlind: 1, gamesCompleted: 1, chaosAscensions: 1 })
+      expect(await stats.get(half)).toEqual({ ...zeroStats(), handsPlayedBlind: 1, gamesCompleted: 1, chaosDemigods: 1 })
+      expect(await stats.get(slayer)).toEqual({ ...zeroStats(), handsPlayedBlind: 1, gamesCompleted: 1, chaosGodsSlain: 1 })
+      expect(updates.find((u) => u.playerId === slayer)!.changedMetrics).toContain('chaosGodsSlain')
+      expect(updates.find((u) => u.playerId === god)!.changedMetrics).toContain('chaosAscensions')
+      expect(updates.find((u) => u.playerId === god)!.changedMetrics).not.toContain('chaosGodsSlain')
+
+      // The slain count adds up across hands (and a row may carry more than one), and a second reign counts again.
+      await settle(hand({ mode: 'blind', config: CHAOS, players: [seat(slayer, { net: 500, won: true, chaosTitles: { slew: 2 } }), seat(god, { seat: 1, chaosTitles: { ascended: true, demigod: true } })] }))
+      expect(await stats.get(slayer)).toMatchObject({ chaosGodsSlain: 3, handsWonBlind: 0 })
+      expect(await stats.get(god)).toMatchObject({ chaosAscensions: 2, chaosDemigods: 1 })
+    })
+
+    it('loses the title marks of a hand whose settlement failed, and of a cancelled hand (Ruling 7)', async () => {
+      const god = await seedPlayer()
+      await settle(hand({ mode: 'blind', config: CHAOS, settlementError: 'DatabaseFaultError: settlement failed', players: [seat(god, { chaosTitles: { ascended: true, slew: 1 } })] }))
+      await settle(hand({ mode: 'blind', config: CHAOS, cancelled: true, players: [seat(god, { chaosTitles: { demigod: true } })] }))
+      expect(await stats.get(god)).toEqual(zeroStats())
+      expect(updates).toEqual([])
+    })
+
+    it('a row with no marks or a slew of 0 writes no title column', async () => {
+      const a = await seedPlayer()
+      await settle(hand({ mode: 'blind', config: CHAOS, players: [seat(a, { chaosTitles: { slew: 0 } })] }))
+      expect(updates[0]!.changedMetrics.some((m) => m.startsWith('chaos'))).toBe(false)
+    })
   })
 
   it('ignores a cancelled hand entirely', async () => {

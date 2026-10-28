@@ -89,6 +89,18 @@ describe('backfillReputation', () => {
     expect(result.applied).toBe(240 + 90 + 100 + 500)
   })
 
+  it('BP-41: an achievement that names its own reputation counts that number, not its rule', async () => {
+    const p = await seedPlayer()
+    await seedHistory(p)
+    // Points and an item, so the rule would be `achievement_item` (500); the definition says 150.
+    const own: AchievementDef = { id: 'ach_own', category: 'chaos', metric: 'chaosDemigods', threshold: 1, reward: { points: 150_000, itemId: 'hat_01' }, reputation: 150 }
+    await db.insert(playerAchievements).values({ playerId: p, achievementId: 'ach_own', progress: 1, unlockedAt: new Date('2026-10-29T00:00:00Z') })
+
+    const result = await backfillReputation(db, { dryRun: false, defs: [...DEFS, own] })
+
+    expect(result.applied).toBe(120 + 90 + 100 + 500 + 150)
+  })
+
   it('live events already written are subtracted', async () => {
     const p = await seedPlayer({ reputation: 112 })
     await seedHistory(p)

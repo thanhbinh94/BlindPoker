@@ -74,7 +74,8 @@ drizzle/             committed migration SQL (0000 generated; 0001_avatar_v2, 00
                       0004_gm generated, then guarded with IF NOT EXISTS — users.role, locked_at, locked_reason and gm_actions;
                       0005_plan26 — gift_months, inventory.ref; 0006_plan27 — reputation, shop, newcomer and welcome tables,
                       players.reputation/rank/welcome_claimed_at, daily_logins.consecutive, and the month-count data step;
-                      0007_chaos — chaos_card_rules, chaos_config and games.chaos_used, guarded with IF NOT EXISTS)
+                      0007_chaos — chaos_card_rules, chaos_config and games.chaos_used, guarded with IF NOT EXISTS;
+                      0008_chaos_titles — player_stats.chaos_ascensions/chaos_demigods/chaos_gods_slain, guarded likewise)
 test/build.test.ts   the build itself, as a test
 ```
 
@@ -782,6 +783,19 @@ a build sidecar, shipped with `dist/` and `data/` as siblings. A server without 
 `metric` must be a key of `PlayerStats` (`stats/player-stats.ts`); `reward` is `{ points }`,
 `{ itemId }` or both. An `itemId` must exist in `items.json` — and adding one automatically removes
 that item from the daily draw pool, because `app.ts` passes every reward id as `reservedItemIds`.
+
+An unlock also adds reputation: by default the rule of its reward tier (`achievementRuleFor`: an item →
+`achievement_item`, more than 5 000 points → `achievement_big`, else `achievement_small`). An optional
+`"reputation": <positive whole number>` overrides that rule for one achievement (BP-41: the chaos titles
+`chaos_god`, `chaos_demigod`, `chaos_godslayer` pay 300 / 150 / 500). The earning, a GM's unlock
+(`unlockWithin`) and the Plan 27 backfill all pay the override, under the same `ach:<player>:<id>` ref.
+The categories are `login`, `holdem`, `blind`, `social` and `chaos`.
+
+The chaos titles' metrics (`chaosAscensions`, `chaosDemigods`, `chaosGodsSlain`) are the only stats a
+Poker hỗn loạn hand moves beyond "played" (spec 2026-10-28 §4.4, the exception to Q13). They are read
+from `HandSummary.players[].chaosTitles`, which the room fills only for a settled hand at a table of two
+or more humans, never on a bot's row, and never `slew` for a bot Thần. A hand with a `settlementError`
+loses its marks, like every other counter (BP-41 Ruling 7).
 
 Restart and it is live: the achievement service evaluates definitions whose metric appears in a
 `STATS_UPDATED` event, so a player who is already past the threshold unlocks it on their next

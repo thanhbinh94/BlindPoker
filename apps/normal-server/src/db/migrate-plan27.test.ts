@@ -99,7 +99,7 @@ describe('0006_plan27', () => {
     expect(await rows(`SELECT 1 FROM information_schema.tables WHERE "table_name" = 'reputation_events'`)).toEqual([])
 
     await runMigrations(db(), 'pglite')
-    expect(await rows(`SELECT "hash" FROM "drizzle"."__drizzle_migrations"`)).toHaveLength(8)
+    expect(await rows(`SELECT "hash" FROM "drizzle"."__drizzle_migrations"`)).toHaveLength(9)
 
     const columns = await rows<{ table_name: string; column_name: string; is_nullable: string; column_default: string | null }>(
       `SELECT "table_name", "column_name", "is_nullable", "column_default" FROM information_schema.columns
@@ -122,7 +122,7 @@ describe('0006_plan27', () => {
     await runMigrations(db(), 'pglite') // nothing left to apply
     await reapply0006() // every statement is guarded
     expect(await counts()).toEqual(before)
-    expect(await rows(`SELECT "hash" FROM "drizzle"."__drizzle_migrations"`)).toHaveLength(8)
+    expect(await rows(`SELECT "hash" FROM "drizzle"."__drizzle_migrations"`)).toHaveLength(9)
   })
 
   it('seeds rules, ranks and welcome choices once', async () => {

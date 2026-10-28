@@ -113,9 +113,11 @@ const entryOf = async (playerId: string, itemId: string, now = OCT) => (await sh
 describe('ShopService', () => {
   it('seeds a price per catalogue item once', async () => {
     await db.delete(shopPrices)
-    expect(await shop.seedPrices()).toBe(127)
+    expect(await shop.seedPrices()).toBe(130)
     const prices = new Map((await shop.prices()).map((p) => [p.itemId, p]))
-    expect(prices.size).toBe(127)
+    expect(prices.size).toBe(130)
+    // BP-41: the three chaos titles are achievements' rewards, so they are seeded off sale.
+    for (const id of ['title_god', 'title_demigod', 'title_godslayer']) expect(prices.get(id), id).toMatchObject({ enabled: false })
     expect(prices.get('outfit_casual01')).toMatchObject({ enabled: false })
     expect(prices.get('outfit_casual_red01')).toMatchObject({ enabled: false })
     expect(prices.get('outfit_champion01')).toMatchObject({ enabled: false })
@@ -160,7 +162,9 @@ describe('ShopService', () => {
     await db.delete(shopPrices).where(eq(shopPrices.itemId, 'head_beanie01'))
     await db.update(shopPrices).set({ enabled: false }).where(eq(shopPrices.itemId, 'outfit_dealer01'))
     const view = await shop.view(me, OCT)
-    expect(view.entries).toHaveLength(127)
+    expect(view.entries).toHaveLength(130)
+    // BP-41: a chaos title is an achievement's, never for sale.
+    expect(view.entries.find((e) => e.itemId === 'title_godslayer')).toMatchObject({ lock: { kind: 'achievement', achievementId: 'chaos_godslayer' }, purchasable: false })
     expect(view.entries.find((e) => e.itemId === 'head_beanie01')).toMatchObject({ lock: { kind: 'unpriced' }, purchasable: false })
     expect(view.entries.find((e) => e.itemId === 'outfit_dealer01')).toMatchObject({ lock: { kind: 'disabled' }, purchasable: false })
     expect(view.me).toMatchObject({ balance: 42_000, reputation: 0, rank: 3 })

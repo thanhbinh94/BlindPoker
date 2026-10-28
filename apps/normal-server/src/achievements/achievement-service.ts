@@ -73,7 +73,8 @@ const ACHIEVEMENT_SOURCE = 'achievement'
  * guarded UPDATE below would match nothing and report `'already'` for an achievement that was never unlocked.
  * `'already'` means the UPDATE found the row unlocked (nothing was paid); `'unlocked'` means this call flipped it.
  *
- * With `pay.reputation`, an unlock also adds the reputation its reward tier pays (Plan 27, spec A2), under
+ * With `pay.reputation`, an unlock also adds the reputation its reward tier pays (Plan 27, spec A2) — or the definition's
+ * own `reputation` when it names one (BP-41) — under
  * `ach:<player>:<id>` on both paths — so a GM's unlock and the player's own earning of it are one event. `rankUp` and
  * `rank` report what that grant did (`false`/`0` when nothing was granted); the caller announces `RANK_UP` after commit.
  */
@@ -88,7 +89,7 @@ export async function unlockWithin(
   playerId: string,
   def: AchievementDef,
   at: Date,
-  pay: { inventory: InventoryService; reason: TxReason; refId: string; reputation?: Pick<ReputationService, 'grantRuleWithin'> | undefined },
+  pay: { inventory: InventoryService; reason: TxReason; refId: string; reputation?: Pick<ReputationService, 'grantRuleWithin' | 'grantWithin'> | undefined },
 ): Promise<UnlockResult> {
   // Lock order (Plan 27 whole-branch review): the player's row first, as every other money path does. The credit and
   // the reputation grant below lock `players` too; taking it after `player_achievements` let two transactions on the
@@ -117,7 +118,12 @@ export async function unlockWithin(
     await pay.inventory.grant(tx, playerId, def.reward.itemId, ACHIEVEMENT_SOURCE)
   }
   if (pay.reputation === undefined) return { outcome: 'unlocked', rankUp: false, rank: 0 }
-  const grant = await pay.reputation.grantRuleWithin(tx, playerId, achievementRuleFor(def), 'achievement', `ach:${playerId}:${def.id}`)
+  const refId = `ach:${playerId}:${def.id}`
+  // BP-41: an achievement that names its own reputation (the chaos titles' 300 / 150 / 500) pays that number, not its tier's rule.
+  const grant =
+    def.reputation !== undefined
+      ? await pay.reputation.grantWithin(tx, playerId, def.reputation, 'achievement', refId)
+      : await pay.reputation.grantRuleWithin(tx, playerId, achievementRuleFor(def), 'achievement', refId)
   return { outcome: 'unlocked', rankUp: grant.rankUp, rank: grant.rank }
 }
 

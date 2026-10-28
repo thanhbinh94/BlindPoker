@@ -125,7 +125,7 @@ const find = (playerId: string, id: string) => achievements.list(playerId).then(
 
 describe('loadAchievements', () => {
   it('reads the shipped catalogue, whose every metric is a counter and every item reward a real item', () => {
-    expect(defs.length).toBe(44)
+    expect(defs.length).toBe(47)
     expect(new Set(defs.map((d) => d.id)).size).toBe(defs.length)
     for (const id of [
       'login_days_7', 'login_streak_7', 'holdem_hands_10', 'win_streak_3', 'lose_streak_10', 'hand_royal',
@@ -149,6 +149,14 @@ describe('loadAchievements', () => {
     expect(defs.find((d) => d.id === 'blind_hands_500')).toMatchObject({ category: 'blind', metric: 'handsPlayedBlind', threshold: 500, reward: { itemId: 'head_pumpkin01' } })
     expect(defs.find((d) => d.id === 'rooms_50')).toMatchObject({ category: 'social', metric: 'roomsJoined', threshold: 50, reward: { itemId: 'outfit_sailor01' } })
     expect(defs.find((d) => d.id === 'win_streak_7')).toMatchObject({ category: 'holdem', metric: 'bestWinStreak', threshold: 7, reward: { itemId: 'head_crab01' } })
+    // BP-41 (spec 2026-10-28 §4.4): the three chaos titles, each points + a title item + its own reputation.
+    expect(defs.filter((d) => d.category === 'chaos')).toEqual([
+      { id: 'chaos_god', category: 'chaos', metric: 'chaosAscensions', threshold: 1, reward: { points: 300_000, itemId: 'title_god' }, reputation: 300 },
+      { id: 'chaos_demigod', category: 'chaos', metric: 'chaosDemigods', threshold: 1, reward: { points: 150_000, itemId: 'title_demigod' }, reputation: 150 },
+      { id: 'chaos_godslayer', category: 'chaos', metric: 'chaosGodsSlain', threshold: 2, reward: { points: 500_000, itemId: 'title_godslayer' }, reputation: 500 },
+    ])
+    // Every older achievement keeps paying its rule: none names a reputation of its own.
+    expect(defs.filter((d) => d.reputation !== undefined).map((d) => d.id)).toEqual(['chaos_god', 'chaos_demigod', 'chaos_godslayer'])
   })
 
   it('maps §14.1’s special-hand thresholds onto the category ranks', () => {
@@ -183,6 +191,16 @@ describe('loadAchievements', () => {
     expect(() => loadAchievements(catalog, fixture([{ ...OK, threshold: 0 }]))).toThrow(/no positive threshold/)
     expect(() => loadAchievements(catalog, fixture([{ ...OK, reward: {} }]))).toThrow(/grants neither points nor an item/)
     expect(() => loadAchievements(catalog, fixture({ defs: [OK] }))).toThrow(/not a JSON array/)
+  })
+
+  it('BP-41: takes the chaos category, a points-and-item reward and a positive whole reputation; refuses any other reputation', () => {
+    const chaos = { ...OK, category: 'chaos', metric: 'chaosGodsSlain', threshold: 2, reward: { points: 500_000, itemId: 'title_godslayer' }, reputation: 500 }
+    expect(loadAchievements(catalog, fixture([chaos]))).toEqual([chaos])
+    // Left out, it is left out: the rule pays.
+    expect(loadAchievements(catalog, fixture([OK]))[0]).not.toHaveProperty('reputation')
+    for (const reputation of [0, -5, 1.5, '300', null]) {
+      expect(() => loadAchievements(catalog, fixture([{ ...chaos, reputation }])), String(reputation)).toThrow(/reputation that is not a positive whole number/)
+    }
   })
 })
 
@@ -348,6 +366,73 @@ describe('reputation', () => {
     // Replayed: nothing unlocks, so nothing is added.
     await bus.publish({ type: 'STATS_UPDATED', playerId, changedMetrics: ['totalLoginDays'] })
     expect((await db.select().from(reputationEvents).where(eq(reputationEvents.playerId, playerId))).length).toBe(4)
+  })
+})
+
+describe('BP-41: the chaos titles', () => {
+  const CHAOS: PublicRoomConfig = { ...CONFIG, mode: 'blind', blind: { holeCards: 2, decisionMode: 'playOrFold', fixedWager: 1_000, botCount: 0, chaosCycle: 5 } }
+  const settleChaos = (seats: HandSummaryPlayer[]): Promise<void> => settle(seats, { mode: 'blind', config: CHAOS })
+  const repOf = (playerId: string) =>
+    db.select({ delta: reputationEvents.delta, reason: reputationEvents.reason, refId: reputationEvents.refId }).from(reputationEvents).where(eq(reputationEvents.playerId, playerId))
+  const standing = async (playerId: string) => (await db.select({ reputation: players.reputation, rank: players.rank }).from(players).where(eq(players.id, playerId)))[0]
+
+  it('each title unlocks once from a chaos hand with its points, its title item and its own reputation', async () => {
+    const god = await seedPlayer()
+    const half = await seedPlayer()
+    const slayer = await seedPlayer()
+
+    await settleChaos([
+      seat(god, { chaosTitles: { ascended: true } }),
+      seat(half, { seat: 1, chaosTitles: { demigod: true } }),
+      seat(slayer, { seat: 2, won: true, net: 2_000, chaosTitles: { slew: 1 } }),
+    ])
+
+    expect(await ledger(god)).toEqual([{ amount: 300_000, reason: 'achievement', refId: `ach:${god}:chaos_god` }])
+    expect(await inv.list(god)).toEqual([{ itemId: 'title_god', source: 'achievement', acquiredAt: expect.any(Number) }])
+    expect(await repOf(god)).toEqual([{ delta: 300, reason: 'achievement', refId: `ach:${god}:chaos_god` }])
+    expect(await standing(god)).toEqual({ reputation: 300, rank: 2 })
+
+    expect(await ledger(half)).toEqual([{ amount: 150_000, reason: 'achievement', refId: `ach:${half}:chaos_demigod` }])
+    expect(await inv.list(half)).toEqual([{ itemId: 'title_demigod', source: 'achievement', acquiredAt: expect.any(Number) }])
+    expect(await repOf(half)).toEqual([{ delta: 150, reason: 'achievement', refId: `ach:${half}:chaos_demigod` }])
+
+    // One god slain of two: progress, nothing paid.
+    expect(await find(slayer, 'chaos_godslayer')).toEqual({ id: 'chaos_godslayer', progress: 1, target: 2, unlockedAt: null })
+    expect(await ledger(slayer)).toEqual([])
+    expect(await repOf(slayer)).toEqual([])
+
+    expect(notified.filter((n) => n.msg.t === 'NOTIFICATION' && n.msg.kind === 'ACHIEVEMENT_UNLOCKED').map((n) => [n.playerId, n.msg])).toEqual([
+      [god, { t: 'NOTIFICATION', kind: 'ACHIEVEMENT_UNLOCKED', payload: { id: 'chaos_god', reward: { points: 300_000, itemId: 'title_god' } } }],
+      [half, { t: 'NOTIFICATION', kind: 'ACHIEVEMENT_UNLOCKED', payload: { id: 'chaos_demigod', reward: { points: 150_000, itemId: 'title_demigod' } } }],
+    ])
+    expect(balanceCalls).toEqual([{ playerId: god, balance: 300_000 }, { playerId: half, balance: 150_000 }])
+
+    // The second god slain unlocks Kẻ Sát Thần; a second ascension and a second Bán Thần pay nothing again.
+    await settleChaos([
+      seat(slayer, { won: true, net: 2_000, chaosTitles: { slew: 1 } }),
+      seat(god, { seat: 1, chaosTitles: { ascended: true } }),
+      seat(half, { seat: 2, chaosTitles: { demigod: true } }),
+    ])
+    expect(await ledger(slayer)).toEqual([{ amount: 500_000, reason: 'achievement', refId: `ach:${slayer}:chaos_godslayer` }])
+    expect(await inv.list(slayer)).toEqual([{ itemId: 'title_godslayer', source: 'achievement', acquiredAt: expect.any(Number) }])
+    expect(await repOf(slayer)).toEqual([{ delta: 500, reason: 'achievement', refId: `ach:${slayer}:chaos_godslayer` }])
+    expect(await standing(slayer)).toEqual({ reputation: 500, rank: 3 })
+    expect(await find(god, 'chaos_god')).toMatchObject({ progress: 2, unlockedAt: NOW })
+    expect(await ledger(god)).toHaveLength(1)
+    expect(await ledger(half)).toHaveLength(1)
+    expect(await repOf(god)).toHaveLength(1)
+    expect(await repOf(half)).toHaveLength(1)
+  })
+
+  it('a GM unlock pays the same override, under the same reputation ref as the earning', async () => {
+    const playerId = await seedPlayer()
+    const def = defs.find((d) => d.id === 'chaos_demigod')!
+    const run = () =>
+      db.transaction((tx) => unlockWithin(tx, playerId, def, new Date(NOW), { inventory: inv, reason: 'gm_achievement', refId: 'gm:7', reputation }))
+    expect(await run()).toEqual({ outcome: 'unlocked', rankUp: true, rank: 2 })
+    expect(await run()).toEqual({ outcome: 'already', rankUp: false, rank: 0 })
+    expect(await ledger(playerId)).toEqual([{ amount: 150_000, reason: 'gm_achievement', refId: 'gm:7' }])
+    expect(await repOf(playerId)).toEqual([{ delta: 150, reason: 'achievement', refId: `ach:${playerId}:chaos_demigod` }])
   })
 })
 

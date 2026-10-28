@@ -91,6 +91,8 @@ export function registerCatalogRoutes(app: FastifyInstance, deps: CatalogRouteDe
         metric: def.metric,
         threshold: def.threshold,
         reward: def.reward,
+        // BP-41: only an achievement that names its own reputation (the chaos titles) says how much it adds.
+        ...(def.reputation !== undefined ? { reputation: def.reputation } : {}),
       })),
     }))
 }

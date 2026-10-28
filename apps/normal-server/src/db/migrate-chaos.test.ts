@@ -73,7 +73,7 @@ describe('0007_chaos', () => {
     expect(await rows(`SELECT 1 FROM information_schema.tables WHERE "table_name" = 'chaos_card_rules'`)).toEqual([])
 
     await runMigrations(db(), 'pglite')
-    expect(await rows(`SELECT "hash" FROM "drizzle"."__drizzle_migrations"`)).toHaveLength(8)
+    expect(await rows(`SELECT "hash" FROM "drizzle"."__drizzle_migrations"`)).toHaveLength(9)
 
     const tables = await rows<{ table_name: string }>(
       `SELECT "table_name" FROM information_schema.tables WHERE "table_schema" = 'public' AND "table_name" IN ('chaos_card_rules', 'chaos_config') ORDER BY "table_name"`,
@@ -99,7 +99,7 @@ describe('0007_chaos', () => {
     await runMigrations(db(), 'pglite') // nothing left to apply
     await reapply0007() // every statement is guarded
     expect(await rows(`SELECT "id", "chaos_used" FROM "games"`)).toEqual([{ id: 'h1', chaos_used: null }])
-    expect(await rows(`SELECT "hash" FROM "drizzle"."__drizzle_migrations"`)).toHaveLength(8)
+    expect(await rows(`SELECT "hash" FROM "drizzle"."__drizzle_migrations"`)).toHaveLength(9)
   })
 
   it('refuses a weight outside 0..100 and keeps updated_by free of foreign keys', async () => {

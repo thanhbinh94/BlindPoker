@@ -48,5 +48,9 @@
   { "id": "rooms_100", "category": "social", "metric": "roomsJoined", "threshold": 100, "reward": { "points": 10000 } },
   { "id": "games_50", "category": "social", "metric": "gamesCompleted", "threshold": 50, "reward": { "points": 5000 } },
   { "id": "games_500", "category": "social", "metric": "gamesCompleted", "threshold": 500, "reward": { "itemId": "badge_veteran" } },
-  { "id": "games_1000", "category": "social", "metric": "gamesCompleted", "threshold": 1000, "reward": { "itemId": "frame_veteran" } }
+  { "id": "games_1000", "category": "social", "metric": "gamesCompleted", "threshold": 1000, "reward": { "itemId": "frame_veteran" } },
+
+  { "id": "chaos_god", "category": "chaos", "metric": "chaosAscensions", "threshold": 1, "reward": { "points": 300000, "itemId": "title_god" }, "reputation": 300 },
+  { "id": "chaos_demigod", "category": "chaos", "metric": "chaosDemigods", "threshold": 1, "reward": { "points": 150000, "itemId": "title_demigod" }, "reputation": 150 },
+  { "id": "chaos_godslayer", "category": "chaos", "metric": "chaosGodsSlain", "threshold": 2, "reward": { "points": 500000, "itemId": "title_godslayer" }, "reputation": 500 }
 ]

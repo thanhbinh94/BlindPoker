@@ -8,7 +8,7 @@
  * formula = (hands_played_holdem + hands_played_blind) × hand_played
  *         + (hands_won_holdem + hands_won_blind) × hand_won
  *         + total_login_days × daily_login
- *         + Σ over unlocked achievements of rules[achievementRuleFor(def)]
+ *         + Σ over unlocked achievements of (def.reputation ?? rules[achievementRuleFor(def)])
  * delta   = max(0, formula − Σ live deltas whose reason mirrors those counters)
  * ```
  *
@@ -77,7 +77,8 @@ export async function backfillReputation(db: AppDb, opts: BackfillOptions): Prom
   })
   const rules = await reputation.rules()
   const ladder = await reputation.ranks()
-  const payOf = new Map<string, number>(opts.defs.map((def) => [def.id, rules[reputation.achievementRuleFor(def)]]))
+  // BP-41: an achievement with its own `reputation` paid that number live, so its history counts that number too.
+  const payOf = new Map<string, number>(opts.defs.map((def) => [def.id, def.reputation ?? rules[reputation.achievementRuleFor(def)]]))
 
   /** What `playerId`'s history earns, minus what the live server already paid for it; read through `q`. */
   async function deltaOf(q: AppDb | AppTx, playerId: string): Promise<number> {
