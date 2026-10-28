@@ -39,8 +39,8 @@ type Firing = Omit<PlannedEffect, 'targets'>
  * its shield (and its armed bonus card waits, untouched). Otherwise a played bonus card fires first (see below), then,
  * in the order the cards were received: duration cards fire while they have hands left; one-shot
  * buffs fire once per effect kind; at most one debuff fires (the oldest); shields and mirrors are exposed as `shield`
- * for the engine, and a held Bia đỡ đạn as `scapegoat` (BP-41); Cấp cứu, Thần tài and Cao thủ wait for `afterHand`; a card whose modes exclude the table's never fires. Each
- * Tay bạc then rolls one effect under the same rules. Deal-time debuffs get their targets here (one other seat at
+ * for the engine, and a held Bia đỡ đạn as `scapegoat` (BP-41); Cấp cứu, Thần tài and Cao thủ wait for `afterHand`;
+ * a card whose modes exclude the table's never fires. Each Tay bạc then rolls one effect under the same rules. Deal-time debuffs get their targets here (one other seat at
  * random, or every other seat with `all`); reveal debuffs get `targets: []`. The input seats are never changed: the
  * returned map holds each seat as it goes into the hand (a rolled Tích lũy adds its points there).
  *

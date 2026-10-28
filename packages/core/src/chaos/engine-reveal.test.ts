@@ -384,7 +384,7 @@ describe('Gậy ông đập lưng ông (backfire)', () => {
 
     const plunder = new Stage({ chaos: plan(2, { 0: { effects: [fx('d_plunder')] }, 1: { effects: [fx('d_backfire')] } }), holes: ['2c 3d', 'Ah Kh'], board: BOARD })
     expect(plunder.applied('plunder', plunder.dealEvents)[0]).toMatchObject({ seat: 0, outcome: 'reflected', targets: [] })
-    expect(plunder.chaos.hit).toEqual([])
+    expect(plunder.chaos.hit).toEqual([0]) // the holder took its own debuff, as for every bounce
   })
 
   it('turns a duel round: the target challenges the user', () => {
@@ -568,5 +568,103 @@ describe('Gậy ông at the deal, on the dealt cards', () => {
       lowered++
     }
     expect(lowered).toBeGreaterThan(15)
+  })
+})
+
+describe('Bia đỡ đạn: privacy and chains (fix round 1)', () => {
+  it('a hand-off of a private deal debuff reaches only the seat passing it, the seat taking it and the user', () => {
+    for (let seed = 1; seed <= 6; seed++) {
+      const t = new Stage({
+        chaos: plan(4, { 0: { effects: [fx('s_freeze_one', { targets: [1] })] }, 1: { scapegoat: true } }),
+        holes: ['2c 3d', 'Ah Kh', '7s 8s', 'Tc Td'], board: BOARD, dealRng: seededRng(seed),
+      })
+      const handOff = t.applied('scapegoat', t.dealEvents)[0]!
+      const to = handOff.targets[0]!
+      expect([2, 3]).toContain(to)
+      expect(handOff).toMatchObject({ seat: 1, outcome: 'applied', privateTo: [1, to, 0] })
+      const third = to === 2 ? 3 : 2
+      for (const s of [0, 1, to]) expect(filterEvent(handOff, s)).not.toBeNull()
+      expect(filterEvent(handOff, third)).toBeNull()
+      expect(filterEvent(handOff, null)).toBeNull()
+      expect(t.chaos.marks).toEqual([{ seat: to, kind: 'freeze' }])
+      // The freeze itself stays private to its user and the seat it landed on.
+      const freeze = t.applied('freeze', t.dealEvents)[0]!
+      expect(filterEvent(freeze, third)).toBeNull()
+    }
+  })
+
+  it('a hand-off at the reveal stays public', () => {
+    const t = new Stage({ chaos: plan(3, { 0: { effects: [fx('g_swap_hands')] }, 1: { scapegoat: true } }), holes: ['2c 3d', 'Ah Kh', '7s 8s'], board: BOARD })
+    t.reveal(script(0, 0))
+    const handOff = t.applied('scapegoat')[0]!
+    expect(handOff.privateTo).toBeUndefined()
+    expect(filterEvent(handOff, null)).toEqual(handOff)
+  })
+
+  it('a chain: the seat it was handed to passes it on with its own; never back to a seat it came from', () => {
+    const t = new Stage({ chaos: plan(4, { 0: { effects: [fx('g_swap_hands')] }, 1: { scapegoat: true }, 2: { scapegoat: true } }), holes: ['2c 3d', 'Ah Kh', '7s 8s', 'Tc Td'], board: BOARD })
+    t.reveal(script(0, 0, 0)) // aimed at seat 1 → handed to seat 2 → handed to seat 3 (seat 1 is excluded)
+    expect(t.applied('scapegoat').map((e) => [e.seat, e.targets])).toEqual([[1, [2]], [2, [3]]])
+    expect(t.applied('swapHands')[0]).toMatchObject({ targets: [3], outcome: 'applied' })
+    expect(t.hole(0)).toEqual(parseCards('Tc Td'))
+    expect(t.chaos.applied).toEqual(expect.arrayContaining([801, 802]))
+
+    const back = new Stage({ chaos: plan(3, { 0: { effects: [fx('g_swap_hands')] }, 1: { scapegoat: true }, 2: { scapegoat: true } }), holes: ['2c 3d', 'Ah Kh', '7s 8s'], board: BOARD })
+    back.reveal(script(0, 0)) // seat 1 → seat 2; seat 2 has nobody left (not the user, not seat 1): it lands, its card waits
+    expect(back.applied('scapegoat').map((e) => e.seat)).toEqual([1])
+    expect(back.applied('swapHands')[0]).toMatchObject({ targets: [2], outcome: 'applied' })
+    expect(back.chaos.applied).not.toContain(802)
+  })
+
+  it('handed to a mirrored seat, a duel turns round on that seat: it challenges the user', () => {
+    const t = new Stage({
+      chaos: plan(3, { 0: { effects: [fx('g_duel')] }, 1: { scapegoat: true }, 2: { shield: 'mirror' } }),
+      holes: ['3c 5d', 'Ah Kh', 'As Ad'], board: BOARD,
+    })
+    t.reveal(script(0, 0, 5)) // aimed at seat 1 → handed to seat 2 → mirrored; seat 2's pair of Aces wins; 3 wagers
+    expect(t.applied('scapegoat')[0]).toMatchObject({ seat: 1, targets: [2] })
+    expect(t.applied('duel')[0]).toMatchObject({ seat: 0, targets: [2], outcome: 'reflected', wagers: 3 })
+    expect(t.chaos.duels).toEqual([expect.objectContaining({ winner: 2, payer: 0, wagers: 3 })])
+  })
+})
+
+describe('Gậy ông and Ngược dòng (fix round 1)', () => {
+  it("a turned-back debuff never touches its user's shield or mirror", () => {
+    for (const kind of ['shield', 'mirror'] as const) {
+      const t = new Stage({ chaos: plan(2, { 0: { effects: [fx('s_redeal_hole')], shield: kind }, 1: { effects: [fx('d_backfire')] } }), holes: ['2c 3d', 'Ah Kh'], board: BOARD, next: 'Qc' })
+      t.reveal(script(0, 0))
+      expect(t.applied('redealHole')[0]).toMatchObject({ seat: 0, outcome: 'reflected' })
+      expect(t.hole(0)).toEqual(parseCards('Qc 3d'))
+      expect(t.chaos.shieldSpent).toEqual([])
+      expect(t.chaos.blocked).not.toContain(700)
+    }
+  })
+
+  it('Kẻ phá đám turned back switches off one of its own user\'s cards', () => {
+    const borrow0 = fx('g_borrow')
+    const borrow2 = fx('g_borrow')
+    const t = new Stage({
+      chaos: plan(3, { 0: { effects: [fx('s_spoiler'), borrow0] }, 1: { effects: [fx('d_backfire')] }, 2: { effects: [borrow2] } }),
+      holes: ['2c 3d', 'Ah Kh', '7s 8s'], board: BOARD,
+    })
+    // Seat 1's only card is the Gậy ông, which no Kẻ phá đám switches off: the target is seat 2.
+    expect(t.applied('spoiler', t.dealEvents)[0]).toMatchObject({ seat: 0, targets: [2], outcome: 'reflected', off: 'g_borrow' })
+    expect(t.chaos.plan.seats[0]!.effects.map((e) => e.uid)).not.toContain(borrow0.uid)
+    expect(t.chaos.plan.seats[2]!.effects.map((e) => e.uid)).toContain(borrow2.uid)
+    expect(t.chaos.hit).toEqual([0])
+  })
+
+  it('Ngược dòng: a tie at the top counts as leading; among tied leaders the first clockwise from the holder', () => {
+    // On Kd 7h 4c 2s 9d, Ah Ad and As Ac are the same pair of Aces with the same kickers.
+    const tie = new Stage({ chaos: plan(3, { 0: { effects: [fx('d_swap_leader')] } }), holes: ['Ah Ad', '3h 5d', 'As Ac'], board: BOARD }).reveal(script())
+    expect(tie.applied('swapLeader')[0]).toMatchObject({ seat: 0, outcome: 'fizzled', targets: [] })
+    expect(tie.hole(0)).toEqual(parseCards('Ah Ad'))
+
+    const two = new Stage({ chaos: plan(3, { 1: { effects: [fx('d_swap_leader')] } }), holes: ['Ah Ad', '3h 5d', 'As Ac'], board: BOARD }).reveal(script())
+    expect(two.applied('swapLeader')[0]).toMatchObject({ seat: 1, targets: [2], outcome: 'applied' })
+    expect(two.hole(1)).toEqual(parseCards('As Ac'))
+
+    const wrap = new Stage({ chaos: plan(3, { 2: { effects: [fx('d_swap_leader')] } }), holes: ['Ah Ad', 'As Ac', '3h 5d'], board: BOARD }).reveal(script())
+    expect(wrap.applied('swapLeader')[0]).toMatchObject({ seat: 2, targets: [0], outcome: 'applied' })
   })
 })

@@ -188,10 +188,11 @@ export type GameEvent =
    * the fixed wagers the duel's loser owes (0 = the challenger's hand did not win or the roll paid nothing); on a
    * `reflected` duel the target challenged the holder, so the holder owes them. `stake` (BP-41 Mạo hiểm gia, Sới lớn, told
    * at the ante): the multiple of the fixed wager the card makes the seat's stake this hand (Sới lớn: the whole table's).
+   * `privateTo` (BP-41 Bia đỡ đạn handing a private deal debuff on): the only seats `filterEvent` lets the event reach.
    */
   | {
     type: 'CHAOS_APPLIED'; seat: number; cardId: string; effect: ChaosEffectKind; targets: number[]; outcome: ChaosOutcome; community?: Card[]
-    amount?: number; dice?: number[]; holeDelta?: number; wild?: Card; off?: string; wagers?: number; stake?: number
+    amount?: number; dice?: number[]; holeDelta?: number; wild?: Card; off?: string; wagers?: number; stake?: number; privateTo?: number[]
   }
   /** "Nhìn trộm": the next board cards, for `seat` only (`filterEvent` blanks them for everyone else). */
   | { type: 'CHAOS_PEEK'; seat: number; cards: Card[] }

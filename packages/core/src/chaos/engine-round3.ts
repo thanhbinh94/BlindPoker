@@ -145,13 +145,19 @@ function lowerTo(state: HandState, seat: number, toRank: number): boolean {
  * its cards. It needs as many cards from the deck as the holder holds, above the reserve, else it fizzles (spec §3
  * "thiếu lá"). Its event names the seats robbed, never a card (A8), and reaches only them and the holder. Under another
  * seat's Gậy ông đập lưng ông (Task 4) it turns back on its holder, who would rob itself: `reflected`, nothing changes,
- * nobody is hit. A Bia đỡ đạn never moves it (it is aimed at no one seat).
+ * and the holder counts as hit, as for every bounced debuff (`fizzled` when it was hit already). A Bia đỡ đạn never
+ * moves it (it is aimed at no one seat).
  */
 function plunder(state: HandState, events: GameEvent[], user: number, e: PlannedEffect): void {
   const chaos = state.chaos!
   const me = getPlayer(state, user)
   const n = me.holeCards.length
   if (backfireAgainst(chaos, user)) {
+    if (chaos.hit.includes(user)) {
+      record(chaos, events, user, e, [], 'fizzled')
+      return
+    }
+    chaos.hit.push(user)
     record(chaos, events, user, e, [], 'reflected')
     return
   }

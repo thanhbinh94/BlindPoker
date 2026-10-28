@@ -18,9 +18,24 @@ import type { ChaosEffectKind, ChaosHandState, ChaosOutcome, PlannedEffect } fro
 export const DEAL_RESERVE = 10
 export const reserveOf = (state: HandState): number => DEAL_RESERVE + (state.chaos?.sixthBoard ? 1 : 0)
 
+/**
+ * Deal-time effects told only to their owner (and, for a debuff, its targets) when they happen: the table learns of
+ * them from `CHAOS_SUMMARY` at the settlement. `reverseRank` is the one deal-time card the whole table is told at once,
+ * and BP-41's Lá chung thứ sáu is public too (the river shows it), as is Nhật thực (every other seat's cards are off).
+ * BP-41 A8 adds Siêu cộng dồn, Lá ma, Liều ăn nhiều, Đảo bài, Hên xui and Cướp đoạt; Task 3b the other two deal-time
+ * debuffs, Lời nguyền and Kẻ phá đám (their target is told, as for a freeze). Kept here (re-exported by `engine.ts`) so
+ * the debuff resolver can give Bia đỡ đạn's hand-off the privacy of the debuff it passes on.
+ */
+export const PRIVATE_AT_DEAL: ReadonlySet<ChaosEffectKind> = new Set([
+  'swapLowest', 'redealWeak', 'swapAll', 'bestOfN', 'highCard', 'suited', 'extraHole', 'freeze', 'blindfold',
+  'acesCharge', 'wildCard', 'riskyHand', 'flipFlop', 'coinFlip', 'plunder', 'curse', 'spoiler',
+])
+
 export type Applied = Extract<GameEvent, { type: 'CHAOS_APPLIED' }>
 /** What an effect's `CHAOS_APPLIED` carries besides its outcome, and whether its card is used up. */
 export interface RecordExtra {
+  /** The only seats `filterEvent` lets the event reach (BP-41 Bia đỡ đạn passing a private deal debuff on). */
+  privateTo?: number[]
   community?: Card[]
   amount?: number
   holeDelta?: number
@@ -77,6 +92,7 @@ export function record(chaos: ChaosHandState, events: GameEvent[], seat: number,
   if (extra.dice !== undefined) ev.dice = extra.dice.slice()
   if (extra.wagers !== undefined) ev.wagers = extra.wagers
   if (extra.stake !== undefined) ev.stake = extra.stake
+  if (extra.privateTo !== undefined) ev.privateTo = extra.privateTo.slice()
   events.push(ev)
   chaos.used.push({ seat, cardId: e.cardId, effect: e.effect, outcome, targets: targets.slice() })
   addUid(chaos.recorded, e.uid)
@@ -135,7 +151,8 @@ const scapegoatOf = (chaos: ChaosHandState, seat: number): PlannedEffect | null 
  *    forever.
  * 4. Bia đỡ đạn (BP-41): the target hands it to another seat at random — still in the hand, not its user, not hit yet,
  *    not immune to a hole-card effect, not a seat it was passed on from — and the card is spent (its own event names the
- *    new target); the new target resolves it from step 2. Nobody to hand it to: the card waits and the debuff lands.
+ *    new target, private to the three seats involved when the debuff is a private deal one: `privateTo`); the new
+ *    target resolves it from step 2. Nobody to hand it to: the card waits and the debuff lands.
  * 5. It lands: `apply` does the harm and says whether anything changed.
  * Without a Gậy ông or a Bia đỡ đạn in the hand this draws nothing from `rng` and is BP-37's resolver, step for step.
  */
@@ -174,7 +191,10 @@ export function resolveDebuff(state: HandState, events: GameEvent[], user: numbe
       .map((p) => p.seat)
     if (others.length > 0) {
       const to = others[opts.rng!.int(others.length)]!
-      record(chaos, events, target, sg, [to], 'applied')
+      // The hand-off is as private as what it passes: a private deal debuff's hand-off reaches only the seat passing it,
+      // the seat taking it and the debuff's user (A8); the table reads it in CHAOS_SUMMARY. Any other is public.
+      const privacy = PRIVATE_AT_DEAL.has(e.effect) ? { privateTo: [...new Set([target, to, user])] } : {}
+      record(chaos, events, target, sg, [to], 'applied', privacy)
       resolveDebuff(state, events, user, e, to, apply, { ...opts, passed })
       return
     }

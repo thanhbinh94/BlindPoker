@@ -13,7 +13,7 @@ import { recordBackfires } from './engine-reveal.js'
 import { markNoFold } from './engine-stake.js'
 import type { ChaosEffectKind, ChaosHandPlan, ChaosHandState, ChaosOutcome, PlannedEffect } from './types.js'
 
-export { DEAL_RESERVE, isImmune } from './engine-core.js'
+export { DEAL_RESERVE, PRIVATE_AT_DEAL, isImmune } from './engine-core.js'
 export { applyRevealEffects } from './engine-reveal.js'
 
 /**
@@ -23,17 +23,6 @@ export { applyRevealEffects } from './engine-reveal.js'
  * in `engine-core.ts`; BP-41's hole-card debuffs, Kẻ phá đám, Nhật thực's event and Mắt diều hâu in `engine-round3.ts`.
  */
 
-/**
- * Deal-time effects told only to their owner (and, for a debuff, its targets) when they happen: the table learns of
- * them from `CHAOS_SUMMARY` at the settlement. `reverseRank` is the one deal-time card the whole table is told at once,
- * and BP-41's Lá chung thứ sáu is public too (the river shows it), as is Nhật thực (every other seat's cards are off).
- * BP-41 A8 adds Siêu cộng dồn, Lá ma, Liều ăn nhiều, Đảo bài, Hên xui and Cướp đoạt; Task 3b the other two deal-time
- * debuffs, Lời nguyền and Kẻ phá đám (their target is told, as for a freeze).
- */
-export const PRIVATE_AT_DEAL: ReadonlySet<ChaosEffectKind> = new Set([
-  'swapLowest', 'redealWeak', 'swapAll', 'bestOfN', 'highCard', 'suited', 'extraHole', 'freeze', 'blindfold',
-  'acesCharge', 'wildCard', 'riskyHand', 'flipFlop', 'coinFlip', 'plunder', 'curse', 'spoiler',
-])
 
 /**
  * The order a seat's deal-time buffs act in. Luck that picks a set comes before the promises that must hold at the end.

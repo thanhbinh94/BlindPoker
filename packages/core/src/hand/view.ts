@@ -66,7 +66,10 @@ export function filterEvent(event: GameEvent, viewerSeat: number | null): GameEv
   if (event.type === 'CARDS_DEALT' && event.seat !== viewerSeat) return { ...event, cards: [] }
   if (event.type === 'CHAOS_PEEK' && event.seat !== viewerSeat) return { ...event, cards: [] }
   if (event.type === 'CHAOS_HAWK' && event.seat !== viewerSeat) return { ...event, cards: [] }
-  if (event.type === 'CHAOS_APPLIED' && PRIVATE_AT_DEAL.has(event.effect)) {
+  if (event.type === 'CHAOS_APPLIED' && event.privateTo) {
+    // BP-41 Bia đỡ đạn passing a private deal debuff on: exactly the seats it names.
+    if (viewerSeat === null || !event.privateTo.includes(viewerSeat)) return null
+  } else if (event.type === 'CHAOS_APPLIED' && PRIVATE_AT_DEAL.has(event.effect)) {
     const party = viewerSeat !== null && (event.seat === viewerSeat || event.targets.includes(viewerSeat))
     if (!party) return null
   }
