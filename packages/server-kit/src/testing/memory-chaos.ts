@@ -3,7 +3,7 @@ import type { ChaosPort } from '../chaos-port.js'
 import type { MemoryRepositories } from '../memory-repositories.js'
 
 export interface MemoryChaosOptions {
-  /** The catalogue; `CHAOS_CARDS_SPEC` by default (the 47 on, BP-41's 39 off until Task 7b). */
+  /** The catalogue; `CHAOS_CARDS_SPEC` by default (all 86 on: Plan 37's 47 and BP-41's 39). */
   cards?: readonly ChaosCardDef[]
   config?: Partial<ChaosConfig>
   weights?: ReadonlyMap<string, number>

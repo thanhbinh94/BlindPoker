@@ -12,15 +12,14 @@ function card(
 }
 
 /**
- * BP-41 (spec 2026-10-28 §4–§6): the 39 round-three cards ship **off** until the engine and the server run them
- * (pre-flight amendment A-churn: Task 7b turns them on). A disabled card has draw weight 0, so no draft, bonus draw,
- * Cấp độ or Tay bạc roll can deal one, and every seeded draw over the 47 stays as it was.
+ * BP-41 (spec 2026-10-28 §4–§6): the 39 round-three cards. They shipped off while the engine and the server were built
+ * (pre-flight amendment A-churn) and are on since Task 7b, like the 47.
  */
 function card3(
   id: string, tier: ChaosTier, family: string, effect: ChaosEffectKind, params: Record<string, number>, timing: ChaosTiming,
   opts: { modes?: readonly ChaosMode[]; debuff?: boolean } = {},
 ): ChaosCardDef {
-  return card(id, tier, family, effect, params, timing, { ...opts, enabled: false })
+  return card(id, tier, family, effect, params, timing, opts)
 }
 
 const FORTUNE_SILVER = { m2: 2, m4: 4, c4: 1, t4: 1, m6: 6, c6: 1, t6: 2 }
@@ -46,7 +45,7 @@ const DICE_DIAMOND = {
 
 /**
  * The 47 cards of spec §5.1–§5.3 as data, in table order, then BP-41's 39 (spec 2026-10-28 §6.3 Bạc, §6.2 Vàng, §6.1
- * Kim cương, each in table order, all `enabled: false` for now). `apps/normal-server/data/chaos-cards.json` must
+ * Kim cương, each in table order; all 86 on). `apps/normal-server/data/chaos-cards.json` must
  * deep-equal this list; tests across the packages build their tables from it. See `ChaosCardDef` for what the BP-37
  * params mean. BP-41's params, by card (every number of the spec lives here; percentages are whole numbers):
  * - `hands`, as before, makes a duration card: it fires each hand while it has hands left. "Up to N hands, until a

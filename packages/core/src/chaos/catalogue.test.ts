@@ -56,10 +56,10 @@ describe('the spec catalogue (fixtures)', () => {
     expect(CHAOS_TIERS.map((tier) => Object.keys(ROUND_THREE[tier]).length)).toEqual([12, 13, 14])
   })
 
-  it('marks only the ✱ cards as play-or-fold only; the 47 are on by default and the 39 ship off until the engine runs them (A-churn)', () => {
+  it('marks only the ✱ cards as play-or-fold only; all 86 are on (the 39 since Task 7b, A-churn)', () => {
     for (const c of CHAOS_CARDS_SPEC) {
       expect(c.modes, c.id).toEqual(STARRED.includes(c.id) ? ['playOrFold'] : ['playOrFold', 'none'])
-      expect(c.enabled, c.id).toBe(!ROUND_THREE_IDS.has(c.id))
+      expect(c.enabled, c.id).toBe(true)
     }
   })
 

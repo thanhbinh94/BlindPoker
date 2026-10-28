@@ -2,7 +2,7 @@ import {
   DEFAULT_CHAOS_CONFIG, EMPTY_CHAOS_SEAT, EMPTY_CHAOS_TABLE, addRevealEffect, afterHand, armBonus, clearUnsettledHand, drawOffer, drawTier, endReign,
   liftTier, planHand, receiveCard, stealPoints, toChaosTableView, toHeldCardView,
   type AfterHandSeat, type ArmWhen, type BlindRules, type ChaosBonusPayload, type ChaosCardDef, type ChaosConfig, type ChaosCredit, type ChaosDebit, type ChaosHandPlan,
-  type ChaosReignKind, type ChaosSeat, type ChaosSnapshot, type ChaosSteal, type ChaosTableState, type ChaosTableView, type ChaosTier, type HandState,
+  type ChaosReignKind, type ChaosSeat, type ChaosSnapshot, type ChaosSteal, type ChaosTableState, type ChaosTableView, type ChaosTier, type ChaosTitles, type HandState,
   type HeldCardView, type RoomEvent,
 } from '@bp/core'
 import type { ChaosPort } from '../chaos-port.js'
@@ -45,6 +45,30 @@ interface Draft {
 }
 
 const done = (e: DraftEntry): boolean => e.picked !== null || e.cardIds.length === 0
+
+/**
+ * BP-41 A12 / spec §4.4 G12: the title marks a settled chaos hand earned that count for the stats, by seat — copied into
+ * `HandSummary.players[].chaosTitles`. Only when at least two humans sit at the table (`humansSeated`, anti-farming);
+ * never for a bot's seat (a bot has no titles); a `slew` mark only when the Thần beaten was a human (`plan.god.isBot`).
+ * The room calls it for a hand that was not cancelled only: a title is earned when its hand settles — an ascension
+ * whose hand is cancelled keeps its reign (and its herald, already sent) but marks nothing (Ruling 7b-1).
+ */
+export function countedTitles(state: HandState, humansSeated: number): Map<number, ChaosTitles> {
+  const out = new Map<number, ChaosTitles>()
+  const chaos = state.chaos
+  if (!chaos?.titles || humansSeated < 2) return out
+  const botGod = chaos.plan.god?.isBot === true
+  for (const { seat, ascended, demigod, slew } of chaos.titles) {
+    if (state.players.find((hp) => hp.seat === seat)?.isBot !== false) continue
+    const marks: ChaosTitles = {
+      ...(ascended ? { ascended } : {}),
+      ...(demigod ? { demigod } : {}),
+      ...(slew && !botGod ? { slew } : {}),
+    }
+    if (Object.keys(marks).length > 0) out.set(seat, marks)
+  }
+  return out
+}
 
 /**
  * The chaos side of one Blind table (Poker hỗn loạn, spec 2026-10-26 §3.2–§3.4): the hands counted, the draft between
@@ -203,6 +227,7 @@ export class ChaosTable {
     const r = stealPoints({
       seats: new Map(seated.map((p) => [p.seat!, p.chaos ?? EMPTY_CHAOS_SEAT])),
       holder,
+      // A uid of its own: a card that acts on receipt is never held, so no held card's uid names it.
       card: { cardId: card.id, uid: this.nextUid(), params: card.params },
       rng: this.host.deps.rng,
     })
@@ -336,7 +361,7 @@ export class ChaosTable {
     if (had && (had.bonus.length > 0 || had.armed)) this.sendBonus(p)
     let table = endReign(this.table, seat)
     if (table.bombs.some((b) => b.owner === seat || b.carrier === seat)) {
-      const others = this.seated().map((x) => x.seat!).filter((s) => s !== seat)
+      const others = this.seated().map((x) => x.seat!) // the leaver's seat is already empty
       const { rng } = this.host.deps
       const bombs = table.bombs.flatMap((b) => {
         if (b.owner === seat) return []
@@ -420,12 +445,12 @@ export class ChaosTable {
       const p = seatPlayer(roll.seat)
       if (!p) continue
       const i = debits.findIndex((d) => d.uid === roll.uid && d.seat === roll.seat)
-      if (i >= 0) this.payDebit(p, debits.splice(i, 1)[0]!)
+      if (i >= 0) await this.payDebit(state.handId, p, debits.splice(i, 1)[0]!)
       this.host.broadcast({ type: 'CHAOS_DICE', seat: roll.seat, cardId: roll.cardId, dice: roll.dice, result: roll.result, stack: p.stack })
     }
     for (const debit of debits) {
       const p = seatPlayer(debit.seat)
-      if (p) this.payDebit(p, debit)
+      if (p) await this.payDebit(state.handId, p, debit)
     }
     for (const s of settled.steals) this.tellSteal(s)
     for (const credit of settled.credits) {
@@ -438,11 +463,23 @@ export class ChaosTable {
 
   /**
    * BP-41 §5 (A6): points a card takes from the seat's stack (the dice), never more than the stack. The stack is lowered
-   * at once, a bot's as a human's (a bot's stack is virtual: nothing else is written for it). A human's sink row is the
-   * table-fee-like write of Task 7b.
+   * at once, a bot's as a human's (a bot's stack is virtual: nothing else is written for it). For a human the points
+   * leave the economy like a table fee: a `chaos_dice` sink row of what was taken, with no player row (the stack's points
+   * left the balance at the buy-in), under `chaos_dice:<room>:<hand>:<seat>:<uid>` so a retry never sinks twice. Retried
+   * once; a write that fails again is logged with its key, like a lost fee, and the stack stays lowered (the books are
+   * short by it until an operator reconciles, as for a fee).
    */
-  private payDebit(p: RoomPlayer, debit: ChaosDebit): void {
-    p.stack -= Math.min(Math.max(0, debit.amount), p.stack)
+  private async payDebit(handId: string, p: RoomPlayer, debit: ChaosDebit): Promise<void> {
+    const taken = Math.min(Math.max(0, debit.amount), p.stack)
+    p.stack -= taken
+    if (p.identity.isBot || taken === 0) return
+    const key = `chaos_dice:${this.host.roomId}:${handId}:${debit.seat}:${debit.uid}`
+    const write = () => this.host.deps.repos.balances.apply([], { refId: key, fee: taken, kind: 'chaos_dice' }, { key })
+    try {
+      await write().catch(() => write()) // one retry, under the same key
+    } catch (err) {
+      this.host.deps.log.error('chaos dice sink failed', { roomId: this.host.roomId, handId, playerId: p.identity.playerId, amount: taken, key, err: String(err) })
+    }
   }
 
   /**

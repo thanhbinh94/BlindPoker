@@ -780,6 +780,24 @@ describe('GmService — daily stats', () => {
       await db.execute(sql`delete from point_transactions where reason in ('shop_purchase', 'shop')`)
     }
   })
+
+  it('BP-41: a dice loss (chaos_dice, the room\'s playerless sink row) counts as a sink, in the day and in the overview', async () => {
+    const gmAt = createGmService(deps({ now: () => START })) // 2026-09-04 10:00 in Ho Chi Minh, 03:00 UTC
+    await stamp('starting_balance', '2026-08-28T10:00:00Z')
+    const before = await gmAt.dailyStats(7)
+    try {
+      // What `Room` writes through `balances.apply([], { kind: 'chaos_dice' })` for a human's lost wager.
+      await db.execute(sql`insert into point_transactions (player_id, amount, reason, ref_id, kind) values (null, 2000, 'chaos_dice', 'chaos_dice:r:h:0:7', 'chaos_dice')`)
+      await stamp('chaos_dice', '2026-09-04T02:00:00Z')
+      const days = await gmAt.dailyStats(7)
+      expect(days[6]).toEqual({ day: '2026-09-04', sources: {}, sinks: { chaos_dice: 2_000 }, net: before[6]!.net - 2_000 })
+      const o = await gmAt.overview()
+      expect(o.points24h.sinks).toBe(2_000)
+      expect(o.points24h.sources).toBe(0)
+    } finally {
+      await db.execute(sql`delete from point_transactions where reason = 'chaos_dice'`)
+    }
+  })
 })
 
 describe('GmService — shop and reputation (Plan 27 B4)', () => {
@@ -971,12 +989,12 @@ describe('GmService — chaos cards (Plan 37)', () => {
     )
   const silver = async () => (await gm.chaos()).cards.filter((c) => c.tier === 'silver')
 
-  it('chaos() lists the 47 cards with activeNow and the config as it stands', async () => {
+  it('chaos() lists the 86 cards with activeNow and the config as it stands', async () => {
     const view = await gm.chaos()
-    // BP-41: the catalogue also lists the 39 round-three cards, off in the file until the engine runs them.
+    // Plan 37's 47 and BP-41's 39, every one on in the file.
     expect(view.cards).toHaveLength(47 + 39)
     expect(view.cards.every((c) => c.rule === null && c.activeNow === c.fileEnabled)).toBe(true)
-    expect(view.cards.filter((c) => c.activeNow)).toHaveLength(47)
+    expect(view.cards.filter((c) => c.activeNow)).toHaveLength(47 + 39)
     expect(view.config).toEqual(await h.app.services.chaos.config())
   })
 

@@ -51,7 +51,10 @@ describe('drawOffer', () => {
     }
     expect(seen.has('g_luck_3')).toBe(false)
     expect(seen.has('g_farm')).toBe(false)
-    expect(seen.get('g_crit')).toBeGreaterThan(450)
+    // Weight 20 among 26 weight-1 gold cards (the 13 + BP-41's 13): in about 4 offers out of 5, and far above any other.
+    expect(seen.get('g_crit')).toBeGreaterThan(380)
+    const rest = [...seen].filter(([id]) => id !== 'g_crit').map(([, n]) => n)
+    expect(Math.max(...rest) * 5).toBeLessThan(seen.get('g_crit')!)
   })
 
   it('offers what exists when a tier has fewer active cards, and falls back a tier when it has none', () => {

@@ -201,7 +201,7 @@ export interface GmService {
   setReputationRanks(actor: GmActor, ranks: unknown, reason: string): Promise<{ actionId: number }>
   /** Adds 1..100 000 reputation to one account (spec A5: a GM only ever adds), announcing a rank-up after the commit. */
   grantReputation(actor: GmActor, playerId: string, amount: number, reason: string): Promise<{ actionId: number; reputation: number; rank: number }>
-  /** Plan 37: the Thẻ hỗn loạn tab — the 47 cards with their rules and whether each is drawn now, and the settings. */
+  /** Plan 37: the Thẻ hỗn loạn tab — the cards (86 since BP-41) with their rules and whether each is drawn now, and the settings. */
   chaos(): Promise<GmChaosDto>
   /** Writes the changed cards' rules (a `clear: true` hands a card back to the file) in one transaction; refuses a tier left under three drawable cards. */
   setChaosRules(actor: GmActor, changes: unknown, reason: string): Promise<{ actionId: number; changed: number }>
@@ -254,9 +254,10 @@ const CLAIM_REASONS = sql`('daily_login', 'daily_item_fallback')`
 const SOURCE_REASONS: ReadonlySet<string> = new Set(['starting_balance', 'daily_reward', 'daily_login', 'daily_item_fallback', 'relief', 'achievement', 'gm_grant', 'gm_adjust', 'gm_achievement', 'gm_checkin_undo', 'chaos_rescue', 'chaos_crit', 'chaos_fortune', 'chaos_jackpot'])
 /**
  * Sinks: a sink row's reason is its kind (`SettlementMeta.kind`). `shop` is the sink half of a purchase; its player
- * half, `shop_purchase`, is a transfer and sits in neither set, so a purchase is counted once.
+ * half, `shop_purchase`, is a transfer and sits in neither set, so a purchase is counted once. BP-41: `chaos_dice`, the
+ * points an unlucky Xúc xắc vận may took off a table stack (a playerless row, like the table fee).
  */
-const SINK_REASONS: ReadonlySet<string> = new Set(['table_fee', 'carry_over', 'shop'])
+const SINK_REASONS: ReadonlySet<string> = new Set(['table_fee', 'carry_over', 'shop', 'chaos_dice'])
 const DAY_MS = 24 * 60 * 60 * 1000
 const SEARCH_LIMIT = { def: 20, max: 100 }
 const ACTIONS_LIMIT = { def: 50, max: 200 }

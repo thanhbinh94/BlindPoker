@@ -47,6 +47,11 @@ describe('receiveCard', () => {
       expect(received).toHaveLength(2)
       expect(received[1]!.tier).toBe('gold')
       expect(received[1]!.effect).not.toBe('levelUp')
+      // BP-41 Trộm điểm (gold) acts on receipt and is never held: the caller resolves it.
+      if (received[1]!.effect === 'stealPoints') {
+        expect(seat.cards).toEqual([])
+        continue
+      }
       expect(seat.cards).toHaveLength(1)
       expect(seat.cards[0]!.cardId).toBe(received[1]!.id)
     }

@@ -71,10 +71,10 @@ const SILVER = CHAOS_CARDS_SPEC.filter((c) => c.tier === 'silver').map((c) => c.
 describe('active()', () => {
   it('follows the file when there are no rules: every card on, each at weight 1 and marked enabled', async () => {
     const { cards, weights } = await chaos.active()
-    expect(cards).toHaveLength(47)
+    expect(cards).toHaveLength(47 + 39)
     expect(cards.every((c) => c.enabled)).toBe(true)
     expect([...weights.values()].every((w) => w === 1)).toBe(true)
-    expect(weights.size).toBe(47)
+    expect(weights.size).toBe(47 + 39)
   })
 
   it('leaves out a card the file has off, and a rule inside its window can turn it on with a weight', async () => {
@@ -121,7 +121,7 @@ describe('active()', () => {
 
   it('is what the port serves as the catalogue, with the config beside it', async () => {
     const port = createChaosPort(chaos)
-    expect((await port.catalogue()).cards).toHaveLength(47)
+    expect((await port.catalogue()).cards).toHaveLength(47 + 39)
     expect(await port.config()).toEqual(DEFAULT_CHAOS_CONFIG)
   })
 })
@@ -133,7 +133,7 @@ describe('rules()', () => {
       { cardId: 'g_crit', enabled: true, weight: 12, startsAt: clock + 5_000, endsAt: clock + 9_000 },
     ])
     const list = await chaos.rules()
-    expect(list).toHaveLength(47 + 39) // BP-41's 39 are listed, off in the file
+    expect(list).toHaveLength(47 + 39) // Plan 37's 47 and BP-41's 39
     expect(list.map((c) => c.id)).toEqual(idsOf(CHAOS_CARDS_SPEC))
     expect(list.find((c) => c.id === 's_charge')).toMatchObject({
       tier: 'silver', family: 'points', effect: 'chaosPoints', fileEnabled: true, activeNow: false,

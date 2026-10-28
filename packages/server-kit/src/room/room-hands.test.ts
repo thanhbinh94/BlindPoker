@@ -1922,8 +1922,9 @@ describe('Money conservation over many hands', () => {
   })
 
   it('200 chaos hands, drafts and card credits included, keep the books at 0', async () => {
-    // Plan 37: the spec's 47 cards, a draft every 5 hands (every human takes the first card offered), two bots. A card
-    // credit is a source row on the ledger and new points on a stack; books() takes the sources back out.
+    // Plan 37: the spec's cards (all 86 since BP-41 Task 7b), a draft every 5 hands (every human takes the first card
+    // offered), two bots. A card credit is a source row on the ledger and new points on a stack; books() takes the sources
+    // back out. A dice loss is a chaos_dice sink row, counted with every sink.
     const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, chaosCycle: 5 } }, { seed: 37, chaos: true, players: [['h', 1_000_000], ['a', 1_000_000]] })
     const ids = ['h', 'a']
     const pickAll = async () => {
@@ -1940,7 +1941,12 @@ describe('Money conservation over many hands', () => {
     await h.room.startGame('h')
     await pickAll()
     let n = 0
-    const policy: Policy = (id, legal) => ({ kind: legal.kinds.includes('play') && (id === 'h' ? n % 3 !== 0 : n % 2 === 0) ? 'play' : 'fold' })
+    // A seat that may not fold (BP-41: Cấm bỏ bài, a Thần at the table) plays.
+    const policy: Policy = (id, legal) => {
+      if (!legal.kinds.includes('play')) return { kind: 'fold' }
+      const wants = id === 'h' ? n % 3 !== 0 : n % 2 === 0
+      return { kind: wants || !legal.kinds.includes('fold') ? 'play' : 'fold' }
+    }
     while (h.repos.hands.length < 200 && n++ < 400) {
       await playOut(h, policy)
       expect(await books(h, { h: 1_000_000, a: 1_000_000 })).toBe(0)

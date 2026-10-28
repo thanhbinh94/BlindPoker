@@ -9,7 +9,8 @@ import type { ChaosTable } from './room-chaos.js'
 /**
  * BP-41 Task 7a: the chaos table's own state across hands (the Thần, the Bán Thần, the bombs), its events (herald, dice,
  * table, steal), the per-seat draft tier, the no-fold rule for a seat that left, and the money the round-three cards
- * move, at room level. The 39 round-three cards are off in data until Task 7b: every test switches on what it uses.
+ * move, at room level. Task 7b: the dice sink, the title marks in the hand summary, the cancelled ascension. Most tests
+ * build a small catalogue of exactly the cards they use.
  */
 
 /** A chaos Blind table: humans on seats 0 and 1, two bots on 3 and 2, a draft every 5 hands. */
@@ -34,7 +35,8 @@ const STEAL_DRAFT: readonly ChaosCardDef[] = [...RESCUE_ONLY.filter((c) => c.tie
 const SILVER_ONLY = { tierWeights: { silver: 1, gold: 0, diamond: 0 } }
 /** Every card on — the 47 and BP-41's 39. */
 const ALL_ON: readonly ChaosCardDef[] = CHAOS_CARDS_SPEC.map((c) => ({ ...c, enabled: true }))
-const ROUND3 = new Set(CHAOS_CARDS_SPEC.filter((c) => !c.enabled).map((c) => c.id))
+/** BP-41's 39, after the 47 of Plan 37 in the catalogue. */
+const ROUND3 = new Set(CHAOS_CARDS_SPEC.slice(47).map((c) => c.id))
 
 type Policy = (playerId: string, legal: LegalActions) => PlayerAction
 const passive: Policy = (_id, legal) => ({ kind: legal.kinds.includes('play') ? 'play' : legal.kinds.includes('check') ? 'check' : 'fold' })
@@ -126,6 +128,9 @@ async function startWith(seed: number, cards: ChaosCardDef[], opts: { spectator?
 }
 
 const EMPTY_VIEW = { god: null, demigods: [], bombs: [] }
+/** The title marks hand `hand`'s summary carries, by player (only the rows that have some). */
+const titlesOf = (h: RoomHarness, hand: number) =>
+  Object.fromEntries(h.repos.hands[hand]!.players.filter((p) => p.chaosTitles).map((p) => [p.playerId, p.chaosTitles]))
 
 describe('BP-41 room: the Thần across hands', () => {
   it('the table and the herald go out before its first hand, nobody may fold, the reign counts down to the end, and a reconnect sees it', async () => {
@@ -216,6 +221,10 @@ describe('BP-41 room: the Bán Thần', () => {
     const winners = h.repos.hands[0]!.players.filter((p) => p.won).map((p) => p.seat).sort()
     expect(crowned.map((d) => d.seat).sort()).toEqual(winners)
     expect(crowned.every((d) => d.handsLeft === 5)).toBe(true)
+    // A12: each human crowned is marked on the hand it won; a crowned bot is not.
+    const humansCrowned = h.repos.hands[0]!.players.filter((p) => !p.isBot && winners.includes(p.seat)).map((p) => p.playerId)
+    expect(humansCrowned.length).toBeGreaterThan(0)
+    expect(titlesOf(h, 0)).toEqual(Object.fromEntries(humansCrowned.map((id) => [id, { demigod: true }])))
     expect(ofEvent(h, 'a', 'CHAOS_HERALD').filter((e) => e.kind === 'demigod')).toEqual([]) // not yet
     await nextHand(h, ['h', 'a'])
     const heralds = ofEvent(h, 'a', 'CHAOS_HERALD').filter((e) => e.kind === 'demigod')
@@ -321,6 +330,12 @@ describe('BP-41 room: the dice', () => {
     expect(mine).toMatchObject({ cardId: 'g_dice', result: { burned: 1_000 }, stack: after('h') - 1_000 })
     expect(mine.dice).toHaveLength(1)
     expect(h.room.players.get('h')!.stack).toBe(after('h') - 1_000)
+    // The human's loss leaves the economy as one chaos_dice sink row (A6), under the hand, seat and card's key; the
+    // bot's writes nothing.
+    expect(h.repos.sinks.filter((x) => x.kind === 'chaos_dice')).toEqual([
+      { refId: expect.stringMatching(new RegExp(`^chaos_dice:room-1:${h.repos.hands[0]!.handId}:0:\\d+$`)), fee: 1_000, kind: 'chaos_dice' },
+    ])
+    expect(h.repos.keys.has(h.repos.sinks.find((x) => x.kind === 'chaos_dice')!.refId)).toBe(true)
     // A bot's loss lowers its virtual stack only.
     const botDice = dice.find((e) => e.seat === h.room.players.get(bot)!.seat)!
     expect(botDice.result.burned).toBe(1_000)
@@ -338,6 +353,115 @@ describe('BP-41 room: the dice', () => {
     await nextHand(h, ['h', 'a'])
     await playOut(h)
     expect(ofEvent(h, 'h', 'CHAOS_DICE')).toHaveLength(3)
+  })
+
+  it('a loss larger than the stack takes the whole stack and sinks exactly that; the books stay at 0', async () => {
+    // A die that loses 20 wagers, held by a human who brought 3 000: whatever the hand left, it is all taken.
+    const start = { h: 3_000, a: 100_000 }
+    const h = createRoomHarness(CHAOS, { seed: 4, chaos: { cards: RESCUE_ONLY, config: SILVER_ONLY }, players: Object.entries(start) })
+    await seat(h, ['h', 'a'])
+    await h.room.startGame('h')
+    give(h, 'h', on('g_dice', { dice: 1, a1: 1, l1: 20 }))
+    await pickAll(h, ['h', 'a'])
+    await playOut(h)
+    const left = 3_000 + h.repos.hands[0]!.players.find((p) => p.playerId === 'h')!.net
+    expect(left).toBeGreaterThan(0)
+    expect(left).toBeLessThan(20_000)
+    const roll = ofEvent(h, 'a', 'CHAOS_DICE').find((e) => e.seat === 0)!
+    expect(roll).toMatchObject({ result: { burned: left }, stack: 0 })
+    expect(diceSinks(h)).toEqual([left])
+    expect(await books(h, start)).toBe(0)
+    expect(h.logs.filter((l) => l.level === 'error')).toEqual([])
+  })
+
+  it('the sink write is retried once under its key; one that fails twice is logged with its key, the stack stays lowered', async () => {
+    for (const failures of [1, 2]) {
+      const h = await startWith(4, [DICE_LOSE])
+      const apply = h.repos.balances.apply.bind(h.repos.balances)
+      let failed = 0
+      const keys: (string | undefined)[] = []
+      h.repos.balances.apply = async (entries, meta, opts) => {
+        if (meta?.kind === 'chaos_dice') {
+          keys.push(opts?.key)
+          if (failed++ < failures) throw new Error('db down')
+        }
+        return apply(entries, meta, opts)
+      }
+      await playOut(h)
+      const left = 100_000 + h.repos.hands[0]!.players.find((p) => p.playerId === 'h')!.net
+      expect(h.room.players.get('h')!.stack).toBe(left - 1_000)
+      expect(keys).toHaveLength(2)
+      expect(keys[0]).toMatch(/^chaos_dice:room-1:/)
+      expect(keys[1]).toBe(keys[0])
+      const errors = h.logs.filter((l) => l.level === 'error')
+      if (failures === 1) {
+        expect(diceSinks(h)).toEqual([1_000])
+        expect(errors).toEqual([])
+      } else {
+        expect(diceSinks(h)).toEqual([])
+        expect(errors).toEqual([{ level: 'error', msg: 'chaos dice sink failed', data: expect.objectContaining({ key: keys[0], amount: 1_000, playerId: 'h' }) }])
+      }
+    }
+  })
+})
+
+describe('BP-41 room: title marks into the hand summary (A12, G12)', () => {
+  it('two humans: the Thần\'s ascension and the human who beat it are marked on that hand; bots never are', async () => {
+    // Seed 1: the Thần (h) loses its first hand, and a is among the winners.
+    const h = await startWith(1, [CARP_FULL])
+    await playOut(h)
+    expect(ofEvent(h, 'a', 'CHAOS_HERALD').filter((e) => e.kind === 'godslain').map((e) => e.playerId)).toContain('a')
+    expect(titlesOf(h, 0)).toEqual({ h: { ascended: true }, a: { slew: 1 } })
+  })
+
+  it('one human with three bots: the ascension is heralded but marks nothing (≥ 2 humans)', async () => {
+    const h = createRoomHarness({ ...CHAOS, blind: { ...CHAOS.blind!, botCount: 3 } }, { seed: 9, chaos: { cards: RESCUE_ONLY, config: SILVER_ONLY } })
+    await seat(h, ['h'])
+    await h.room.startGame('h')
+    give(h, 'h', CARP_FULL)
+    await pickAll(h, ['h'])
+    await playOut(h)
+    expect(ofEvent(h, 'h', 'CHAOS_HERALD').filter((e) => e.kind === 'god').map((e) => e.playerId)).toEqual(['h'])
+    expect(titlesOf(h, 0)).toEqual({})
+  })
+
+  it('a bot Thần: its ascension is no title, and a human who beats it is not marked slew', async () => {
+    // Seed 1: a human beats the bot Thần within its reign.
+    const h = createRoomHarness(CHAOS, { seed: 1, chaos: { cards: RESCUE_ONLY, config: SILVER_ONLY } })
+    await seat(h, ['h', 'a'])
+    await h.room.startGame('h')
+    give(h, botIds(h)[0]!, CARP_FULL)
+    await pickAll(h, ['h', 'a'])
+    const god = ofEvent(h, 'h', 'CHAOS_HERALD').find((e) => e.kind === 'god')!
+    expect(god.playerId).toBe(botIds(h)[0])
+    for (let n = 0; n < 5 && chaosOf(h).table.god; n++) {
+      await playOut(h)
+      await nextHand(h, ['h', 'a'])
+    }
+    expect(ofEvent(h, 'h', 'CHAOS_HERALD').filter((e) => e.kind === 'godslain').some((e) => e.playerId === 'h' || e.playerId === 'a')).toBe(true)
+    for (let i = 0; i < h.repos.hands.length; i++) expect(titlesOf(h, i)).toEqual({})
+  })
+
+  it('Ruling 7b-1: an ascension whose hand is cancelled keeps its reign (5 hands, not counted) and its herald, the Cá chép spent, and marks no title; the reign plays on', async () => {
+    const h = await startWith(9, [CARP_FULL], { spectator: true })
+    expect(ofEvent(h, 'b', 'CHAOS_HERALD')).toEqual([{ type: 'CHAOS_HERALD', kind: 'god', seat: 0, playerId: 'h' }])
+    expect(ofEvent(h, 'b', 'CHAOS_TABLE').at(-1)!.table.god).toEqual({ seat: 0, handsLeft: 5, curse: 1 })
+    const runner = (h.room as unknown as { runner: { cancel(reason: string): unknown } }).runner
+    await h.room.enqueue(() => runner.cancel('test'))
+    await tick(h)
+    expect(h.room.handActive).toBe(false)
+    expect(h.repos.hands[0]).toMatchObject({ cancelled: true })
+    expect(titlesOf(h, 0)).toEqual({})
+    expect(chaosOf(h).table.god).toMatchObject({ seat: 0, handsLeft: 5 })
+    expect(h.room.players.get('h')!.chaos!.cards.some((c) => c.effect === 'carp')).toBe(false)
+    // The next hand plays the same reign: no second herald, nobody may fold, and it counts down from 5.
+    await nextHand(h, ['h', 'a'])
+    expect(h.room.handActive).toBe(true)
+    expect(ofEvent(h, 'b', 'CHAOS_HERALD')).toHaveLength(1)
+    expect(h.room.snapshot('a').hand!.legal!.kinds).toEqual(['play'])
+    await playOut(h)
+    expect(titlesOf(h, 1)).toEqual({}) // the ascension mark belonged to the cancelled hand
+    expect(ofEvent(h, 'a', 'CHAOS_STATE').at(-1)!.table?.god?.handsLeft).toBe(4)
   })
 })
 
@@ -421,13 +545,13 @@ describe('BP-41 room: bots and money with every round-three card on', () => {
   it('two humans, two bots, 120 hands with the round-three money cards: the books stay at 0 (credits out, dice losses in)', async () => {
     const MONEY = new Set(['adventurer', 'bigTable', 'noFold', 'duel', 'shareWinnings', 'winTax', 'timeBomb', 'fortuneDice', 'riskyHand', 'fateDie', 'master', 'tierUp', 'stealPoints', 'carp'])
     // The Bạc die is pinned to lose 2 wagers or pay a 1-wager jackpot (half and half), so the run meets both often.
-    const cards = CHAOS_CARDS_SPEC.filter((c) => c.enabled || MONEY.has(c.effect)).map((c) =>
-      c.effect === 'carp' ? CARP_FULL : c.id === 's_dice' ? on('s_dice', { dice: 1, a1: 1, l1: 2, a2: 4, j2: 1 }) : { ...c, enabled: true })
+    const cards = CHAOS_CARDS_SPEC.filter((c) => !ROUND3.has(c.id) || MONEY.has(c.effect)).map((c) =>
+      c.effect === 'carp' ? CARP_FULL : c.id === 's_dice' ? on('s_dice', { dice: 1, a1: 1, l1: 2, a2: 4, j2: 1 }) : c)
     const start = { h: 1_000_000, a: 1_000_000 }
     const h = createRoomHarness(CHAOS, { seed: 4141, chaos: { cards }, players: Object.entries(start) })
     const ids = ['h', 'a']
     // The humans take a round-three money card whenever one is offered, a die first.
-    const prefer = (id: string): boolean => byId.get(id)!.effect === 'fortuneDice' || (!byId.get(id)!.enabled && MONEY.has(byId.get(id)!.effect))
+    const prefer = (id: string): boolean => byId.get(id)!.effect === 'fortuneDice' || (ROUND3.has(id) && MONEY.has(byId.get(id)!.effect))
     await seat(h, ids)
     await h.room.startGame('h')
     await pickAll(h, ids, prefer)
@@ -446,9 +570,9 @@ describe('BP-41 room: bots and money with every round-three card on', () => {
     }
     expect(h.repos.hands.length).toBeGreaterThanOrEqual(120)
     expect(h.logs.filter((l) => l.level === 'error')).toEqual([])
-    // The run must actually move money through the new paths.
-    const dice = ofEvent(h, 'h', 'CHAOS_DICE')
-    expect(dice.some((e) => (e.result.burned ?? 0) > 0 && e.seat <= 1)).toBe(true)
+    // The run must actually move money through the new paths: every human dice loss is one chaos_dice sink row of it.
+    expect(humanBurns(h).length).toBeGreaterThan(0)
+    expect(diceSinks(h)).toEqual(humanBurns(h))
     expect(h.repos.entries.some((e) => e.entry.reason === 'chaos_jackpot')).toBe(true)
     expect(ofEvent(h, 'h', 'CHAOS_HERALD').some((e) => e.kind === 'god')).toBe(true)
   })
@@ -456,9 +580,8 @@ describe('BP-41 room: bots and money with every round-three card on', () => {
 
 /**
  * The books of a chaos table with humans `h`/`a` on seats 0 and 1 (as room-hands.test.ts's): their balance and stack
- * changes, the bots' nets, every sink, the carried pot, less the card credits a human was paid (ledger sources), plus the
- * dice losses a human's stack took that no sink row records (A6: the sink row is the room's `chaos_dice` write) — so the
- * sum is 0 whether that row is written or not.
+ * changes, the bots' nets, every sink (a human's dice loss among them: the room's `chaos_dice` row, A6), the carried pot,
+ * less the card credits a human was paid (ledger sources). 0 when every point is accounted for.
  */
 const CHAOS_SOURCES = new Set(['chaos_rescue', 'chaos_crit', 'chaos_fortune', 'chaos_jackpot'])
 async function books(h: RoomHarness, humans: Record<string, number>): Promise<number> {
@@ -466,8 +589,11 @@ async function books(h: RoomHarness, humans: Record<string, number>): Promise<nu
   for (const [id, start] of Object.entries(humans)) humanDelta += (await h.repos.balances.get(id)) + (h.room.players.get(id)?.stack ?? 0) - start
   const botNet = h.repos.hands.flatMap((x) => x.players).filter((p) => p.isBot).reduce((s, p) => s + p.net, 0)
   const sources = h.repos.entries.filter((e) => CHAOS_SOURCES.has(e.entry.reason)).reduce((s, e) => s + e.entry.delta, 0)
-  const burned = ofEvent(h, 'h', 'CHAOS_DICE').filter((e) => e.seat <= 1).reduce((s, e) => s + (e.result.burned ?? 0), 0)
-  const diceSinks = h.repos.sinks.filter((x) => x.kind === 'chaos_dice').reduce((s, x) => s + x.fee, 0)
   const sinks = h.repos.sinks.reduce((s, x) => s + x.fee, 0)
-  return humanDelta + botNet + sinks + h.room.carryOverPot + (h.room.pendingRelease?.pot ?? 0) - sources + (burned - diceSinks)
+  return humanDelta + botNet + sinks + h.room.carryOverPot + (h.room.pendingRelease?.pot ?? 0) - sources
 }
+
+/** Every human seat's dice loss as told (`CHAOS_DICE.result.burned`, seats 0 and 1), in order. */
+const humanBurns = (h: RoomHarness, watcher = 'h'): number[] =>
+  ofEvent(h, watcher, 'CHAOS_DICE').filter((e) => e.seat <= 1 && (e.result.burned ?? 0) > 0).map((e) => e.result.burned!)
+const diceSinks = (h: RoomHarness): number[] => h.repos.sinks.filter((x) => x.kind === 'chaos_dice').map((x) => x.fee)

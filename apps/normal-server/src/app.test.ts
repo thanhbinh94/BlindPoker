@@ -807,9 +807,9 @@ describe('the websocket, authenticated by the session cookie', () => {
 })
 
 describe('Poker hỗn loạn', () => {
-  it('serves the 47 shipped cards through the service the game server was built with, and accepts a chaos table (the port is wired)', async () => {
+  it('serves the 86 shipped cards (Plan 37\'s 47, BP-41\'s 39) through the service the game server was built with, and accepts a chaos table (the port is wired)', async () => {
     const h = await harness()
-    expect((await h.app.services.chaos.active()).cards).toHaveLength(47)
+    expect((await h.app.services.chaos.active()).cards).toHaveLength(47 + 39)
     expect(await h.app.services.chaos.config()).toMatchObject({ pointsThreshold: 10, dailyCapPoints: 100_000, dailyRescues: 3 })
 
     const me = await h.register()
