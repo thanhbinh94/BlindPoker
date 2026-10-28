@@ -9,7 +9,7 @@ below are the real history.
 
 ---
 
-## BP-40 — from the second chaos draft on, the draft panel stands whole on a phone instead of being cut short and scrolling — merged `MERGE` (2026-10-28)
+## BP-40 — from the second chaos draft on, the draft panel stands whole on a phone instead of being cut short and scrolling — merged `883776b` (2026-10-28)
 
 The user's report, 2026-10-28, with two phone screenshots (`docs/bug-log.md` §12 H10): on a phone, upright and on its side, every
 draft after the first was cut short and scrolled inside. Branch `bugfix/BP-40-draft-after-result`.
