@@ -439,6 +439,10 @@ export interface PlayerStatsDto {
   totalLoginDays: number
   loginStreak: number
   bestLoginStreak: number
+  /** Plan 41: the chaos titles, counted from the hands' title marks (migration 0008). */
+  chaosAscensions: number
+  chaosDemigods: number
+  chaosGodsSlain: number
 }
 
 /** One card a chaos hand used: the seat that held it, the card's id, and how it ended (`applied`, `blocked`, `reflected` or `fizzled`). */
@@ -548,6 +552,8 @@ export interface AchievementProgressDto {
   progress: number
   /** Epoch milliseconds, or `null` while it is still locked. */
   unlockedAt: number | null
+  /** Plan 41: reputation the unlock pays, beside `reward`; sent only by an achievement that names one. */
+  reputation?: number
 }
 
 /* ── the game master's console (`apps/normal-server/src/http/routes-gm.ts`) ─────────────────── */

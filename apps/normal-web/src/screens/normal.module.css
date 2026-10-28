@@ -1139,6 +1139,14 @@
   text-align: right;
 }
 
+/* A reward longer than the column ("300.000 điểm · Hóa Thần") wraps inside its pill instead of running into the bar. */
+.achReward .achBadge {
+  max-width: 100%;
+  border-radius: var(--radius-md);
+  text-align: right;
+  white-space: normal;
+}
+
 @media (max-width: 640px) {
   .achievement {
     grid-template-columns: minmax(0, 1fr) auto;

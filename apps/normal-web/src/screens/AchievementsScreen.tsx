@@ -10,10 +10,10 @@ import { useAsync } from './useAsync.js'
 /** The earned row's tick, a named value rather than a literal in the markup (`react/jsx-no-literals`). */
 const CHECK_GLYPH = '✓'
 
-/** `apps/normal-server/data/achievements.json` — the four buckets, in the order the screen reads best. */
-export const CATEGORY_ORDER = ['login', 'holdem', 'blind', 'social']
+/** `apps/normal-server/data/achievements.json` — the five buckets, in the order the screen reads best. */
+export const CATEGORY_ORDER = ['login', 'holdem', 'blind', 'social', 'chaos']
 
-/** A reward is points, an item, or both. Anything with neither is a definition bug, and prints nothing. */
+/** A reward is points, an item, or both (reputation, which an achievement may also name, is its own badge). Anything with neither is a definition bug, and prints nothing. */
 export function rewardText(row: AchievementProgressDto, lang: Language, t: TFunction): string {
   const parts: string[] = []
   if (row.reward.points !== undefined) parts.push(`${formatPoints(row.reward.points, lang)} ${t('common:units.pointsShort')}`)
@@ -144,9 +144,14 @@ export function AchievementsScreen({ api, lang }: AchievementsScreenProps) {
 
                     <span className={s.achReward}>
                       {reward === '' ? null : (
-                        <Badge tone={unlocked ? 'gold' : 'muted'}>
+                        <Badge tone={unlocked ? 'gold' : 'muted'} className={s.achBadge}>
                           <span className="visually-hidden">{t('achievements.ui.reward')}</span>
                           {reward}
+                        </Badge>
+                      )}
+                      {row.reputation === undefined ? null : (
+                        <Badge tone={unlocked ? 'gold' : 'muted'} className={s.achBadge}>
+                          {t('achievements.ui.reputation', { points: formatPoints(row.reputation, lang) })}
                         </Badge>
                       )}
                       {row.unlockedAt === null ? null : (

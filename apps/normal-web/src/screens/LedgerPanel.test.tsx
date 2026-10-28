@@ -31,15 +31,17 @@ describe('LedgerPanel', () => {
     expect(screen.queryByRole('button', { name: viNormal.profile.ledger.loadMore })).toBeNull()
   })
 
-  it('names the four chaos reasons rather than falling back to "Khác"', async () => {
-    const reasons = ['chaos_rescue', 'chaos_crit', 'chaos_fortune', 'chaos_to_table']
-    const entries = reasons.map((reason, i) => ({ id: 10 - i, amount: i < 3 ? 1_000 : -3_000, reason, refId: `k${String(i)}`, createdAt: Date.UTC(2026, 9, 26, 10, i) }))
+  it('names the six chaos reasons rather than falling back to "Khác"', async () => {
+    const reasons = ['chaos_rescue', 'chaos_crit', 'chaos_fortune', 'chaos_to_table', 'chaos_jackpot', 'chaos_dice']
+    const entries = reasons.map((reason, i) => ({ id: 10 - i, amount: i < 3 || i === 4 ? 1_000 : -3_000, reason, refId: `k${String(i)}`, createdAt: Date.UTC(2026, 9, 26, 10, i) }))
     renderWithI18n(<LedgerPanel load={vi.fn().mockResolvedValue({ entries, nextBefore: null })} lang="vi" />)
 
     expect(await screen.findByText('Thẻ cấp cứu')).toBeInTheDocument()
     expect(screen.getByText('Thẻ bạo kích')).toBeInTheDocument()
     expect(screen.getByText('Thẻ thần tài')).toBeInTheDocument()
     expect(screen.getByText('Thẻ hỗn loạn lên bàn')).toBeInTheDocument()
+    expect(screen.getByText('Thẻ nổ hũ')).toBeInTheDocument()
+    expect(screen.getByText('Xúc xắc hỗn loạn')).toBeInTheDocument()
     expect(screen.queryByText(viNormal.ledger.reason.other)).toBeNull()
   })
 

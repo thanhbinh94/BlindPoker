@@ -589,8 +589,12 @@
         "blind": "Blind Poker",
         "streaks": "Chuỗi thắng/thua",
         "login": "Điểm danh",
-        "social": "Hoạt động"
+        "social": "Hoạt động",
+        "chaos": "Poker hỗn loạn"
       },
+      "chaosAscensions": "Lần hóa Thần Bài",
+      "chaosDemigods": "Lần thành Bán Thần",
+      "chaosGodsSlain": "Thần Bài đã hạ",
       "handsPlayedHoldem": "Số ván đã chơi",
       "handsWonHoldem": "Số ván thắng",
       "bestHandRank": "Bài mạnh nhất",
@@ -650,6 +654,8 @@
       "chaos_crit": "Thẻ bạo kích",
       "chaos_fortune": "Thẻ thần tài",
       "chaos_to_table": "Thẻ hỗn loạn lên bàn",
+      "chaos_jackpot": "Thẻ nổ hũ",
+      "chaos_dice": "Xúc xắc hỗn loạn",
       "other": "Khác"
     }
   },
@@ -878,6 +884,9 @@
     "title_night_owl": "Cú đêm",
     "title_devoted": "Chuyên cần",
     "title_hot_hand": "Vận đỏ",
+    "title_god": "Hóa Thần",
+    "title_demigod": "Bán Thần",
+    "title_godslayer": "Kẻ Sát Thần",
     "badge_bronze": "Huy hiệu đồng",
     "badge_silver": "Huy hiệu bạc",
     "badge_gold": "Huy hiệu vàng",
@@ -984,8 +993,10 @@
         "login": "Điểm danh",
         "holdem": "Texas Hold'em",
         "blind": "Blind Poker",
-        "social": "Hoạt động"
+        "social": "Hoạt động",
+        "chaos": "Poker hỗn loạn"
       },
+      "reputation": "{{points}} danh vọng",
       "unlocked": "Đã đạt"
     },
     "login_days_7": {
@@ -1163,6 +1174,18 @@
     "games_1000": {
       "name": "Nghìn ván trọn vẹn",
       "desc": "Chơi hết 1.000 ván từ đầu đến cuối."
+    },
+    "chaos_god": {
+      "name": "Hóa Thần",
+      "desc": "Trở thành Thần Bài lần đầu ở bàn Poker hỗn loạn."
+    },
+    "chaos_demigod": {
+      "name": "Bán Thần",
+      "desc": "Trở thành Bán Thần lần đầu ở bàn Poker hỗn loạn."
+    },
+    "chaos_godslayer": {
+      "name": "Kẻ Sát Thần",
+      "desc": "Đánh bại Thần Bài 2 lần."
     }
   }
 }

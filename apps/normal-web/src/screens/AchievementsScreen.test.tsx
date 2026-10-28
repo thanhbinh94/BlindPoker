@@ -62,6 +62,26 @@ const ROWS: AchievementProgressDto[] = [
     progress: 9,
     unlockedAt: null,
   },
+  {
+    id: 'chaos_godslayer',
+    category: 'chaos',
+    metric: 'chaosGodsSlain',
+    threshold: 2,
+    reward: { points: 500_000, itemId: 'title_godslayer' },
+    reputation: 500,
+    progress: 1,
+    unlockedAt: null,
+  },
+  {
+    id: 'chaos_demigod',
+    category: 'chaos',
+    metric: 'chaosDemigods',
+    threshold: 1,
+    reward: { points: 150_000, itemId: 'title_demigod' },
+    reputation: 150,
+    progress: 1,
+    unlockedAt: Date.UTC(2026, 9, 29),
+  },
 ]
 
 function stubApi(overrides: Partial<NormalApi> = {}): NormalApi {
@@ -93,11 +113,36 @@ describe('AchievementsScreen', () => {
     renderScreen()
     await screen.findByText(viNormal.achievements.login_days_7.name)
 
-    expect(screen.getByText(viNormal.achievements.ui.summary.replace('{{unlocked}}', '2').replace('{{total}}', '6'))).toBeInTheDocument()
+    expect(screen.getByText(viNormal.achievements.ui.summary.replace('{{unlocked}}', '3').replace('{{total}}', '8'))).toBeInTheDocument()
     for (const label of Object.values(viNormal.achievements.ui.category)) {
       expect(screen.getByRole('heading', { name: label })).toBeInTheDocument()
     }
     expect(screen.getByText(viNormal.achievements.login_days_7.desc)).toBeInTheDocument()
+  })
+
+  it('files the chaos titles under their own heading, last, with the reputation they pay beside points and title', async () => {
+    renderScreen()
+    await screen.findByText(viNormal.achievements.chaos_godslayer.name)
+
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)
+    expect(headings.at(-1)).toBe(viNormal.achievements.ui.category.chaos)
+
+    const row = screen.getByText(viNormal.achievements.chaos_godslayer.name).closest('li')!
+    expect(within(row).getByText(viNormal.achievements.chaos_godslayer.desc)).toBeInTheDocument()
+    expect(within(row).getByText(`500.000 điểm · ${viNormal.items.title_godslayer}`)).toBeInTheDocument()
+    expect(within(row).getByText('500 danh vọng')).toBeInTheDocument()
+    expect(screen.getByText(viNormal.achievements.ui.progress.replace('{{progress}}', '1').replace('{{threshold}}', '2'))).toBeInTheDocument()
+    const demigod = screen.getByText(viNormal.achievements.chaos_demigod.name).closest('li')!
+    expect(demigod).toHaveAttribute('data-unlocked', 'true')
+    expect(demigod).toHaveTextContent('150 danh vọng')
+  })
+
+  it('shows no reputation on an achievement that names none', async () => {
+    renderScreen()
+    await screen.findByText(viNormal.achievements.login_days_7.name)
+
+    const row = screen.getByText(viNormal.achievements.login_days_7.name).closest('li')!
+    expect(row).not.toHaveTextContent('danh vọng')
   })
 
   it('gives each row a progress bar that says how far along it is, clamped at the threshold', async () => {

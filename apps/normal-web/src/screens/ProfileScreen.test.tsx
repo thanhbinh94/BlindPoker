@@ -93,6 +93,9 @@ const STATS: PlayerStatsDto = {
   totalLoginDays: 44,
   loginStreak: 6,
   bestLoginStreak: 21,
+  chaosAscensions: 1,
+  chaosDemigods: 3,
+  chaosGodsSlain: 5,
 }
 
 const HAND: HistoryEntryDto = {
@@ -292,6 +295,17 @@ describe('ProfileScreen', () => {
     expect(screen.getAllByText(viNormal.profile.stats.handsPlayedHoldem)).toHaveLength(2)
     expect(screen.getByText(`88.000 ${i18n.t('common:units.pointsShort')}`)).toBeInTheDocument()
     expect(screen.getByText(i18n.t('game:hand.flush'))).toBeInTheDocument()
+  })
+
+  it('counts the chaos titles in their own group: ascended, a Demigod, Card Gods slain', async () => {
+    renderScreen()
+    await screen.findByRole('heading', { name: 'Bình', level: 2 })
+
+    const group = screen.getByRole('heading', { name: viNormal.profile.stats.groups.chaos, level: 3 }).closest('section')!
+    const value = (label: string): string | null => within(group).getByText(label).closest('div')!.querySelector('dd')!.textContent
+    expect(value(viNormal.profile.stats.chaosAscensions)).toBe('1')
+    expect(value(viNormal.profile.stats.chaosDemigods)).toBe('3')
+    expect(value(viNormal.profile.stats.chaosGodsSlain)).toBe('5')
   })
 
   it('says "none yet" for a best hand nobody has won', async () => {
