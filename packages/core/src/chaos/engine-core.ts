@@ -1,5 +1,8 @@
 import { rankOf, type Card } from '../cards/cards.js'
+import type { Rng } from '../cards/rng.js'
+import type { HandEvaluation } from '../evaluator/evaluator.js'
 import type { GameEvent, HandState } from '../hand/types.js'
+import { evaluateAny, evaluateWild } from './evaluate.js'
 import type { ChaosEffectKind, ChaosHandState, ChaosOutcome, PlannedEffect } from './types.js'
 
 /**
@@ -23,6 +26,8 @@ export interface RecordExtra {
   holeDelta?: number
   wild?: Card
   off?: string
+  dice?: number[]
+  wagers?: number
   consume?: 'applied' | 'blocked' | null
 }
 
@@ -68,6 +73,8 @@ export function record(chaos: ChaosHandState, events: GameEvent[], seat: number,
   if (extra.holeDelta !== undefined) ev.holeDelta = extra.holeDelta
   if (extra.wild !== undefined) ev.wild = extra.wild
   if (extra.off !== undefined) ev.off = extra.off
+  if (extra.dice !== undefined) ev.dice = extra.dice.slice()
+  if (extra.wagers !== undefined) ev.wagers = extra.wagers
   events.push(ev)
   chaos.used.push({ seat, cardId: e.cardId, effect: e.effect, outcome, targets: targets.slice() })
   addUid(chaos.recorded, e.uid)
@@ -78,15 +85,70 @@ export function record(chaos: ChaosHandState, events: GameEvent[], seat: number,
 
 /** What a debuff's harm returns: whether anything changed, or (it did) what its event adds. */
 export type DebuffHarm = boolean | RecordExtra
+/**
+ * Does a debuff's harm to `victim`. `target` is the seat the debuff was finally aimed at (after a Bia đỡ đạn moved it):
+ * the victim is the target when it lands, and the user when a mirror or Gậy ông đập lưng ông turns it back — a duel
+ * needs both to know who challenges whom.
+ */
+export type DebuffApply = (victim: number, target: number) => DebuffHarm
+
+export interface ResolveOpts {
+  /** Bia đỡ đạn picks the seat it hands the debuff to with this; without it no Bia đỡ đạn acts. */
+  rng?: Rng
+  /** An effect on hole cards (spec §3 "miễn nhiễm rút bài"): an immune seat is never handed it, nor bounced into. */
+  holes?: true
+  /** Seats a Bia đỡ đạn already passed this debuff on from (never handed it back). */
+  passed?: number[]
+}
 
 /**
- * Resolves one debuff aimed at `target`: a seat already hit this hand lets it fizzle (the card is still used); a
- * shield blocks it (a one-shot shield is spent on it); a mirror turns it back on its user when the user has taken no
- * debuff yet (otherwise it blocks); else it lands. `apply(victim)` does the harm and says whether anything changed.
- * A reflected debuff is not shielded again, so two mirrors cannot bounce it forever.
+ * BP-41 Gậy ông đập lưng ông: the card that turns a debuff by `user` back on `user` — one another seat fired this hand
+ * ("mọi debuff … trừ của bạn"), or undefined. It stands once told (`recordBackfires`: at the deal, or at the reveal for
+ * one pressed during the choice), whatever its holder does after: it is a rule of the hand.
  */
-export function resolveDebuff(state: HandState, events: GameEvent[], user: number, e: PlannedEffect, target: number, apply: (victim: number) => DebuffHarm): void {
+export function backfireAgainst(chaos: ChaosHandState, user: number): PlannedEffect | undefined {
+  for (const s of chaos.plan.seats) {
+    if (s.seat === user) continue
+    const e = s.effects.find((x) => x.effect === 'backfire' && chaos.recorded.includes(x.uid))
+    if (e) return e
+  }
+  return undefined
+}
+
+/** BP-41 Bia đỡ đạn: `seat`'s scapegoat waiting this hand (exposed by `planHand`), not used yet, or null. */
+const scapegoatOf = (chaos: ChaosHandState, seat: number): PlannedEffect | null => {
+  const sg = chaos.plan.seats.find((s) => s.seat === seat)?.scapegoat
+  if (!sg || chaos.applied.includes(sg.uid)) return null
+  return { uid: sg.uid, cardId: sg.cardId, effect: 'scapegoat', params: {}, timing: 'wait', debuff: false, targets: [] }
+}
+
+/**
+ * Resolves one debuff aimed at `target`, in this order (BP-41 Task 4; BP-37's steps unchanged in between):
+ * 1. Gậy ông đập lưng ông (BP-41): when another seat fired one this hand, the debuff turns back on its user before it
+ *    reaches anyone (`reflected`, its target named) — unless the user took a debuff already (or is immune to a hole-card
+ *    effect), when it fizzles. Nothing shields a bounced debuff.
+ * 2. A seat already hit this hand lets it fizzle (the card is still used).
+ * 3. A shield blocks it (a one-shot shield is spent on it); a mirror turns it back on its user when the user has taken
+ *    no debuff yet (otherwise it blocks). A reflected debuff is not shielded again, so two mirrors cannot bounce it
+ *    forever.
+ * 4. Bia đỡ đạn (BP-41): the target hands it to another seat at random — still in the hand, not its user, not hit yet,
+ *    not immune to a hole-card effect, not a seat it was passed on from — and the card is spent (its own event names the
+ *    new target); the new target resolves it from step 2. Nobody to hand it to: the card waits and the debuff lands.
+ * 5. It lands: `apply` does the harm and says whether anything changed.
+ * Without a Gậy ông or a Bia đỡ đạn in the hand this draws nothing from `rng` and is BP-37's resolver, step for step.
+ */
+export function resolveDebuff(state: HandState, events: GameEvent[], user: number, e: PlannedEffect, target: number, apply: DebuffApply, opts: ResolveOpts = {}): void {
   const chaos = state.chaos!
+  if (backfireAgainst(chaos, user) && !opts.passed?.length) {
+    if (chaos.hit.includes(user) || (opts.holes && isImmune(chaos, user))) {
+      record(chaos, events, user, e, [target], 'fizzled')
+      return
+    }
+    chaos.hit.push(user)
+    const harm = apply(user, target)
+    record(chaos, events, user, e, [target], 'reflected', typeof harm === 'object' ? harm : {})
+    return
+  }
   if (chaos.hit.includes(target)) {
     record(chaos, events, user, e, [target], 'fizzled')
     return
@@ -95,15 +157,28 @@ export function resolveDebuff(state: HandState, events: GameEvent[], user: numbe
     const shield = chaos.plan.seats.find((s) => s.seat === target)!.shield!
     if (shield.kind === 'mirror' && user !== target && !chaos.hit.includes(user)) {
       chaos.hit.push(user)
-      const harm = apply(user)
+      const harm = apply(user, target)
       record(chaos, events, user, e, [target], 'reflected', typeof harm === 'object' ? harm : {})
       return
     }
     record(chaos, events, user, e, [target], 'blocked', { consume: 'blocked' })
     return
   }
+  const sg = opts.rng ? scapegoatOf(chaos, target) : null
+  if (sg) {
+    const passed = [...(opts.passed ?? []), target]
+    const others = state.players
+      .filter((p) => !p.folded && p.seat !== user && !passed.includes(p.seat) && !chaos.hit.includes(p.seat) && !(opts.holes && isImmune(chaos, p.seat)))
+      .map((p) => p.seat)
+    if (others.length > 0) {
+      const to = others[opts.rng!.int(others.length)]!
+      record(chaos, events, target, sg, [to], 'applied')
+      resolveDebuff(state, events, user, e, to, apply, { ...opts, passed })
+      return
+    }
+  }
   chaos.hit.push(target)
-  const harm = apply(target)
+  const harm = apply(target, target)
   record(chaos, events, user, e, [target], harm === false ? 'fizzled' : 'applied', typeof harm === 'object' ? harm : {})
 }
 
@@ -132,11 +207,46 @@ export function spendShield(chaos: ChaosHandState, seat: number): boolean {
  * is spent, the seat is not counted hit, its shield is not touched (Task 3a Ruling 7) — and a mirror turning it back on
  * an immune user changes nothing.
  */
-export function resolveHoleDebuff(state: HandState, events: GameEvent[], user: number, e: PlannedEffect, target: number, apply: (victim: number) => DebuffHarm): void {
+export function resolveHoleDebuff(state: HandState, events: GameEvent[], user: number, e: PlannedEffect, target: number, apply: DebuffApply, rng?: Rng): void {
   const chaos = state.chaos!
-  if (isImmune(chaos, target)) {
+  // A Gậy ông turns the debuff back before it reaches the immune target: the user's own immunity decides then.
+  if (isImmune(chaos, target) && !backfireAgainst(chaos, user)) {
     record(chaos, events, user, e, [target], 'fizzled')
     return
   }
-  resolveDebuff(state, events, user, e, target, (victim) => !isImmune(chaos, victim) && apply(victim))
+  resolveDebuff(state, events, user, e, target, (victim, t) => !isImmune(chaos, victim) && apply(victim, t), { holes: true, ...(rng ? { rng } : {}) })
+}
+
+/**
+ * Spec §3 (A16) for an effect on several seats at once: a shield or a mirror standing on `seat` only blocks it for that
+ * seat — never reflects — and a one-shot one is spent; the `blocked` event names that seat. Returns whether it blocked.
+ */
+export function blockForSeat(chaos: ChaosHandState, events: GameEvent[], user: number, e: PlannedEffect, seat: number): boolean {
+  if (!spendShield(chaos, seat)) return false
+  record(chaos, events, user, e, [seat], 'blocked', { consume: 'blocked' })
+  return true
+}
+
+/**
+ * How `seat` ranks `cards` in a chaos hand — the showdown's `SettleHooks.evaluateSeat`, and the reveal's Ngược dòng and
+ * Thách đấu: any number of cards, and Lá ma's wild card while the seat still holds it.
+ */
+export function evaluateChaosSeat(state: HandState, seat: number, cards: readonly Card[]): HandEvaluation & { wild?: { card: Card; as: Card } } {
+  const chaos = state.chaos!
+  const wild = chaos.wild?.find((w) => w.seat === seat)?.card
+  const holds = state.players.find((p) => p.seat === seat)?.holeCards.includes(wild ?? -1) ?? false
+  return wild !== undefined && holds ? evaluateWild(cards, wild) : evaluateAny(cards)
+}
+
+/**
+ * `seat`'s strength right now as the showdown would rank it — its hole cards, the board and a borrowed card — higher is
+ * better, "Thế giới đảo ngược" included (the weakest hand wins, so the rank is negated as `settle` does).
+ */
+export function showdownScore(state: HandState, seat: number): number {
+  const chaos = state.chaos!
+  const p = state.players.find((x) => x.seat === seat)!
+  const borrowed = chaos.borrowed.find((b) => b.seat === seat)?.card
+  const cards = borrowed === undefined ? [...p.holeCards, ...state.community] : [...p.holeCards, ...state.community, borrowed]
+  const rank = evaluateChaosSeat(state, seat, cards).rank
+  return chaos.plan.reverse ? -rank : rank
 }

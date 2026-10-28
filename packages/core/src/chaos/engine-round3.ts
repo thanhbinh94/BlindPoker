@@ -3,8 +3,8 @@ import type { Rng } from '../cards/rng.js'
 import { dealCards, getPlayer, seatsClockwiseFrom } from '../hand/common.js'
 import type { GameEvent, HandState } from '../hand/types.js'
 import {
-  addUid, canDealAtDeal, effectOf, effectsOf, highestIndex, isImmune, record, resolveDebuff, resolveHoleDebuff, shieldUp, spendShield,
-  takeFromDeck, type DebuffHarm,
+  addUid, backfireAgainst, blockForSeat, canDealAtDeal, effectOf, effectsOf, highestIndex, isImmune, record, resolveDebuff, resolveHoleDebuff,
+  shieldUp, takeFromDeck, type DebuffHarm,
 } from './engine-core.js'
 import type { ChaosEffectKind, ChaosHandState, PlannedEffect } from './types.js'
 
@@ -29,8 +29,11 @@ export function recordEclipse(state: HandState, events: GameEvent[]): void {
   }
 }
 
-/** Effects that acted when the hand was planned (a rolled Tích lũy's points, Nhật thực): nothing left to switch off. */
-const ACTED_AT_PLAN: ReadonlySet<ChaosEffectKind> = new Set(['chaosPoints', 'eclipse'])
+/**
+ * Effects that acted when the hand was planned (a rolled Tích lũy's points, Nhật thực) or stand from the first moment
+ * of the deal (Gậy ông đập lưng ông, told before any Kẻ phá đám): nothing left to switch off.
+ */
+const ACTED_AT_PLAN: ReadonlySet<ChaosEffectKind> = new Set(['chaosPoints', 'eclipse', 'backfire'])
 
 /**
  * What Kẻ phá đám may switch off on `seat`: a card firing this hand that has not acted yet — never a bonus card pressed
@@ -60,7 +63,7 @@ export function resolveSpoilers(state: HandState, events: GameEvent[], rng: Rng)
       continue
     }
     const target = opponents[rng.int(opponents.length)]!
-    resolveDebuff(state, events, user.seat, e, target, (victim) => switchOff(chaos, victim, e.uid, rng))
+    resolveDebuff(state, events, user.seat, e, target, (victim) => switchOff(chaos, victim, e.uid, rng), { rng })
   }
 }
 
@@ -113,7 +116,7 @@ function curse(state: HandState, events: GameEvent[], user: number, e: PlannedEf
     return
   }
   const target = fresh[rng.int(fresh.length)]!
-  resolveHoleDebuff(state, events, user, e, target, (victim) => lowerTo(state, victim, e.params.toRank ?? 0))
+  resolveHoleDebuff(state, events, user, e, target, (victim) => lowerTo(state, victim, e.params.toRank ?? 0), rng)
 }
 
 function lowerTo(state: HandState, seat: number, toRank: number): boolean {
@@ -139,12 +142,18 @@ function lowerTo(state: HandState, seat: number, toRank: number): boolean {
  * lost and counts as hit. When the opponents within reach hold fewer cards than the holder needs, it takes them all and
  * the rest comes from the top of the deck (random: Ruling 3b-3). Nobody within reach: it fizzles, and the holder keeps
  * its cards. It needs as many cards from the deck as the holder holds, above the reserve, else it fizzles (spec §3
- * "thiếu lá"). Its event names the seats robbed, never a card (A8), and reaches only them and the holder.
+ * "thiếu lá"). Its event names the seats robbed, never a card (A8), and reaches only them and the holder. Under another
+ * seat's Gậy ông đập lưng ông (Task 4) it turns back on its holder, who would rob itself: `reflected`, nothing changes,
+ * nobody is hit. A Bia đỡ đạn never moves it (it is aimed at no one seat).
  */
 function plunder(state: HandState, events: GameEvent[], user: number, e: PlannedEffect): void {
   const chaos = state.chaos!
   const me = getPlayer(state, user)
   const n = me.holeCards.length
+  if (backfireAgainst(chaos, user)) {
+    record(chaos, events, user, e, [], 'reflected')
+    return
+  }
   if (n === 0 || !canDealAtDeal(state, n)) {
     record(chaos, events, user, e, [], 'fizzled')
     return
@@ -161,10 +170,7 @@ function plunder(state: HandState, events: GameEvent[], user: number, e: Planned
     take = strongestTake(state, reach, n)
     const shielded = [...new Set(take.map((t) => t.seat))].filter((s) => shieldUp(chaos, s))
     if (shielded.length === 0) break
-    for (const s of shielded) {
-      spendShield(chaos, s)
-      record(chaos, events, user, e, [s], 'blocked', { consume: 'blocked' })
-    }
+    for (const s of shielded) blockForSeat(chaos, events, user, e, s)
     reach = reach.filter((s) => !shielded.includes(s))
   }
   const victims = [...new Set(take.map((t) => t.seat))]

@@ -58,7 +58,7 @@ const fortuneRow = (len: number): 2 | 4 | 6 => (len >= 6 ? 6 : len >= 4 ? 4 : 2)
  * - next hand's freeze and blindfold come from `marks` only;
  * - BP-41: a seat Nhật thực switched off (`eclipsed`) keeps its durations and wait cards as a frozen seat does; each
  *   fired Mồi lửa gives every seat in the hand its `points`, and a fired Tích tiểu thành đại gives its holder `points`
- *   on a lost hand — flat, never doubled.
+ *   on a lost hand — flat, never doubled; Cao thủ (unless idle) is spent by a won or lost hand, `points` on a win.
  * The input is never changed; every draw goes through `rng` and `weights`.
  *
  * BP-41 A3: `table` is the table's chaos state as `planHand` returned it (absent = `EMPTY_CHAOS_TABLE`), and `outcomes`
@@ -168,6 +168,15 @@ export function afterHand(input: {
       if (rescue && outcome === 'loss' && s.stackAfter < 2 * wager) {
         result.credits.push({ seat: s.seat, amount: (rescue.params.multiplier ?? 0) * wager, reason: 'chaos_rescue', cardId: rescue.cardId, uid: rescue.uid })
         cards = cards.filter((c) => c !== rescue)
+      }
+
+      // BP-41 Cao thủ (spec §6.3 "Thắng ván kế tiếp → +3"): the oldest one is spent by the next hand the seat plays to a
+      // result — `points` chaos points on a win, nothing on a loss; a carry-over hand ('none') leaves it waiting. Flat,
+      // like Mồi lửa: never doubled by the streak or Cày điểm.
+      const master = cards.find((c) => c.effect === 'master')
+      if (master && outcome !== 'none') {
+        if (outcome === 'win') points += master.params.points ?? 0
+        cards = cards.filter((c) => c !== master)
       }
     }
 

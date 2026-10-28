@@ -177,10 +177,13 @@ export type GameEvent =
    * Xúc xắc định mệnh, A15). `holeDelta`: the hole cards a card adds (+) or takes (−) at the deal (BP-41 Hên xui, Đảo
    * bài, Liều ăn nhiều; on `fizzled`, what it would have done). `wild`: the hole card Lá ma made wild (its owner only).
    * `off`: the card id Kẻ phá đám switched off for the hand (BP-41; its owner and target only, never a bonus card).
+   * `holeDelta` also tells what Xúc xắc định mệnh's die did at the reveal (−1, 0 or +count). `wagers` (BP-41 Thách đấu):
+   * the fixed wagers the duel's loser owes (0 = the challenger's hand did not win or the roll paid nothing); on a
+   * `reflected` duel the target challenged the holder, so the holder owes them.
    */
   | {
     type: 'CHAOS_APPLIED'; seat: number; cardId: string; effect: ChaosEffectKind; targets: number[]; outcome: ChaosOutcome; community?: Card[]
-    amount?: number; dice?: number[]; holeDelta?: number; wild?: Card; off?: string
+    amount?: number; dice?: number[]; holeDelta?: number; wild?: Card; off?: string; wagers?: number
   }
   /** "Nhìn trộm": the next board cards, for `seat` only (`filterEvent` blanks them for everyone else). */
   | { type: 'CHAOS_PEEK'; seat: number; cards: Card[] }

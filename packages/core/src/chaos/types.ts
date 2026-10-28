@@ -200,6 +200,12 @@ export interface ChaosHandPlan {
      * otherwise.
      */
     eclipsed?: true
+    /**
+     * BP-41 Bia đỡ đạn: the seat's oldest held scapegoat, waiting this hand (a wait card, exposed like `shield`): the
+     * next debuff aimed at the seat goes to another seat at random, and the card is spent (its uid joins `applied`).
+     * Absent when the seat holds none, is frozen or eclipsed.
+     */
+    scapegoat?: { uid: number; cardId: string }
   }[]
   reverse: boolean
   /**
@@ -290,6 +296,12 @@ export interface ChaosHandState {
    */
   outcomes?: ChaosHandOutcomes
   /**
+   * BP-41 Thách đấu: each duel the reveal settled that pays — `payer` owes `winner` `wagers` × the fixed wager (2 or 3,
+   * rolled on the card's `p2`/`p3`). A mirrored or bounced duel has the target challenge the holder. Task 5b moves the
+   * points (`afterPayout`, capped at the payer's stack). Absent until one pays.
+   */
+  duels?: { winner: number; payer: number; wagers: number; cardId: string; uid: number }[]
+  /**
    * BP-41 A12: the title marks this hand earned, per seat (an ascension, a demigod, a dethrone). The room copies them
    * into `HandSummary.players[].chaosTitles`. Absent when nobody earned one.
    */
@@ -303,7 +315,7 @@ export interface ChaosHandState {
 export interface ChaosHandOutcomes {
   /** Xúc xắc định mệnh rolled 5–6: Bạo kích ×2 if the seat wins. */
   fateCrit?: number[]
-  /** Seats that won a Thách đấu (or a Thần thách đấu) this hand. */
+  /** Seats that won a Thách đấu (or a Thần thách đấu) this hand: a payment is due to them (`ChaosHandState.duels`). */
   duelWins?: number[]
   /** Seats that beat the Thần this hand (spec §4.2 "hạ Thần"): each takes 2 Kim cương cards and a count. */
   dethroned?: number[]

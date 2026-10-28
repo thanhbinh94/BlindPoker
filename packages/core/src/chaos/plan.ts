@@ -39,7 +39,7 @@ type Firing = Omit<PlannedEffect, 'targets'>
  * its shield (and its armed bonus card waits, untouched). Otherwise a played bonus card fires first (see below), then,
  * in the order the cards were received: duration cards fire while they have hands left; one-shot
  * buffs fire once per effect kind; at most one debuff fires (the oldest); shields and mirrors are exposed as `shield`
- * for the engine; Cấp cứu and Thần tài wait for `afterHand`; a card whose modes exclude the table's never fires. Each
+ * for the engine, and a held Bia đỡ đạn as `scapegoat` (BP-41); Cấp cứu, Thần tài and Cao thủ wait for `afterHand`; a card whose modes exclude the table's never fires. Each
  * Tay bạc then rolls one effect under the same rules. Deal-time debuffs get their targets here (one other seat at
  * random, or every other seat with `all`); reveal debuffs get `targets: []`. The input seats are never changed: the
  * returned map holds each seat as it goes into the hand (a rolled Tích lũy adds its points there).
@@ -146,6 +146,9 @@ export function planHand(input: {
         if (out.shield === null || (lasting && out.shield.lasting !== true)) {
           out.shield = { uid: card.uid, cardId: card.cardId, kind: card.effect, ...(lasting ? { lasting: true as const } : {}) }
         }
+      } else if (card.effect === 'scapegoat') {
+        // BP-41 Bia đỡ đạn waits for a debuff aimed at the seat: the oldest held one stands, as a shield does.
+        out.scapegoat ??= { uid: card.uid, cardId: card.cardId }
       } else if (card.timing !== 'wait' && card.timing !== 'now' && card.timing !== 'end' && !(card.debuff && debuffFired) && !kinds.has(card.effect)) {
         fire(chargeUp(card))
       }
@@ -193,6 +196,7 @@ function eclipse(planSeats: PlanSeat[], seats: Map<number, ChaosSeat>, input: re
     if (s === sun) continue
     s.effects = []
     s.shield = null
+    delete s.scapegoat
     s.eclipsed = true
     seats.set(s.seat, clearUnsettledHand(input.find((x) => x.seat === s.seat)!.chaos))
   }

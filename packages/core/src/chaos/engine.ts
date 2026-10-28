@@ -1,18 +1,19 @@
 import { rankOf, suitOf, type Card } from '../cards/cards.js'
 import type { Rng } from '../cards/rng.js'
 import type { Pot } from '../betting/pots.js'
-import { dealCards, getPlayer, seatsClockwiseFrom, type SettleHooks } from '../hand/common.js'
+import { dealCards, seatsClockwiseFrom, type SettleHooks } from '../hand/common.js'
 import type { GameEvent, HandPlayer, HandState } from '../hand/types.js'
 import { canInsertThisHand } from './bonus.js'
 import {
-  DEAL_RESERVE, addUid, canDealAtDeal, effectOf, effectsOf, highestIndex, lowestIndex, record, remaining, reserveOf, resolveDebuff,
-  resolveHoleDebuff, takeFromDeck,
+  DEAL_RESERVE, addUid, canDealAtDeal, effectOf, effectsOf, evaluateChaosSeat, lowestIndex, record, remaining, reserveOf, resolveDebuff,
+  takeFromDeck,
 } from './engine-core.js'
 import { applyHoleDebuffs, emitHawkEyes, recordEclipse, resolveSpoilers } from './engine-round3.js'
-import { evaluateAny, evaluateWild } from './evaluate.js'
+import { recordBackfires } from './engine-reveal.js'
 import type { ChaosEffectKind, ChaosHandPlan, ChaosHandState, ChaosOutcome, PlannedEffect } from './types.js'
 
 export { DEAL_RESERVE, isImmune } from './engine-core.js'
+export { applyRevealEffects } from './engine-reveal.js'
 
 /**
  * The chaos effect appliers of a Blind hand (spec 2026-10-26 §3.5), called from `hand/blind.ts` at the deal, the
@@ -43,7 +44,6 @@ const DEAL_BUFFS: readonly ChaosEffectKind[] = [
 /** Deal buffs that would replace a card of a seat Siêu cộng dồn (or the Thần) just dealt its Aces to: they fizzle there. */
 const BREAK_ACES: ReadonlySet<ChaosEffectKind> = new Set(['swapLowest', 'suited'])
 const DEAL_DEBUFFS: ReadonlySet<ChaosEffectKind> = new Set(['freeze', 'blindfold'])
-const HAND_DEBUFFS: readonly ChaosEffectKind[] = ['stealHole', 'lowerHole', 'swapHands']
 
 export function initialChaosState(plan: ChaosHandPlan): ChaosHandState {
   const effects = (kind: ChaosEffectKind) => plan.seats.flatMap((s) => s.effects.filter((e) => e.effect === kind).map((e) => ({ seat: s.seat, e })))
@@ -219,12 +219,15 @@ const markImmune = (chaos: ChaosHandState, seat: number): void => addUid((chaos.
  * 5. `applyDealEffects`.
  * Before all of it (BP-41 Task 3b, the plan's second pass): Nhật thực is told (`planHand` already switched every other
  * seat's cards off), then each Kẻ phá đám switches one card of an opponent off for this hand (`resolveSpoilers`), so
- * the card it takes away never acts. Both draw nothing from `rng` when the plan holds neither.
+ * the card it takes away never acts. Both draw nothing from `rng` when the plan holds neither. Between the two, each
+ * Gậy ông đập lưng ông is told (`recordBackfires`, Task 4): it is a rule of the whole hand, so every debuff of another
+ * seat from here on — Kẻ phá đám's and the deal's included — turns back on its user (`resolveDebuff`).
  */
 export function dealChaosHand(state: HandState, events: GameEvent[], rng: Rng): void {
   const chaos = state.chaos
   if (!chaos) throw new Error('dealChaosHand: not a chaos hand')
   recordEclipse(state, events)
+  recordBackfires(state, events)
   resolveSpoilers(state, events, rng)
   const base = state.rules.mode === 'blind' ? state.rules.holeCards : 2
   const order = seatsClockwiseFrom(state, state.button)
@@ -328,7 +331,7 @@ export function applyDealEffects(state: HandState, events: GameEvent[], rng: Rng
         resolveDebuff(state, events, p.seat, e, target, (victim) => {
           chaos.marks.push({ seat: victim, kind })
           return true
-        })
+        }, { rng })
       }
     }
   }
@@ -390,102 +393,6 @@ export function refundFreeFolds(state: HandState): GameEvent[] {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// The reveal
-
-/**
- * The reveal-time cards (spec §3.5.3), after the river and before the showdown, and only when two or more seats are
- * still in (otherwise they wait, held, for a hand with a showdown). In order: (b) each holder's hand debuff, aimed at
- * random among the opponents still in and not yet hit; (c) board re-deals; (d) borrowed cards. A holder who folded
- * fires nothing and keeps the card. Reveal draws need only the cards they take.
- */
-export function applyRevealEffects(state: HandState, events: GameEvent[], rng: Rng): void {
-  const chaos = state.chaos
-  if (!chaos) return
-  const live = (): HandPlayer[] => state.players.filter((p) => !p.folded)
-  if (live().length < 2) return
-  const order = seatsClockwiseFrom(state, state.button).filter((p) => !p.folded)
-
-  for (const user of order) {
-    for (const kind of HAND_DEBUFFS) {
-      const e = effectOf(chaos, user.seat, kind)
-      if (!e) continue
-      const opponents = live().filter((p) => p.seat !== user.seat).map((p) => p.seat)
-      if (kind === 'lowerHole' && remaining(state) < 1) {
-        record(chaos, events, user.seat, e, [], 'fizzled', { consume: null })
-        continue
-      }
-      let targets: number[]
-      if (e.params.all) targets = opponents
-      else {
-        const fresh = opponents.filter((s) => !chaos.hit.includes(s))
-        if (fresh.length === 0) {
-          record(chaos, events, user.seat, e, [], 'fizzled')
-          continue
-        }
-        targets = [fresh[rng.int(fresh.length)]!]
-      }
-      // BP-41 "miễn nhiễm rút bài": the card is spent on an immune seat and does nothing; the seat is not counted hit.
-      for (const target of targets) resolveHoleDebuff(state, events, user.seat, e, target, (victim) => handDebuff(state, kind, user.seat, victim, rng))
-    }
-  }
-
-  for (const user of order) {
-    const e = effectOf(chaos, user.seat, 'redealBoard')
-    if (!e) continue
-    const count = Math.min(e.params.count ?? 1, state.community.length)
-    if (count <= 0 || remaining(state) < count) {
-      record(chaos, events, user.seat, e, [], 'fizzled', { consume: null })
-      continue
-    }
-    if (count >= state.community.length) state.community = dealCards(state, state.community.length)
-    else {
-      for (let i = 0; i < count; i++) state.community[rng.int(state.community.length)] = dealCards(state, 1)[0]!
-    }
-    record(chaos, events, user.seat, e, [], 'applied', { community: state.community.slice() })
-  }
-
-  for (const user of order) {
-    const e = effectOf(chaos, user.seat, 'borrowHole')
-    if (!e) continue
-    const opponents = live().filter((p) => p.seat !== user.seat && p.holeCards.length > 0)
-    if (opponents.length === 0) {
-      record(chaos, events, user.seat, e, [], 'fizzled', { consume: null })
-      continue
-    }
-    const from = opponents[rng.int(opponents.length)]!
-    chaos.borrowed.push({ seat: user.seat, card: from.holeCards[rng.int(from.holeCards.length)]! })
-    record(chaos, events, user.seat, e, [from.seat], 'applied')
-  }
-}
-
-/** Steal, lower or swap on `victim`; false when nothing could change (a last card is never stolen). */
-function handDebuff(state: HandState, kind: ChaosEffectKind, user: number, victim: number, rng: Rng): boolean {
-  const v = getPlayer(state, victim)
-  switch (kind) {
-    case 'stealHole': {
-      if (v.holeCards.length <= 1) return false
-      v.holeCards.splice(rng.int(v.holeCards.length), 1)
-      return true
-    }
-    case 'lowerHole': {
-      if (v.holeCards.length === 0 || remaining(state) < 1) return false
-      v.holeCards[highestIndex(v.holeCards)] = dealCards(state, 1)[0]!
-      return true
-    }
-    case 'swapHands': {
-      if (victim === user) return false // a mirrored swap would trade the hand with itself
-      const u = getPlayer(state, user)
-      const mine = u.holeCards
-      u.holeCards = v.holeCards
-      v.holeCards = mine
-      return true
-    }
-    default:
-      return false
-  }
-}
-
-// ---------------------------------------------------------------------------------------------------------------------
 // The settlement
 
 /**
@@ -524,10 +431,7 @@ export function chaosSettleHooks(state: HandState): SettleHooks | undefined {
     reverse: chaos.plan.reverse,
     borrowed: (seat) => chaos.borrowed.find((b) => b.seat === seat)?.card ?? null,
     // A9 / Ruling 4: any number of cards, and Lá ma's wild card while its seat still holds it.
-    evaluateSeat: (seat, cards) => {
-      const wild = chaos.wild?.find((w) => w.seat === seat)?.card
-      return wild !== undefined && getPlayer(state, seat).holeCards.includes(wild) ? evaluateWild(cards, wild) : evaluateAny(cards)
-    },
+    evaluateSeat: (seat, cards) => evaluateChaosSeat(state, seat, cards),
     beforePayout: (pots, winners) => insure(state, pots, winners),
     beforeSettlement: () => [{ type: 'CHAOS_SUMMARY', used: chaos.used.map((u) => ({ ...u })) }],
   }
