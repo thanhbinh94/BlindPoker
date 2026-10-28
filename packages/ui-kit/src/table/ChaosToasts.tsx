@@ -1,10 +1,10 @@
-import { Fragment, useEffect, useId, useRef, useState, type MouseEvent, type ReactNode } from 'react'
+import { Fragment, useEffect, useId, useReducer, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ChaosGodCurse } from '@bp/core'
 import type { AppliedChaosView } from '../client/types.js'
 import type { Language } from '../i18n/index.js'
 import { cx } from '../primitives/cx.js'
-import { chaosDetail } from './chaos-detail.js'
+import { DICE_ROLL_MS, chaosDetail } from './chaos-detail.js'
 import { ChaosCardInfo, tierOfCardId } from './ChaosCardInfo.js'
 import { useMediaQuery } from './useMediaQuery.js'
 import s from './table.module.css'
@@ -119,7 +119,16 @@ export function ChaosToasts({ applied, handId, restored, nameOf, layout, reverse
   const { t, i18n } = useTranslation()
   const language: Language = lang ?? (i18n.language === 'en' ? 'en' : 'vi')
   /** BP-41: what a round-three card did, said after its line ("Lan → Bình: 1.000"); `null` for a card that says nothing more. */
-  const detailOf = (item: AppliedChaosView): string | null => chaosDetail(item, t, language, nameOf, curse)
+  const now = Date.now()
+  const detailOf = (item: AppliedChaosView): string | null => chaosDetail(item, t, language, nameOf, curse, now)
+  // A dice roll's line tells its faces once the dice land (Ruling 22): one wake at the next landing still to come.
+  const [, tick] = useReducer((n: number) => n + 1, 0)
+  const landing = Math.min(...applied.flatMap((x) => (x.rolledAt === undefined ? [] : [x.rolledAt + DICE_ROLL_MS])).filter((at) => at > now))
+  useEffect(() => {
+    if (!Number.isFinite(landing)) return
+    const timer = setTimeout(tick, Math.max(0, landing - Date.now()) + 16)
+    return () => clearTimeout(timer)
+  }, [landing])
   const reduce = useMediaQuery('(prefers-reduced-motion: reduce)')
   const narrow = useMediaQuery(NARROW_LANDSCAPE_QUERY)
   const listId = useId()

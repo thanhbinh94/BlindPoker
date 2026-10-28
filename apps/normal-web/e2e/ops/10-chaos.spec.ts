@@ -778,6 +778,14 @@ interface Moments {
   outside: string[]
   /** The most the page scrolled, either way, while a herald or the dice were up. */
   scroll: { down: number; across: number }
+  /** The page's clock (`performance.now()`) at the first and the last frame the herald's band, or the dice panel, stood. */
+  heraldSpan: { first: number; last: number } | null
+  diceSpan: { first: number; last: number } | null
+  /**
+   * What told a roll while its dice still tumbled (Rulings 20b, 22): a 6-6-6 band, or a card toast naming the roller with its
+   * faces. Empty when nothing gave the roll away.
+   */
+  spoilers: string[]
 }
 
 /**
@@ -787,7 +795,14 @@ interface Moments {
  */
 async function watchMoments(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const w = { heralds: [] as string[], heraldFrames: 0, rolls: [] as { name: string; tumbled: boolean; faces: string; result: string }[], diceFrames: 0, outside: [] as string[], scroll: { down: 0, across: 0 }, stop: false }
+    const w = {
+      heralds: [] as string[], heraldFrames: 0, rolls: [] as { name: string; tumbled: boolean; faces: string; result: string }[], diceFrames: 0, outside: [] as string[], scroll: { down: 0, across: 0 },
+      heraldSpan: null as { first: number; last: number } | null, diceSpan: null as { first: number; last: number } | null, spoilers: [] as string[], stop: false,
+    }
+    const span = (was: { first: number; last: number } | null, at: number) => (was === null ? { first: at, last: at } : { first: was.first, last: at })
+    const spoil = (what: string): void => {
+      if (w.spoilers.length < 10 && !w.spoilers.includes(what)) w.spoilers.push(what)
+    }
     Object.assign(window, { __moments: w })
     const root = document.documentElement
     const measure = (part: string, el: Element): void => {
@@ -801,10 +816,12 @@ async function watchMoments(page: Page): Promise<void> {
     }
     const tick = (): void => {
       if (w.stop) return
+      const at = performance.now()
       const band = document.querySelector('button[data-herald]')
       // The band's own shake is clipped by the layer (`overflow: hidden`): measured once it stands.
       if (band !== null && band.getBoundingClientRect().height > 0) {
         w.heraldFrames += 1
+        w.heraldSpan = span(w.heraldSpan, at)
         for (const line of Array.from(band.querySelectorAll('[data-kind]'))) {
           const text = line.textContent?.trim() ?? ''
           if (text !== '' && !w.heralds.includes(text)) w.heralds.push(text)
@@ -814,16 +831,25 @@ async function watchMoments(page: Page): Promise<void> {
       const panel = document.querySelector('section[aria-label="Xúc xắc vận may"]')
       if (panel !== null) {
         w.diceFrames += 1
+        w.diceSpan = span(w.diceSpan, at)
         measure('the dice', panel)
-        for (const row of Array.from(panel.children)) {
+        // The panel is one button, a row in it per roll.
+        for (const row of Array.from(panel.querySelectorAll(':scope > button > span'))) {
           const name = row.querySelector('strong')?.textContent?.trim() ?? ''
           let seen = w.rolls.find((r) => r.name === name)
           if (seen === undefined) {
             seen = { name, tumbled: false, faces: '', result: '' }
             w.rolls.push(seen)
           }
-          if (row.getAttribute('data-rolling') === 'true') seen.tumbled = true
-          else {
+          if (row.getAttribute('data-rolling') === 'true') {
+            seen.tumbled = true
+            // Nothing tells this roll while it tumbles: not a 6-6-6 band, not a toast of the roller's card with faces in it.
+            if (band?.querySelector('[data-kind="dice"]') != null) spoil(`the 6-6-6 band while ${name}'s dice tumbled`)
+            for (const toast of Array.from(document.querySelectorAll('[data-chaos-toasts] [data-chaos-toast], [data-chaos-toasts] li'))) {
+              const text = toast.textContent ?? ''
+              if (text.startsWith(`${name} dùng`) && text.includes('Xúc xắc: ')) spoil(`a toast while ${name}'s dice tumbled: ${text}`)
+            }
+          } else {
             seen.faces = row.querySelector('[role="img"]')?.getAttribute('aria-label') ?? ''
             seen.result = row.querySelector('[role="status"]')?.textContent?.trim() ?? ''
           }
@@ -839,8 +865,32 @@ async function readMoments(page: Page): Promise<Moments> {
   return page.evaluate(() => {
     const w = (window as unknown as { __moments: Moments & { stop: boolean } }).__moments
     w.stop = true
-    return { heralds: w.heralds, heraldFrames: w.heraldFrames, rolls: w.rolls, diceFrames: w.diceFrames, outside: w.outside, scroll: w.scroll }
+    return {
+      heralds: w.heralds, heraldFrames: w.heraldFrames, rolls: w.rolls, diceFrames: w.diceFrames, outside: w.outside, scroll: w.scroll,
+      heraldSpan: w.heraldSpan, diceSpan: w.diceSpan, spoilers: w.spoilers,
+    }
   })
+}
+
+/**
+ * Whether the text-overlap rule's last measurement fell while `part` stood: the rule stamps the page's clock when it reads the
+ * boxes (`overlap.ts`), and `watchMoments` keeps the first and last frame each part stood, so the answer comes from the page's own
+ * clock, however long the round trips to the test took (BP-41 fix wave: a `toHaveCount(1, { timeout: 100 })` afterwards failed
+ * whenever the machine was slow, though the rule had measured the herald).
+ */
+async function measuredWhileUp(page: Page, part: 'herald' | 'dice'): Promise<{ at: number | null; span: { first: number; last: number } | null }> {
+  return page.evaluate((which) => {
+    const w = window as unknown as { __overlapMeasuredAt?: number; __moments: Moments }
+    return { at: w.__overlapMeasuredAt ?? null, span: which === 'herald' ? w.__moments.heraldSpan : w.__moments.diceSpan }
+  }, part)
+}
+
+/** Asserts the overlap rule measured while `part` stood (one frame's slack after its last frame). */
+async function expectMeasuredWhileUp(page: Page, part: 'herald' | 'dice', label: string): Promise<void> {
+  const { at, span } = await measuredWhileUp(page, part)
+  expect(at, `${label}: the overlap rule stamped its measurement`).not.toBeNull()
+  expect(span, `${label}: the frame record saw it`).not.toBeNull()
+  expect(at! >= span!.first && at! <= span!.last + 50, `${label}: measured at ${Math.round(at!)} ms, stood ${Math.round(span!.first)}–${Math.round(span!.last)} ms`).toBe(true)
 }
 
 /** `text` as a regular expression that matches it literally. */
@@ -879,7 +929,7 @@ async function godReigns({ id, who, phone }: { id: string; who: Player; phone: b
   await expect(herald, 'the Thần’s herald crosses the screen').toBeVisible({ timeout: 30_000 })
   await expectNoPageScroll(page, `${id}, the Thần's herald`)
   await expectNoTextOverlapAt(page, `${id}, the Thần's herald`)
-  await expect(herald, 'the herald still stood when the overlap rule had measured it (3 s)').toHaveCount(1, { timeout: 100 })
+  await expectMeasuredWhileUp(page, 'herald', 'the herald stood when the overlap rule measured')
   await shot(page, `chaos-${id}-herald`)
   const line = (await herald.locator('[data-kind="god"]').first().textContent())?.trim() ?? ''
   const godName = GOD_HERALD.exec(line)?.[1]
@@ -956,7 +1006,8 @@ test('F-14b: @s25p @s25l a Thần Bài on the Galaxy S25 — the herald fits the
  * end of the first hand (Ruling 5). The dice panel names the human, its three dice tumble ("Đang gieo…") and land on faces it
  * says in words, with what they gave; the panel stays inside the screen and scrolls nothing; and the roll's line joins the
  * cards' toasts — a toast of its own, or, since it comes after the settlement while the result is open (BP-39), under
- * "+N thẻ khác", whose list names it.
+ * "+N thẻ khác", whose list names it. The line says "Đang gieo…" until the dice land and then the faces the panel landed on
+ * (Ruling 22); no frame shows the faces in a toast, or a 6-6-6 band, while the dice still tumble (Ruling 20b).
  */
 async function diceRoll({ id, who, phone }: { id: string; who: Player; phone: boolean }): Promise<void> {
   const page = who.page
@@ -977,11 +1028,11 @@ async function diceRoll({ id, who, phone }: { id: string; who: Player; phone: bo
   // so the page is measured first, then the toast is read, and what the panel showed is taken from `watchMoments` afterwards.
   const panel = page.getByRole('region', { name: 'Xúc xắc vận may', exact: true })
   await expect(panel, 'the dice roll at the end of the first hand').toBeVisible({ timeout: 90_000 })
-  await expect(panel.locator(':scope > div').filter({ has: page.locator('strong').getByText(me, { exact: true }) }), `a row for ${me}`).toHaveCount(1)
+  await expect(panel.locator(':scope > button > span').filter({ has: page.locator('strong').getByText(me, { exact: true }) }), `a row for ${me}`).toHaveCount(1)
   await expectNoPageScroll(page, `${id}, the dice`)
   // The overlap rule measures under reduced motion, which lands the dice at once: what it measures is the landed panel.
   await expectNoTextOverlapAt(page, `${id}, the dice`)
-  await expect(panel, 'the panel still stood when the overlap rule had measured it (3 s)').toHaveCount(1, { timeout: 100 })
+  await expectMeasuredWhileUp(page, 'dice', 'the panel stood when the overlap rule measured')
   await shot(page, `chaos-${id}-dice`)
 
   // The roll's line among the cards' toasts: its own toast, or "+N thẻ khác"'s list. The toast watch stops before the list
@@ -991,12 +1042,16 @@ async function diceRoll({ id, who, phone }: { id: string; who: Player; phone: bo
   const more = toastBand(page).locator('[data-more] button')
   await expect(own.or(more).first(), 'the roll is told among the cards').toBeVisible({ timeout: 5_000 })
   const watch = await readWatch(page)
+  // The line says "Đang gieo…" until the dice land (Ruling 22), then the faces: read it once they are in.
   let line: string
-  if ((await own.count()) > 0) line = (await own.first().textContent())?.trim() ?? ''
-  else {
+  if ((await own.count()) > 0) {
+    await expect(own.first(), 'the toast tells the faces once the dice have landed').toContainText('Xúc xắc: ', { timeout: 5_000 })
+    line = (await own.first().textContent())?.trim() ?? ''
+  } else {
     await (how === 'tap' ? more.tap() : more.click())
     const listed = toastBand(page).getByRole('list', { name: 'Các thẻ đã dùng ván này' }).getByRole('listitem').filter({ hasText: mineSaid })
     await expect(listed.first(), '"+N thẻ khác" lists the roll').toBeVisible()
+    await expect(listed.first(), 'the list tells the faces once the dice have landed').toContainText('Xúc xắc: ', { timeout: 5_000 })
     line = (await listed.first().textContent())?.trim() ?? ''
     await shot(page, `chaos-${id}-dice-list`)
     await page.keyboard.press('Escape')
@@ -1015,7 +1070,9 @@ async function diceRoll({ id, who, phone }: { id: string; who: Player; phone: bo
   expect(roll!.result).not.toBe('Đang gieo…')
   expect(moments.outside, `${id}: the dice panel stays inside the screen`).toEqual([])
   expect(moments.scroll, `${id}: nothing scrolled the page while the dice stood`).toEqual({ down: 0, across: 0 })
-  // The toast tells the same roll: its faces, then what it gave.
+  // Nothing gave the roll away while the dice tumbled: no 6-6-6 band (Ruling 20b), no toast with the faces (Ruling 22).
+  expect(moments.spoilers, `${id}: the roll told before the dice landed`).toEqual([])
+  // Once shown, the toast tells the same roll as the panel landed on: its faces, then what it gave.
   const faces = roll!.faces.replace(/^Xúc xắc: /, '')
   expect(line, 'the roll told among the cards, with its faces and result').toMatch(new RegExp(`^${escapeRe(me)} dùng ${DIAMOND_DICE.name}( — .+)? · Xúc xắc: ${faces} · .+$`))
   await leave(page)

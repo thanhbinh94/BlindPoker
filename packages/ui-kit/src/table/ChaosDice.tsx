@@ -3,14 +3,12 @@ import { useTranslation } from 'react-i18next'
 import type { ClientDiceRoll } from '../client/types.js'
 import type { Language } from '../i18n/index.js'
 import { cx } from '../primitives/cx.js'
-import { diceText, rollText } from './chaos-detail.js'
+import { DICE_MS, DICE_ROLL_MS, diceText, rollText } from './chaos-detail.js'
 import { useMediaQuery } from './useMediaQuery.js'
 import s from './table.module.css'
 
-/** How long the dice tumble before they land (spec 2026-10-28 §5: about 1.5 s). */
-export const DICE_ROLL_MS = 1_500
-/** How long a roll stays up in all, from its arrival: the tumble, then the result. */
-export const DICE_MS = 3_000
+// The roll's two moments live with the words that wait for them (the toast's line, Ruling 22); said again here, where they show.
+export { DICE_MS, DICE_ROLL_MS }
 /** How often a tumbling die shows another face. */
 const TUMBLE_STEP_MS = 90
 
@@ -71,25 +69,28 @@ export function ChaosDice({ rolls, lang }: ChaosDiceProps) {
 
   if (live.length === 0) return null
   return (
-    <section className={s.dicePanel} data-surface="night" aria-label={t('chaos.dice.label')} onClick={() => setDismissed(Math.max(...live.map((r) => r.id)))}>
-      {live.slice(-4).map((roll) => {
-        const rolling = !reduce && now - roll.at < DICE_ROLL_MS
-        // A tumbling die shows a face that changes every step, from the clock: no state to keep, and nothing random to test.
-        const faces = rolling ? roll.dice.map((_, i) => 1 + ((Math.floor(now / TUMBLE_STEP_MS) + i * 2 + roll.id) % 6)) : roll.dice
-        return (
-          <div key={roll.id} className={s.diceRow} data-rolling={rolling ? 'true' : undefined} data-herald={roll.result.herald === true ? 'true' : undefined}>
-            <strong className={s.diceName}>{roll.name}</strong>
-            <span className={s.diceFaces} role="img" aria-label={rolling ? t('chaos.dice.rolling') : t('chaos.dice.faces', { dice: diceText(roll.dice) })}>
-              {faces.map((face, i) => (
-                <Die key={i} face={face} tumbling={rolling} />
-              ))}
+    <section className={s.diceSlot} data-surface="night" aria-label={t('chaos.dice.label')}>
+      {/* The panel is one button, as the herald's band is: a tap or a key puts it away (BP-41 Task 9 M7). */}
+      <button type="button" className={s.dicePanel} onClick={() => setDismissed(Math.max(...live.map((r) => r.id)))}>
+        {live.slice(-4).map((roll) => {
+          const rolling = !reduce && now - roll.at < DICE_ROLL_MS
+          // A tumbling die shows a face that changes every step, from the clock: no state to keep, and nothing random to test.
+          const faces = rolling ? roll.dice.map((_, i) => 1 + ((Math.floor(now / TUMBLE_STEP_MS) + i * 2 + roll.id) % 6)) : roll.dice
+          return (
+            <span key={roll.id} className={s.diceRow} data-rolling={rolling ? 'true' : undefined} data-herald={roll.result.herald === true ? 'true' : undefined}>
+              <strong className={s.diceName}>{roll.name}</strong>
+              <span className={s.diceFaces} role="img" aria-label={rolling ? t('chaos.dice.rolling') : t('chaos.dice.faces', { dice: diceText(roll.dice) })}>
+                {faces.map((face, i) => (
+                  <Die key={i} face={face} tumbling={rolling} />
+                ))}
+              </span>
+              <span className={s.diceResult} role="status">
+                {rolling ? t('chaos.dice.rolling') : rollText(roll.result, t, lang)}
+              </span>
             </span>
-            <span className={s.diceResult} role="status">
-              {rolling ? t('chaos.dice.rolling') : rollText(roll.result, t, lang)}
-            </span>
-          </div>
-        )
-      })}
+          )
+        })}
+      </button>
     </section>
   )
 }

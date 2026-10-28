@@ -461,6 +461,7 @@ function applyChaosRoomEvent(chaos: ClientChaos, event: RoomEvent, ctx: ChaosRoo
       const roll: ClientDiceRoll = { id, seat: event.seat, name, cardId: event.cardId, dice: event.dice.slice(), result: event.result, at: ctx.now }
       const line: AppliedChaosView = {
         seat: event.seat, cardId: event.cardId, effect: 'fortuneDice', targets: [], outcome: 'applied', dice: event.dice.slice(), roll: event.result,
+        rolledAt: ctx.now,
       }
       const heralds =
         event.result.herald === true

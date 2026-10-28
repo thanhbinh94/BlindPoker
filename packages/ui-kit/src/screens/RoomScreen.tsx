@@ -480,10 +480,10 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
 
       {/* BP-41 (spec 2026-10-28 §4.5, §5): the table's moments — the Thần's herald across the screen and the dice of fortune —
           in a layer fixed to the screen over everything, laid out in one column so the two never cover each other's words.
-          It takes no room and catches no press but on what it shows, and each piece is gone after its 3 s. */}
-      {chaosTable ? (
+          It takes no room and catches no press but on what it shows, and each piece is gone after its 3 s. */}      {chaosTable ? (
         <div className={s.moments} data-surface="night">
-          <ChaosHerald heralds={state.chaos.heralds} lang={lang} />
+          {/* The fall of a Thần names the winner: it waits out the reveal hold with the result (Ruling 21). */}
+          <ChaosHerald heralds={state.chaos.heralds} lang={lang} held={held} />
           <ChaosDice rolls={state.chaos.rolls} lang={lang} />
         </div>
       ) : null}

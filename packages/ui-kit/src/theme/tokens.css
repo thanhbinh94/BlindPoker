@@ -194,6 +194,19 @@
   --radius-pill: 999px;
 
   --tap: 44px;
+
+  /* Poker hỗn loạn's moments (BP-41 §4.5, §5): the Thần's gold-on-red — the herald's band, the aura, the crown — and the dice of
+     fortune. They are drawn on night surfaces only, so one value serves both themes. */
+  --chaos-god-edge: #f0b443;
+  --chaos-god-ink: #ffe2a0;
+  --chaos-god-band: rgba(96, 13, 20, 0.94);
+  --chaos-god-band-top: rgba(122, 18, 25, 0.94);
+  --chaos-god-band-foot: rgba(70, 8, 14, 0.94);
+  --chaos-die-face-top: #fbf6e8;
+  --chaos-die-face-foot: #ddd2b6;
+  --chaos-die-pip: #1b1f2e;
+  --chaos-die-pip-hot: #b3202a;
+
   --z-modal: 100;
   /* Above every dialog (BP-29, bug log §10 E5): a refusal that answers a dialog's own button — "Số dư không đủ" for a
      Hold'em buy-in — was drawn under that dialog's backdrop, which shared the modal's z-index and came later in the DOM. */

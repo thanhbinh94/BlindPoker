@@ -3,6 +3,7 @@ import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppliedChaosView } from '../client/types.js'
 import { createI18n } from '../i18n/index.js'
+import { DICE_ROLL_MS } from './chaos-detail.js'
 import { ChaosToasts, NARROW_LANDSCAPE_QUERY, TOAST_MS, type ChaosToastsProps } from './ChaosToasts.js'
 import TABLE_CSS from './table.module.css?raw'
 import s from './table.module.css'
@@ -352,6 +353,16 @@ describe('ChaosToasts, BP-41 lines', () => {
     expect(line(applied(1, 'd_dice', { effect: 'fortuneDice', dice: [6, 6, 6], roll: { jackpot: 60_000, triple: true, herald: true } }))).toContain('Xúc xắc: 6-6-6 · Bộ ba! · Nổ hũ 60.000')
     document.body.innerHTML = ''
     expect(line(applied(0, 'g_steal_points', { effect: 'stealPoints', targets: [1], steal: { from: 1, to: 0, amount: 5 } }))).toContain('Bảo → Ann: 5 điểm hỗn loạn')
+  })
+
+  it('keeps a roll’s faces and result back until the dice land, then tells the faces the panel landed on (Ruling 22)', () => {
+    const rolledAt = Date.now()
+    const roll = applied(1, 'd_dice', { effect: 'fortuneDice', dice: [6, 6, 6], roll: { jackpot: 60_000, triple: true, herald: true }, rolledAt })
+    expect(line(roll)).toBe('Bảo dùng Xúc xắc vận may kim cương · Đang gieo…')
+    advance(DICE_ROLL_MS - 100)
+    expect(texts()[0]).not.toContain('6-6-6')
+    advance(120)
+    expect(texts()[0]).toBe('Bảo dùng Xúc xắc vận may kim cương · Xúc xắc: 6-6-6 · Bộ ba! · Nổ hũ 60.000')
   })
 
   it('a plain card says nothing more', () => {

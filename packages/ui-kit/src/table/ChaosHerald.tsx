@@ -3,27 +3,49 @@ import { useTranslation } from 'react-i18next'
 import type { ClientHerald } from '../client/types.js'
 import { formatPoints, type Language } from '../i18n/index.js'
 import { cx } from '../primitives/cx.js'
-import { diceText } from './chaos-detail.js'
-import { DICE_ROLL_MS } from './ChaosDice.js'
+import { DICE_MS, DICE_ROLL_MS, diceText } from './chaos-detail.js'
 import { useMediaQuery } from './useMediaQuery.js'
 import s from './table.module.css'
 
-/** How long a herald stays up (spec 2026-10-28 §4.5: about 3 s), from its arrival — or, for a 6-6-6 roll, from the dice landing. */
+/** How long a herald stays up (spec 2026-10-28 §4.5: about 3 s), from its arrival — or from the end of the result's reveal hold. */
 export const HERALD_MS = 3_000
 
 /**
- * When a herald shows, in client time: from its arrival for a reign; for a dice roll (`dice`), once the dice have landed, so
- * the banner does not tell the roll before the table has watched it — at once under reduced motion, which skips the roll.
+ * The result's reveal hold as the herald saw it (`useRevealHold`), in client time: `since` when it began, `until` when it ended
+ * (`null` while it runs).
  */
-export function heraldWindow(herald: ClientHerald, reduce: boolean): { from: number; until: number } {
-  const from = herald.kind === 'dice' && !reduce ? herald.at + DICE_ROLL_MS : herald.at
-  return { from, until: from + HERALD_MS }
+export interface HeraldHold {
+  since: number
+  until: number | null
+}
+
+/**
+ * When a herald shows, in client time:
+ * - a reign (Thần, Bán Thần): from its arrival, for `HERALD_MS`;
+ * - the fall of a Thần (`godslain`, Ruling 21): the same, but never while the result's reveal hold runs — a herald that would
+ *   show during the hold waits for its end, so the band does not name the winner while the cards are still turning;
+ * - a 6-6-6 roll (`dice`, Ruling 20b): from the dice landing (`DICE_ROLL_MS` after the roll came) until the dice panel leaves
+ *   (`DICE_MS`), so the band says nothing while the panel reads "Đang gieo…" and covers the result no longer than the panel. The
+ *   window is the same under reduced motion, where only the tumble is dropped.
+ */
+export function heraldWindow(herald: ClientHerald, hold: HeraldHold | null = null): { from: number; until: number } {
+  if (herald.kind === 'dice') return { from: herald.at + DICE_ROLL_MS, until: herald.at + DICE_MS }
+  if (herald.kind === 'godslain' && hold !== null && herald.at + HERALD_MS > hold.since && (hold.until === null || herald.at < hold.until)) {
+    const from = hold.until ?? Number.POSITIVE_INFINITY
+    return { from, until: from + HERALD_MS }
+  }
+  return { from: herald.at, until: herald.at + HERALD_MS }
 }
 
 export interface ChaosHeraldProps {
   /** `ClientState.chaos.heralds`: the latest heralds, oldest first. */
   heralds: readonly ClientHerald[]
   lang: Language
+  /**
+   * The result card is held back while the showdown turns an opponent's cards over (`useRevealHold`, `REVEAL_HOLD_MS`): the fall
+   * of a Thần waits for the hold's end (Ruling 21).
+   */
+  held?: boolean
 }
 
 /**
@@ -36,14 +58,20 @@ export interface ChaosHeraldProps {
  * a remount — shows only for what is left of its time; none is replayed. A live region (assertive: it is the table's news).
  * Under `prefers-reduced-motion` the words simply show — no glow pulse, no shake.
  */
-export function ChaosHerald({ heralds, lang }: ChaosHeraldProps) {
+export function ChaosHerald({ heralds, lang, held = false }: ChaosHeraldProps) {
   const { t } = useTranslation()
   const reduce = useMediaQuery('(prefers-reduced-motion: reduce)')
   /** The newest herald put away by a tap: it and every one before it stay down. */
   const [dismissed, setDismissed] = useState(0)
   const [, tick] = useReducer((n: number) => n + 1, 0)
   const now = Date.now()
-  const windows = heralds.map((h) => ({ h, ...heraldWindow(h, reduce) }))
+  // The reveal hold's start and end, noted in the render that sees them change (React's pattern for what earlier renders knew).
+  const [hold, setHold] = useState<HeraldHold | null>(null)
+  let seenHold = hold
+  if (held && (hold === null || hold.until !== null)) seenHold = { since: now, until: null }
+  else if (!held && hold !== null && hold.until === null) seenHold = { since: hold.since, until: now }
+  if (seenHold !== hold) setHold(seenHold)
+  const windows = heralds.map((h) => ({ h, ...heraldWindow(h, seenHold) }))
   const shown = windows.filter((w) => w.h.id > dismissed && w.from <= now && now < w.until)
   // Wakes at the next moment something appears or leaves.
   const next = Math.min(...windows.filter((w) => w.h.id > dismissed).flatMap((w) => [w.from, w.until]).filter((at) => at > now))

@@ -60,7 +60,10 @@ describe('ChaosDice (BP-41 §5)', () => {
     expect(panel()).toBeNull()
     cleanup()
     draw([roll({ id: 2, at: Date.now() })])
-    fireEvent.click(panel()!)
+    // The panel is a button (a tap, or Enter from the keyboard), inside the named region.
+    const button = panel()!.querySelector('button')!
+    expect(button).toHaveAttribute('type', 'button')
+    fireEvent.click(button)
     expect(panel()).toBeNull()
   })
 

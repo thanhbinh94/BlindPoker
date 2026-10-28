@@ -3,6 +3,11 @@ import type { TFunction } from 'i18next'
 import type { AppliedChaosView } from '../client/types.js'
 import { cardLabel, formatPoints, type Language } from '../i18n/index.js'
 
+/** How long the dice tumble before they land (spec 2026-10-28 §5: about 1.5 s). `ChaosDice` re-exports it. */
+export const DICE_ROLL_MS = 1_500
+/** How long a roll stays up in all, from its arrival: the tumble, then the result. `ChaosDice` re-exports it. */
+export const DICE_MS = 3_000
+
 /** How dice faces read in a line: "6-6-6". */
 export const diceText = (dice: readonly number[]): string => dice.join('-')
 
@@ -26,6 +31,10 @@ export function rollText(result: ChaosDiceResult, t: TFunction, lang: Language):
  * or `null` when it tells nothing beyond the card and its targets: who paid whom (a duel, a bomb, Ép chia thưởng, Thuế thắng), the
  * stake a card multiplied, the die and what it did, the hole cards added or taken, the wild card, the card switched off, a reign,
  * the Thần's curse, a dice roll and a Trộm điểm. `curse` is the reigning Thần's (`ChaosTableView.god.curse`), for its curse line.
+ *
+ * A dice roll's line keeps its faces and result back until the dice have landed (`rolledAt + DICE_ROLL_MS`, Ruling 22): until
+ * then it says "Đang gieo…", as the panel does, so the toast never tells the roll the table is still watching. `now` is the
+ * client clock (`Date.now()` by default); a roll line rebuilt without `rolledAt` tells at once.
  */
 export function chaosDetail(
   item: AppliedChaosView,
@@ -33,9 +42,13 @@ export function chaosDetail(
   lang: Language,
   nameOf: (seat: number) => string,
   curse: ChaosGodCurse | null = null,
+  now: number = Date.now(),
 ): string | null {
   if (item.reign !== undefined) return t(`chaos.detail.${item.reign}`)
-  if (item.roll !== undefined) return `${t('chaos.detail.dice', { dice: diceText(item.dice ?? []) })} · ${rollText(item.roll, t, lang)}`
+  if (item.roll !== undefined) {
+    if (item.rolledAt !== undefined && now < item.rolledAt + DICE_ROLL_MS) return t('chaos.dice.rolling')
+    return `${t('chaos.detail.dice', { dice: diceText(item.dice ?? []) })} · ${rollText(item.roll, t, lang)}`
+  }
   if (item.steal !== undefined) {
     const { from, to, amount } = item.steal
     return from === null || to === null || amount <= 0 ? null : t('chaos.detail.steal', { from: nameOf(from), to: nameOf(to), count: amount })

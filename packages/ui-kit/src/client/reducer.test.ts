@@ -956,7 +956,7 @@ describe('Poker hỗn loạn', () => {
       s = at(s, 13, { type: 'CHAOS_DICE', seat: 1, cardId: 'g_dice', dice: [1, 1], result: { burned: 1000 }, stack: 19_000 }, 700)
       expect(s.hand!.seats.find((x) => x.seat === 1)!.stack).toBe(19_000)
       expect(s.chaos.rolls).toEqual([{ id: 1, seat: 1, name: 'P1', cardId: 'g_dice', dice: [1, 1], result: { burned: 1000 }, at: 700 }])
-      expect(s.chaos.applied.at(-1)).toEqual({ seat: 1, cardId: 'g_dice', effect: 'fortuneDice', targets: [], outcome: 'applied', dice: [1, 1], roll: { burned: 1000 } })
+      expect(s.chaos.applied.at(-1)).toEqual({ seat: 1, cardId: 'g_dice', effect: 'fortuneDice', targets: [], outcome: 'applied', dice: [1, 1], roll: { burned: 1000 }, rolledAt: 700 })
       expect(s.chaos.heralds).toEqual([])
       const jackpot = { jackpot: 60_000, cards: [{ tier: 'diamond' as const, count: 2 }], triple: true as const, herald: true as const }
       s = at(s, 14, { type: 'CHAOS_DICE', seat: 2, cardId: 'd_dice', dice: [6, 6, 6], result: jackpot, stack: 20_000 }, 800)

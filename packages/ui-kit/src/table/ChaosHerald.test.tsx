@@ -3,7 +3,7 @@ import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClientHerald } from '../client/types.js'
 import { createI18n, type Language } from '../i18n/index.js'
-import { DICE_ROLL_MS } from './ChaosDice.js'
+import { DICE_MS, DICE_ROLL_MS } from './ChaosDice.js'
 import { ChaosHerald, HERALD_MS } from './ChaosHerald.js'
 import CSS from './table.module.css?raw'
 import s from './table.module.css'
@@ -89,13 +89,53 @@ describe('ChaosHerald (BP-41 §4.5)', () => {
     expect(screen.getByText('Bình đã đánh bại Thần Bài!')).toBeInTheDocument()
   })
 
-  it('a 6-6-6 roll’s banner waits for the dice to land, then says the jackpot', () => {
+  it('a 6-6-6 roll’s banner waits for the dice to land, says the jackpot, and leaves with the dice panel (Ruling 20b)', () => {
     draw([herald({ kind: 'dice', dice: [6, 6, 6], amount: 60_000 })])
     expect(band()).toBeNull()
-    act(() => void vi.advanceTimersByTime(DICE_ROLL_MS + 20))
-    expect(screen.getByText('Xúc xắc 6-6-6! Lan nổ hũ 60.000!')).toBeInTheDocument()
-    act(() => void vi.advanceTimersByTime(HERALD_MS))
+    act(() => void vi.advanceTimersByTime(DICE_ROLL_MS - 100))
     expect(band()).toBeNull()
+    act(() => void vi.advanceTimersByTime(120))
+    expect(screen.getByText('Xúc xắc 6-6-6! Lan nổ hũ 60.000!')).toBeInTheDocument()
+    // Up to the panel's 3 s, never past them: the result's "Người thắng" is covered no longer than spec §4.5's 3 s.
+    act(() => void vi.advanceTimersByTime(DICE_MS - DICE_ROLL_MS - 120))
+    expect(band()).not.toBeNull()
+    act(() => void vi.advanceTimersByTime(140))
+    expect(band()).toBeNull()
+  })
+
+  it('the fall of a Thần waits for the result’s reveal hold to end, then shows its full 3 s (Ruling 21)', () => {
+    const at = (held: boolean, heralds: ClientHerald[]) => (
+      <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+        <ChaosHerald heralds={heralds} lang="vi" held={held} />
+      </I18nextProvider>
+    )
+    // The showdown turns the cards over: the hold starts with the settlement, and the herald comes just after it.
+    const { rerender } = render(at(true, []))
+    act(() => void vi.advanceTimersByTime(50))
+    const slain = herald({ id: 1, kind: 'godslain', name: 'Châu', at: Date.now() })
+    rerender(at(true, [slain]))
+    expect(band()).toBeNull()
+    act(() => void vi.advanceTimersByTime(1_200))
+    expect(band()).toBeNull()
+    // The hold ends: the band shows from now, for its whole 3 s.
+    rerender(at(false, [slain]))
+    expect(screen.getByText('Châu đã đánh bại Thần Bài!')).toBeInTheDocument()
+    act(() => void vi.advanceTimersByTime(HERALD_MS - 100))
+    expect(band()).not.toBeNull()
+    act(() => void vi.advanceTimersByTime(200))
+    expect(band()).toBeNull()
+  })
+
+  it('a reign herald and a fall with no hold show at once; the dice herald ignores the hold', () => {
+    draw([herald({ id: 1, kind: 'godslain', name: 'Châu' })])
+    expect(screen.getByText('Châu đã đánh bại Thần Bài!')).toBeInTheDocument()
+    cleanup()
+    render(
+      <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+        <ChaosHerald heralds={[herald({ id: 2, kind: 'god' })]} lang="vi" held />
+      </I18nextProvider>,
+    )
+    expect(screen.getByText(/trở thành Thần Bài!/)).toBeInTheDocument()
   })
 
   it('glows and shakes, and under reduced motion only shows its words (no motion class; the CSS stops it too)', () => {
@@ -104,7 +144,9 @@ describe('ChaosHerald (BP-41 §4.5)', () => {
     cleanup()
     motion(true)
     draw([herald({ kind: 'dice', dice: [6, 6, 6], amount: 60_000 })])
-    // No roll to wait for either: the dice skip their tumble.
+    // The same window as with motion (Ruling 20b): from the landing to the panel's 3 s; only the tumble is dropped.
+    expect(band()).toBeNull()
+    act(() => void vi.advanceTimersByTime(DICE_ROLL_MS + 20))
     expect(band()).not.toHaveClass(s.heraldMotion!)
     expect(screen.getByText(/nổ hũ 60.000/)).toBeInTheDocument()
     const off = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(CSS)?.[1] ?? ''
