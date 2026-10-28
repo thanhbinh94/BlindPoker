@@ -303,7 +303,7 @@ describe('the chaos cards (Plan 37)', () => {
     const body = res.json() as ChaosBody
     expect(body.cards).toHaveLength(47)
     expect(body.cards.every((c) => c.activeNow && c.rule === null)).toBe(true)
-    expect(body.config.tierWeights).toEqual({ silver: 60, gold: 30, diamond: 10 })
+    expect(body.config.tierWeights).toEqual({ silver: 50, gold: 35, diamond: 15 })
   })
 
   it('a write without a reason is exactly 400 INVALID_REASON, before its body is looked at', async () => {

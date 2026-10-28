@@ -1,7 +1,8 @@
 import {
-  DEFAULT_CHAOS_CONFIG, EMPTY_CHAOS_SEAT, addRevealEffect, afterHand, armBonus, clearUnsettledHand, drawOffer, drawTier, planHand, receiveCard, toHeldCardView,
+  DEFAULT_CHAOS_CONFIG, EMPTY_CHAOS_SEAT, EMPTY_CHAOS_TABLE, addRevealEffect, afterHand, armBonus, clearUnsettledHand, drawOffer, drawTier, planHand, receiveCard,
+  toHeldCardView,
   type ArmWhen, type BlindRules, type ChaosBonusPayload, type ChaosCardDef, type ChaosConfig, type ChaosCredit, type ChaosHandPlan,
-  type ChaosSeat, type ChaosSnapshot, type ChaosTier, type HandState, type HeldCardView, type RoomEvent,
+  type ChaosSeat, type ChaosSnapshot, type ChaosTableState, type ChaosTier, type HandState, type HeldCardView, type RoomEvent,
 } from '@bp/core'
 import type { ChaosPort } from '../chaos-port.js'
 import type { TimerHandle } from '../infra/clock.js'
@@ -66,6 +67,8 @@ export class ChaosTable {
   private readonly pending = new Map<string, { credit: ChaosCredit; request: Parameters<ChaosPort['credit']>[0] }[]>()
   private uid = 0
   private readonly cycleLength: number
+  /** The table's own chaos state (BP-41: the Thần, the Bán Thần, the bombs), threaded through `planHand` and `afterHand`. */
+  table: ChaosTableState = EMPTY_CHAOS_TABLE
 
   constructor(
     private readonly port: ChaosPort,
@@ -188,15 +191,17 @@ export class ChaosTable {
   planHand(eligible: readonly RoomPlayer[]): ChaosHandPlan {
     // A card played for this hand now names it (`armed.hand: 'this'`), or joined the held cards: its owner is told.
     const before = this.bonusKeys(eligible)
-    const { plan, seats } = planHand({
+    const { plan, seats, table } = planHand({
       seats: eligible.map((p) => ({ seat: p.seat!, isBot: p.identity.isBot, chaos: p.chaos ?? EMPTY_CHAOS_SEAT })),
       rules: this.host.rules,
       pool: this.cards,
       rng: this.host.deps.rng,
       nextUid: () => this.nextUid(),
       weights: this.weights,
+      table: this.table,
     })
     for (const p of eligible) p.chaos = seats.get(p.seat!) ?? p.chaos
+    this.table = table
     this.tellBonusChanges(before)
     this.tableHands += 1
     return plan
@@ -268,6 +273,8 @@ export class ChaosTable {
       carryOverOnly,
       marks: chaos.marks,
       weights: this.weights,
+      table: this.table,
+      ...(chaos.outcomes ? { outcomes: chaos.outcomes } : {}),
       seats: inHand.map(({ hp, p }) => ({
         seat: hp.seat,
         isBot: hp.isBot,
@@ -280,6 +287,7 @@ export class ChaosTable {
       })),
     })
     for (const { hp, p } of inHand) p.chaos = settled.seats.get(hp.seat) ?? p.chaos
+    this.table = settled.table
     // A bonus card drawn, a played card spent or given back: told to its owner only (`settled.bonusAwarded` is never
     // broadcast). The table sees the count change in `CHAOS_STATE`.
     this.tellBonusChanges(before)

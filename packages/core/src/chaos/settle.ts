@@ -4,9 +4,9 @@ import { drawOffer, drawTier } from './draw.js'
 import { needsNoPress, returnToBonus } from './bonus.js'
 import { farmHandsOf, receiveCard, tierFromParam, toHeld } from './hold.js'
 import {
-  BONUS_HAND_MAX,
-  type ChaosCardDef, type ChaosConfig, type ChaosCredit, type ChaosHandPlan, type ChaosMark, type ChaosMode, type ChaosSeat, type ChaosTier,
-  type HeldCard,
+  BONUS_HAND_MAX, EMPTY_CHAOS_TABLE,
+  type ChaosCardDef, type ChaosConfig, type ChaosCredit, type ChaosDebit, type ChaosHandOutcomes, type ChaosHandPlan, type ChaosMark, type ChaosMode,
+  type ChaosSeat, type ChaosTableState, type ChaosTier, type HeldCard,
 } from './types.js'
 
 export interface AfterHandSeat {
@@ -25,6 +25,10 @@ export interface AfterHandSeat {
 export interface AfterHandResult {
   seats: Map<number, ChaosSeat>
   credits: ChaosCredit[]
+  /** BP-41: points cards take into the sink (the dice); the room lowers the stacks and writes the sink rows. */
+  debits: ChaosDebit[]
+  /** BP-41 A3: the table's chaos state for the next hand (reigns and bombs counted down, a Thần dethroned…). */
+  table: ChaosTableState
   /** Cards that reached a seat through `receiveCard` (draft-style: public, they act on their own). */
   awarded: { seat: number; cards: ChaosCardDef[] }[]
   /** Bonus cards that went into a human's bonus hand (BP-39): private, told only to their owner. */
@@ -53,6 +57,9 @@ const fortuneRow = (len: number): 2 | 4 | 6 => (len >= 6 ? 6 : len >= 4 ? 4 : 2)
  *   the armed one included — when it is full the points wait — except a card that needs no press, which acts as today;
  * - next hand's freeze and blindfold come from `marks` only.
  * The input is never changed; every draw goes through `rng` and `weights`.
+ *
+ * BP-41 A3: `table` is the table's chaos state as `planHand` returned it (absent = `EMPTY_CHAOS_TABLE`), and `outcomes`
+ * what the engine recorded in `ChaosHandState.outcomes`; the result's `table` is the state for the next hand.
  */
 export function afterHand(input: {
   rules: BlindRules
@@ -71,12 +78,14 @@ export function afterHand(input: {
   marks: readonly ChaosMark[]
   seats: readonly AfterHandSeat[]
   weights?: ReadonlyMap<string, number>
+  table?: ChaosTableState
+  outcomes?: ChaosHandOutcomes
 }): AfterHandResult {
   const { rules, config, pool, rng, nextUid, plan, consumed, marks, weights } = input
   const recorded = input.recorded ?? new Set<number>()
   const mode: ChaosMode = rules.decisionMode
   const wager = rules.fixedWager
-  const result: AfterHandResult = { seats: new Map(), credits: [], awarded: [], bonusAwarded: [] }
+  const result: AfterHandResult = { seats: new Map(), credits: [], debits: [], table: input.table ?? EMPTY_CHAOS_TABLE, awarded: [], bonusAwarded: [] }
 
   for (const s of input.seats) {
     const chaos = s.chaos

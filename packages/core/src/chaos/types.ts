@@ -6,27 +6,54 @@ import type { Card } from '../cards/cards.js'
  */
 
 export type ChaosTier = 'silver' | 'gold' | 'diamond'
-/** When a card acts (spec §5 "Lúc áp"): at the deal, during the play/fold choice, at the reveal, on a condition, on receipt. */
-export type ChaosTiming = 'deal' | 'decision' | 'reveal' | 'wait' | 'now'
+/**
+ * When a card acts (spec §5 "Lúc áp"): at the deal, during the play/fold choice, at the reveal, on a condition, on
+ * receipt, or at the end of the hand (BP-41 §5, the dice: wait-like — never fired by `planHand`, never in the bonus hand).
+ */
+export type ChaosTiming = 'deal' | 'decision' | 'reveal' | 'wait' | 'now' | 'end'
 /** The table's `BlindRules.decisionMode` a card is valid for; ✱ cards are `['playOrFold']` only. */
 export type ChaosMode = 'playOrFold' | 'none'
+/**
+ * What a card does. The first block is BP-37's; the rest are BP-41's (spec 2026-10-28 §4–§6), one per behaviour — a card
+ * that only changes numbers shares its kind with the card it varies (Siêu cộng dồn vàng is `acesCharge`, Thách đấu bạc and
+ * vàng are `duel`, Đổi bài liều is BP-37's `swapHands`, the three Xúc xắc vận may are `fortuneDice`).
+ */
 export type ChaosEffectKind =
   | 'swapLowest' | 'bestOfN' | 'highCard' | 'suited' | 'redealWeak' | 'swapAll' | 'extraHole'
   | 'peekBoard' | 'freeFold' | 'refundStake' | 'shield' | 'mirror' | 'rescue' | 'chaosPoints' | 'farm'
   | 'stealHole' | 'lowerHole' | 'blindfold' | 'freeze' | 'crit' | 'fortune' | 'levelUp'
   | 'borrowHole' | 'redealBoard' | 'swapHands' | 'reverseRank' | 'gambler'
+  // BP-41 Kim cương
+  | 'carp' | 'acesCharge' | 'riskyHand' | 'adventurer' | 'shareWinnings' | 'plunder' | 'shuffleHoles' | 'swapLeader'
+  | 'backfire' | 'deluge' | 'eclipse' | 'wildCard' | 'timeBomb' | 'fortuneDice'
+  // BP-41 Vàng
+  | 'flipFlop' | 'bigTable' | 'duel' | 'stealPoints' | 'scapegoat' | 'hawkEye' | 'sixthBoard' | 'winTax' | 'curse' | 'fateDie'
+  // BP-41 Bạc
+  | 'tierUp' | 'noFold' | 'coinFlip' | 'master' | 'lossPoints' | 'redealHole' | 'neighbourSwap' | 'spoiler' | 'kindling'
 
 export const CHAOS_TIERS: readonly ChaosTier[] = ['silver', 'gold', 'diamond']
-export const CHAOS_TIMINGS: readonly ChaosTiming[] = ['deal', 'decision', 'reveal', 'wait', 'now']
+export const CHAOS_TIMINGS: readonly ChaosTiming[] = ['deal', 'decision', 'reveal', 'wait', 'now', 'end']
 export const CHAOS_MODES: readonly ChaosMode[] = ['playOrFold', 'none']
 export const CHAOS_EFFECT_KINDS: readonly ChaosEffectKind[] = [
   'swapLowest', 'bestOfN', 'highCard', 'suited', 'redealWeak', 'swapAll', 'extraHole',
   'peekBoard', 'freeFold', 'refundStake', 'shield', 'mirror', 'rescue', 'chaosPoints', 'farm',
   'stealHole', 'lowerHole', 'blindfold', 'freeze', 'crit', 'fortune', 'levelUp',
   'borrowHole', 'redealBoard', 'swapHands', 'reverseRank', 'gambler',
+  'carp', 'acesCharge', 'riskyHand', 'adventurer', 'shareWinnings', 'plunder', 'shuffleHoles', 'swapLeader',
+  'backfire', 'deluge', 'eclipse', 'wildCard', 'timeBomb', 'fortuneDice',
+  'flipFlop', 'bigTable', 'duel', 'stealPoints', 'scapegoat', 'hawkEye', 'sixthBoard', 'winTax', 'curse', 'fateDie',
+  'tierUp', 'noFold', 'coinFlip', 'master', 'lossPoints', 'redealHole', 'neighbourSwap', 'spoiler', 'kindling',
 ]
-/** The effects that hurt another seat (spec §3.4–§3.5: at most one fires per seat per hand, shields block them). */
-export const CHAOS_DEBUFF_EFFECTS: ReadonlySet<ChaosEffectKind> = new Set(['stealHole', 'lowerHole', 'blindfold', 'freeze', 'swapHands'])
+/**
+ * The effects that hurt another seat (spec §3.4–§3.5: at most one fires per seat per hand, shields block them). BP-41
+ * §3 adds the cards aimed at one person: Cướp đoạt, Ngược dòng, Lời nguyền, Đổi lá hàng xóm, Xào bài, Bom nổ chậm,
+ * Thách đấu, Kẻ phá đám, Trộm điểm (Đổi bài liều is `swapHands`, already here). Table rules (Thuế thắng, Ép chia thưởng,
+ * Cấm bỏ bài, Hoán vị định mệnh, Đại hồng thủy, Nhật thực, Sới lớn) are not debuffs.
+ */
+export const CHAOS_DEBUFF_EFFECTS: ReadonlySet<ChaosEffectKind> = new Set<ChaosEffectKind>([
+  'stealHole', 'lowerHole', 'blindfold', 'freeze', 'swapHands',
+  'plunder', 'swapLeader', 'curse', 'neighbourSwap', 'redealHole', 'timeBomb', 'duel', 'spoiler', 'stealPoints',
+])
 
 /**
  * One catalogue row. `params` holds every number of the card (spec §6.1), as integers:
@@ -62,6 +89,12 @@ export interface HeldCard {
   debuff: boolean
   /** null = waits for its condition (wait cards) or fires once (one-shot). */
   handsLeft: number | null
+  /**
+   * BP-41: state the card itself carries from hand to hand, kept with the card and lost with the seat — Cá chép's
+   * energy and Siêu cộng dồn's chance (percent), Đảo bài's phase, Liều ăn nhiều's hands played, Mạo hiểm gia's step.
+   * Absent on every card that keeps none. A second copy of a charge card adds hands and keeps this (Ruling 6).
+   */
+  charge?: number
 }
 
 /** The most cards a human seat keeps in its bonus hand (BP-39): a fourth bonus card waits as points. */
@@ -110,7 +143,8 @@ export interface ChaosConfig {
 }
 
 export const DEFAULT_CHAOS_CONFIG: ChaosConfig = Object.freeze({
-  tierWeights: Object.freeze({ silver: 60, gold: 30, diamond: 10 }),
+  // BP-41 G8: 50 / 35 / 15 (was 60 / 30 / 10).
+  tierWeights: Object.freeze({ silver: 50, gold: 35, diamond: 15 }),
   pointsThreshold: 10,
   draftMs: 15_000,
   resultMs: 10_000,
@@ -151,12 +185,20 @@ export interface ChaosHandPlan {
     blindfolded: boolean
   }[]
   reverse: boolean
+  /**
+   * BP-41 A2: the seats that may not fold this hand ("Chơi hoặc bỏ" only) — Cấm bỏ bài's mark from last hand (every seat
+   * but its holder), or every seat while a Thần reigns. Absent or empty: anyone may fold.
+   */
+  noFoldSeats?: number[]
 }
 
-/** A freeze or blindfold that landed this hand, after shields and mirrors (the engine's final marks). */
+/**
+ * A mark that landed this hand for the next one, after shields and mirrors (the engine's final marks): a freeze or a
+ * blindfold on `seat`; `noFold` (BP-41 Cấm bỏ bài): `seat` may not fold next hand.
+ */
 export interface ChaosMark {
   seat: number
-  kind: 'freeze' | 'blindfold'
+  kind: 'freeze' | 'blindfold' | 'noFold'
 }
 
 /**
@@ -204,9 +246,52 @@ export interface ChaosHandState {
   hit: number[]
   /** Seats whose one-shot shield or mirror is spent this hand. */
   shieldSpent: number[]
+  /**
+   * BP-41 A3: what the hand did that `afterHand` settles on — the room copies it into `afterHand`'s `outcomes`. Absent
+   * until a round-three card or the Thần writes it.
+   */
+  outcomes?: ChaosHandOutcomes
+  /**
+   * BP-41 A12: the title marks this hand earned, per seat (an ascension, a demigod, a dethrone). The room copies them
+   * into `HandSummary.players[].chaosTitles`. Absent when nobody earned one.
+   */
+  titles?: ({ seat: number } & ChaosTitles)[]
 }
 
-export type ChaosCreditReason = 'chaos_rescue' | 'chaos_crit' | 'chaos_fortune'
+/**
+ * BP-41 A3: the round-three results `afterHand` settles on, as the engine recorded them in `ChaosHandState.outcomes`.
+ * Every list holds seats; absent = none.
+ */
+export interface ChaosHandOutcomes {
+  /** Xúc xắc định mệnh rolled 5–6: Bạo kích ×2 if the seat wins. */
+  fateCrit?: number[]
+  /** Seats that won a Thách đấu (or a Thần thách đấu) this hand. */
+  duelWins?: number[]
+  /** Seats that beat the Thần this hand (spec §4.2 "hạ Thần"): each takes 2 Kim cương cards and a count. */
+  dethroned?: number[]
+  /** Seats dealt their Aces by Siêu cộng dồn this hand: its charge goes back to 0 and the card is spent. */
+  acesDealt?: number[]
+}
+
+/**
+ * BP-41 §4.4: one hand's title marks for one seat — became the Thần (`ascended`), became a Bán Thần (`demigod`), beat
+ * the Thần `slew` times (1 per hand; 0 or absent = none). Counted for a title only where spec §4.4 G12 allows (≥ 2
+ * humans at the table, never a bot Thần).
+ */
+export interface ChaosTitles {
+  ascended?: true
+  demigod?: true
+  slew?: number
+}
+
+/**
+ * The ledger reasons of new points a card pays. BP-41 A14: every crit (Thần, Bán Thần, Liều ăn nhiều, Xúc xắc định
+ * mệnh…) stays `chaos_crit`; `chaos_jackpot` is a dice or Mạo hiểm gia jackpot.
+ */
+export type ChaosCreditReason = 'chaos_rescue' | 'chaos_crit' | 'chaos_fortune' | 'chaos_jackpot'
+
+/** A Bạo kích multiplier: ×2/×3 (BP-37), ×4/×5 (BP-41's Thần and Liều ăn nhiều). */
+export type ChaosCritMultiplier = 2 | 3 | 4 | 5
 
 /** New points a card pays (spec §4): the room writes one ledger row per credit. */
 export interface ChaosCredit {
@@ -217,7 +302,76 @@ export interface ChaosCredit {
   /** The held card that paid. */
   uid: number
   /** Bạo kích only. */
-  multiplier?: 2 | 3
+  multiplier?: ChaosCritMultiplier
+}
+
+/**
+ * BP-41 §5: points a card takes off a seat's stack into the sink (Xúc xắc vận may's unlucky rolls). The room lowers
+ * the stack at once and writes the sink like the table fee (`SettlementMeta.kind: 'chaos_dice'`, A6); never more than
+ * the stack.
+ */
+export interface ChaosDebit {
+  seat: number
+  amount: number
+  reason: 'chaos_dice'
+  cardId: string
+  /** The held card that rolled. */
+  uid: number
+}
+
+/**
+ * BP-41 §5: what one Xúc xắc vận may roll gave (`CHAOS_DICE.result`). Empty = nothing. `points`: chaos points; `cards`:
+ * prize cards by tier and count, never which cards (A7: a human's go to the private bonus hand); `burned`: points the
+ * seat lost to the sink (`ChaosDebit`), as taken; `jackpot`: the jackpot due (the `CHAOS_CREDIT` that follows says what
+ * the daily cap let through); `triple`: three alike on the Kim cương dice (the cell's prize doubled); `herald`: the
+ * table-wide banner (18 or 6-6-6).
+ */
+export interface ChaosDiceResult {
+  points?: number
+  cards?: { tier: ChaosTier; count: number }[]
+  burned?: number
+  jackpot?: number
+  triple?: true
+  herald?: true
+}
+
+/** BP-41 §4.2: the Thần's curse on every other seat in the first 3 hands — 1 rút bài, 2 thách đấu, 3 tráo bài. */
+export type ChaosGodCurse = 1 | 2 | 3
+
+/**
+ * The chaos state of the table itself, not of a seat (BP-41 §4, §6.1 Bom nổ chậm), server-side: one Thần at most, any
+ * number of Bán Thần, and the bombs in play. `planHand` and `afterHand` take it in and give it back (A3); a seat that
+ * leaves ends its reign and clears its bombs. Pure data; `EMPTY_CHAOS_TABLE` is the start.
+ */
+export interface ChaosTableState {
+  /**
+   * The Thần Bài, or null. `handsLeft`: hands of the reign still to play (5 at the ascension). `curse`: drawn once at the
+   * ascension; it acts while `handsLeft > 2` (the first 3 hands) and is null afterwards.
+   */
+  god: { seat: number; playerId: string; isBot: boolean; handsLeft: number; curse: ChaosGodCurse | null } | null
+  /** The Bán Thần, one per seat at most, each with the hands of its reign still to play (5 at the start). */
+  demigods: { seat: number; playerId: string; isBot: boolean; handsLeft: number }[]
+  /**
+   * Every Bom nổ chậm in play (two holders may each plant one, A3): planted by `owner`, held by `carrier` (never the
+   * owner), `handsLeft` until it explodes (3 at the plant); `cardId`/`uid` name the card that planted it.
+   */
+  bombs: { owner: number; carrier: number; handsLeft: number; cardId: string; uid: number }[]
+}
+
+export const EMPTY_CHAOS_TABLE: ChaosTableState = Object.freeze({
+  god: null,
+  demigods: Object.freeze([]) as unknown as ChaosTableState['demigods'],
+  bombs: Object.freeze([]) as unknown as ChaosTableState['bombs'],
+})
+
+/**
+ * What every client sees of `ChaosTableState` (`CHAOS_STATE.table`, `ChaosSnapshot.table`): who reigns and for how long,
+ * the curse, and who carries a bomb. Never a player id or a held bonus card.
+ */
+export interface ChaosTableView {
+  god: { seat: number; handsLeft: number; curse: ChaosGodCurse | null } | null
+  demigods: { seat: number; handsLeft: number }[]
+  bombs: { owner: number; carrier: number; handsLeft: number }[]
 }
 
 export interface HeldCardView {
@@ -225,4 +379,6 @@ export interface HeldCardView {
   cardId: string
   tier: ChaosTier
   handsLeft: number | null
+  /** BP-41: the card's `HeldCard.charge` (Cá chép's energy, Siêu cộng dồn's %…), when it keeps one. */
+  charge?: number
 }

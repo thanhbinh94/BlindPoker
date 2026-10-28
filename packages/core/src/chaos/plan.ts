@@ -3,7 +3,10 @@ import type { BlindRules } from '../hand/types.js'
 import { clearUnsettledHand, firesFromArmed, returnToBonus } from './bonus.js'
 import { pickCard } from './draw.js'
 import { farmHandsOf, stackHeld } from './hold.js'
-import type { ChaosCardDef, ChaosEffectKind, ChaosHandPlan, ChaosMode, ChaosSeat, HeldCard, PlannedEffect } from './types.js'
+import {
+  EMPTY_CHAOS_TABLE,
+  type ChaosCardDef, type ChaosEffectKind, type ChaosHandPlan, type ChaosMode, type ChaosSeat, type ChaosTableState, type HeldCard, type PlannedEffect,
+} from './types.js'
 
 /** Spec §5.3 Tay bạc: it rolls any enabled Silver or Gold effect except these. */
 const GAMBLER_EXCLUDED: ReadonlySet<ChaosEffectKind> = new Set(['rescue', 'fortune', 'levelUp', 'gambler'])
@@ -28,6 +31,10 @@ type Firing = Omit<PlannedEffect, 'targets'>
  * Tay bạc then rolls one effect under the same rules. Deal-time debuffs get their targets here (one other seat at
  * random, or every other seat with `all`); reveal debuffs get `targets: []`. The input seats are never changed: the
  * returned map holds each seat as it goes into the hand (a rolled Tích lũy adds its points there).
+ *
+ * `table` (BP-41 A3) is the table's chaos state going into the hand (the Thần, the Bán Thần, the bombs); the returned
+ * `table` is what it becomes for this hand. Absent, it is `EMPTY_CHAOS_TABLE`. End-of-hand cards (`end`, the dice) are
+ * never fired here, like wait cards (A10).
  */
 export function planHand(input: {
   seats: readonly PlanSeatInput[]
@@ -36,8 +43,10 @@ export function planHand(input: {
   rng: Rng
   nextUid: () => number
   weights?: ReadonlyMap<string, number>
-}): { plan: ChaosHandPlan; seats: Map<number, ChaosSeat> } {
+  table?: ChaosTableState
+}): { plan: ChaosHandPlan; seats: Map<number, ChaosSeat>; table: ChaosTableState } {
   const { rules, pool, rng, nextUid, weights } = input
+  const table = input.table ?? EMPTY_CHAOS_TABLE
   const mode: ChaosMode = rules.decisionMode
   const defs = new Map(pool.map((c) => [c.id, c]))
   /** A card the GM took out of the pool since it was drawn still runs (spec §6.2): it was valid when received. */
@@ -105,7 +114,7 @@ export function planHand(input: {
         if (out.shield === null || (lasting && out.shield.lasting !== true)) {
           out.shield = { uid: card.uid, cardId: card.cardId, kind: card.effect, ...(lasting ? { lasting: true as const } : {}) }
         }
-      } else if (card.timing !== 'wait' && card.timing !== 'now' && !(card.debuff && debuffFired) && !kinds.has(card.effect)) {
+      } else if (card.timing !== 'wait' && card.timing !== 'now' && card.timing !== 'end' && !(card.debuff && debuffFired) && !kinds.has(card.effect)) {
         fire(card)
       }
     }
@@ -129,5 +138,5 @@ export function planHand(input: {
     if (points !== chaos.points) seats.set(seat, { ...chaos, points })
   }
 
-  return { plan: { seats: planSeats, reverse: planSeats.some((s) => s.effects.some((e) => e.effect === 'reverseRank')) }, seats }
+  return { plan: { seats: planSeats, reverse: planSeats.some((s) => s.effects.some((e) => e.effect === 'reverseRank')) }, seats, table }
 }

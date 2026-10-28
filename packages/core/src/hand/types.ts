@@ -148,7 +148,12 @@ export type GameEvent =
   | { type: 'CARDS_DEALT'; seat: number; cards: Card[]; cardCount: number }
   | { type: 'TURN_CHANGED'; seat: number; turnSeq: number; legal: LegalActions }
   | { type: 'PLAYER_ACTED'; seat: number; action: PlayerAction; amount: number; stack: number; allIn: boolean; timedOut: boolean }
-  | { type: 'DECISION_PHASE'; seats: number[]; turnSeq: number }
+  /**
+   * BP-41 (chaos tables only; absent = as before): `noFold` — the seats that may only "Chơi" this hand (Cấm bỏ bài, a
+   * Thần, A2); `calls` — what "Chơi" costs each seat when a card multiplied its stake (Mạo hiểm gia, Sới lớn, A1),
+   * instead of the table's fixed wager.
+   */
+  | { type: 'DECISION_PHASE'; seats: number[]; turnSeq: number; noFold?: number[]; calls?: { seat: number; amount: number }[] }
   | { type: 'DECISION_MADE'; seat: number }
   | { type: 'DECISIONS_REVEALED'; decisions: { seat: number; decision: Decision }[] }
   | { type: 'SQUEEZE_PHASE'; seats: number[]; turnSeq: number }
@@ -160,8 +165,12 @@ export type GameEvent =
   | { type: 'SETTLEMENT'; payouts: { seat: number; amount: number }[]; fee: number; pots: PotResult[]; carryOverOut: number; stacks: { seat: number; stack: number }[]; uncalledReturned: { seat: number; amount: number } | null }
   | { type: 'HAND_CANCELLED'; reason: string; refunds: { seat: number; amount: number }[]; carryOverOut: number }
   | { type: 'HAND_COMPLETE' }
-  /** A chaos card acted. Deal-time buffs and debuffs reach only their owner and targets (`filterEvent`); `reverseRank` and the rest are public. `amount`: a refund (freeFold, refundStake). */
-  | { type: 'CHAOS_APPLIED'; seat: number; cardId: string; effect: ChaosEffectKind; targets: number[]; outcome: ChaosOutcome; community?: Card[]; amount?: number }
+  /**
+   * A chaos card acted. Deal-time buffs and debuffs reach only their owner and targets (`filterEvent`); `reverseRank` and
+   * the rest are public. `amount`: a refund (freeFold, refundStake). `dice`: the faces a card rolled in the hand (BP-41
+   * Xúc xắc định mệnh, A15).
+   */
+  | { type: 'CHAOS_APPLIED'; seat: number; cardId: string; effect: ChaosEffectKind; targets: number[]; outcome: ChaosOutcome; community?: Card[]; amount?: number; dice?: number[] }
   /** "Nhìn trộm": the next board cards, for `seat` only (`filterEvent` blanks them for everyone else). */
   | { type: 'CHAOS_PEEK'; seat: number; cards: Card[] }
   /** Every card the hand used, public, just before `SETTLEMENT`. */

@@ -994,7 +994,7 @@ const folding: BotStrategy = { decide: () => ({ kind: 'fold' }) }
  * that the paired `chaos_to_table` row moved straight onto the stack, so they are taken back out here. A bot's credit
  * lands on its virtual stack only, which the sum never counts (a bot is counted by its nets).
  */
-const CHAOS_SOURCES = new Set(['chaos_rescue', 'chaos_crit', 'chaos_fortune'])
+const CHAOS_SOURCES = new Set(['chaos_rescue', 'chaos_crit', 'chaos_fortune', 'chaos_jackpot'])
 async function books(h: RoomHarness, humans: Record<string, number> = { h: 100_000 }): Promise<number> {
   let humanDelta = 0
   for (const [id, start] of Object.entries(humans)) humanDelta += (await h.repos.balances.get(id)) + (h.room.players.get(id)?.stack ?? 0) - start

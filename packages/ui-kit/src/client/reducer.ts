@@ -332,6 +332,8 @@ function applyRoomEvent(room: RoomView, event: RoomEvent): RoomView {
     case 'CHAOS_PICKED':
     case 'CHAOS_STATE':
     case 'CHAOS_AWARDED':
+    case 'CHAOS_HERALD':
+    case 'CHAOS_DICE':
     case 'RESULT_SKIPS': // the count lives in `ClientState.resultSkips`
       return room
   }

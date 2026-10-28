@@ -733,16 +733,18 @@ describe('GmService — daily stats', () => {
       await db.execute(sql`insert into point_transactions (player_id, amount, reason, ref_id) values
         (${me.playerId}, 40000, 'chaos_crit', 'k1'), (${me.playerId}, -40000, 'chaos_to_table', 'k1'),
         (${me.playerId}, 5000, 'chaos_rescue', 'k2'), (${me.playerId}, -5000, 'chaos_to_table', 'k2'),
-        (${me.playerId}, 8000, 'chaos_fortune', 'k3'), (${me.playerId}, -8000, 'chaos_to_table', 'k3')`)
+        (${me.playerId}, 8000, 'chaos_fortune', 'k3'), (${me.playerId}, -8000, 'chaos_to_table', 'k3'),
+        (${me.playerId}, 7000, 'chaos_jackpot', 'k4'), (${me.playerId}, -7000, 'chaos_to_table', 'k4')`)
       await db.execute(sql`update point_transactions set created_at = '2026-09-04T02:00:00Z'::timestamptz where reason like 'chaos_%'`)
 
+      // BP-41: a jackpot (`chaos_jackpot`) is a source like the other three.
       const days = await gmAt.dailyStats(7)
-      expect(days[6]).toEqual({ day: '2026-09-04', sources: { chaos_crit: 40_000, chaos_rescue: 5_000, chaos_fortune: 8_000 }, sinks: {}, net: before[6]!.net + 53_000 })
+      expect(days[6]).toEqual({ day: '2026-09-04', sources: { chaos_crit: 40_000, chaos_rescue: 5_000, chaos_fortune: 8_000, chaos_jackpot: 7_000 }, sinks: {}, net: before[6]!.net + 60_000 })
       expect(days[6]!.sources).not.toHaveProperty('chaos_to_table')
       expect(days[6]!.sinks).not.toHaveProperty('chaos_to_table')
 
       const o = await gmAt.overview()
-      expect(o.points24h.sources).toBe(53_000)
+      expect(o.points24h.sources).toBe(60_000)
       expect(o.points24h.sinks).toBe(0)
     } finally {
       await db.execute(sql`delete from point_transactions where reason like 'chaos_%'`)

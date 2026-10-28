@@ -44,7 +44,7 @@ export function createMemoryChaosPort(opts: MemoryChaosOptions): ChaosPort {
       const written = repos.entries.find((e) => e.entry.refId === key && e.entry.reason === reason)
       if (written) return { credited: written.entry.delta, capped: written.entry.delta < amount }
       const mine = repos.entries.filter((e) => e.entry.playerId === playerId)
-      const paid = mine.filter((e) => e.entry.reason === 'chaos_rescue' || e.entry.reason === 'chaos_crit' || e.entry.reason === 'chaos_fortune').reduce((s, e) => s + e.entry.delta, 0)
+      const paid = mine.filter((e) => e.entry.reason === 'chaos_rescue' || e.entry.reason === 'chaos_crit' || e.entry.reason === 'chaos_fortune' || e.entry.reason === 'chaos_jackpot').reduce((s, e) => s + e.entry.delta, 0)
       const rescued = mine.filter((e) => e.entry.reason === 'chaos_rescue').length
       const allowed = reason === 'chaos_rescue' && rescued >= rescues ? 0 : Math.max(0, capPoints - paid)
       const credited = Math.min(amount, allowed)

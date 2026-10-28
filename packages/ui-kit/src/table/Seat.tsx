@@ -1,4 +1,4 @@
-import type { Card as CardId, HeldCardView, RoomPlayerView } from '@bp/core'
+import type { Card as CardId, ChaosCritMultiplier, HeldCardView, RoomPlayerView } from '@bp/core'
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Chibi, type ChibiSubject, type Expression } from '../avatar2d/index.js'
@@ -179,7 +179,7 @@ export interface SeatProps {
   /** The viewer's own cards are face down because "Bịt mắt" hit them: the seat says so instead of leaving a bare back. */
   blindfolded?: boolean
   /** "Bạo kích ×2!" for the seat that won with it (2 or 3), drawn with its payout. */
-  critMultiplier?: 2 | 3 | null
+  critMultiplier?: ChaosCritMultiplier | null
   /** The dense strip of opponents (seven or more, on a phone): the seat's cards are one icon with their number, not a row of them. */
   chaosSummary?: boolean
   /**

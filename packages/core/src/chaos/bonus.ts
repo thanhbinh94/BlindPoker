@@ -15,9 +15,10 @@ export const MID_HAND_EFFECTS: ReadonlySet<ChaosEffectKind> = new Set(['stealHol
 
 /**
  * Cards that need no press (Cấp cứu, Thần tài, Khiên, Gương wait for their condition; Tích lũy, Cấp độ act on receipt):
- * as bonus cards they go straight to the seat through `receiveCard`, never into the bonus hand.
+ * as bonus cards they go straight to the seat through `receiveCard`, never into the bonus hand. BP-41 Ruling 5: the
+ * end-of-hand dice (`end`) are wait-like too.
  */
-export const needsNoPress = (def: Pick<ChaosCardDef, 'timing'>): boolean => def.timing === 'wait' || def.timing === 'now'
+export const needsNoPress = (def: Pick<ChaosCardDef, 'timing'>): boolean => def.timing === 'wait' || def.timing === 'now' || def.timing === 'end'
 
 /**
  * An armed card that fires from `armed` in its hand's plan and stays there until `afterHand` sees whether it was used:

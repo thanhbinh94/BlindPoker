@@ -272,7 +272,7 @@ describe('config()/setConfig()', () => {
   it('fills a stored row that lacks a field, or holds a wrong one, from the defaults', async () => {
     await db.insert(chaosConfig).values({ key: 'chaos', value: { pointsThreshold: 20, draftMs: 'soon', tierWeights: { gold: 7 } } })
     expect((await chaos.config()).resultMs).toBe(10_000) // a stored row from before BP-39 has no result time
-    expect(await chaos.config()).toEqual({ ...DEFAULT_CHAOS_CONFIG, pointsThreshold: 20, tierWeights: { silver: 60, gold: 7, diamond: 10 } })
+    expect(await chaos.config()).toEqual({ ...DEFAULT_CHAOS_CONFIG, pointsThreshold: 20, tierWeights: { silver: 50, gold: 7, diamond: 15 } })
     await db.update(chaosConfig).set({ value: 'garbage' }).where(eq(chaosConfig.key, 'chaos'))
     clock += CONFIG_CACHE_MS // a row edited by hand is seen once the cache runs out
     expect(await chaos.config()).toEqual(DEFAULT_CHAOS_CONFIG)
@@ -310,8 +310,21 @@ describe('config()/setConfig()', () => {
 })
 
 describe('credit()', () => {
-  const credit = (playerId: string, amount: number, reason: 'chaos_rescue' | 'chaos_crit' | 'chaos_fortune', key: string) =>
+  const credit = (playerId: string, amount: number, reason: 'chaos_rescue' | 'chaos_crit' | 'chaos_fortune' | 'chaos_jackpot', key: string) =>
     chaos.credit({ playerId, roomId: 'room-1', amount, reason, key })
+
+  it('BP-41: pays a jackpot as its own source row, under the same daily cap as the other chaos credits', async () => {
+    const p = await seedPlayer()
+    await setConfig({ ...DEFAULT_CHAOS_CONFIG, dailyCapPoints: 50_000 })
+    expect(await credit(p, 30_000, 'chaos_crit', 'kc')).toEqual({ credited: 30_000, capped: false })
+    expect(await credit(p, 30_000, 'chaos_jackpot', 'kj')).toEqual({ credited: 20_000, capped: true })
+    expect(await credit(p, 1_000, 'chaos_crit', 'kc2')).toEqual({ credited: 0, capped: true })
+    expect((await ledger(p)).filter((r) => r.refId === 'kj')).toEqual([
+      { amount: 20_000, reason: 'chaos_jackpot', refId: 'kj' },
+      { amount: -20_000, reason: 'chaos_to_table', refId: 'kj' },
+    ])
+    expect(await balanceOf(p)).toBe(BALANCE)
+  })
 
   it('writes the source row and the transfer to the table under one key, and leaves the balance alone', async () => {
     const p = await seedPlayer()

@@ -4,7 +4,9 @@ import type { BlindRules } from '../hand/types.js'
 import { CHAOS_CARDS_SPEC } from './fixtures.js'
 import { receiveCard, toHeld } from './hold.js'
 import { afterHand, type AfterHandSeat } from './settle.js'
-import { DEFAULT_CHAOS_CONFIG, EMPTY_CHAOS_SEAT, type ChaosCardDef, type ChaosHandPlan, type ChaosSeat, type PlannedEffect } from './types.js'
+import {
+  DEFAULT_CHAOS_CONFIG, EMPTY_CHAOS_SEAT, EMPTY_CHAOS_TABLE, type ChaosCardDef, type ChaosHandPlan, type ChaosSeat, type ChaosTableState, type PlannedEffect,
+} from './types.js'
 
 const card = (id: string): ChaosCardDef => {
   const c = CHAOS_CARDS_SPEC.find((x) => x.id === id)
@@ -332,7 +334,7 @@ describe('afterHand — Bạo kích', () => {
 
   it('hits about 25 % + 10 % of wins with a seeded rng', () => {
     const rng = seededRng(11)
-    const counts = { 2: 0, 3: 0 }
+    const counts = { 2: 0, 3: 0, 4: 0, 5: 0 }
     for (let i = 0; i < 4_000; i++) {
       for (const c of crit(rng, { outcome: 'win', net: 100 }).r.credits) counts[c.multiplier!]++
     }
@@ -381,5 +383,18 @@ describe('afterHand — Thần tài', () => {
       expect(r.credits).toEqual([])
       expect(r.seats.get(0)!.cards.map((c) => c.cardId)).toEqual(['g_fortune'])
     }
+  })
+})
+
+describe('afterHand — BP-41 plumbing', () => {
+  it('takes the table state and the outcomes in and gives the table back (A3), with no debits yet', () => {
+    const plain = settle([seat(EMPTY_CHAOS_SEAT, { outcome: 'win', net: 100 })])
+    expect(plain.table).toEqual(EMPTY_CHAOS_TABLE)
+    expect(plain.debits).toEqual([])
+    const table: ChaosTableState = { god: null, demigods: [{ seat: 0, playerId: 'p0', isBot: false, handsLeft: 4 }], bombs: [] }
+    const r = settle([seat(EMPTY_CHAOS_SEAT, { outcome: 'win', net: 100 })], { table, outcomes: { dethroned: [0] } })
+    expect(r.table).toEqual(table)
+    // Nothing else moves: the same seat as without them.
+    expect(r.seats.get(0)).toEqual(plain.seats.get(0))
   })
 })

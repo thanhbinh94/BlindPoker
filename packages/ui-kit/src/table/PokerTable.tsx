@@ -1,4 +1,4 @@
-import type { Card as CardId, RoomPlayerView, RoomView, ShowdownHand } from '@bp/core'
+import type { Card as CardId, ChaosCritMultiplier, RoomPlayerView, RoomView, ShowdownHand } from '@bp/core'
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { botChibi, type ChibiSubject, type Expression } from '../avatar2d/index.js'
@@ -216,7 +216,7 @@ export function PokerTable({
   const squeezeDecides = squeezeRound && hand.phase === 'DECISION'
 
   // A Bạo kích that paid shows on the winner's seat with the payout; held back with the rest of the result.
-  const crits = new Map<number, 2 | 3>()
+  const crits = new Map<number, ChaosCritMultiplier>()
   for (const c of resultPending ? [] : (chaos?.credits ?? [])) if (c.reason === 'chaos_crit' && c.multiplier !== undefined) crits.set(c.seat, c.multiplier)
   const chaosRoom = room.config.blind?.chaosCycle !== undefined
   // The next board cards, while they are still to come: once any of them is on the board the peek has done its job.

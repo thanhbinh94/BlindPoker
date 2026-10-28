@@ -248,10 +248,10 @@ const CLAIM_REASONS = sql`('daily_login', 'daily_item_fallback')`
 
 /**
  * Sources: the reasons that create points. Transfers (buy-in, cash-out, settlement, refund) only move them.
- * Plan 37: the three chaos credits are sources; `chaos_to_table`, the paired row that sends them straight to a table
+ * Plan 37: the chaos credits (BP-41 adds `chaos_jackpot`) are sources; `chaos_to_table`, the paired row that sends them straight to a table
  * stack, is neither a source nor a sink (it is a transfer, so it nets the credit out of the balance).
  */
-const SOURCE_REASONS: ReadonlySet<string> = new Set(['starting_balance', 'daily_reward', 'daily_login', 'daily_item_fallback', 'relief', 'achievement', 'gm_grant', 'gm_adjust', 'gm_achievement', 'gm_checkin_undo', 'chaos_rescue', 'chaos_crit', 'chaos_fortune'])
+const SOURCE_REASONS: ReadonlySet<string> = new Set(['starting_balance', 'daily_reward', 'daily_login', 'daily_item_fallback', 'relief', 'achievement', 'gm_grant', 'gm_adjust', 'gm_achievement', 'gm_checkin_undo', 'chaos_rescue', 'chaos_crit', 'chaos_fortune', 'chaos_jackpot'])
 /**
  * Sinks: a sink row's reason is its kind (`SettlementMeta.kind`). `shop` is the sink half of a purchase; its player
  * half, `shop_purchase`, is a transfer and sits in neither set, so a purchase is counted once.

@@ -1,5 +1,5 @@
 import type {
-  Card, ChaosBonusPayload, ChaosCreditReason, ChaosEffectKind, ChaosOutcome, ChaosTier, Decision, ErrorCode, GameMode, HeldCardView, LegalActions, PlayerAction,
+  Card, ChaosBonusPayload, ChaosCreditReason, ChaosCritMultiplier, ChaosEffectKind, ChaosOutcome, ChaosTier, Decision, ErrorCode, GameMode, HeldCardView, LegalActions, PlayerAction,
   RoomSummary, RoomView, ServerMessage, ShowdownHand,
 } from '@bp/core'
 import type { PreActionKind } from './preaction.js'
@@ -119,8 +119,8 @@ export interface ClientChaosCredit {
   reason: ChaosCreditReason
   /** The daily cap cut the credit (`amount` is what was actually paid). */
   capped: boolean
-  /** Bạo kích only. */
-  multiplier?: 2 | 3
+  /** Bạo kích only (×2…×5, BP-41). */
+  multiplier?: ChaosCritMultiplier
 }
 
 /** Poker hỗn loạn (spec 2026-10-26): everything the client keeps about the chaos cards. Empty on a table without them. */

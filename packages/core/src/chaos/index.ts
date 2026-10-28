@@ -1,7 +1,7 @@
 export * from './types.js'
 export { parseChaosCatalogue, MIN_CARDS_PER_TIER } from './catalogue.js'
 export { drawTier, drawOffer, cardWeight } from './draw.js'
-export { receiveCard, toHeld, toHeldCardView } from './hold.js'
+export { receiveCard, toChaosTableView, toHeld, toHeldCardView } from './hold.js'
 export { armBonus, canInsertThisHand, clearUnsettledHand, firesFromArmed, MID_HAND_EFFECTS, needsNoPress, returnToBonus, type ArmError, type ArmWhen } from './bonus.js'
 export { addRevealEffect } from './engine.js'
 export { planHand, type PlanSeatInput } from './plan.js'

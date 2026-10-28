@@ -116,6 +116,11 @@ describe('needsNoPress and returnToBonus', () => {
     expect([...new Set(noPress)].sort()).toEqual(['chaosPoints', 'fortune', 'levelUp', 'mirror', 'rescue', 'shield'])
   })
 
+  it('BP-41 Ruling 5: an end-of-hand card (the dice) needs no press either', () => {
+    expect(needsNoPress({ timing: 'end' })).toBe(true)
+    expect(needsNoPress({ timing: 'deal' })).toBe(false)
+  })
+
   it('puts a card back at its old place, by uid', () => {
     const [a, b, c] = [held('s_lower'), held('s_steal_one'), held('g_borrow')]
     expect(returnToBonus([a!, c!], b!)).toEqual([a, b, c])

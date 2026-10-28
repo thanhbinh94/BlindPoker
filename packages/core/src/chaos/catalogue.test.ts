@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseChaosCatalogue } from './catalogue.js'
 import { CHAOS_CARDS_SPEC } from './fixtures.js'
+import { CHAOS_DEBUFF_EFFECTS, CHAOS_EFFECT_KINDS } from './types.js'
 
 /** Spec §5.1–§5.3, in table order. */
 const SPEC_IDS = {
@@ -109,6 +110,28 @@ describe('parseChaosCatalogue', () => {
       cards[0] = { ...cards[0], ...patch }
       expect(() => parseChaosCatalogue(cards), field).toThrow(new RegExp(`invalid chaos catalogue: .*${field}`))
     }
+  })
+
+  it('BP-41: accepts the round-three effect kinds and the end-of-hand timing, and ties debuff to the kind', () => {
+    const cards = raw()
+    cards.push(
+      { id: 'x_dice', tier: 'diamond', family: 'dice', effect: 'fortuneDice', params: { dice: 3 }, timing: 'end', modes: ['playOrFold', 'none'], debuff: false, enabled: false },
+      { id: 'x_bomb', tier: 'diamond', family: 'debuff', effect: 'timeBomb', params: { hands: 3 }, timing: 'deal', modes: ['playOrFold', 'none'], debuff: true, enabled: false },
+      { id: 'x_carp', tier: 'diamond', family: 'god', effect: 'carp', params: { energy0: 0 }, timing: 'wait', modes: ['playOrFold', 'none'], debuff: false, enabled: false },
+    )
+    const parsed = parseChaosCatalogue(cards)
+    expect(parsed.slice(-3).map((c) => [c.effect, c.timing, c.debuff])).toEqual([['fortuneDice', 'end', false], ['timeBomb', 'deal', true], ['carp', 'wait', false]])
+    // Spec §3: aimed at one person = a debuff; a table rule is not.
+    for (const kind of ['plunder', 'swapLeader', 'curse', 'neighbourSwap', 'redealHole', 'timeBomb', 'duel', 'spoiler', 'stealPoints', 'swapHands'] as const) {
+      expect(CHAOS_DEBUFF_EFFECTS.has(kind), kind).toBe(true)
+    }
+    for (const kind of ['winTax', 'shareWinnings', 'noFold', 'shuffleHoles', 'deluge', 'eclipse', 'bigTable', 'fortuneDice', 'carp'] as const) {
+      expect(CHAOS_DEBUFF_EFFECTS.has(kind), kind).toBe(false)
+    }
+    const wrong = raw()
+    wrong.push({ id: 'x_duel', tier: 'gold', family: 'duel', effect: 'duel', params: { p2: 30, p3: 10 }, timing: 'reveal', modes: ['playOrFold', 'none'], debuff: false, enabled: false })
+    expect(() => parseChaosCatalogue(wrong)).toThrow(/invalid chaos catalogue: x_duel debuff must be true for duel/)
+    expect(new Set(CHAOS_EFFECT_KINDS).size).toBe(CHAOS_EFFECT_KINDS.length)
   })
 
   it('refuses anything that is not an array of card objects', () => {

@@ -2,7 +2,8 @@ import type { Rng } from '../cards/rng.js'
 import { drawOffer, drawTier } from './draw.js'
 import {
   CHAOS_TIERS, DEFAULT_CHAOS_CONFIG,
-  type ChaosCardDef, type ChaosConfig, type ChaosMode, type ChaosSeat, type ChaosTier, type HeldCard, type HeldCardView,
+  type ChaosCardDef, type ChaosConfig, type ChaosMode, type ChaosSeat, type ChaosTableState, type ChaosTableView, type ChaosTier,
+  type HeldCard, type HeldCardView,
 } from './types.js'
 
 const TIER_RANK: Readonly<Record<ChaosTier, number>> = { silver: 1, gold: 2, diamond: 3 }
@@ -106,4 +107,12 @@ export function receiveCard(
 
 export const toHeldCardView = (card: HeldCard): HeldCardView => ({
   uid: card.uid, cardId: card.cardId, tier: card.tier, handsLeft: card.handsLeft,
+  ...(card.charge === undefined ? {} : { charge: card.charge }),
+})
+
+/** The public face of the table's chaos state (BP-41): seats and hands left, no player id. */
+export const toChaosTableView = (table: ChaosTableState): ChaosTableView => ({
+  god: table.god ? { seat: table.god.seat, handsLeft: table.god.handsLeft, curse: table.god.curse } : null,
+  demigods: table.demigods.map((d) => ({ seat: d.seat, handsLeft: d.handsLeft })),
+  bombs: table.bombs.map((b) => ({ owner: b.owner, carrier: b.carrier, handsLeft: b.handsLeft })),
 })

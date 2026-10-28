@@ -4,7 +4,7 @@ import type { BlindRules } from '../hand/types.js'
 import { CHAOS_CARDS_SPEC } from './fixtures.js'
 import { receiveCard, toHeld } from './hold.js'
 import { planHand } from './plan.js'
-import { EMPTY_CHAOS_SEAT, type ChaosCardDef, type ChaosSeat } from './types.js'
+import { EMPTY_CHAOS_SEAT, EMPTY_CHAOS_TABLE, type ChaosCardDef, type ChaosSeat, type ChaosTableState } from './types.js'
 
 const card = (id: string): ChaosCardDef => {
   const c = CHAOS_CARDS_SPEC.find((x) => x.id === id)
@@ -257,5 +257,30 @@ describe('planHand', () => {
     const snapshot = JSON.stringify(chaos)
     expect(plan(chaos, RULES, 9).plan).toEqual(plan(chaos, RULES, 9).plan)
     expect(JSON.stringify(chaos)).toBe(snapshot)
+  })
+
+  describe('BP-41 plumbing', () => {
+    const DICE: ChaosCardDef = {
+      id: 'x_dice', tier: 'silver', family: 'dice', effect: 'fortuneDice', params: { dice: 1 }, timing: 'end',
+      modes: ['playOrFold', 'none'], debuff: false, enabled: true,
+    }
+
+    it('an end-of-hand card (the dice) never fires at the plan, like a wait card (A10)', () => {
+      const chaos = { ...holding(['g_luck_3']), cards: [toHeld(DICE, 77), ...holding(['g_luck_3']).cards] }
+      const r = planHand({ seats: [{ seat: 0, isBot: false, chaos }, { seat: 1, isBot: false, chaos: EMPTY_CHAOS_SEAT }], rules: RULES, pool: [...pool, DICE], rng: seededRng(1), nextUid: counter(1_000) })
+      expect(ids(r, 0)).toEqual(['g_luck_3'])
+    })
+
+    it('takes the table state in and gives it back (A3); absent, the table is empty', () => {
+      expect(plan({ 0: EMPTY_CHAOS_SEAT, 1: EMPTY_CHAOS_SEAT }).table).toEqual(EMPTY_CHAOS_TABLE)
+      const table: ChaosTableState = {
+        god: { seat: 1, playerId: 'p1', isBot: false, handsLeft: 5, curse: 2 },
+        demigods: [],
+        bombs: [{ owner: 0, carrier: 1, handsLeft: 3, cardId: 'x_bomb', uid: 5 }],
+      }
+      const r = planHand({ seats: [{ seat: 0, isBot: false, chaos: EMPTY_CHAOS_SEAT }, { seat: 1, isBot: false, chaos: EMPTY_CHAOS_SEAT }], rules: RULES, pool, rng: seededRng(1), nextUid: counter(1), table })
+      expect(r.table).toEqual(table)
+      expect(r.plan.noFoldSeats).toBeUndefined()
+    })
   })
 })
