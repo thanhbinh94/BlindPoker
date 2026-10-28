@@ -1,6 +1,6 @@
 import type {
-  Card, ChaosBonusPayload, ChaosCreditReason, ChaosCritMultiplier, ChaosEffectKind, ChaosOutcome, ChaosTier, Decision, ErrorCode, GameMode, HeldCardView, LegalActions, PlayerAction,
-  RoomSummary, RoomView, ServerMessage, ShowdownHand,
+  Card, ChaosBonusPayload, ChaosCreditReason, ChaosCritMultiplier, ChaosDiceResult, ChaosEffectKind, ChaosOutcome, ChaosReignKind, ChaosTableView, ChaosTier,
+  ChaosTransfer, Decision, ErrorCode, GameMode, HeldCardView, LegalActions, PlayerAction, RoomSummary, RoomView, ServerMessage, ShowdownHand,
 } from '@bp/core'
 import type { PreActionKind } from './preaction.js'
 
@@ -87,9 +87,19 @@ export interface ClientHand {
   boardAt: number | null
   /** The `SHOWDOWN`; see `dealtAt`. */
   showdownAt: number | null
+  /**
+   * BP-41 (chaos): what this hand's `DECISION_PHASE` asked of the viewer's seat (`calls`) before its stack capped it — more than
+   * the fixed wager when a card multiplied the stake. Absent when the server named no call for it (and on a snapshot).
+   */
+  myCall?: number
 }
 
-/** One `CHAOS_APPLIED` as the viewer received it: deal-time buffs only ever reach their owner, so a seat's own are the only ones it sees early. */
+/**
+ * One `CHAOS_APPLIED` as the viewer received it: deal-time buffs only ever reach their owner, so a seat's own are the only ones it sees early.
+ * BP-41 adds what a round-three card tells besides (`dice`, `holeDelta`, `wild`, `off`, `wagers`, `stake`, `transfers`, `reign`, as
+ * on the event), and two lines the room tells outside a hand, kept here so the toasts say them like any card: a Xúc xắc vận may
+ * rolled at the end of the hand (`roll`, from `CHAOS_DICE`) and a Trộm điểm received (`steal`, from `CHAOS_STEAL`).
+ */
 export interface AppliedChaosView {
   seat: number
   cardId: string
@@ -98,6 +108,45 @@ export interface AppliedChaosView {
   outcome: ChaosOutcome
   community?: Card[]
   amount?: number
+  dice?: number[]
+  holeDelta?: number
+  wild?: Card
+  off?: string
+  wagers?: number
+  stake?: number
+  transfers?: ChaosTransfer[]
+  reign?: ChaosReignKind
+  /** BP-41 §5: what this seat's Xúc xắc vận may gave (the roll itself is `dice`). */
+  roll?: ChaosDiceResult
+  /** BP-41 Trộm điểm: the chaos points it moved (`from`/`to` null and `amount` 0 when blocked or fizzled). */
+  steal?: { from: number | null; to: number | null; amount: number }
+}
+
+/**
+ * BP-41 §4.5 (G7): one table-wide banner as the room told it (`CHAOS_HERALD`), with the seat's name taken when it came — the
+ * player may leave before it is read. `id` grows with every herald (and every 6-6-6 roll, `dice`), so the banner tells a new
+ * one from one it has shown; `at` is the client clock at its arrival.
+ */
+export interface ClientHerald {
+  id: number
+  kind: ChaosReignKind | 'dice'
+  seat: number
+  name: string
+  /** `dice` only: the jackpot the roll is due, and its faces. */
+  amount?: number
+  dice?: number[]
+  at: number
+}
+
+/** BP-41 §5: one Xúc xắc vận may roll the table watches (`CHAOS_DICE`), with the roller's name; `id` and `at` as on `ClientHerald`. */
+export interface ClientDiceRoll {
+  id: number
+  seat: number
+  name: string
+  cardId: string
+  dice: number[]
+  result: ChaosDiceResult
+  at: number
 }
 
 /**
@@ -152,9 +201,31 @@ export interface ClientChaos {
    * owner's `CHAOS_BONUS` notification and a snapshot; empty for a spectator and on every other table.
    */
   bonus: ChaosBonusPayload
+  /**
+   * BP-41: the table's own chaos state, public — the Thần Bài, the Bán Thần and the bombs (`CHAOS_TABLE`, `CHAOS_STATE.table`, a
+   * snapshot's `chaos.table`). `null`: none of them.
+   */
+  table: ChaosTableView | null
+  /** BP-41 §4.5: the latest heralds, oldest first (a few at most); the banner shows the ones that arrived in its last 3 s. */
+  heralds: ClientHerald[]
+  /** BP-41 §5: the latest dice rolls, oldest first (a few at most); the dice show the ones that arrived in their last 3 s. */
+  rolls: ClientDiceRoll[]
+  /**
+   * BP-41 Lá ma: the viewer's own hole card that ranks as wild this hand (its owner's `CHAOS_APPLIED.wild`, or a snapshot's hand
+   * view); `null` otherwise. Cleared when the next hand starts.
+   */
+  wild: Card | null
+  /**
+   * BP-41 Mắt diều hâu: the hole cards of `target` the viewer saw (`CHAOS_HAWK` with cards is the viewer's own, or a snapshot's
+   * hand view); `null` otherwise. Cleared when the next hand starts.
+   */
+  hawk: { target: number; cards: Card[] } | null
 }
 
-export const initialChaos: ClientChaos = { draft: null, seats: {}, applied: [], credits: [], awarded: [], peek: null, reverse: false, blindfolded: null, bonus: { cards: [], armed: null } }
+export const initialChaos: ClientChaos = {
+  draft: null, seats: {}, applied: [], credits: [], awarded: [], peek: null, reverse: false, blindfolded: null, bonus: { cards: [], armed: null },
+  table: null, heralds: [], rolls: [], wild: null, hawk: null,
+}
 
 /**
  * A chaos table's result wait, as "Bỏ qua" counts it: how many of the `total` voters pressed it, and whether I did.

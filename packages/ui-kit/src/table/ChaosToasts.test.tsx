@@ -311,3 +311,50 @@ describe('the toast band in the stylesheet', () => {
     expect(off).toMatch(/\.chaosToastIn\b/)
   })
 })
+
+// BP-41 (spec 2026-10-28 §8): every new kind of effect says what it did after its line.
+describe('ChaosToasts, BP-41 lines', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  const line = (item: AppliedChaosView, curse: ChaosToastsProps['curse'] = null): string => {
+    mount({ applied: [item], layout: 'desktop', curse })
+    return texts()[0] ?? ''
+  }
+
+  it('says who paid whom: a duel, a bomb, Ép chia thưởng', () => {
+    // Paid, the payment says it all: the wagers due are not said again.
+    expect(line(applied(0, 'g_duel', { effect: 'duel', targets: [2], wagers: 2, transfers: [{ from: 2, to: 0, amount: 2000 }] }))).toBe('Ann dùng Thách đấu vàng → Chi · Chi → Ann: 2.000')
+  })
+
+  it('a duel not yet paid says the wagers due', () => {
+    expect(line(applied(0, 's_duel', { effect: 'duel', targets: [1], wagers: 2 }))).toContain('Phải trả 2 mức cược')
+  })
+
+  it('says a bomb going off with its payment', () => {
+    expect(line(applied(1, 'd_time_bomb', { effect: 'timeBomb', targets: [3], transfers: [{ from: 3, to: 1, amount: 1000 }] }))).toContain('Dũng → Bảo: 1.000')
+  })
+
+  it('says a stake, a die and the cards it added, a card switched off, a reign and the Thần’s curse', () => {
+    expect(line(applied(0, 'd_adventurer', { effect: 'adventurer', stake: 4 }))).toContain('Mức cược ×4')
+    document.body.innerHTML = ''
+    expect(line(applied(0, 'g_fate_die', { effect: 'fateDie', dice: [6], holeDelta: 1 }))).toContain('Xúc xắc: 6 · +1 lá')
+    document.body.innerHTML = ''
+    expect(line(applied(0, 's_spoiler', { effect: 'spoiler', targets: [1], off: 's_shield' }))).toContain('Tắt thẻ Khiên gỗ')
+    document.body.innerHTML = ''
+    expect(line(applied(2, 'd_carp', { effect: 'carp', reign: 'god' }))).toContain('Hóa Thần Bài!')
+    document.body.innerHTML = ''
+    // The curse falls on the whole table: the line does not list it.
+    expect(line(applied(2, 'd_carp', { effect: 'carp', targets: [0, 1] }), 3)).toBe('Chi dùng Cá chép hóa rồng · Lời nguyền của Thần: Thần tráo bài')
+  })
+
+  it('says a dice roll and a Trộm điểm, which the room tells outside the hand', () => {
+    expect(line(applied(1, 'd_dice', { effect: 'fortuneDice', dice: [6, 6, 6], roll: { jackpot: 60_000, triple: true, herald: true } }))).toContain('Xúc xắc: 6-6-6 · Bộ ba! · Nổ hũ 60.000')
+    document.body.innerHTML = ''
+    expect(line(applied(0, 'g_steal_points', { effect: 'stealPoints', targets: [1], steal: { from: 1, to: 0, amount: 5 } }))).toContain('Bảo → Ann: 5 điểm hỗn loạn')
+  })
+
+  it('a plain card says nothing more', () => {
+    expect(line(applied(0, 's_shield'))).toBe('Ann dùng Khiên gỗ')
+  })
+})

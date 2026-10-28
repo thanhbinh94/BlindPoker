@@ -723,7 +723,10 @@ describe('Poker hỗn loạn', () => {
   const settlement: GameEvent = { type: 'SETTLEMENT', payouts: [], fee: 0, pots: [], carryOverOut: 0, stacks: [], uncalledReturned: null }
 
   it('starts with no draft, no cards and nothing applied', () => {
-    expect(initialClientState.chaos).toEqual({ draft: null, seats: {}, applied: [], credits: [], awarded: [], peek: null, reverse: false, blindfolded: null, bonus: { cards: [], armed: null } })
+    expect(initialClientState.chaos).toEqual({
+      draft: null, seats: {}, applied: [], credits: [], awarded: [], peek: null, reverse: false, blindfolded: null, bonus: { cards: [], armed: null },
+      table: null, heralds: [], rolls: [], wild: null, hawk: null,
+    })
   })
 
   it('takes every seat\'s cards and points from the snapshot, and a draft it was in the middle of', () => {
@@ -904,6 +907,120 @@ describe('Poker hỗn loạn', () => {
     // Another seat's call or no-fold is not mine.
     expect(decision({ type: 'DECISION_PHASE', seats: [0, 1, 2], turnSeq: 1, calls: [{ seat: 1, amount: 4000 }], noFold: [1, 2] })).toMatchObject({ kinds: ['play', 'fold'], callAmount: 1000 })
     expect(decision({ type: 'DECISION_PHASE', seats: [0, 1, 2], turnSeq: 1, noFold: [0, 1, 2] })).toMatchObject({ kinds: ['play'], callAmount: 1000 })
+  })
+
+  it('BP-41: keeps the call the server asked of my seat before the stack capped it (the tray’s "Tất tay")', () => {
+    let s = room(inChaosRoom(), 11, { type: 'PLAYER_SAT', playerId: 'p0', seat: 0, stack: 3000 })
+    s = game(s, 12, started)
+    s = game(s, 13, { type: 'BLINDS_POSTED', posts: [{ seat: 0, amount: 2000, kind: 'ANTE' }] })
+    s = game(s, 14, { type: 'DECISION_PHASE', seats: [0, 1, 2], turnSeq: 1, calls: [{ seat: 0, amount: 2000 }] })
+    expect(s.hand!.legal).toMatchObject({ callAmount: 1000 })
+    expect(s.hand!.myCall).toBe(2000)
+    expect(game(s, 15, { type: 'DECISION_PHASE', seats: [0, 1, 2], turnSeq: 2 }).hand!.myCall).toBe(2000) // a frame naming none changes nothing
+  })
+
+  describe('BP-41 round three', () => {
+    const TABLE = { god: { seat: 1, handsLeft: 4, curse: 2 as const }, demigods: [{ seat: 2, handsLeft: 5 }], bombs: [{ owner: 2, carrier: 0, handsLeft: 2 }] }
+    const EMPTY = { god: null, demigods: [], bombs: [] }
+    const seatState = { seat: 1, cards: [], points: 0, bonusCount: 0 }
+    const at = (s: ClientState, seq: number, event: RoomEvent, now: number) => reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq, event }, now })
+
+    it('keeps the table’s reign and bombs from CHAOS_TABLE, CHAOS_STATE and a snapshot; empty or absent is none', () => {
+      let s = room(inChaosRoom(), 11, { type: 'CHAOS_TABLE', table: TABLE })
+      expect(s.chaos.table).toEqual(TABLE)
+      s = game(s, 12, started)
+      expect(s.chaos.table).toEqual(TABLE) // a hand does not end a reign
+      s = room(s, 13, { type: 'CHAOS_TABLE', table: EMPTY })
+      expect(s.chaos.table).toBeNull()
+      s = room(s, 14, { type: 'CHAOS_STATE', seats: [seatState], table: TABLE })
+      expect(s.chaos.table).toEqual(TABLE)
+      s = room(s, 15, { type: 'CHAOS_STATE', seats: [seatState] })
+      expect(s.chaos.table).toBeNull()
+      expect(inChaosRoom({ draft: null, table: TABLE }).chaos.table).toEqual(TABLE)
+      expect(inChaosRoom({ draft: null }).chaos.table).toBeNull()
+    })
+
+    it('keeps each herald with the player’s name as it came, and the hand that follows does not clear it', () => {
+      let s = at(inChaosRoom(), 11, { type: 'CHAOS_HERALD', kind: 'god', seat: 1, playerId: 'p1' }, 500)
+      s = game(s, 12, started)
+      s = at(s, 13, { type: 'CHAOS_HERALD', kind: 'godslain', seat: 2, playerId: 'p2' }, 900)
+      expect(s.chaos.heralds).toEqual([
+        { id: 1, kind: 'god', seat: 1, name: 'P1', at: 500 },
+        { id: 2, kind: 'godslain', seat: 2, name: 'P2', at: 900 },
+      ])
+    })
+
+    it('a dice roll is watched by the table, said in the toasts, lowers the finished hand’s plate, and a 6-6-6 brings a herald', () => {
+      let s = game(inChaosRoom(), 11, started)
+      s = game(s, 12, { ...settlement, stacks: [{ seat: 1, stack: 20_000 }] } as GameEvent)
+      s = at(s, 13, { type: 'CHAOS_DICE', seat: 1, cardId: 'g_dice', dice: [1, 1], result: { burned: 1000 }, stack: 19_000 }, 700)
+      expect(s.hand!.seats.find((x) => x.seat === 1)!.stack).toBe(19_000)
+      expect(s.chaos.rolls).toEqual([{ id: 1, seat: 1, name: 'P1', cardId: 'g_dice', dice: [1, 1], result: { burned: 1000 }, at: 700 }])
+      expect(s.chaos.applied.at(-1)).toEqual({ seat: 1, cardId: 'g_dice', effect: 'fortuneDice', targets: [], outcome: 'applied', dice: [1, 1], roll: { burned: 1000 } })
+      expect(s.chaos.heralds).toEqual([])
+      const jackpot = { jackpot: 60_000, cards: [{ tier: 'diamond' as const, count: 2 }], triple: true as const, herald: true as const }
+      s = at(s, 14, { type: 'CHAOS_DICE', seat: 2, cardId: 'd_dice', dice: [6, 6, 6], result: jackpot, stack: 20_000 }, 800)
+      expect(s.chaos.rolls.map((r) => r.id)).toEqual([1, 2])
+      expect(s.chaos.heralds).toEqual([{ id: 3, kind: 'dice', seat: 2, name: 'P2', dice: [6, 6, 6], amount: 60_000, at: 800 }])
+    })
+
+    it('a Trộm điểm received is a line in the toasts with the points it moved', () => {
+      const s = room(inChaosRoom(), 11, { type: 'CHAOS_STEAL', seat: 0, cardId: 'g_steal_points', outcome: 'applied', targets: [1], from: 1, to: 0, amount: 3, spent: [] })
+      expect(s.chaos.applied).toEqual([{ seat: 0, cardId: 'g_steal_points', effect: 'stealPoints', targets: [1], outcome: 'applied', steal: { from: 1, to: 0, amount: 3 } }])
+    })
+
+    it('a duel told at the reveal and paid at the settlement is one line, with the payment on it; a bomb going off is its own', () => {
+      let s = game(inChaosRoom(), 11, started)
+      s = game(s, 12, { type: 'CHAOS_APPLIED', seat: 0, cardId: 'g_duel', effect: 'duel', targets: [2], outcome: 'applied', wagers: 2 })
+      // The target won the duel: the holder pays it (the payment's seat is the winner).
+      s = game(s, 13, { type: 'CHAOS_APPLIED', seat: 2, cardId: 'g_duel', effect: 'duel', targets: [0], outcome: 'applied', amount: 2000, transfers: [{ from: 0, to: 2, amount: 2000 }] })
+      s = game(s, 14, { type: 'CHAOS_APPLIED', seat: 1, cardId: 'd_time_bomb', effect: 'timeBomb', targets: [2], outcome: 'applied', amount: 1000, transfers: [{ from: 2, to: 1, amount: 1000 }] })
+      expect(s.chaos.applied).toEqual([
+        { seat: 0, cardId: 'g_duel', effect: 'duel', targets: [2], outcome: 'applied', wagers: 2, transfers: [{ from: 0, to: 2, amount: 2000 }], amount: 2000 },
+        { seat: 1, cardId: 'd_time_bomb', effect: 'timeBomb', targets: [2], outcome: 'applied', amount: 1000, transfers: [{ from: 2, to: 1, amount: 1000 }] },
+      ])
+    })
+
+    it('the Thần’s duels, one payment per opponent, all join its curse’s line', () => {
+      let s = game(inChaosRoom(), 11, started)
+      s = game(s, 12, { type: 'CHAOS_APPLIED', seat: 1, cardId: 'd_carp', effect: 'carp', targets: [0, 2], outcome: 'applied' })
+      s = game(s, 13, { type: 'CHAOS_APPLIED', seat: 1, cardId: 'd_carp', effect: 'carp', targets: [0], outcome: 'applied', amount: 1000, transfers: [{ from: 0, to: 1, amount: 1000 }] })
+      s = game(s, 14, { type: 'CHAOS_APPLIED', seat: 2, cardId: 'd_carp', effect: 'carp', targets: [1], outcome: 'applied', amount: 1000, transfers: [{ from: 1, to: 2, amount: 1000 }] })
+      expect(s.chaos.applied).toHaveLength(1)
+      expect(s.chaos.applied[0]!.transfers).toEqual([{ from: 0, to: 1, amount: 1000 }, { from: 1, to: 2, amount: 1000 }])
+    })
+
+    it('"Thẻ đã dùng" says a card that hit several seats in several entries (Cướp đoạt) once, with every target', () => {
+      let s = game(inChaosRoom(), 11, started)
+      s = game(s, 12, {
+        type: 'CHAOS_SUMMARY',
+        used: [
+          { seat: 0, cardId: 'd_plunder', effect: 'plunder', outcome: 'applied', targets: [1] },
+          { seat: 2, cardId: 's_shield', effect: 'shield', outcome: 'applied', targets: [] },
+          { seat: 0, cardId: 'd_plunder', effect: 'plunder', outcome: 'applied', targets: [2] },
+          { seat: 0, cardId: 'd_plunder', effect: 'plunder', outcome: 'blocked', targets: [2] },
+        ],
+      })
+      expect(s.hand!.result!.chaosUsed).toEqual([
+        { seat: 0, cardId: 'd_plunder', outcome: 'applied', targets: [1, 2] },
+        { seat: 2, cardId: 's_shield', outcome: 'applied', targets: [] },
+        { seat: 0, cardId: 'd_plunder', outcome: 'blocked', targets: [2] },
+      ])
+    })
+
+    it('keeps my own wild card and my hawk’s look for the hand, never another seat’s, and a new hand clears them', () => {
+      let s = room(inChaosRoom(), 11, { type: 'PLAYER_SAT', playerId: 'p0', seat: 0, stack: 10_000 })
+      s = game(s, 12, started)
+      const [qd, nine] = parseCards('Qd 9c')
+      s = game(s, 13, { type: 'CHAOS_APPLIED', seat: 0, cardId: 'd_wild_card', effect: 'wildCard', targets: [], outcome: 'applied', wild: qd })
+      s = game(s, 14, { type: 'CHAOS_HAWK', seat: 0, target: 2, cards: [nine!] })
+      s = game(s, 15, { type: 'CHAOS_HAWK', seat: 1, target: 0, cards: [] })
+      expect(s.chaos.wild).toBe(qd)
+      expect(s.chaos.hawk).toEqual({ target: 2, cards: [nine] })
+      s = game(s, 16, { ...started, handId: 'h2' })
+      expect(s.chaos.wild).toBeNull()
+      expect(s.chaos.hawk).toBeNull()
+    })
   })
 
   it('a credit after a finished hand raises that seat on the hand still shown too', () => {

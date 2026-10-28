@@ -20,6 +20,10 @@ const SPEC_BY_ID = new Map(CHAOS_CARDS_SPEC.map((def) => [def.id, def]))
 export interface ChaosCardInfoEntry {
   cardId: string
   handsLeft?: number | null
+  /** BP-41: the held card's charge (`HeldCardView.charge`) — Cá chép's energy, Siêu cộng dồn's chance — shown as a percentage. */
+  charge?: number | null
+  /** BP-41: one more line about the card where it stands — a reign and the hands it has left, a bomb's fuse. */
+  note?: string | null
 }
 
 /** A card that has been played: who played it, on whom (display names; none for a card on the player itself), and how it went. */
@@ -51,7 +55,7 @@ interface ChaosCardInfoBase {
 
 export type ChaosCardInfoProps = ChaosCardInfoBase &
   (
-    | { cardId: string; handsLeft?: number | null; use?: ChaosUseInfo; cards?: never }
+    | { cardId: string; handsLeft?: number | null; charge?: number | null; note?: string | null; use?: ChaosUseInfo; cards?: never }
     /** Several cards in one popup: a seat's stacked icon on a crowded phone strip, or its "+N". */
     | { cards: readonly ChaosCardInfoEntry[]; cardId?: never; handsLeft?: never; use?: never }
   )
@@ -107,7 +111,9 @@ let closeOpenInfo: (() => void) | null = null
 export function ChaosCardInfo(props: ChaosCardInfoProps) {
   const { t } = useTranslation()
   const { children, className, action } = props
-  const entries: readonly ChaosCardInfoEntry[] = props.cards ?? [{ cardId: props.cardId, handsLeft: props.handsLeft ?? null }]
+  const entries: readonly ChaosCardInfoEntry[] = props.cards ?? [
+    { cardId: props.cardId, handsLeft: props.handsLeft ?? null, charge: props.charge ?? null, note: props.note ?? null },
+  ]
   const use = props.cards === undefined ? props.use : undefined
 
   const [open, setOpen] = useState<Opener | null>(null)
@@ -207,6 +213,14 @@ export function ChaosCardInfo(props: ChaosCardInfoProps) {
   const tierOf = (cardId: string): ChaosTier => SPEC_BY_ID.get(cardId)?.tier ?? tierOfCardId(cardId)
   const leftOf = (handsLeft: number | null | undefined): string | null =>
     handsLeft === null || handsLeft === undefined ? null : t('chaos.handsLeft', { count: handsLeft })
+  /** BP-41 (spec 2026-10-28 §8): Cá chép shows its energy, Siêu cộng dồn its chance of the Aces; other charges say nothing. */
+  const chargeLine = (entry: ChaosCardInfoEntry): string | null => {
+    if (entry.charge === undefined || entry.charge === null) return null
+    const effect = SPEC_BY_ID.get(entry.cardId)?.effect
+    if (effect === 'carp') return t('chaos.energy', { percent: entry.charge })
+    if (effect === 'acesCharge') return t('chaos.acesChance', { percent: entry.charge })
+    return null
+  }
   const first = entries[0]
   const label =
     props.label ??
@@ -255,6 +269,7 @@ export function ChaosCardInfo(props: ChaosCardInfoProps) {
         const timing: ChaosTiming | undefined = SPEC_BY_ID.get(entry.cardId)?.timing
         const left = leftOf(entry.handsLeft)
         const when = [timing === undefined ? null : t(`chaos.timing.${timing}`), left].filter((x): x is string => x !== null).join(SEP)
+        const charged = chargeLine(entry)
         return (
           <div key={`${entry.cardId}-${i}`} className={s.cardInfoEntry} data-tier={tier}>
             <p className={s.cardInfoHead}>
@@ -263,6 +278,16 @@ export function ChaosCardInfo(props: ChaosCardInfoProps) {
             </p>
             <p className={s.cardInfoDesc}>{t(`chaos.cards.${entry.cardId}.desc`, { defaultValue: '' })}</p>
             {when === '' ? null : <p className={s.cardInfoMeta}>{when}</p>}
+            {charged === null ? null : (
+              <p className={s.cardInfoMeta} data-charge="">
+                {charged}
+              </p>
+            )}
+            {entry.note === undefined || entry.note === null ? null : (
+              <p className={s.cardInfoMeta} data-note="">
+                {entry.note}
+              </p>
+            )}
           </div>
         )
       })}

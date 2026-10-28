@@ -107,6 +107,22 @@
   overflow: hidden;
 }
 
+/* BP-41 (spec 2026-10-28 §4.5, §5): the table's moments — the herald and the dice — in a layer fixed to the screen over the
+   room. One column from a little below the top, so the two never lie on each other; it clips what a shake pushes past the
+   screen's edge, takes no room in the page and lets every press through but on the pieces themselves. */
+.moments {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding-top: clamp(40px, 16vh, 150px);
+  overflow: hidden;
+  pointer-events: none;
+}
+
 .roomMain {
   position: relative;
   flex: 1;

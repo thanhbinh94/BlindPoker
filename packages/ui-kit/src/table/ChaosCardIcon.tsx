@@ -28,7 +28,7 @@ export function ChaosCardIcon({ card, className }: ChaosCardIconProps) {
   const left = card.handsLeft === null ? null : t('chaos.handsLeft', { count: card.handsLeft })
   const label = `${name} (${t(`chaos.tier.${card.tier}`)})${left === null ? '' : ` · ${left}`}`
   return (
-    <ChaosCardInfo cardId={card.cardId} handsLeft={card.handsLeft} label={label}>
+    <ChaosCardInfo cardId={card.cardId} handsLeft={card.handsLeft} charge={card.charge ?? null} label={label}>
       <span className={cx(s.chaosIcon, className)} data-tier={card.tier} role="img" aria-label={label}>
         <span className={s.chaosGlyph} aria-hidden="true">
           {name.trim().slice(0, 1).toUpperCase()}

@@ -316,9 +316,10 @@ export function ActionBar({
   // the button says so with the stable "Tất tay" — still a `play` on the wire.
   const fixedWager = room.config.blind?.fixedWager ?? 0
   // BP-41 A1: a multiplied stake (Mạo hiểm gia, Sới lớn) calls more than the fixed wager; it is all in when it takes
-  // the whole stack.
+  // the whole stack — even when the stack it takes is exactly the fixed wager (`myCall` says what was asked before the cap).
+  const multiplied = (legal?.callAmount ?? 0) > fixedWager || (hand.myCall ?? 0) > fixedWager
   const playsAllIn = legal !== null && legal.callAmount > 0
-    && (legal.callAmount < fixedWager || (legal.callAmount > fixedWager && mine !== undefined && legal.callAmount >= mine.stack))
+    && (legal.callAmount < fixedWager || (multiplied && mine !== undefined && legal.callAmount >= mine.stack))
   const play = labelled(t(playsAllIn ? 'actions.allIn' : 'actions.play'), wager)
   const call = labelled(t('actions.call'), callAmount > 0 ? callAmount : null)
   const sizeVerb = t(canRaise ? 'actions.raise' : 'actions.bet')
@@ -354,7 +355,14 @@ export function ActionBar({
   const playRow = (
     <div className={s.trayRow}>
       {stack ? autoPlayToggle : null}
-      {kinds.includes('fold') ? foldButton : null}
+      {kinds.includes('fold') ? (
+        foldButton
+      ) : (
+        // Where "Bỏ bài" would stand, the reason it does not: a short line, so the row keeps its height.
+        <span className={s.noFoldNote} data-no-fold="">
+          {t('chaos.noFold')}
+        </span>
+      )}
       <Button variant="gold" size={buttonSize} disabled={disabled} className={s.grow} aria-label={play.label} onClick={() => emit({ kind: 'play' })}>
         {play.children}
       </Button>

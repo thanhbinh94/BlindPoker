@@ -1,5 +1,5 @@
 import { parseCards, type ServerMessage } from '@bp/core'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { I18nextProvider } from 'react-i18next'
 import { describe, expect, it } from 'vitest'
 import { initialClientState, reduceClient } from '../client/reducer.js'
@@ -83,7 +83,7 @@ describe('PokerTable on a Poker hỗn loạn table', () => {
     expect(peeked).toHaveLength(2)
     expect(peeked[0]).toHaveTextContent('Nhìn trộm')
     expect(peeked[1]).not.toHaveTextContent('Nhìn trộm')
-    // the other three slots are still ghosts, and the board is still five wide
+    // the other three slots are still ghosts, and the board is still five wide (six only with BP-41's Lá chung thứ sáu, below)
     expect(board.children).toHaveLength(5)
   })
 
@@ -205,5 +205,104 @@ describe('PokerTable on a crowded Poker hỗn loạn phone table', () => {
   it('draws the full row on the ring, however many seats there are', () => {
     drawNine('ring')
     expect(seatBox(3).querySelectorAll('[data-chaos-cards] [role="img"]')).toHaveLength(3)
+  })
+})
+
+// BP-41 (spec 2026-10-28 §4.5, §8; plan A9): the Thần, the Bán Thần and the bombs on the seats; six board slots; hands of one
+// to five cards; the wild card; a hawk's look.
+describe('PokerTable, BP-41 round three', () => {
+  const reigning = chaos({ table: { god: { seat: 2, handsLeft: 4, curse: 2 }, demigods: [{ seat: 0, handsLeft: 5 }], bombs: [{ owner: 0, carrier: 2, handsLeft: 2 }] } })
+
+  it('rings the Thần’s plate with its aura and marks it with the hands of its reign; the Bán Thần gets its own mark', () => {
+    draw(handOf(), reigning)
+    expect(seatBox(2)).toHaveClass(s.seatGod!)
+    expect(seatBox(2)).toHaveAttribute('data-reign', 'god')
+    expect(within(seatBox(2)).getByRole('img', { name: 'Thần Bài · còn 4 ván' })).toBeInTheDocument()
+    expect(seatBox(0)).toHaveClass(s.seatDemigod!)
+    expect(within(seatBox(0)).getByRole('img', { name: 'Bán Thần · còn 5 ván' })).toBeInTheDocument()
+  })
+
+  it('marks the seat that carries a bomb with its fuse, and nobody else', () => {
+    draw(handOf(), reigning)
+    expect(within(seatBox(2)).getByRole('img', { name: 'Đang giữ bom · còn 2 ván' })).toBeInTheDocument()
+    expect(within(seatBox(0)).queryByRole('img', { name: /bom/ })).toBeNull()
+  })
+
+  it('opens the reign’s card from its mark, with the hands left and the curse in words', async () => {
+    draw(handOf(), reigning)
+    fireEvent.click(within(seatBox(2)).getByRole('button', { name: 'Thần Bài · còn 4 ván' }))
+    const tip = await screen.findByRole('tooltip')
+    expect(tip).toHaveTextContent('Cá chép hóa rồng')
+    expect(tip).toHaveTextContent('Thần Bài · còn 4 ván · Lời nguyền của Thần: Thần thách đấu')
+  })
+
+  it('draws no mark, no aura and no sixth slot when the table has no reign, no bomb and no Lá chung thứ sáu', () => {
+    draw(handOf(), chaos())
+    expect(document.querySelector('[data-seat-marks]')).toBeNull()
+    expect(document.querySelector(`.${s.seatGod}`)).toBeNull()
+    expect(screen.getByRole('group', { name: 'Bài chung' }).children).toHaveLength(5)
+  })
+
+  it('opens a sixth board slot once Lá chung thứ sáu is told, and lays a six-card board in it', () => {
+    const told = chaos({ applied: [{ seat: 2, cardId: 'g_sixth_board', effect: 'sixthBoard', targets: [], outcome: 'applied' }] })
+    const { unmount } = draw(handOf(), told)
+    const board = screen.getByRole('group', { name: 'Bài chung' })
+    expect(board.children).toHaveLength(6)
+    expect(board).toHaveAttribute('data-board', '6')
+    unmount()
+    draw(handOf({ phase: 'COMPLETE', community: parseCards('Ah Kd 2c 7s 9h Tc') }), chaos())
+    const six = screen.getByRole('group', { name: 'Bài chung' })
+    expect(six.children).toHaveLength(6)
+    expect(six.querySelectorAll('[data-card]')).toHaveLength(6)
+  })
+
+  it('lays out a five-card hand overlapped to the width of three', () => {
+    draw(handOf({}, { cardCount: 5, holeCards: parseCards('As Ks Qs Js 9d') }), chaos())
+    const mine = seatBox(0).querySelector('[data-hand]')!
+    expect(mine.querySelectorAll('[data-card]')).toHaveLength(5)
+    expect(mine).toHaveAttribute('data-count', '5')
+  })
+
+  it('lays out a one-card hand alone, mine face up and the other seat’s down', () => {
+    draw(
+      makeHand({
+        mode: 'blind', phase: 'DECISION', community: [], actingSeat: null,
+        seats: [makeSeat({ seat: 0, playerId: 'a', displayName: 'Ann', cardCount: 1, holeCards: parseCards('Ah') }), makeSeat({ seat: 2, playerId: 'b', displayName: 'Bob', cardCount: 1 })],
+      }),
+      chaos(),
+    )
+    const one = seatBox(0).querySelector('[data-hand]')!
+    expect(one.querySelectorAll('[data-card]')).toHaveLength(1)
+    expect(one).not.toHaveAttribute('data-count')
+    expect(seatBox(2).querySelector('[data-hand]')!.children).toHaveLength(1)
+  })
+
+  it('marks my wild card while the hand runs, and every seat’s at the showdown', () => {
+    draw(handOf(), chaos({ wild: parseCards('Qd')[0]! }))
+    const wild = seatBox(0).querySelector(`.${s.cardWild}`)
+    expect(wild?.querySelector('[data-card]')).toHaveAttribute('data-card', 'Qd')
+    expect(within(seatBox(0)).getByText('Lá ma: Đầm rô')).toHaveClass(s.sr!)
+  })
+
+  it('marks every seat’s wild card at the showdown, from the result', () => {
+    const showdown = [{ seat: 2, cards: parseCards('9c 9h 2d'), rank: 1, category: 1 as const, best: parseCards('9c 9h 2d'), wild: { card: parseCards('2d')[0]!, as: parseCards('9s')[0]! } }]
+    draw(
+      handOf({
+        phase: 'COMPLETE',
+        seats: [makeSeat({ seat: 0, playerId: 'a', displayName: 'Ann', cardCount: 3, holeCards: parseCards('Qs Qd 7c') }), makeSeat({ seat: 2, playerId: 'b', displayName: 'Bob', cardCount: 3, holeCards: parseCards('9c 9h 2d') })],
+        result: { payouts: [{ seat: 2, amount: 2_000 }], pots: [], fee: 0, showdown, carryOverOut: 0, uncalledReturned: null, cancelled: false, reason: null },
+      }),
+      chaos(),
+    )
+    expect(seatBox(2).querySelector(`.${s.cardWild} [data-card]`)).toHaveAttribute('data-card', '2d')
+    expect(seatBox(0).querySelector(`.${s.cardWild}`)).toBeNull()
+  })
+
+  it('turns up the cards my hawk saw on that seat alone, the rest still down', () => {
+    draw(handOf(), chaos({ hawk: { target: 2, cards: parseCards('9c') } }))
+    const bob = seatBox(2).querySelector('[data-hand]')!
+    expect(bob.querySelectorAll('[data-card]')).toHaveLength(1)
+    expect(bob.querySelector(`.${s.cardHawk} [data-card]`)).toHaveAttribute('data-card', '9c')
+    expect(bob.querySelectorAll(`.${s.cardDown}`)).toHaveLength(2)
   })
 })

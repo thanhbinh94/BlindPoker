@@ -441,6 +441,14 @@ describe('HandResult on a Poker hỗn loạn table', () => {
     ])
     expect(meta()).toEqual(['Ann: Cấp cứu +10.000', 'Bob: Bạo kích ×2 +12.000', 'Bob: Thần tài +0 · Đã chạm trần thẻ hôm nay'])
   })
+
+  it('BP-41: prints a jackpot (dice, Mạo hiểm gia) and a crit ×5 in words', () => {
+    draw(handWith(), [
+      { seat: 0, amount: 60_000, reason: 'chaos_jackpot', capped: false },
+      { seat: 1, amount: 20_000, reason: 'chaos_crit', capped: false, multiplier: 5 },
+    ])
+    expect(meta()).toEqual(['Ann: Nổ hũ +60.000', 'Bob: Bạo kích ×5 +20.000'])
+  })
 })
 
 describe('HandResult: the chaos strip and "Bỏ qua" (BP-39, spec 2026-10-27 §3.2–3.3)', () => {

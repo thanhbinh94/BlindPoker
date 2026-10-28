@@ -363,8 +363,69 @@
     "credit": {
       "chaos_rescue": "Rescue +{{amount}}",
       "chaos_crit": "Crit ×{{multiplier}} +{{amount}}",
-      "chaos_fortune": "Fortune +{{amount}}"
+      "chaos_fortune": "Fortune +{{amount}}",
+      "chaos_jackpot": "Jackpot +{{amount}}"
     },
+    "herald": {
+      "god": "Warning: {{name}} has gathered enough energy and become the Card God!",
+      "demigod": "Warning: {{name}} has beaten fate and become a Demigod!",
+      "godslain": "{{name}} has defeated the Card God!",
+      "dice": "Dice {{dice}}! {{name}} hits the jackpot: {{amount}}!",
+      "diceBig": "Dice {{dice}}! {{name}} hits it big!",
+      "label": "Table announcement"
+    },
+    "reign": {
+      "god": "Card God",
+      "demigod": "Demigod",
+      "godSeat_one": "Card God · {{count}} hand left",
+      "godSeat_other": "Card God · {{count}} hands left",
+      "demigodSeat_one": "Demigod · {{count}} hand left",
+      "demigodSeat_other": "Demigod · {{count}} hands left",
+      "bombSeat_one": "Holding a bomb · {{count}} hand left",
+      "bombSeat_other": "Holding a bomb · {{count}} hands left",
+      "curse": "The God's curse: {{curse}}",
+      "curses": {
+        "1": "God's Draw",
+        "2": "God's Duel",
+        "3": "God's Shuffle"
+      }
+    },
+    "detail": {
+      "transfer": "{{from}} → {{to}}: {{amount}}",
+      "wagers_one": "{{count}} wager due",
+      "wagers_other": "{{count}} wagers due",
+      "stake": "Stake ×{{stake}}",
+      "dice": "Dice: {{dice}}",
+      "holeUp_one": "+{{count}} card",
+      "holeUp_other": "+{{count}} cards",
+      "holeDown_one": "−{{count}} card",
+      "holeDown_other": "−{{count}} cards",
+      "holeSame": "No change",
+      "wild": "Wild card: {{card}}",
+      "off": "Switched off {{card}}",
+      "god": "Becomes the Card God!",
+      "demigod": "Becomes a Demigod!",
+      "godslain": "The Card God falls!",
+      "points_one": "+{{count}} chaos point",
+      "points_other": "+{{count}} chaos points",
+      "cards_one": "{{count}} {{tier}} card",
+      "cards_other": "{{count}} {{tier}} cards",
+      "burned": "Lost {{amount}}",
+      "jackpot": "Jackpot {{amount}}",
+      "nothing": "Nothing",
+      "triple": "Triple!",
+      "steal_one": "{{from}} → {{to}}: {{count}} chaos point",
+      "steal_other": "{{from}} → {{to}}: {{count}} chaos points"
+    },
+    "dice": {
+      "label": "Lucky dice",
+      "rolling": "Rolling…",
+      "faces": "Dice: {{dice}}"
+    },
+    "energy": "Energy: {{percent}}%",
+    "acesChance": "Ace chance: {{percent}}%",
+    "noFold": "No folding this hand",
+    "hawkMark": "Hawk Eye",
     "cards": {
       "s_swap_one": {
         "name": "Card Swap",

@@ -345,3 +345,35 @@ describe('placeChaosInfo', () => {
     expect(at.top + tall.height).toBeLessThanOrEqual(360 - INFO_MARGIN)
   })
 })
+
+// BP-41 (spec 2026-10-28 §8): a card with a charge says it — Cá chép its energy, Siêu cộng dồn its chance of the Aces.
+describe('ChaosCardInfo, BP-41 charges and notes', () => {
+  /** One card, with the single card's own props (`draw` takes what every variant shares). */
+  const drawCard = (props: { cardId: string; handsLeft?: number; charge?: number; note?: string }) => draw(props as Parameters<typeof draw>[0])
+  it('says Cá chép’s energy and Siêu cộng dồn’s chance as a percentage', () => {
+    const { unmount } = drawCard({ cardId: 'd_carp', charge: 35 })
+    tap(trigger())
+    expect(tip()).toHaveTextContent('Năng lượng: 35%')
+    unmount()
+    drawCard({ cardId: 'g_aces_charge', handsLeft: 18, charge: 12 })
+    tap(trigger())
+    expect(tip()).toHaveTextContent('Tỉ lệ ra lá A: 12%')
+    expect(tip()).toHaveTextContent('còn 18 ván')
+  })
+
+  it('a charge that is not a percentage (Đảo bài’s hands played) says nothing, and a card with none says nothing either', () => {
+    const { unmount } = drawCard({ cardId: 'g_flip_flop', charge: 3 })
+    tap(trigger())
+    expect(tip()?.querySelector('[data-charge]')).toBeNull()
+    unmount()
+    drawCard({ cardId: 'd_carp' })
+    tap(trigger())
+    expect(tip()?.querySelector('[data-charge]')).toBeNull()
+  })
+
+  it('adds the note it is given (a reign, a fuse) under the card', () => {
+    drawCard({ cardId: 'd_carp', note: 'Thần Bài · còn 3 ván' })
+    tap(trigger())
+    expect(tip()?.querySelector('[data-note]')).toHaveTextContent('Thần Bài · còn 3 ván')
+  })
+})

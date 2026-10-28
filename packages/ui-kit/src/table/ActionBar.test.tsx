@@ -171,9 +171,30 @@ describe('ActionBar', () => {
       expect(screen.getByRole('button', { name: 'Tất tay 3.000' })).toBeInTheDocument()
     })
 
-    it('no "Bỏ bài" for a seat that may not fold', () => {
+    it('no "Bỏ bài" for a seat that may not fold, and the row says why in its place', () => {
       show(legal(['play'], 1000))
       expect(screen.queryByRole('button', { name: 'Bỏ bài' })).toBeNull()
+      expect(screen.getByRole('button', { name: 'Chơi 1.000' })).toBeInTheDocument()
+      expect(screen.getByText('Không được bỏ bài ván này')).toHaveAttribute('data-no-fold')
+    })
+
+    it('a seat that may fold is told nothing of it', () => {
+      show(legal(['play', 'fold'], 1000))
+      expect(screen.queryByText('Không được bỏ bài ván này')).toBeNull()
+    })
+
+    it('"Tất tay" when a multiplied stake takes a stack that is exactly the fixed wager (BP-41 → Task 9)', () => {
+      // Asked 2.000 (×2), the stack has 1.000 left: the cap lands on the fixed wager, and it is still the whole stack.
+      render(
+        <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+          <ActionBar hand={hand(legal(['play', 'fold'], 1000), { mode: 'blind', phase: 'DECISION', seats: [{ ...me, stack: 1000 }], myCall: 2000 })} room={blindRoom} onAct={() => {}} lang="vi" />
+        </I18nextProvider>,
+      )
+      expect(screen.getByRole('button', { name: 'Tất tay 1.000' })).toBeInTheDocument()
+    })
+
+    it('a plain stake exactly the stack stays "Chơi", as it always was', () => {
+      show(legal(['play', 'fold'], 1000), 1000)
       expect(screen.getByRole('button', { name: 'Chơi 1.000' })).toBeInTheDocument()
     })
   })

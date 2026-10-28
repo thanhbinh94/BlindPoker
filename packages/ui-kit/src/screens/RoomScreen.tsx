@@ -11,7 +11,9 @@ import { Modal } from '../primitives/Modal.js'
 import { cx } from '../primitives/cx.js'
 import { ActionBar } from '../table/ActionBar.js'
 import { BonusHand } from '../table/BonusHand.js'
+import { ChaosDice } from '../table/ChaosDice.js'
 import { ChaosDraft } from '../table/ChaosDraft.js'
+import { ChaosHerald } from '../table/ChaosHerald.js'
 import { ChaosToasts } from '../table/ChaosToasts.js'
 import { HandResult, ResultSkipControl, type ResultSkip } from '../table/HandResult.js'
 import { STACK_LAYOUT_QUERY, useRoomFrame, useStageTier, type RoomFrame } from '../table/frame.js'
@@ -471,7 +473,19 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
           resultOpen={resultCard !== null}
           // Upright, seven seats or more put the opponents in three rows: the band holds two toasts there (I2).
           crowded={room.config.maxPlayers > 6}
+          lang={lang}
+          curse={state.chaos.table?.god?.curse ?? null}
         />
+      ) : null}
+
+      {/* BP-41 (spec 2026-10-28 §4.5, §5): the table's moments — the Thần's herald across the screen and the dice of fortune —
+          in a layer fixed to the screen over everything, laid out in one column so the two never cover each other's words.
+          It takes no room and catches no press but on what it shows, and each piece is gone after its 3 s. */}
+      {chaosTable ? (
+        <div className={s.moments} data-surface="night">
+          <ChaosHerald heralds={state.chaos.heralds} lang={lang} />
+          <ChaosDice rolls={state.chaos.rolls} lang={lang} />
+        </div>
       ) : null}
 
       {state.status === 'open' ? null : (

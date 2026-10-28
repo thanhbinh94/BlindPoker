@@ -363,8 +363,69 @@
     "credit": {
       "chaos_rescue": "Cấp cứu +{{amount}}",
       "chaos_crit": "Bạo kích ×{{multiplier}} +{{amount}}",
-      "chaos_fortune": "Thần tài +{{amount}}"
+      "chaos_fortune": "Thần tài +{{amount}}",
+      "chaos_jackpot": "Nổ hũ +{{amount}}"
     },
+    "herald": {
+      "god": "Cảnh báo: {{name}} đã tích luỹ đủ năng lượng và trở thành Thần Bài!",
+      "demigod": "Cảnh báo: {{name}} đã chiến thắng định mệnh và trở thành Bán Thần!",
+      "godslain": "{{name}} đã đánh bại Thần Bài!",
+      "dice": "Xúc xắc {{dice}}! {{name}} nổ hũ {{amount}}!",
+      "diceBig": "Xúc xắc {{dice}}! {{name}} trúng lớn!",
+      "label": "Thông báo của bàn"
+    },
+    "reign": {
+      "god": "Thần Bài",
+      "demigod": "Bán Thần",
+      "godSeat_one": "Thần Bài · còn {{count}} ván",
+      "godSeat_other": "Thần Bài · còn {{count}} ván",
+      "demigodSeat_one": "Bán Thần · còn {{count}} ván",
+      "demigodSeat_other": "Bán Thần · còn {{count}} ván",
+      "bombSeat_one": "Đang giữ bom · còn {{count}} ván",
+      "bombSeat_other": "Đang giữ bom · còn {{count}} ván",
+      "curse": "Lời nguyền của Thần: {{curse}}",
+      "curses": {
+        "1": "Thần rút bài",
+        "2": "Thần thách đấu",
+        "3": "Thần tráo bài"
+      }
+    },
+    "detail": {
+      "transfer": "{{from}} → {{to}}: {{amount}}",
+      "wagers_one": "Phải trả {{count}} mức cược",
+      "wagers_other": "Phải trả {{count}} mức cược",
+      "stake": "Mức cược ×{{stake}}",
+      "dice": "Xúc xắc: {{dice}}",
+      "holeUp_one": "+{{count}} lá",
+      "holeUp_other": "+{{count}} lá",
+      "holeDown_one": "−{{count}} lá",
+      "holeDown_other": "−{{count}} lá",
+      "holeSame": "Không đổi lá",
+      "wild": "Lá ma: {{card}}",
+      "off": "Tắt thẻ {{card}}",
+      "god": "Hóa Thần Bài!",
+      "demigod": "Thành Bán Thần!",
+      "godslain": "Thần Bài bị hạ!",
+      "points_one": "+{{count}} điểm hỗn loạn",
+      "points_other": "+{{count}} điểm hỗn loạn",
+      "cards_one": "{{count}} thẻ {{tier}}",
+      "cards_other": "{{count}} thẻ {{tier}}",
+      "burned": "Mất {{amount}}",
+      "jackpot": "Nổ hũ {{amount}}",
+      "nothing": "Không trúng gì",
+      "triple": "Bộ ba!",
+      "steal_one": "{{from}} → {{to}}: {{count}} điểm hỗn loạn",
+      "steal_other": "{{from}} → {{to}}: {{count}} điểm hỗn loạn"
+    },
+    "dice": {
+      "label": "Xúc xắc vận may",
+      "rolling": "Đang gieo…",
+      "faces": "Xúc xắc: {{dice}}"
+    },
+    "energy": "Năng lượng: {{percent}}%",
+    "acesChance": "Tỉ lệ ra lá A: {{percent}}%",
+    "noFold": "Không được bỏ bài ván này",
+    "hawkMark": "Mắt diều hâu",
     "cards": {
       "s_swap_one": {
         "name": "Đổi lá",
