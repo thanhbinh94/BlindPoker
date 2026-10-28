@@ -301,8 +301,10 @@ describe('the chaos cards (Plan 37)', () => {
     const res = await gmReq('GET', '/api/gm/chaos')
     expect(res.statusCode).toBe(200)
     const body = res.json() as ChaosBody
-    expect(body.cards).toHaveLength(47)
-    expect(body.cards.every((c) => c.activeNow && c.rule === null)).toBe(true)
+    // BP-41: the 39 round-three cards are listed too, off in the file until the engine runs them.
+    expect(body.cards).toHaveLength(47 + 39)
+    expect(body.cards.filter((c) => c.activeNow)).toHaveLength(47)
+    expect(body.cards.every((c) => c.rule === null)).toBe(true)
     expect(body.config.tierWeights).toEqual({ silver: 50, gold: 35, diamond: 15 })
   })
 

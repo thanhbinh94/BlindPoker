@@ -8,8 +8,20 @@ import {
   type ChaosCardDef, type ChaosEffectKind, type ChaosHandPlan, type ChaosMode, type ChaosSeat, type ChaosTableState, type HeldCard, type PlannedEffect,
 } from './types.js'
 
-/** Spec §5.3 Tay bạc: it rolls any enabled Silver or Gold effect except these. */
-const GAMBLER_EXCLUDED: ReadonlySet<ChaosEffectKind> = new Set(['rescue', 'fortune', 'levelUp', 'gambler'])
+/**
+ * Spec §5.3 Tay bạc: it rolls any enabled Silver or Gold effect except these. A roll fires for one hand under a fresh
+ * uid, with no held card behind it, so BP-41 (Task 2) also leaves out: every round-three card that waits, acts on
+ * receipt or at the end of the hand (Nâng tầm uy lực, Cao thủ, Bia đỡ đạn, Trộm điểm, the dice, Cá chép); the cards that
+ * carry state on the held card from hand to hand (Siêu cộng dồn's chance, Đảo bài's phase); and every Kim cương-only
+ * round-three rule, named here too so a catalogue that ever lists one as Silver or Gold still cannot hand it to a roll.
+ */
+export const GAMBLER_EXCLUDED: ReadonlySet<ChaosEffectKind> = new Set<ChaosEffectKind>([
+  'rescue', 'fortune', 'levelUp', 'gambler',
+  'tierUp', 'master', 'scapegoat', 'stealPoints', 'fortuneDice', 'carp',
+  'acesCharge', 'flipFlop',
+  'riskyHand', 'adventurer', 'shareWinnings', 'plunder', 'shuffleHoles', 'swapLeader', 'backfire', 'deluge', 'eclipse',
+  'wildCard', 'timeBomb',
+])
 /** The debuffs that act at the deal and so are aimed here; the reveal debuffs are aimed by the engine at the reveal. */
 const DEAL_DEBUFFS: ReadonlySet<ChaosEffectKind> = new Set(['freeze', 'blindfold'])
 

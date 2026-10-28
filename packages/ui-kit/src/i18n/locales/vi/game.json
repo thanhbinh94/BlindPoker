@@ -341,7 +341,8 @@
       "decision": "Áp lúc quyết định",
       "reveal": "Áp lúc lật bài",
       "wait": "Chờ điều kiện để áp",
-      "now": "Áp ngay khi nhận"
+      "now": "Áp ngay khi nhận",
+      "end": "Áp khi ván kết thúc"
     },
     "info": {
       "by": "Người dùng: {{name}}",
@@ -552,6 +553,162 @@
       "d_level": {
         "name": "Cấp độ kim cương",
         "desc": "Đổi ngay thành 2 thẻ ngẫu nhiên, mỗi thẻ cấp ngẫu nhiên từ Bạc đến Kim cương."
+      },
+      "s_tier_up": {
+        "name": "Nâng tầm uy lực",
+        "desc": "Nằm chờ; thẻ kế tiếp bạn nhận (khung chọn hoặc thẻ thưởng) lên 1 cấp, Kim cương thì giữ nguyên."
+      },
+      "s_no_fold": {
+        "name": "Cấm bỏ bài",
+        "desc": "Ở ván sau, mọi người khác không được Bỏ bài, chỉ được Chơi."
+      },
+      "s_duel": {
+        "name": "Thách đấu bạc",
+        "desc": "Khi lật bài, thách 1 đối thủ ngẫu nhiên còn trong ván; tay bạn hơn thì 25% cơ hội họ trả bạn 2 mức cược."
+      },
+      "s_hawk_eye": {
+        "name": "Mắt diều hâu",
+        "desc": "Xem 1 lá riêng ngẫu nhiên của 1 đối thủ ngẫu nhiên trước khi chọn Chơi hoặc Bỏ bài, trong 1 ván."
+      },
+      "s_coin_flip": {
+        "name": "Hên xui",
+        "desc": "Tung đồng xu: ván này bạn được thêm 1 lá riêng hoặc mất 1 lá riêng."
+      },
+      "s_master": {
+        "name": "Cao thủ",
+        "desc": "Nằm chờ; thắng ván kế tiếp thì nhận 3 điểm hỗn loạn."
+      },
+      "s_loss_points": {
+        "name": "Tích tiểu thành đại",
+        "desc": "Mỗi ván thua được thêm 1 điểm hỗn loạn, trong 5 ván."
+      },
+      "s_redeal_hole": {
+        "name": "Xào bài",
+        "desc": "Khi lật bài, 1 lá riêng ngẫu nhiên của 1 đối thủ ngẫu nhiên bị chia lại."
+      },
+      "s_neighbour_swap": {
+        "name": "Đổi lá hàng xóm",
+        "desc": "Khi lật bài, đổi 1 lá riêng ngẫu nhiên của bạn với 1 lá của người ngồi bên trái còn trong ván."
+      },
+      "s_spoiler": {
+        "name": "Kẻ phá đám",
+        "desc": "Tắt 1 thẻ ngẫu nhiên đang áp ván này của 1 đối thủ ngẫu nhiên."
+      },
+      "s_kindling": {
+        "name": "Mồi lửa",
+        "desc": "Mọi người ngồi bàn nhận 1 điểm hỗn loạn mỗi ván, trong 3 ván."
+      },
+      "s_dice": {
+        "name": "Xúc xắc vận may bạc",
+        "desc": "Cuối ván gieo 1 xúc xắc: 3–4 được 2 điểm hỗn loạn, 5 được 1 thẻ Bạc, 6 được 1 thẻ Vàng."
+      },
+      "g_aces_charge": {
+        "name": "Siêu cộng dồn vàng",
+        "desc": "Mỗi ván thêm 5–7% cơ hội được đôi A (tối đa 60%); nổ là hết thẻ, tối đa 20 ván."
+      },
+      "g_flip_flop": {
+        "name": "Đảo bài",
+        "desc": "Luân phiên thêm 1 lá riêng rồi bớt 1 lá, bắt đầu bằng thêm; ván bớt lá thì không ai rút được bài của bạn, trong 4 ván."
+      },
+      "g_big_table": {
+        "name": "Sới lớn",
+        "desc": "Cả bàn cược gấp đôi mức cược cơ bản; bạn được chia 2 bộ bài riêng và giữ bộ tốt hơn, trong 3 ván."
+      },
+      "g_duel": {
+        "name": "Thách đấu vàng",
+        "desc": "Khi lật bài, thách 1 đối thủ ngẫu nhiên còn trong ván; tay bạn hơn thì 30% họ trả bạn 2 mức cược, 10% trả 3."
+      },
+      "g_steal_points": {
+        "name": "Trộm điểm",
+        "desc": "Lấy ngay 5 điểm hỗn loạn của người đang có nhiều điểm hỗn loạn nhất."
+      },
+      "g_scapegoat": {
+        "name": "Bia đỡ đạn",
+        "desc": "Nằm chờ; thẻ gây hại kế tiếp nhắm vào bạn chuyển sang 1 người ngẫu nhiên khác."
+      },
+      "g_hawk_eye": {
+        "name": "Mắt diều hâu vàng",
+        "desc": "Xem cả bài riêng của 1 đối thủ ngẫu nhiên trước khi chọn Chơi hoặc Bỏ bài, trong 1 ván."
+      },
+      "g_swap_hands": {
+        "name": "Đổi bài liều",
+        "desc": "Khi lật bài, đổi cả bài riêng với 1 đối thủ ngẫu nhiên còn trong ván."
+      },
+      "g_sixth_board": {
+        "name": "Lá chung thứ sáu",
+        "desc": "Ván này có 6 lá chung cho cả bàn; mỗi người ghép 5 lá tốt nhất."
+      },
+      "g_win_tax": {
+        "name": "Thuế thắng",
+        "desc": "Ai thắng ván (trừ bạn) nộp bạn 10% phần lời, trong 3 ván."
+      },
+      "g_curse": {
+        "name": "Lời nguyền",
+        "desc": "Mỗi ván, lá riêng cao nhất của 1 đối thủ ngẫu nhiên bị đổi thành một lá 2, trong 3 ván."
+      },
+      "g_fate_die": {
+        "name": "Xúc xắc định mệnh",
+        "desc": "Khi lật bài, gieo 1 xúc xắc: 1–2 bạn mất 1 lá riêng, 3–4 không gì, 5–6 thêm 1 lá và bạo kích ×2 nếu thắng."
+      },
+      "g_dice": {
+        "name": "Xúc xắc vận may vàng",
+        "desc": "Cuối ván gieo 2 xúc xắc: 2 mất 1 mức cược, 3–6 được 3 điểm hỗn loạn, 7–9 thẻ Vàng, 10–11 thẻ Kim cương, 12 nổ hũ 10 × mức cược."
+      },
+      "d_carp": {
+        "name": "Cá chép hóa rồng",
+        "desc": "Nằm chờ; mỗi ván thua tích 5–7% năng lượng, trúng thì thành Thần Bài 5 ván; thắng trước khi hóa thần thì thành Bán Thần."
+      },
+      "d_aces_charge": {
+        "name": "Siêu cộng dồn",
+        "desc": "Mỗi ván thêm 5–7% cơ hội được toàn lá A, tới 100% thì chắc chắn; nổ là hết thẻ, tối đa 20 ván."
+      },
+      "d_risky_hand": {
+        "name": "Liều ăn nhiều",
+        "desc": "Bớt 1 lá riêng nhưng được chia 3 bộ và giữ bộ tốt nhất, không ai rút được bài của bạn; thắng thì bạo kích ×3, ×4 hoặc ×5 rồi hết thẻ, tối đa 10 ván."
+      },
+      "d_adventurer": {
+        "name": "Mạo hiểm gia",
+        "desc": "Mức cược của riêng bạn ×2, ×4, ×8, ×16, ×32 qua từng ván tới khi thắng; thắng thì nổ hũ 5 × mức cược và 5 điểm hỗn loạn, tối đa 5 ván."
+      },
+      "d_share_winnings": {
+        "name": "Ép chia thưởng",
+        "desc": "Còn trong ván mà thua thì người thắng trả bạn một nửa phần lời, trong 2 ván."
+      },
+      "d_plunder": {
+        "name": "Cướp đoạt",
+        "desc": "Bỏ bài riêng của bạn, lấy từ bài đối thủ những lá ghép thành tay mạnh nhất; họ nhận lá thay thế, trong 2 ván."
+      },
+      "d_shuffle_holes": {
+        "name": "Hoán vị định mệnh",
+        "desc": "Khi lật bài, bài riêng của mọi người còn trong ván (cả bạn) bị xáo ngẫu nhiên giữa họ."
+      },
+      "d_swap_leader": {
+        "name": "Ngược dòng",
+        "desc": "Khi lật bài, nếu bạn không đứng đầu thì đổi bài riêng với người đang đứng đầu."
+      },
+      "d_backfire": {
+        "name": "Gậy ông đập lưng ông",
+        "desc": "Ván này, mọi thẻ gây hại của người khác dội ngược về chính người dùng."
+      },
+      "d_deluge": {
+        "name": "Đại hồng thủy",
+        "desc": "Khi lật bài, chia lại bài riêng của mọi người còn trong ván và cả 5 lá chung."
+      },
+      "d_eclipse": {
+        "name": "Nhật thực",
+        "desc": "Ván này mọi thẻ của người khác bị tắt (không mất); chỉ thẻ của bạn chạy."
+      },
+      "d_wild_card": {
+        "name": "Lá ma",
+        "desc": "1 lá riêng ngẫu nhiên của bạn thành lá đa năng, tính như lá bất kỳ để ghép bộ tốt nhất, trong 1 ván."
+      },
+      "d_time_bomb": {
+        "name": "Bom nổ chậm",
+        "desc": "Đặt bom lên 1 đối thủ ngẫu nhiên, mỗi ván bom chuyền sang người khác; sau 3 ván ai cầm bom trả bạn 1 mức cược."
+      },
+      "d_dice": {
+        "name": "Xúc xắc vận may kim cương",
+        "desc": "Cuối ván gieo 3 xúc xắc và cộng lại: từ mất 2 mức cược tới nổ hũ 30 × mức cược; ba con giống nhau thì thưởng gấp đôi."
       }
     }
   },

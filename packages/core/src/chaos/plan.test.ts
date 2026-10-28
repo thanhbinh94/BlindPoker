@@ -3,7 +3,7 @@ import { seededRng } from '../cards/rng.js'
 import type { BlindRules } from '../hand/types.js'
 import { CHAOS_CARDS_SPEC } from './fixtures.js'
 import { receiveCard, toHeld } from './hold.js'
-import { planHand } from './plan.js'
+import { GAMBLER_EXCLUDED, planHand } from './plan.js'
 import { EMPTY_CHAOS_SEAT, EMPTY_CHAOS_TABLE, type ChaosCardDef, type ChaosSeat, type ChaosTableState } from './types.js'
 
 const card = (id: string): ChaosCardDef => {
@@ -148,6 +148,39 @@ describe('planHand', () => {
       rolled.add(def.id)
     }
     expect(rolled.size).toBeGreaterThan(15)
+  })
+
+  it('BP-41: the gambler never rolls a round-three card that waits, acts on receipt or at the end, carries a charge, or is a Kim cương rule', () => {
+    // Every round-three card switched on (as Task 7b will ship them), and every card but the excluded ones weighted 0:
+    // the roll finds nothing to fire.
+    const allOn = CHAOS_CARDS_SPEC.map((c) => ({ ...c, enabled: true }))
+    const excluded = allOn.filter((c) => GAMBLER_EXCLUDED.has(c.effect))
+    expect(excluded.filter((c) => c.tier !== 'diamond').map((c) => c.id)).toEqual([
+      's_rescue', 's_fortune', 's_level', 'g_rescue', 'g_fortune', 'g_level',
+      's_tier_up', 's_master', 's_dice', 'g_aces_charge', 'g_flip_flop', 'g_steal_points', 'g_scapegoat', 'g_dice',
+    ])
+    for (const kind of ['carp', 'riskyHand', 'adventurer', 'shareWinnings', 'plunder', 'shuffleHoles', 'swapLeader', 'backfire', 'deluge', 'eclipse', 'wildCard', 'timeBomb'] as const) {
+      expect(GAMBLER_EXCLUDED.has(kind), kind).toBe(true)
+    }
+    const onlyExcluded = new Map(allOn.filter((c) => !GAMBLER_EXCLUDED.has(c.effect)).map((c) => [c.id, 0]))
+    for (const decisionMode of ['playOrFold', 'none'] as const) {
+      for (let seed = 1; seed <= 30; seed++) {
+        const seats = [{ seat: 0, isBot: false, chaos: holding(['d_gambler']) }, { seat: 1, isBot: false, chaos: EMPTY_CHAOS_SEAT }]
+        const r = planHand({ seats, rules: { ...RULES, decisionMode }, pool: allOn, rng: seededRng(seed), nextUid: counter(1_000), weights: onlyExcluded })
+        expect(effectsOf(r, 0)).toMatchObject({ effects: [], shield: null })
+      }
+    }
+    // With the round-three cards on and nothing weighted out, a roll can land on one the gambler may use.
+    const rolled = new Set<string>()
+    for (let seed = 1; seed <= 400; seed++) {
+      const seats = [{ seat: 0, isBot: false, chaos: holding(['d_gambler']) }, { seat: 1, isBot: false, chaos: EMPTY_CHAOS_SEAT }]
+      const r = planHand({ seats, rules: RULES, pool: allOn, rng: seededRng(seed), nextUid: counter(1_000) })
+      for (const e of effectsOf(r, 0).effects) {
+        expect(GAMBLER_EXCLUDED.has(e.effect), e.cardId).toBe(false)
+        rolled.add(e.cardId)
+      }
+    }
+    expect([...rolled].some((id) => ['s_duel', 's_coin_flip', 'g_big_table', 'g_curse', 'g_win_tax'].includes(id))).toBe(true)
   })
 
   it("the gambler's roll respects the one-debuff rule and the weights", () => {

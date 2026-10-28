@@ -191,7 +191,9 @@
         "extra": "Extra card",
         "board": "Board",
         "rule": "Table rule",
-        "gambler": "Gambler"
+        "gambler": "Gambler",
+        "god": "Card God",
+        "dice": "Dice"
       },
       "config": {
         "title": "Chaos numbers",

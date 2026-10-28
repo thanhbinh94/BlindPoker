@@ -341,7 +341,8 @@
       "decision": "Acts at the decision",
       "reveal": "Acts at the reveal",
       "wait": "Waits for its moment",
-      "now": "Acts as soon as it is drawn"
+      "now": "Acts as soon as it is drawn",
+      "end": "Acts when the hand ends"
     },
     "info": {
       "by": "Played by {{name}}",
@@ -552,6 +553,162 @@
       "d_level": {
         "name": "Diamond Level-Up",
         "desc": "Turns at once into 2 random cards, each of a random tier from Silver to Diamond."
+      },
+      "s_tier_up": {
+        "name": "Power Up",
+        "desc": "Waits; the next card you receive (draft or bonus) comes one tier higher; a Diamond stays a Diamond."
+      },
+      "s_no_fold": {
+        "name": "No Folding",
+        "desc": "Next hand, nobody else may fold; they can only play."
+      },
+      "s_duel": {
+        "name": "Silver Duel",
+        "desc": "At the reveal, you challenge 1 random opponent still in the hand; if your hand beats theirs, a 25% chance they pay you 2 wagers."
+      },
+      "s_hawk_eye": {
+        "name": "Hawk Eye",
+        "desc": "See 1 random hole card of 1 random opponent before you choose to play or fold, for 1 hand."
+      },
+      "s_coin_flip": {
+        "name": "Coin Toss",
+        "desc": "A coin toss: this hand you get 1 extra hole card or lose 1."
+      },
+      "s_master": {
+        "name": "Master",
+        "desc": "Waits; win your next hand and you get 3 chaos points."
+      },
+      "s_loss_points": {
+        "name": "Every Bit Counts",
+        "desc": "Each hand you lose gives you 1 chaos point, for 5 hands."
+      },
+      "s_redeal_hole": {
+        "name": "Reshuffle",
+        "desc": "At the reveal, 1 random hole card of 1 random opponent is redealt."
+      },
+      "s_neighbour_swap": {
+        "name": "Neighbour Swap",
+        "desc": "At the reveal, 1 random hole card of yours is swapped with one of the player on your left, if still in the hand."
+      },
+      "s_spoiler": {
+        "name": "Spoiler",
+        "desc": "Switches off 1 random card that 1 random opponent has in play this hand."
+      },
+      "s_kindling": {
+        "name": "Kindling",
+        "desc": "Everyone at the table gets 1 chaos point each hand, for 3 hands."
+      },
+      "s_dice": {
+        "name": "Silver Lucky Die",
+        "desc": "When the hand ends, roll 1 die: 3–4 gives 2 chaos points, 5 a Silver card, 6 a Gold card."
+      },
+      "g_aces_charge": {
+        "name": "Gold Ace Surge",
+        "desc": "Each hand adds a 5–7% chance of a pair of Aces (up to 60%); it ends when it hits, up to 20 hands."
+      },
+      "g_flip_flop": {
+        "name": "Flip-Flop",
+        "desc": "Alternates 1 extra hole card and 1 fewer, starting with the extra; in a short hand nobody can take your cards, for 4 hands."
+      },
+      "g_big_table": {
+        "name": "High Stakes",
+        "desc": "The whole table bets twice the base wager; you get 2 sets of hole cards and keep the better, for 3 hands."
+      },
+      "g_duel": {
+        "name": "Gold Duel",
+        "desc": "At the reveal, you challenge 1 random opponent still in the hand; if your hand beats theirs, a 30% chance they pay you 2 wagers, 10% that they pay 3."
+      },
+      "g_steal_points": {
+        "name": "Point Thief",
+        "desc": "Takes 5 chaos points at once from whoever has the most."
+      },
+      "g_scapegoat": {
+        "name": "Scapegoat",
+        "desc": "Waits; the next harmful card aimed at you goes to another random player instead."
+      },
+      "g_hawk_eye": {
+        "name": "Gold Hawk Eye",
+        "desc": "See all the hole cards of 1 random opponent before you choose to play or fold, for 1 hand."
+      },
+      "g_swap_hands": {
+        "name": "Reckless Trade",
+        "desc": "At the reveal, you trade all hole cards with 1 random opponent still in the hand."
+      },
+      "g_sixth_board": {
+        "name": "Sixth Card",
+        "desc": "This hand has 6 community cards for the whole table; everyone makes their best 5."
+      },
+      "g_win_tax": {
+        "name": "Winner's Tax",
+        "desc": "Whoever wins a hand (other than you) pays you 10% of their profit, for 3 hands."
+      },
+      "g_curse": {
+        "name": "Curse",
+        "desc": "Each hand, the highest hole card of 1 random opponent turns into a 2, for 3 hands."
+      },
+      "g_fate_die": {
+        "name": "Die of Fate",
+        "desc": "At the reveal, roll 1 die: 1–2 you lose 1 hole card, 3–4 nothing, 5–6 one extra card and a ×2 crit if you win."
+      },
+      "g_dice": {
+        "name": "Gold Lucky Dice",
+        "desc": "When the hand ends, roll 2 dice: 2 loses 1 wager, 3–6 gives 3 chaos points, 7–9 a Gold card, 10–11 a Diamond card, 12 a 10 × wager jackpot."
+      },
+      "d_carp": {
+        "name": "Carp to Dragon",
+        "desc": "Waits; each lost hand adds 5–7% energy, and a hit makes you the Card God for 5 hands; win before that and you become a Demigod."
+      },
+      "d_aces_charge": {
+        "name": "Ace Surge",
+        "desc": "Each hand adds a 5–7% chance of all Aces, certain at 100%; it ends when it hits, up to 20 hands."
+      },
+      "d_risky_hand": {
+        "name": "All or Nothing",
+        "desc": "One hole card fewer, but 3 sets dealt and the best kept, and nobody can take your cards; a win crits ×3, ×4 or ×5 and ends the card, up to 10 hands."
+      },
+      "d_adventurer": {
+        "name": "Adventurer",
+        "desc": "Your own wager goes ×2, ×4, ×8, ×16, ×32 hand by hand until you win; a win pays a 5 × wager jackpot and 5 chaos points, up to 5 hands."
+      },
+      "d_share_winnings": {
+        "name": "Fair Share",
+        "desc": "If you are still in the hand and lose, the winner pays you half their profit, for 2 hands."
+      },
+      "d_plunder": {
+        "name": "Plunder",
+        "desc": "You drop your hole cards and take from your opponents' the cards that make the strongest hand; they get replacements, for 2 hands."
+      },
+      "d_shuffle_holes": {
+        "name": "Fate's Shuffle",
+        "desc": "At the reveal, the hole cards of everyone still in the hand (you too) are shuffled among them."
+      },
+      "d_swap_leader": {
+        "name": "Against the Tide",
+        "desc": "At the reveal, if you are not in the lead, you trade hole cards with whoever is."
+      },
+      "d_backfire": {
+        "name": "Backfire",
+        "desc": "This hand, every harmful card of the others bounces back at whoever used it."
+      },
+      "d_deluge": {
+        "name": "The Flood",
+        "desc": "At the reveal, the hole cards of everyone still in the hand and all 5 community cards are redealt."
+      },
+      "d_eclipse": {
+        "name": "Eclipse",
+        "desc": "This hand every card of the others is switched off (not lost); only yours run."
+      },
+      "d_wild_card": {
+        "name": "Ghost Card",
+        "desc": "1 random hole card of yours becomes wild, counting as any card that makes your best hand, for 1 hand."
+      },
+      "d_time_bomb": {
+        "name": "Time Bomb",
+        "desc": "Plants a bomb on 1 random opponent; it passes to someone else each hand, and after 3 hands whoever holds it pays you 1 wager."
+      },
+      "d_dice": {
+        "name": "Diamond Lucky Dice",
+        "desc": "When the hand ends, roll 3 dice and add them up: from losing 2 wagers to a 30 × wager jackpot; three of a kind doubles the prize."
       }
     }
   },

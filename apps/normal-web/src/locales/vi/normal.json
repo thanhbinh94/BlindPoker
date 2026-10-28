@@ -191,7 +191,9 @@
         "extra": "Thêm lá",
         "board": "Lá chung",
         "rule": "Luật bàn",
-        "gambler": "Tay bạc"
+        "gambler": "Tay bạc",
+        "god": "Thần Bài",
+        "dice": "Xúc xắc"
       },
       "config": {
         "title": "Số liệu hỗn loạn",

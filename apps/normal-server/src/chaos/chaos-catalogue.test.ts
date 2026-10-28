@@ -21,13 +21,15 @@ function copyWith(edit: (cards: Record<string, unknown>[]) => unknown): string {
 }
 
 describe('data/chaos-cards.json', () => {
-  it('loads the 47 cards of spec 2026-10-26 §5, all on, and equals the core fixture the other packages test against', () => {
+  it('loads the 47 cards of spec 2026-10-26 §5, all on, and BP-41\'s 39, off until the engine runs them, and equals the core fixture the other packages test against', () => {
     const cards = loadChaosCatalogue()
-    expect(cards).toHaveLength(47)
-    expect(cards.every((c) => c.enabled)).toBe(true)
+    expect(cards).toHaveLength(47 + 39)
+    expect(cards.slice(0, 47).every((c) => c.enabled)).toBe(true)
+    expect(cards.slice(47).every((c) => !c.enabled)).toBe(true)
     expect(cards).toEqual([...CHAOS_CARDS_SPEC])
     expect(JSON.parse(readFileSync(defaultChaosCardsPath(), 'utf8'))).toEqual(JSON.parse(JSON.stringify(CHAOS_CARDS_SPEC)))
-    expect(CHAOS_TIERS.map((tier) => cards.filter((c) => c.tier === tier).length)).toEqual([18, 15, 14])
+    expect(CHAOS_TIERS.map((tier) => cards.filter((c) => c.tier === tier).length)).toEqual([18 + 12, 15 + 13, 14 + 14])
+    expect(CHAOS_TIERS.map((tier) => cards.filter((c) => c.tier === tier && c.enabled).length)).toEqual([18, 15, 14])
   })
 
   it('stops the boot on a broken copy, naming the file and the problem', () => {

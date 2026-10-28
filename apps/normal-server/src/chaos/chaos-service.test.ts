@@ -133,7 +133,7 @@ describe('rules()', () => {
       { cardId: 'g_crit', enabled: true, weight: 12, startsAt: clock + 5_000, endsAt: clock + 9_000 },
     ])
     const list = await chaos.rules()
-    expect(list).toHaveLength(47)
+    expect(list).toHaveLength(47 + 39) // BP-41's 39 are listed, off in the file
     expect(list.map((c) => c.id)).toEqual(idsOf(CHAOS_CARDS_SPEC))
     expect(list.find((c) => c.id === 's_charge')).toMatchObject({
       tier: 'silver', family: 'points', effect: 'chaosPoints', fileEnabled: true, activeNow: false,

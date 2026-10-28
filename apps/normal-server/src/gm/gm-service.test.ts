@@ -973,8 +973,10 @@ describe('GmService — chaos cards (Plan 37)', () => {
 
   it('chaos() lists the 47 cards with activeNow and the config as it stands', async () => {
     const view = await gm.chaos()
-    expect(view.cards).toHaveLength(47)
-    expect(view.cards.every((c) => c.activeNow && c.rule === null)).toBe(true)
+    // BP-41: the catalogue also lists the 39 round-three cards, off in the file until the engine runs them.
+    expect(view.cards).toHaveLength(47 + 39)
+    expect(view.cards.every((c) => c.rule === null && c.activeNow === c.fileEnabled)).toBe(true)
+    expect(view.cards.filter((c) => c.activeNow)).toHaveLength(47)
     expect(view.config).toEqual(await h.app.services.chaos.config())
   })
 

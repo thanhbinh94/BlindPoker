@@ -64,6 +64,7 @@ export const CHAOS_DEBUFF_EFFECTS: ReadonlySet<ChaosEffectKind> = new Set<ChaosE
  * - Thần tài: `mN` × wager, `cN` prize cards of tier `tN` (1 silver, 2 gold, 3 diamond), for a loss streak of
  *   N = 2 (2–3 hands), 4 (4–5) or 6 (6 and more);
  * - Cấp độ: `count` cards of tier `tier` (absent = a random tier each).
+ * BP-41's params (Cá chép, Siêu cộng dồn, the dice tables …) are listed card by card on `CHAOS_CARDS_SPEC` (fixtures.ts).
  */
 export interface ChaosCardDef {
   id: string

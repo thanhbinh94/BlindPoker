@@ -55,7 +55,9 @@ describe('chaos card copy', () => {
 
   it('names and describes every card of the catalogue in vi and en, and nothing else', () => {
     const ids = CHAOS_CARDS_SPEC.map((c) => c.id).sort()
-    expect(ids).toHaveLength(47)
+    expect(ids).toHaveLength(47 + 39) // BP-41's 39 are named before they are dealt
+    expect(Object.keys(vi.chaos.timing).sort()).toEqual(['deal', 'decision', 'end', 'now', 'reveal', 'wait'])
+    expect(Object.keys(en.chaos.timing).sort()).toEqual(Object.keys(vi.chaos.timing).sort())
     for (const [lang, res] of [['vi', vi], ['en', en]] as const) {
       expect(Object.keys(cards(res)).sort(), lang).toEqual(ids)
       for (const id of ids) {

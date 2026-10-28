@@ -113,7 +113,9 @@ describe('armBonus', () => {
 describe('needsNoPress and returnToBonus', () => {
   it('the wait and on-receipt cards need no press; every other card does', () => {
     const noPress = CHAOS_CARDS_SPEC.filter(needsNoPress).map((c) => c.effect)
-    expect([...new Set(noPress)].sort()).toEqual(['chaosPoints', 'fortune', 'levelUp', 'mirror', 'rescue', 'shield'])
+    expect([...new Set(noPress)].sort()).toEqual([
+      'carp', 'chaosPoints', 'fortune', 'fortuneDice', 'levelUp', 'master', 'mirror', 'rescue', 'scapegoat', 'shield', 'stealPoints', 'tierUp',
+    ])
   })
 
   it('BP-41 Ruling 5: an end-of-hand card (the dice) needs no press either', () => {

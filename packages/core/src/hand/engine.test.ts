@@ -187,6 +187,8 @@ describe('simulation invariants', () => {
     expect(fnv(parts.join('\n'))).toBe(GOLDEN_NON_CHAOS)
   })
   it('500 seeded chaos hands, planned from the spec catalogue, keep every point (Σ stacks + fee + carry-over)', () => {
+    // The cards a table can deal today: BP-41's 39 ship off (A-churn) until the engine runs them.
+    const DEALT = CHAOS_CARDS_SPEC.filter((c) => c.enabled)
     const rng = seededRng(3737)
     let uid = 0
     const nextUid = () => ++uid
@@ -201,7 +203,7 @@ describe('simulation invariants', () => {
         let chaos: ChaosSeat = { ...EMPTY_CHAOS_SEAT, frozenNextHand: rng.int(10) === 0, blindfoldedNextHand: rng.int(8) === 0 }
         const held = 1 + rng.int(5)
         for (let k = 0; k < held; k++) {
-          const def = CHAOS_CARDS_SPEC[rng.int(CHAOS_CARDS_SPEC.length)]!
+          const def = DEALT[rng.int(DEALT.length)]!
           chaos = receiveCard(chaos, def, nextUid, CHAOS_CARDS_SPEC, rules.decisionMode, rng).seat
         }
         return { seat, isBot: false, chaos }
