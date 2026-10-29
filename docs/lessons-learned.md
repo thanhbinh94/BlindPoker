@@ -1548,6 +1548,53 @@ See the CHANGELOG's "Still open" and `docs/known-limitations.md` → "Poker hỗ
 (H6) waits for the user's statistics; real-phone checks; small tap targets; nine seats on a phone on its side; the 1024 px desktop
 card over part of the toast column; leaving mid-hand then creating at once; the new English copy for the user's review.
 
+## Plan 41 — Poker hỗn loạn, round three (merged `MERGE`, 2026-10-29)
+
+Spec `docs/superpowers/specs/2026-10-28-chaos-round-three-design.md` (the user's decisions G1–G12: the money fence opened,
+Cá chép hóa rồng with the Thần Bài / Bán Thần, 5-hand reigns, titles 300.000 / 150.000 / 500.000, dice of fortune, tiers
+50/35/15, no titles against a bot Thần); plan `docs/superpowers/plans/2026-10-29-plan41-chaos-round-three.md` with pre-flight
+amendments A1–A16, A-ops, A-churn; branch `feature/BP-41-chaos-round-three`. Eleven tasks run as fifteen (3, 5 and 7 split into
+3a/3b, 5a/5b/5c, 7a/7b), a three-area final review (core, server, UI + docs), one fix wave of 42 items. The user: "viết spec rồi
+lập plan và triển khai/deploy luôn", then "xong thì báo tôi".
+
+### Rulings
+
+- The CHANGELOG's Plan 41 section lists rulings 9–28 and the nine deviations; the ones that change what a player sees:
+  - Ruling 14: a no-fold seat whose player leaves (or whose reconnect lapses) during the decision plays, not forfeits — G11
+    wants an opponent for the Thần every hand. Costs if wrong: a leaver loses a stake they did not choose.
+  - Ruling 15: duels and bombs pay the base fixed wager, not the multiplied stake. Costs if wrong: one multiplication.
+  - Ruling 19: "at least two humans" counts the humans dealt into the hand, so an idle second account sitting out cannot farm titles.
+  - Rulings 20b, 21, 22: nothing on screen tells a result before the table has watched it — the dethrone herald waits out the
+    reveal hold, the 6-6-6 band shows only after the dice land and leaves with them at 3 s, the roll's toast holds its faces.
+  - Ruling 24: Mồi lửa pays every seated player, sitting out or not (spec "mọi người ngồi bàn").
+  - Ruling 25: a reigning Thần's Siêu cộng dồn is frozen, so a former Thần does not come back with +25–35 % Aces.
+  - Ruling 27: the first-paint budget rises from 170 to 180 KB gzip.
+- Process: Ruling 8 — review task N from a diff file while task N+1's implementer writes; the fix round for N runs after N+1.
+  No fix round needed a merge by hand.
+
+### Lessons
+
+- **Spoilers are timing bugs, and only a frame-by-frame check sees them.** Three separate moments (the dethrone herald, the 6-6-6
+  band, the roll's toast) each told the result early. Every task review passed them, because each looked right at rest; the
+  UI final reviewer found them by laying the timelines side by side, and the ops case then caught a one-frame toast spoiler that
+  the unit test's fake timers could not. Next time, give the plan one table of "what is on screen when" from the hand's end to the
+  next deal, and test against it.
+- **A seeded fuzz finds what pinned seeds hide.** The core reviewer's throwaway 18,000-hand fuzz (table carried, sitting-out seats,
+  leavers) found the three rule edges the per-task tests missed (Mồi lửa skipping sitting-out seats, Siêu cộng dồn growing during a
+  reign, Kẻ phá đám handed to the Thần). It is now a small seeded unit test; plans that add cross-card rules should start with one.
+- **A stale `dist` hides a budget breach.** The first-paint footprint test read an old build for several tasks; the branch had
+  passed 170 KB before anyone saw it. Rebuild before any test that reads `dist`, and say so in the brief.
+- **Test-only hooks need a shipping guard, not a promise.** The `E2E_CHAOS_CARDS` overlay is excluded from the build, but only the
+  `build.test.ts` assertion over `dist` makes that permanent.
+- **"Who is in the hand" has three answers** (seated, dealt in, not folded) and the spec's "ngồi bàn" means the first. Name which
+  one each rule uses in the plan; G12 and Mồi lửa each picked the wrong one once.
+
+### Residuals
+
+See the CHANGELOG's "Still open" and `docs/known-limitations.md` → round three: card balance waits for the user's statistics; the
+Thần outfits are a later phase; real-phone checks (glow, shake, dice, glyphs on Safari and Firefox); F-13c's unreproduced 5 px scroll;
+a dice sink that fails twice; the LAN host lacks migrations 0004–0008; the new English copy for the user's review.
+
 ## 5. Open items
 
 The single list is `docs/known-limitations.md`. As of this writing, the items a next session is most likely to meet:
