@@ -52,6 +52,13 @@ describe('ChaosDice (BP-41 §5)', () => {
     expect(panel()).toHaveTextContent('Bộ ba! · Nổ hũ 60.000 · 2 thẻ Kim cương')
   })
 
+  it('lands on time: the last tumble step never runs past the landing (the toast tells the faces just after it)', () => {
+    draw([roll()])
+    act(() => void vi.advanceTimersByTime(DICE_ROLL_MS + 17))
+    expect(screen.getByRole('img', { name: 'Xúc xắc: 6-6-6' })).toBeInTheDocument()
+    expect(document.querySelectorAll(`.${s.dieTumble}`)).toHaveLength(0)
+  })
+
   it('goes 3 s after it came, and a tap puts it away sooner', () => {
     draw([roll()])
     act(() => void vi.advanceTimersByTime(DICE_MS - 100))

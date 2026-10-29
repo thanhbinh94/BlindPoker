@@ -57,10 +57,10 @@ export function ChaosDice({ rolls, lang }: ChaosDiceProps) {
   const now = Date.now()
   const live = rolls.filter((r) => r.id > dismissed && now - r.at < DICE_MS)
   const tumbling = !reduce && live.some((r) => now - r.at < DICE_ROLL_MS)
-  // While a die tumbles, a new face every step; then one wake when the dice land and one when the panel goes.
-  const next = tumbling
-    ? now + TUMBLE_STEP_MS
-    : Math.min(...live.flatMap((r) => [r.at + DICE_ROLL_MS, r.at + DICE_MS]).filter((at) => at > now))
+  // While a die tumbles, a new face every step — but never past the moment one lands, so the panel lands on time (the toast
+  // waits for it, Ruling 22); then one wake when the dice land and one when the panel goes.
+  const moments = live.flatMap((r) => [r.at + DICE_ROLL_MS, r.at + DICE_MS]).filter((at) => at > now)
+  const next = tumbling ? Math.min(now + TUMBLE_STEP_MS, ...moments) : Math.min(...moments)
   useEffect(() => {
     if (!Number.isFinite(next)) return
     const timer = setTimeout(tick, Math.max(0, next - Date.now()) + 16)

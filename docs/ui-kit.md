@@ -642,7 +642,8 @@ var(--z-toast)`, one column from `clamp(40px, 16vh, 150px)` down, `overflow: hid
 other. They cover the result or the draft no longer than their 3 s. The roll's line also reaches the toasts, as a toast of its own,
 or under "+N thẻ khác" when the result is already open (BP-39's rule). It arrives with the roll but keeps its faces and result back
 until the dice land: `AppliedChaosView.rolledAt` is the arrival, and `chaosDetail` says "Đang gieo…" until `rolledAt + DICE_ROLL_MS`
-(Ruling 22), so neither the toast nor the 6-6-6 band tells the roll while the panel's dice still tumble. The herald's live region is a
+and `TOAST_AFTER_LANDING_MS` (80 ms, so the line never beats the panel's own landing; the panel's last tumble step stops at the
+landing) (Ruling 22), so neither the toast nor the 6-6-6 band tells the roll while the panel's dice still tumble. The herald's live region is a
 real box (`.heraldSlot`, not `display: contents`). The Thần's and the dice's colours are tokens (`--chaos-god-*`, `--chaos-die-*` in
 `tokens.css`).
 

@@ -4,7 +4,7 @@ import type { ChaosGodCurse } from '@bp/core'
 import type { AppliedChaosView } from '../client/types.js'
 import type { Language } from '../i18n/index.js'
 import { cx } from '../primitives/cx.js'
-import { DICE_ROLL_MS, chaosDetail } from './chaos-detail.js'
+import { DICE_ROLL_MS, TOAST_AFTER_LANDING_MS, chaosDetail } from './chaos-detail.js'
 import { ChaosCardInfo, tierOfCardId } from './ChaosCardInfo.js'
 import { useMediaQuery } from './useMediaQuery.js'
 import s from './table.module.css'
@@ -123,7 +123,7 @@ export function ChaosToasts({ applied, handId, restored, nameOf, layout, reverse
   const detailOf = (item: AppliedChaosView): string | null => chaosDetail(item, t, language, nameOf, curse, now)
   // A dice roll's line tells its faces once the dice land (Ruling 22): one wake at the next landing still to come.
   const [, tick] = useReducer((n: number) => n + 1, 0)
-  const landing = Math.min(...applied.flatMap((x) => (x.rolledAt === undefined ? [] : [x.rolledAt + DICE_ROLL_MS])).filter((at) => at > now))
+  const landing = Math.min(...applied.flatMap((x) => (x.rolledAt === undefined ? [] : [x.rolledAt + DICE_ROLL_MS + TOAST_AFTER_LANDING_MS])).filter((at) => at > now))
   useEffect(() => {
     if (!Number.isFinite(landing)) return
     const timer = setTimeout(tick, Math.max(0, landing - Date.now()) + 16)

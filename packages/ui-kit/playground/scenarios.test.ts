@@ -189,6 +189,13 @@ describe('the chaos worst-case pages', () => {
     expect(screen.getByText(/Nổ hũ \+120\.000/)).toBeInTheDocument()
   })
 
+  it('#worst/chaosSlain/6/vi: the fall of the Thần — its banner and its own toast line beside the result', () => {
+    draw('#worst/chaosSlain/6/vi')
+    expect(screen.getByText(/đã đánh bại Thần Bài!$/)).toBeInTheDocument()
+    expect(document.querySelector('[data-chaos-toast][data-reign="godslain"]')).toHaveTextContent(/hạ Thần Bài Bot 1$/)
+    expect(screen.getByRole('heading', { name: 'Người thắng' })).toBeInTheDocument()
+  })
+
   it('#worst/chaosSix/6/vi: six board cards, my five hole cards with the wild one marked, one seat down to one card', () => {
     draw('#worst/chaosSix/6/vi')
     expect(screen.getByRole('group', { name: 'Bài chung' }).querySelectorAll('[data-card]')).toHaveLength(6)

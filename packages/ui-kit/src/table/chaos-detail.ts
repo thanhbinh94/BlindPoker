@@ -8,6 +8,12 @@ export const DICE_ROLL_MS = 1_500
 /** How long a roll stays up in all, from its arrival: the tumble, then the result. `ChaosDice` re-exports it. */
 export const DICE_MS = 3_000
 
+/**
+ * How long after the dice land a roll's toast line tells the faces: a few frames, so the line never shows them while the panel,
+ * on its own timer, is still drawing its last tumble (ops F-14d caught one such frame on the S25).
+ */
+export const TOAST_AFTER_LANDING_MS = 80
+
 /** How dice faces read in a line: "6-6-6". */
 export const diceText = (dice: readonly number[]): string => dice.join('-')
 
@@ -32,7 +38,8 @@ export function rollText(result: ChaosDiceResult, t: TFunction, lang: Language):
  * stake a card multiplied, the die and what it did, the hole cards added or taken, the wild card, the card switched off, a reign,
  * the Thần's curse, a dice roll and a Trộm điểm. `curse` is the reigning Thần's (`ChaosTableView.god.curse`), for its curse line.
  *
- * A dice roll's line keeps its faces and result back until the dice have landed (`rolledAt + DICE_ROLL_MS`, Ruling 22): until
+ * A dice roll's line keeps its faces and result back until the dice have landed (`rolledAt + DICE_ROLL_MS`, then
+ * `TOAST_AFTER_LANDING_MS`; Ruling 22): until
  * then it says "Đang gieo…", as the panel does, so the toast never tells the roll the table is still watching. `now` is the
  * client clock (`Date.now()` by default); a roll line rebuilt without `rolledAt` tells at once.
  */
@@ -46,7 +53,7 @@ export function chaosDetail(
 ): string | null {
   if (item.reign !== undefined) return t(`chaos.detail.${item.reign}`)
   if (item.roll !== undefined) {
-    if (item.rolledAt !== undefined && now < item.rolledAt + DICE_ROLL_MS) return t('chaos.dice.rolling')
+    if (item.rolledAt !== undefined && now < item.rolledAt + DICE_ROLL_MS + TOAST_AFTER_LANDING_MS) return t('chaos.dice.rolling')
     return `${t('chaos.detail.dice', { dice: diceText(item.dice ?? []) })} · ${rollText(item.roll, t, lang)}`
   }
   if (item.steal !== undefined) {
