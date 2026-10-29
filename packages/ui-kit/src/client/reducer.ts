@@ -1,4 +1,4 @@
-import type { ChaosTableView, GameEvent, HandView, HeldCardView, LegalActions, RoomEvent, RoomView, ServerMessage } from '@bp/core'
+import type { ChaosDiceResult, ChaosTableView, GameEvent, HandView, HeldCardView, LegalActions, RoomEvent, RoomView, ServerMessage } from '@bp/core'
 import { initialChaos, initialClientState } from './types.js'
 import type { AppliedChaosView, ClientAction, ClientChaos, ClientDiceRoll, ClientHand, ClientHandResult, ClientHerald, ClientSeat, ClientState } from './types.js'
 
@@ -482,17 +482,28 @@ function applyChaosRoomEvent(chaos: ClientChaos, event: RoomEvent, ctx: ChaosRoo
     }
     case 'CHAOS_CREDIT': {
       const { type: _type, stack: _stack, ...credit } = event
-      // BP-41: a 6-6-6 jackpot cut by the daily cap — the seat's dice herald (it comes just before, and shows only once the
-      // dice land) says what was paid, or no amount at all when the cap left nothing (Task 9 M3).
-      const lastDice = event.reason === 'chaos_jackpot' && event.capped
-        ? chaos.heralds.reduce((last, h, i) => (h.kind === 'dice' && h.seat === event.seat ? i : last), -1)
-        : -1
-      const heralds = lastDice < 0 ? chaos.heralds : chaos.heralds.map((h, i) => {
-        if (i !== lastDice) return h
+      // BP-41: a dice jackpot cut by the daily cap — the roll that won it (it comes just before, and shows only once the dice
+      // land) says what was paid, everywhere it is told: its herald (no amount at all when the cap left nothing), the dice panel
+      // and its toast line (Task 9 M3, follow-up R2). Matched by the card that paid (`cardId`): a Mạo hiểm gia's is not a roll.
+      if (event.reason !== 'chaos_jackpot' || !event.capped || event.cardId === undefined) return { ...chaos, credits: [...chaos.credits, credit] }
+      const lastIndex = <T,>(list: readonly T[], hit: (x: T) => boolean): number => list.reduce((last, x, i) => (hit(x) ? i : last), -1)
+      const rollAt = lastIndex(chaos.rolls, (r) => r.seat === event.seat && r.cardId === event.cardId && r.result.jackpot !== undefined)
+      if (rollAt < 0) return { ...chaos, credits: [...chaos.credits, credit] }
+      const capResult = (result: ChaosDiceResult): ChaosDiceResult => {
+        const { jackpot: _was, ...rest } = result
+        return event.amount > 0 ? { ...rest, jackpot: event.amount } : rest
+      }
+      const roll = chaos.rolls[rollAt]!
+      const rolls = chaos.rolls.map((r, i) => (i === rollAt ? { ...r, result: capResult(r.result) } : r))
+      const heraldAt = lastIndex(chaos.heralds, (h) => h.kind === 'dice' && h.seat === event.seat)
+      const heralds = chaos.heralds.map((h, i) => {
+        if (i !== heraldAt) return h
         const { amount: _was, ...rest } = h
         return event.amount > 0 ? { ...rest, amount: event.amount } : rest
       })
-      return { ...chaos, credits: [...chaos.credits, credit], heralds }
+      const lineAt = lastIndex(chaos.applied, (a) => a.seat === event.seat && a.cardId === roll.cardId && a.roll !== undefined)
+      const applied = chaos.applied.map((a, i) => (i === lineAt && a.roll !== undefined ? { ...a, roll: capResult(a.roll) } : a))
+      return { ...chaos, credits: [...chaos.credits, credit], heralds, rolls, applied }
     }
     case 'CHAOS_AWARDED':
       return { ...chaos, awarded: [...chaos.awarded, { seat: event.seat, cardIds: event.cardIds }] }

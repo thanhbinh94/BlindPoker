@@ -131,9 +131,10 @@ export type RoomEvent =
   /**
    * New points a card paid onto the seat's stack (`amount` as credited; `capped` when the daily cap cut it). `stack` is
    * the seat's stack after the credit, absolute, so a client never has to add it up (a seat at 0 rescued between hands).
-   * `multiplier`: Bạo kích only, ×2…×5 (BP-41).
+   * `multiplier`: Bạo kích only, ×2…×5 (BP-41). `cardId`: a jackpot only (BP-41), the card that paid it, so a client can say a
+   * capped amount on the roll that won it (a Xúc xắc vận may) and not on a Mạo hiểm gia's.
    */
-  | { type: 'CHAOS_CREDIT'; seat: number; amount: number; stack: number; reason: ChaosCreditReason; capped: boolean; multiplier?: ChaosCritMultiplier }
+  | { type: 'CHAOS_CREDIT'; seat: number; amount: number; stack: number; reason: ChaosCreditReason; capped: boolean; multiplier?: ChaosCritMultiplier; cardId?: string }
   /**
    * BP-41 §4.5 (G7): the table-wide banner, to everyone in the room — `god`: the seat became the Thần Bài; `demigod`: a
    * Bán Thần; `godslain`: the seat beat the Thần (one event per winner). Sent at the deal (god, demigod) or at the

@@ -18,14 +18,18 @@ export const CATEGORY_ORDER = ['login', 'holdem', 'blind', 'social', 'chaos']
 
 /** A reward is points, an item, or both (reputation, which an achievement may also name, is its own badge). Anything with neither is a definition bug, and prints nothing. */
 export function rewardText(row: AchievementProgressDto, lang: Language, t: TFunction): string {
-  return rewardParts(row, lang, t).join(REWARD_SEP)
+  return rewardParts(row, lang, t).map((part) => part.text).join(REWARD_SEP)
 }
 
-/** The reward's parts, points then item: the badge keeps each whole, so a line breaks between them, never inside a name. */
-export function rewardParts(row: AchievementProgressDto, lang: Language, t: TFunction): string[] {
-  const parts: string[] = []
-  if (row.reward.points !== undefined) parts.push(`${formatPoints(row.reward.points, lang)} ${t('common:units.pointsShort')}`)
-  if (row.reward.itemId !== undefined) parts.push(itemName(row.reward.itemId, t))
+/**
+ * The reward's parts, points then item. `whole`: kept on one line — the points, and a title's name ("Hóa Thần", "Kẻ Sát Thần").
+ * A wardrobe item's longer name ("Áo măng tô thám tử") may wrap between its words, so a phone's badge column stays narrow
+ * (fix-wave follow-up R5). A line never breaks inside a title's name.
+ */
+export function rewardParts(row: AchievementProgressDto, lang: Language, t: TFunction): { text: string; whole: boolean }[] {
+  const parts: { text: string; whole: boolean }[] = []
+  if (row.reward.points !== undefined) parts.push({ text: `${formatPoints(row.reward.points, lang)} ${t('common:units.pointsShort')}`, whole: true })
+  if (row.reward.itemId !== undefined) parts.push({ text: itemName(row.reward.itemId, t), whole: row.reward.itemId.startsWith('title_') })
   return parts
 }
 
@@ -156,9 +160,9 @@ export function AchievementsScreen({ api, lang }: AchievementsScreenProps) {
                         <Badge tone={unlocked ? 'gold' : 'muted'} className={s.achBadge}>
                           <span className="visually-hidden">{t('achievements.ui.reward')}</span>
                           {parts.map((part, i) => (
-                            <Fragment key={part}>
+                            <Fragment key={part.text}>
                               {i === 0 ? null : REWARD_SEP}
-                              <span className={s.achPart}>{part}</span>
+                              <span className={part.whole ? s.achPart : undefined}>{part.text}</span>
                             </Fragment>
                           ))}
                         </Badge>

@@ -380,6 +380,45 @@ describe('ChaosToasts, BP-41 lines', () => {
     expect(line(applied(0, 'd_carp', { effect: 'carp', targets: [1, 3], reign: 'godslain' }))).toBe('Bảo, Dũng hạ Thần Bài Ann')
   })
 
+  it('under reduced motion a roll’s line tells its faces at once, as the panel does (follow-up R3)', () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: (query: string) => ({ matches: query.includes('prefers-reduced-motion'), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }),
+    })
+    try {
+      const roll = applied(1, 'd_dice', { effect: 'fortuneDice', dice: [6, 6, 6], roll: { jackpot: 60_000, triple: true, herald: true }, rolledAt: Date.now() })
+      expect(line(roll)).toBe('Bảo dùng Xúc xắc vận may kim cương · Xúc xắc: 6-6-6 · Bộ ba! · Nổ hũ 60.000')
+    } finally {
+      Reflect.deleteProperty(window, 'matchMedia')
+    }
+  })
+
+  it('a capped jackpot reads what was paid on the line, as the reducer rewrote it (follow-up R2)', () => {
+    const roll = applied(1, 'd_dice', { effect: 'fortuneDice', dice: [6, 6, 6], roll: { jackpot: 25_000, triple: true, herald: true } })
+    expect(line(roll)).toContain('Nổ hũ 25.000')
+  })
+
+  it('while the reveal hold runs, the settlement’s lines wait and a line already up tells no payment; both come when it ends (Ruling 28)', () => {
+    const duel = applied(0, 'g_duel', { effect: 'duel', targets: [2], wagers: 2 })
+    // The duel was told before the hold; the hand then completes with a showdown that turns cards over.
+    const view = mount({ applied: [duel], layout: 'desktop', held: false })
+    expect(texts()).toEqual(['Ann dùng Thách đấu vàng → Chi · Chi trả 2 mức cược'])
+    const paid = { ...duel, transfers: [{ from: 2, to: 0, amount: 2000 }], amount: 2000 }
+    const slain = applied(1, 'd_carp', { effect: 'carp', targets: [0], reign: 'godslain' })
+    view.again({ applied: [paid, slain], layout: 'desktop', held: true })
+    expect(texts()).toEqual(['Ann dùng Thách đấu vàng → Chi · Chi trả 2 mức cược'])
+    advance(1_200)
+    expect(texts()).toHaveLength(1)
+    expect(texts()[0]).not.toContain('2.000')
+    // The hold ends with the result: the payment and the fall of the Thần show, the new line for its own 4 s.
+    view.again({ applied: [paid, slain], layout: 'desktop', held: false, resultOpen: true })
+    expect(texts()).toEqual(['Ann dùng Thách đấu vàng → Chi · Chi → Ann: 2.000', 'Ann hạ Thần Bài Bảo'])
+    advance(TOAST_MS - 100)
+    expect(texts()).toContain('Ann hạ Thần Bài Bảo')
+    advance(200)
+    expect(texts()).not.toContain('Ann hạ Thần Bài Bảo')
+  })
+
   it('a plain card says nothing more', () => {
     expect(line(applied(0, 's_shield'))).toBe('Ann dùng Khiên gỗ')
   })

@@ -962,12 +962,22 @@ describe('Poker hỗn loạn', () => {
       s = at(s, 14, { type: 'CHAOS_DICE', seat: 2, cardId: 'd_dice', dice: [6, 6, 6], result: jackpot, stack: 20_000 }, 800)
       expect(s.chaos.rolls.map((r) => r.id)).toEqual([1, 2])
       expect(s.chaos.heralds).toEqual([{ id: 3, kind: 'dice', seat: 2, name: 'P2', dice: [6, 6, 6], amount: 60_000, at: 800 }])
-      // The daily cap cut the jackpot: the herald says what was paid (Task 9 M3)…
-      const capped = room(s, 15, { type: 'CHAOS_CREDIT', seat: 2, amount: 25_000, stack: 45_000, reason: 'chaos_jackpot', capped: true })
+      // The daily cap cut the jackpot: the herald, the dice panel and the toast line all say what was paid (Task 9 M3, R2)…
+      const credit = { type: 'CHAOS_CREDIT' as const, seat: 2, stack: 45_000, reason: 'chaos_jackpot' as const, cardId: 'd_dice' }
+      const capped = room(s, 15, { ...credit, amount: 25_000, capped: true })
       expect(capped.chaos.heralds).toEqual([{ id: 3, kind: 'dice', seat: 2, name: 'P2', dice: [6, 6, 6], amount: 25_000, at: 800 }])
-      // …no amount when it left nothing, and an uncapped credit leaves the herald as it is.
-      expect(room(s, 15, { type: 'CHAOS_CREDIT', seat: 2, amount: 0, stack: 20_000, reason: 'chaos_jackpot', capped: true }).chaos.heralds[0]).not.toHaveProperty('amount')
-      expect(room(s, 15, { type: 'CHAOS_CREDIT', seat: 2, amount: 60_000, stack: 80_000, reason: 'chaos_jackpot', capped: false }).chaos.heralds).toEqual(s.chaos.heralds)
+      expect(capped.chaos.rolls.at(-1)!.result.jackpot).toBe(25_000)
+      expect(capped.chaos.applied.at(-1)!.roll!.jackpot).toBe(25_000)
+      // …the other seat's roll untouched; no amount when the cap left nothing; an uncapped credit, or a Mạo hiểm gia's
+      // (another card), leaves the roll as it is.
+      expect(capped.chaos.rolls[0]).toEqual(s.chaos.rolls[0])
+      const nothing = room(s, 15, { ...credit, amount: 0, capped: true })
+      expect(nothing.chaos.heralds[0]).not.toHaveProperty('amount')
+      expect(nothing.chaos.rolls.at(-1)!.result).not.toHaveProperty('jackpot')
+      expect(room(s, 15, { ...credit, amount: 60_000, capped: false }).chaos.heralds).toEqual(s.chaos.heralds)
+      const adventurer = room(s, 15, { ...credit, amount: 1_000, capped: true, cardId: 'd_adventurer' })
+      expect(adventurer.chaos.rolls).toEqual(s.chaos.rolls)
+      expect(adventurer.chaos.heralds).toEqual(s.chaos.heralds)
     })
 
     it('a Trộm điểm received is a line in the toasts with the points it moved', () => {

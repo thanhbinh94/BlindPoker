@@ -1141,20 +1141,25 @@
 
 /* A reward longer than the column ("300.000 điểm · Hóa Thần") wraps inside its pill instead of running into the bar. */
 .achReward .achBadge {
+  /* Inline flow, not the kit's inline-flex: as flex items the parts could never wrap between them (follow-up R5). */
+  display: inline-block;
   max-width: 100%;
   border-radius: var(--radius-md);
   text-align: right;
   white-space: normal;
 }
 
-/* …between its parts only: "300.000 điểm" and "Hóa Thần" each stay whole (BP-41 Task 10 review). */
+/* …and never inside the points or a title's name: "300.000 điểm" and "Hóa Thần" each stay whole (BP-41 Task 10 review); a
+   wardrobe item's name may wrap between its words (follow-up R5). */
 .achPart {
   white-space: nowrap;
 }
 
 @media (max-width: 640px) {
+  /* The badge column takes what its reward needs, up to half the row: a long reward wraps instead of squeezing the title
+     to a word a line (BP-41 follow-up R5: "3.000 điểm · Huy hiệu đồng" left the title 34 px at 320 px). */
   .achievement {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) fit-content(50%);
     grid-template-areas:
       'main reward'
       'progress progress';

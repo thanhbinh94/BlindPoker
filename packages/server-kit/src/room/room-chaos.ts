@@ -593,7 +593,11 @@ export class ChaosTable {
   }
 
   private applyCredit(p: RoomPlayer, credit: ChaosCredit, paid: { credited: number; capped: boolean }): void {
-    const extra = credit.multiplier === undefined ? {} : { multiplier: credit.multiplier }
+    const extra = {
+      ...(credit.multiplier === undefined ? {} : { multiplier: credit.multiplier }),
+      // BP-41: a jackpot names its card, so the table can tell a capped dice jackpot on its roll.
+      ...(credit.reason === 'chaos_jackpot' ? { cardId: credit.cardId } : {}),
+    }
     p.stack += paid.credited
     this.host.broadcast({ type: 'CHAOS_CREDIT', seat: p.seat ?? credit.seat, amount: paid.credited, stack: p.stack, reason: credit.reason, capped: paid.capped, ...extra })
   }

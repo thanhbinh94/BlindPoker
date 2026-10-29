@@ -391,7 +391,8 @@ describe('BP-41 room: the dice', () => {
     const theirs = dice.find((e) => e.seat === 1)!
     expect(theirs).toMatchObject({ cardId: 's_dice', result: { jackpot: 2_000 }, stack: after('a') })
     const credit = ofEvent(h, 'h', 'CHAOS_CREDIT').find((e) => e.reason === 'chaos_jackpot')!
-    expect(credit).toMatchObject({ seat: 1, amount: 2_000, stack: after('a') + 2_000, capped: false })
+    // It names its card, so a client can say a capped amount on the roll that won it (follow-up R2).
+    expect(credit).toMatchObject({ seat: 1, amount: 2_000, stack: after('a') + 2_000, capped: false, cardId: 's_dice' })
     expect(h.repos.entries.filter((e) => e.entry.reason === 'chaos_jackpot').map((e) => [e.entry.playerId, e.entry.delta])).toEqual([['a', 2_000]])
     expect(lastIndex(h, 'h', isRoom('CHAOS_DICE'))).toBeLessThan(lastIndex(h, 'h', isRoom('CHAOS_CREDIT')))
     expect(lastIndex(h, 'h', isRoom('CHAOS_CREDIT'))).toBeLessThan(lastIndex(h, 'h', isRoom('CHAOS_STATE')))
