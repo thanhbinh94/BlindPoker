@@ -150,6 +150,54 @@ describe('ActionBar', () => {
     )
     expect(screen.getByRole('button', { name: 'Chơi 5.000' })).toBeInTheDocument()
   })
+  describe('BP-41 chaos: a multiplied stake, a hand nobody may fold', () => {
+    const blindRoom = { config: { mode: 'blind', blind: { fixedWager: 1000, decisionMode: 'playOrFold' } } } as unknown as RoomView
+    const me: ClientSeat = { seat: 1, playerId: 'me', displayName: 'Me', isBot: false, stack: 10_000, betThisStreet: 0, folded: false, allIn: false, cardCount: 2, holeCards: null, hasDecided: false, decision: null, lastAction: null, timedOut: false }
+    const show = (legal: LegalActions, stack = 10_000) => render(
+      <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+        <ActionBar hand={hand(legal, { mode: 'blind', phase: 'DECISION', seats: [{ ...me, stack }] })} room={blindRoom} onAct={() => {}} lang="vi" />
+      </I18nextProvider>,
+    )
+    const legal = (kinds: LegalActions['kinds'], callAmount: number): LegalActions => ({ seat: 1, kinds, callAmount, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 })
+
+    it('"Chơi" names the multiplied stake (Mạo hiểm gia ×4)', () => {
+      show(legal(['play', 'fold'], 4000))
+      expect(screen.getByRole('button', { name: 'Chơi 4.000' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Bỏ bài' })).toBeInTheDocument()
+    })
+
+    it('a multiplied stake that takes the whole stack is "Tất tay"', () => {
+      show(legal(['play', 'fold'], 3000), 3000)
+      expect(screen.getByRole('button', { name: 'Tất tay 3.000' })).toBeInTheDocument()
+    })
+
+    it('no "Bỏ bài" for a seat that may not fold, and the row says why in its place', () => {
+      show(legal(['play'], 1000))
+      expect(screen.queryByRole('button', { name: 'Bỏ bài' })).toBeNull()
+      expect(screen.getByRole('button', { name: 'Chơi 1.000' })).toBeInTheDocument()
+      expect(screen.getByText('Không được bỏ bài ván này')).toHaveAttribute('data-no-fold')
+    })
+
+    it('a seat that may fold is told nothing of it', () => {
+      show(legal(['play', 'fold'], 1000))
+      expect(screen.queryByText('Không được bỏ bài ván này')).toBeNull()
+    })
+
+    it('"Tất tay" when a multiplied stake takes a stack that is exactly the fixed wager (BP-41 → Task 9)', () => {
+      // Asked 2.000 (×2), the stack has 1.000 left: the cap lands on the fixed wager, and it is still the whole stack.
+      render(
+        <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+          <ActionBar hand={hand(legal(['play', 'fold'], 1000), { mode: 'blind', phase: 'DECISION', seats: [{ ...me, stack: 1000 }], myCall: 2000 })} room={blindRoom} onAct={() => {}} lang="vi" />
+        </I18nextProvider>,
+      )
+      expect(screen.getByRole('button', { name: 'Tất tay 1.000' })).toBeInTheDocument()
+    })
+
+    it('a plain stake exactly the stack stays "Chơi", as it always was', () => {
+      show(legal(['play', 'fold'], 1000), 1000)
+      expect(screen.getByRole('button', { name: 'Chơi 1.000' })).toBeInTheDocument()
+    })
+  })
 })
 
 // Plan 26 (B4): a phone on its side keeps its height for the table. The betting buttons sit in a bottom-right dock and

@@ -1,10 +1,16 @@
-import { Fragment, useEffect, useId, useRef, useState, type MouseEvent, type ReactNode } from 'react'
+import { Fragment, useEffect, useId, useReducer, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { ChaosGodCurse } from '@bp/core'
 import type { AppliedChaosView } from '../client/types.js'
+import type { Language } from '../i18n/index.js'
 import { cx } from '../primitives/cx.js'
+import { DICE_ROLL_MS, TOAST_AFTER_LANDING_MS, chaosDetail } from './chaos-detail.js'
 import { ChaosCardInfo, tierOfCardId } from './ChaosCardInfo.js'
 import { useMediaQuery } from './useMediaQuery.js'
 import s from './table.module.css'
+
+/** Between a card's line and what it did (BP-41). */
+const DETAIL_SEP = ' · '
 
 /** How long a toast stays up, counted from its arrival (spec 2026-10-27 §3.1): every toast of one batch leaves together. */
 export const TOAST_MS = 4_000
@@ -40,6 +46,15 @@ export interface ChaosToastsProps {
   resultOpen: boolean
   /** A table of seven seats or more: upright, the band holds `CROWDED_STACK_CAP` toasts. */
   crowded?: boolean
+  /** The language the points are written in (BP-41's lines say amounts). Defaults to the translation's own. */
+  lang?: Language
+  /** The reigning Thần's curse (`ChaosTableView.god.curse`), for the line its curse tells. */
+  curse?: ChaosGodCurse | null
+  /**
+   * The result is held back while the showdown turns an opponent's cards over (`useRevealHold`): lines that arrive now wait
+   * for its end, and a line already up shows no payment yet — they tell who won (Ruling 28, as Ruling 21 for the band).
+   */
+  held?: boolean
 }
 
 interface Toast {
@@ -86,6 +101,13 @@ function arrive(band: Band, count: number, slots: number, resultWasOpen: boolean
   }
 }
 
+/** A roll's line as if its dice had landed: no arrival to wait from. */
+function withoutRolledAt(item: AppliedChaosView): AppliedChaosView {
+  if (item.rolledAt === undefined) return item
+  const { rolledAt: _at, ...rest } = item
+  return rest
+}
+
 /** A template's `{{slot}}` markers replaced by nodes: the card's name is a button, so the line cannot be one string. */
 function fill(template: string, slots: Record<string, ReactNode>): ReactNode[] {
   return template.split(/(\{\{\w+\}\})/).map((part, i) => {
@@ -105,9 +127,32 @@ function fill(template: string, slots: Record<string, ReactNode>): ReactNode[] {
  * A live region, so a screen reader hears each toast. A hand rebuilt from a snapshot replays nothing. Under
  * `prefers-reduced-motion` a toast shows in place, with no slide.
  */
-export function ChaosToasts({ applied, handId, restored, nameOf, layout, reverseNote, resultOpen, crowded = false }: ChaosToastsProps) {
-  const { t } = useTranslation()
+export function ChaosToasts({ applied, handId, restored, nameOf, layout, reverseNote, resultOpen, crowded = false, lang, curse = null, held = false }: ChaosToastsProps) {
+  const { t, i18n } = useTranslation()
+  const language: Language = lang ?? (i18n.language === 'en' ? 'en' : 'vi')
+  /** BP-41: what a round-three card did, said after its line ("Lan → Bình: 1.000"); `null` for a card that says nothing more. */
+  const now = Date.now()
   const reduce = useMediaQuery('(prefers-reduced-motion: reduce)')
+  const detailOf = (item: AppliedChaosView): string | null => {
+    // Under reduced motion the dice do not tumble: the panel shows the faces at once, and so does the line (follow-up R3).
+    const told = reduce ? withoutRolledAt(item) : item
+    // While the reveal hold runs, a payment merged into a line already up (a duel paid at the settlement) is not told yet.
+    if (held && told.transfers !== undefined) {
+      const { transfers: _later, amount: _paid, ...before } = told
+      return chaosDetail(before, t, language, nameOf, curse, now)
+    }
+    return chaosDetail(told, t, language, nameOf, curse, now)
+  }
+  // A dice roll's line tells its faces once the dice land (Ruling 22): one wake at the next landing still to come.
+  const [, tick] = useReducer((n: number) => n + 1, 0)
+  const landing = reduce
+    ? Number.POSITIVE_INFINITY
+    : Math.min(...applied.flatMap((x) => (x.rolledAt === undefined ? [] : [x.rolledAt + DICE_ROLL_MS + TOAST_AFTER_LANDING_MS])).filter((at) => at > now))
+  useEffect(() => {
+    if (!Number.isFinite(landing)) return
+    const timer = setTimeout(tick, Math.max(0, landing - Date.now()) + 16)
+    return () => clearTimeout(timer)
+  }, [landing])
   const narrow = useMediaQuery(NARROW_LANDSCAPE_QUERY)
   const listId = useId()
   const [band, setBand] = useState<Band>(() => fresh(handId, restored ? applied.length : 0, 0))
@@ -128,7 +173,8 @@ export function ChaosToasts({ applied, handId, restored, nameOf, layout, reverse
   else if (applied.length < band.seen) current = fresh(handId, applied.length, band.batch)
   const cap = layout === 'landscape' && narrow ? 1 : layout === 'stack' && crowded ? CROWDED_STACK_CAP : TOAST_CAP[layout]
   const slots = cap - (reverseNote === null ? 0 : 1)
-  if (applied.length > current.seen) current = arrive(current, applied.length, slots, resultWasOpen.current)
+  // Ruling 28: what arrives while the reveal hold runs (the settlement's lines: the fall of a Thần, payments) waits for its end.
+  if (applied.length > current.seen && !held) current = arrive(current, applied.length, slots, resultWasOpen.current)
   if (current !== band) setBand(current)
   if (reset && listOpen) setListOpen(false)
 
@@ -211,28 +257,59 @@ export function ChaosToasts({ applied, handId, restored, nameOf, layout, reverse
 
   const cardName = (cardId: string): string => t(`chaos.cards.${cardId}.name`, { defaultValue: cardId })
   const outcomeOf = (item: AppliedChaosView): string | null => (item.outcome === 'applied' ? null : t(`chaos.outcome.${item.outcome}`))
+  /**
+   * Whom the line names. The Thần's curse (BP-41: Cá chép with no reign) falls on every other seat at the table — its detail
+   * says so and who paid whom — so the line does not list the whole table.
+   */
+  const targetsOf = (item: AppliedChaosView): number[] => (item.effect === 'carp' && item.reign === undefined ? [] : item.targets)
   /** The line as plain words, for the "+N" list. */
   const lineOf = (item: AppliedChaosView): string => {
     const name = nameOf(item.seat)
+    if (item.reign === 'godslain') return t('chaos.toast.godslain', { slayer: item.targets.map(nameOf).join(', '), god: name })
     const card = cardName(item.cardId)
+    const aimed = targetsOf(item)
     const text =
-      item.targets.length === 0
+      aimed.length === 0
         ? t('chaos.toast.use', { name, card })
-        : t('chaos.toast.useOn', { name, card, targets: item.targets.map(nameOf).join(', ') })
+        : t('chaos.toast.useOn', { name, card, targets: aimed.map(nameOf).join(', ') })
     const outcome = outcomeOf(item)
-    return outcome === null ? text : `${text} — ${outcome}`
+    const detail = detailOf(item)
+    const told = outcome === null ? text : `${text} — ${outcome}`
+    return detail === null ? told : `${told} · ${detail}`
   }
 
   const toasts = current.toasts.flatMap((toast) => {
     const item = applied[toast.index]
     if (item === undefined) return []
     const name = nameOf(item.seat)
-    const targets = item.targets.map(nameOf)
+    const targets = targetsOf(item).map(nameOf)
+    // The fall of a Thần is its own line, "Bình hạ Thần Bài Lan" (the event's seat is the Thần, its targets who beat it), not
+    // a card played on someone (BP-41 fix wave 28).
+    if (item.reign === 'godslain') {
+      return [
+        <div
+          key={`t${toast.index}`}
+          className={cx(s.chaosToast, !reduce && s.chaosToastIn)}
+          data-chaos-toast=""
+          data-tier={tierOfCardId(item.cardId)}
+          data-outcome={item.outcome}
+          data-reign="godslain"
+          data-pinned={toast.pinned ? 'true' : undefined}
+          onClick={(event) => togglePin(toast.index, event)}
+        >
+          {fill(t('chaos.toast.godslain', { slayer: '{{slayer}}', god: '{{god}}' }), {
+            slayer: <strong className={s.chaosToastName}>{targets.join(', ')}</strong>,
+            god: <strong className={s.chaosToastName}>{name}</strong>,
+          })}
+        </div>,
+      ]
+    }
     const template =
       targets.length === 0
         ? t('chaos.toast.use', { name: '{{name}}', card: '{{card}}' })
         : t('chaos.toast.useOn', { name: '{{name}}', card: '{{card}}', targets: '{{targets}}' })
     const outcome = outcomeOf(item)
+    const detail = detailOf(item)
     return [
       <div
         key={`t${toast.index}`}
@@ -253,6 +330,12 @@ export function ChaosToasts({ applied, handId, restored, nameOf, layout, reverse
           targets: <strong className={s.chaosToastName}>{targets.join(', ')}</strong>,
         })}
         {outcome === null ? null : <span className={s.chaosToastOutcome}>{outcome}</span>}
+        {detail === null ? null : (
+          <span className={s.chaosToastDetail}>
+            {DETAIL_SEP}
+            {detail}
+          </span>
+        )}
       </div>,
     ]
   })

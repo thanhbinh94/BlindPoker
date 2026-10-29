@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig, devices } from '@playwright/test'
 
 /**
@@ -39,7 +40,9 @@ export default defineConfig({
     stdout: 'pipe',
     stderr: 'pipe',
     // Every ops browser reads from the one loopback address, so the shipped 240 reads a minute overflowed (P-02 flake).
-    env: { E2E_PORT: String(PORT), E2E_READ_LIMIT: '2400' },
+    // BP-41 (A-ops): the shipped chaos cards with Cá chép hóa rồng at 100 % energy and off by default, so the Thần case
+    // (10-chaos.spec.ts, F-14) can force a Thần with a GM rule that turns it on; no other case can draw it.
+    env: { E2E_PORT: String(PORT), E2E_READ_LIMIT: '2400', E2E_CHAOS_CARDS: fileURLToPath(new URL('./chaos-cards.ops.json', import.meta.url)) },
   },
   projects: [
     {

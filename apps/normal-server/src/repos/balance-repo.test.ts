@@ -1,7 +1,7 @@
 import { InsufficientBalanceError, type ApplyResult } from '@bp/server-kit'
 import { asc, sql } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
-import type { AppDb } from '../db/client.js'
+import { rowsOf, type AppDb } from '../db/client.js'
 import { ledgerKeys, players, pointTransactions, users } from '../db/schema.js'
 import type { TestDb } from '../db/test-db.js'
 import { createTestDb } from '../db/test-db.js'
@@ -254,6 +254,26 @@ describe('balances.apply with a key', () => {
     await repos.balances.apply([{ playerId: id, delta: 10, reason: 'refund', refId: 'room-1' }], meta, { key: 'carry_over:room-1:x' })
     expect(await repos.balances.apply([{ playerId: id, delta: 10, reason: 'refund', refId: 'room-1' }], meta, { key: 'carry_over:room-1:x' })).toEqual({ applied: false })
     expect((await ledgerRows()).map((r) => [r.player_id, r.amount])).toEqual([[id, 10], [null, 3]])
+  })
+
+  it('BP-41: a keyed dice sink written twice leaves one playerless chaos_dice row, and Σ balances + Σ sinks moves only by it', async () => {
+    await seedPlayer(5_000)
+    const sum = async (): Promise<{ balances: number; sinks: number }> => {
+      const rows = rowsOf<{ balances: string | number; sinks: string | number }>(await db.execute(sql`
+        select (select coalesce(sum(balance), 0) from players) as balances,
+               (select coalesce(sum(amount), 0) from point_transactions where player_id is null) as sinks`))
+      return { balances: Number(rows[0]!.balances), sinks: Number(rows[0]!.sinks) }
+    }
+    const before = await sum()
+    // What `Room` writes for a human's lost wager (`ChaosTable.payDebit`): the stack's points left the balance at the buy-in.
+    const key = 'chaos_dice:room-1:hand-1:0:7'
+    const meta = { refId: key, fee: 2_000, kind: 'chaos_dice' as const }
+    expect(await repos.balances.apply([], meta, { key })).toEqual({ applied: true })
+    expect(await repos.balances.apply([], meta, { key })).toEqual({ applied: false })
+    expect(await ledgerRows()).toEqual([{ player_id: null, amount: 2_000, reason: 'chaos_dice', ref_id: key, kind: 'chaos_dice' }])
+    const after = await sum()
+    expect(after.balances).toBe(before.balances)
+    expect(after.sinks).toBe(before.sinks + 2_000)
   })
 
   it('skips the balance check on a replay: a committed buy-in retried with the balance now short is not refused', async () => {

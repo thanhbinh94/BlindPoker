@@ -334,5 +334,8 @@ describe('GET /api/me/achievements', () => {
     expect(body.length).toBe(h.app.services.defs.length)
     expect(body[0]).toMatchObject({ id: expect.any(String), category: expect.any(String), metric: expect.any(String), progress: 0, unlockedAt: null })
     expect(body.every((a) => a.threshold > 0)).toBe(true)
+    // BP-41: a chaos title says its own reputation; an older achievement carries no such field.
+    expect(body.find((a) => a.id === 'chaos_godslayer')).toMatchObject({ category: 'chaos', reward: { points: 500_000, itemId: 'title_godslayer' }, reputation: 500 })
+    expect(body.find((a) => a.id === 'login_days_7')).not.toHaveProperty('reputation')
   })
 })

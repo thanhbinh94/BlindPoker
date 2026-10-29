@@ -409,6 +409,14 @@ export const playerStats = pgTable('player_stats', {
   totalLoginDays: integer('total_login_days').notNull().default(0),
   loginStreak: integer('login_streak').notNull().default(0),
   bestLoginStreak: integer('best_login_streak').notNull().default(0),
+  /**
+   * BP-41 (spec 2026-10-28 §4.4): the three title counters — the only chaos-hand stats counted (the exception to Q13).
+   * Times this player became the Thần Bài, became a Bán Thần, and won a hand against a human Thần, each counted only at a
+   * table of two or more humans (`HandSummary.players[].chaosTitles`). Migration `0008_chaos_titles`.
+   */
+  chaosAscensions: integer('chaos_ascensions').notNull().default(0),
+  chaosDemigods: integer('chaos_demigods').notNull().default(0),
+  chaosGodsSlain: integer('chaos_gods_slain').notNull().default(0),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

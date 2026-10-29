@@ -43,8 +43,10 @@ export interface HandView {
   /**
    * Poker hỗn loạn, on a chaos hand only: the reversed ranking (public from the deal), the board cards the viewer
    * peeked at (theirs only, `[]` otherwise), and whether the viewer is blindfolded (their own cards are then null).
+   * `wild` (BP-41 Lá ma): the viewer's own wild hole card while they hold it, for a reconnect; absent otherwise.
+   * `hawk` (BP-41 Mắt diều hâu): the opponent the viewer looked at and the cards it saw, for a reconnect; absent otherwise.
    */
-  chaos?: { reverse: boolean; peek: Card[]; blindfolded: boolean }
+  chaos?: { reverse: boolean; peek: Card[]; blindfolded: boolean; wild?: Card; hawk?: { seat: number; cards: Card[] } }
 }
 
 function viewerLegal(state: HandState, viewerSeat: number | null): LegalActions | null {
@@ -63,7 +65,13 @@ function viewerLegal(state: HandState, viewerSeat: number | null): LegalActions 
 export function filterEvent(event: GameEvent, viewerSeat: number | null): GameEvent | null {
   if (event.type === 'CARDS_DEALT' && event.seat !== viewerSeat) return { ...event, cards: [] }
   if (event.type === 'CHAOS_PEEK' && event.seat !== viewerSeat) return { ...event, cards: [] }
-  if (event.type === 'CHAOS_APPLIED' && PRIVATE_AT_DEAL.has(event.effect)) {
+  if (event.type === 'CHAOS_HAWK' && event.seat !== viewerSeat) return { ...event, cards: [] }
+  if (event.type === 'CHAOS_APPLIED' && event.privateTo) {
+    // BP-41 Bia đỡ đạn passing a private deal debuff on: exactly the seats it names.
+    if (viewerSeat === null || !event.privateTo.includes(viewerSeat)) return null
+  } else if (event.type === 'CHAOS_APPLIED' && PRIVATE_AT_DEAL.has(event.effect) && !event.transfers) {
+    // Only its owner and targets, unless it moved points at the settlement (`transfers`: BP-41 Bom nổ chậm going off),
+    // which every viewer sees in the stacks anyway.
     const party = viewerSeat !== null && (event.seat === viewerSeat || event.targets.includes(viewerSeat))
     if (!party) return null
   }
@@ -115,6 +123,11 @@ export function playerView(state: HandState, viewerSeat: number | null): HandVie
       peek: state.chaos.peek.find((x) => x.seat === viewerSeat)?.cards.slice() ?? [],
       blindfolded: viewerSeat !== null && isBlindfolded(plan, viewerSeat),
     }
+    const wild = state.chaos.wild?.find((w) => w.seat === viewerSeat)?.card
+    const holds = state.players.find((p) => p.seat === viewerSeat)?.holeCards.includes(wild ?? -1) ?? false
+    if (wild !== undefined && holds && !view.chaos.blindfolded) view.chaos.wild = wild
+    const hawk = state.chaos.hawk?.find((h) => h.seat === viewerSeat)
+    if (hawk) view.chaos.hawk = { seat: hawk.target, cards: hawk.cards.slice() }
   }
   return view
 }

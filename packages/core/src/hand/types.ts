@@ -1,6 +1,6 @@
 import type { Card } from '../cards/cards.js'
 import type { PotResult } from '../betting/pots.js'
-import type { ChaosEffectKind, ChaosHandState, ChaosOutcome, ChaosUse } from '../chaos/types.js'
+import type { ChaosEffectKind, ChaosHandState, ChaosOutcome, ChaosReignKind, ChaosTransfer, ChaosUse } from '../chaos/types.js'
 import type { HandCategory } from '../evaluator/evaluator.js'
 
 export interface HoldemRules {
@@ -89,6 +89,12 @@ export type HandCommand =
   | { type: 'ADVANCE' }
   | { type: 'REVEALED'; seat: number }
   | { type: 'CANCEL'; reason: string }
+  /**
+   * BP-41 A2: `seat` gives up this hand — it left or stood up, so nobody is there to choose. Folds it even where the rules
+   * forbid folding (Cấm bỏ bài, a Thần), which a `fold` action or a `TIMEOUT` (it plays there) never does. Hold'em: a
+   * `fold` on the seat's turn.
+   */
+  | { type: 'FORFEIT'; seat: number }
 
 export interface ShowdownHand {
   seat: number
@@ -98,6 +104,12 @@ export interface ShowdownHand {
   best: Card[]
   /** Poker hỗn loạn "Mượn lá": the opponent's card this seat also ranked with (a copy). */
   borrowed?: Card
+  /**
+   * BP-41 Lá ma: the seat's wild hole card `card` ranked as `as`. `cards` and `best` show the real card (`card`, in the
+   * slot `as` filled); `rank` and `category` are the ranking with `as`. Absent when the wild card ranked as itself or
+   * did not make the best five.
+   */
+  wild?: { card: Card; as: Card }
 }
 
 export interface HandResult {
@@ -148,7 +160,13 @@ export type GameEvent =
   | { type: 'CARDS_DEALT'; seat: number; cards: Card[]; cardCount: number }
   | { type: 'TURN_CHANGED'; seat: number; turnSeq: number; legal: LegalActions }
   | { type: 'PLAYER_ACTED'; seat: number; action: PlayerAction; amount: number; stack: number; allIn: boolean; timedOut: boolean }
-  | { type: 'DECISION_PHASE'; seats: number[]; turnSeq: number }
+  /**
+   * BP-41 (chaos tables only; absent = as before): `noFold` — the seats that may only "Chơi" this hand (Cấm bỏ bài, a
+   * Thần, A2); `calls` — what "Chơi" costs each seat when a card multiplied its stake (Mạo hiểm gia, Sới lớn, A1),
+   * instead of the table's fixed wager: the stake × the wager, at most the seat's stack (its `callAmount`). Seats with a
+   * plain stake are not listed; either field is absent when nobody is.
+   */
+  | { type: 'DECISION_PHASE'; seats: number[]; turnSeq: number; noFold?: number[]; calls?: { seat: number; amount: number }[] }
   | { type: 'DECISION_MADE'; seat: number }
   | { type: 'DECISIONS_REVEALED'; decisions: { seat: number; decision: Decision }[] }
   | { type: 'SQUEEZE_PHASE'; seats: number[]; turnSeq: number }
@@ -160,10 +178,35 @@ export type GameEvent =
   | { type: 'SETTLEMENT'; payouts: { seat: number; amount: number }[]; fee: number; pots: PotResult[]; carryOverOut: number; stacks: { seat: number; stack: number }[]; uncalledReturned: { seat: number; amount: number } | null }
   | { type: 'HAND_CANCELLED'; reason: string; refunds: { seat: number; amount: number }[]; carryOverOut: number }
   | { type: 'HAND_COMPLETE' }
-  /** A chaos card acted. Deal-time buffs and debuffs reach only their owner and targets (`filterEvent`); `reverseRank` and the rest are public. `amount`: a refund (freeFold, refundStake). */
-  | { type: 'CHAOS_APPLIED'; seat: number; cardId: string; effect: ChaosEffectKind; targets: number[]; outcome: ChaosOutcome; community?: Card[]; amount?: number }
+  /**
+   * A chaos card acted. Deal-time buffs and debuffs reach only their owner and targets (`filterEvent`); `reverseRank` and
+   * the rest are public. `amount`: a refund (freeFold, refundStake). `dice`: the faces a card rolled in the hand (BP-41
+   * Xúc xắc định mệnh, A15). `holeDelta`: the hole cards a card adds (+) or takes (−) at the deal (BP-41 Hên xui, Đảo
+   * bài, Liều ăn nhiều; on `fizzled`, what it would have done). `wild`: the hole card Lá ma made wild (its owner only).
+   * `off`: the card id Kẻ phá đám switched off for the hand (BP-41; its owner and target only, never a bonus card).
+   * `holeDelta` also tells what Xúc xắc định mệnh's die did at the reveal (−1, 0 or +count). `wagers` (BP-41 Thách đấu):
+   * the fixed wagers the duel's loser owes (0 = the challenger's hand did not win or the roll paid nothing); on a
+   * `reflected` duel the target challenged the holder, so the holder owes them. `stake` (BP-41 Mạo hiểm gia, Sới lớn, told
+   * at the ante): the multiple of the fixed wager the card makes the seat's stake this hand (Sới lớn: the whole table's).
+   * `privateTo` (BP-41 Bia đỡ đạn handing a private deal debuff on): the only seats `filterEvent` lets the event reach.
+   * `transfers` (BP-41 Task 5b, told at the settlement, always public): the points the card moved from one stack to
+   * another — a duel paid, Ép chia thưởng, Thuế thắng, a bomb gone off — each as taken (capped at the payer's stack,
+   * possibly 0); `amount` is then their sum. `SETTLEMENT.stacks` already include them. `reign` (BP-41 Cá chép hóa rồng,
+   * public, effect `carp`): `seat` became the Thần at the deal (`god`), a Bán Thần at the settlement (`demigod`), or the
+   * Thần at `seat` fell to the seats in `targets` (`godslain`). The Thần's curse is told as `carp` with no `reign`.
+   */
+  | {
+    type: 'CHAOS_APPLIED'; seat: number; cardId: string; effect: ChaosEffectKind; targets: number[]; outcome: ChaosOutcome; community?: Card[]
+    amount?: number; dice?: number[]; holeDelta?: number; wild?: Card; off?: string; wagers?: number; stake?: number; privateTo?: number[]
+    transfers?: ChaosTransfer[]; reign?: ChaosReignKind
+  }
   /** "Nhìn trộm": the next board cards, for `seat` only (`filterEvent` blanks them for everyone else). */
   | { type: 'CHAOS_PEEK'; seat: number; cards: Card[] }
+  /**
+   * BP-41 Mắt diều hâu: `seat` saw `cards` of `target`'s hole cards (one, or all of them) before choosing; for `seat`
+   * only — `filterEvent` blanks the cards for everyone else, who learn only that `target` was looked at.
+   */
+  | { type: 'CHAOS_HAWK'; seat: number; target: number; cards: Card[] }
   /** Every card the hand used, public, just before `SETTLEMENT`. */
   | { type: 'CHAOS_SUMMARY'; used: ChaosUse[] }
 

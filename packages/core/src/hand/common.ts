@@ -1,6 +1,10 @@
 import type { Card } from '../cards/cards.js'
 import { computePots, distributePots, tableFee, type Pot } from '../betting/pots.js'
-import { evaluate } from '../evaluator/evaluator.js'
+// The one runtime import of a chaos module here (BP-41 5a): `deadMoneyOf` reads `state.chaos` and is 0 on a plain hand, and
+// `engine-stake` imports nothing of `hand/common`, so there is no cycle. Passing it through `SettleHooks` would split the
+// pot's build in two for one sum; kept as it is.
+import { deadMoneyOf } from '../chaos/engine-stake.js'
+import { evaluate, type HandEvaluation } from '../evaluator/evaluator.js'
 import { EngineError, type GameEvent, type HandPlayer, type HandState, type ShowdownHand, type Street } from './types.js'
 
 export function clone<T>(s: T): T {
@@ -46,7 +50,8 @@ const STREET_CARDS: Record<Street, number> = { PREFLOP: 0, FLOP: 3, TURN: 1, RIV
 export function revealNext(state: HandState, events: GameEvent[]): void {
   const street = state.revealQueue.shift()
   if (!street) throw new EngineError('INVALID_COMMAND', 'nothing to reveal')
-  const cards = dealCards(state, STREET_CARDS[street])
+  // BP-41 Lá chung thứ sáu: on a chaos hand that set it, the river deals two cards.
+  const cards = dealCards(state, STREET_CARDS[street] + (street === 'RIVER' && state.chaos?.sixthBoard ? 1 : 0))
   state.community.push(...cards)
   state.street = street
   events.push({ type: 'COMMUNITY_REVEALED', street, cards, community: state.community.slice() })
@@ -82,12 +87,18 @@ export function returnUncalled(state: HandState): { seat: number; amount: number
  * What a chaos hand changes in the settlement (Poker hỗn loạn; built by `chaos/engine.ts`, absent for a plain hand):
  * a borrowed card a seat ranks with, the reversed ranking, a step after the ranks are known and before the pots are
  * paid (insurance, which may move points from `pots` to stacks — its events follow `SHOWDOWN`), and events told just
- * before `SETTLEMENT` (the summary).
+ * before `SETTLEMENT` (the summary). `evaluateSeat` (BP-41 A9) ranks a seat's cards in place of `evaluate`: more than
+ * ten cards (a sixth board card, extra hole cards) and Lá ma's wild card; the plain evaluator is never changed.
+ * `afterPayout` (BP-41 A5) runs once the pots are paid onto the stacks, showdown or not (and in `carryOverAll`, with no
+ * payouts): the points cards move between players (duels, Ép chia thưởng, Thuế thắng, a bomb going off), stack to stack,
+ * so `SETTLEMENT.stacks` include them; its events are told after `beforePayout`'s.
  */
 export interface SettleHooks {
   reverse: boolean
   borrowed(seat: number): Card | null
+  evaluateSeat?(seat: number, cards: readonly Card[]): HandEvaluation & { wild?: { card: Card; as: Card } }
   beforePayout(pots: Pot[], winners: ReadonlySet<number>): GameEvent[]
+  afterPayout?(payoutBySeat: ReadonlyMap<number, number>): GameEvent[]
   beforeSettlement(): GameEvent[]
 }
 
@@ -101,7 +112,8 @@ export function settle(state: HandState, events: GameEvent[], opts: { showdown: 
     if (!hooks) throw new EngineError('INVALID_SETUP', 'no pot to settle')
     pots.push({ amount: 0, eligibleSeats: unfolded(state).map((p) => p.seat) })
   }
-  pots[0]!.amount += state.carryOverIn
+  // BP-41 A1: a stake card's dead money goes with what carried in, to whoever wins the main pot.
+  pots[0]!.amount += state.carryOverIn + deadMoneyOf(state)
 
   const total = pots.reduce((a, p) => a + p.amount, 0)
   const fee = Math.min(tableFee(total, state.rules.tableFeeRate, opts.feeCap), pots[0]!.amount)
@@ -114,11 +126,12 @@ export function settle(state: HandState, events: GameEvent[], opts: { showdown: 
     showdown = live.map((p) => {
       const borrowed = hooks?.borrowed(p.seat) ?? null
       const cards = borrowed === null ? [...p.holeCards, ...state.community] : [...p.holeCards, ...state.community, borrowed]
-      const ev = evaluate(cards)
+      const ev: HandEvaluation & { wild?: { card: Card; as: Card } } = hooks?.evaluateSeat ? hooks.evaluateSeat(p.seat, cards) : evaluate(cards)
       // "Thế giới đảo ngược": the weakest hand wins every pot it is in; the shown ranks stay the real ones.
       rankBySeat.set(p.seat, hooks?.reverse ? -ev.rank : ev.rank)
       const hand: ShowdownHand = { seat: p.seat, cards: p.holeCards.slice(), rank: ev.rank, category: ev.category, best: ev.best }
       if (borrowed !== null) hand.borrowed = borrowed
+      if (ev.wild) hand.wild = ev.wild
       return hand
     })
   } else {
@@ -136,6 +149,7 @@ export function settle(state: HandState, events: GameEvent[], opts: { showdown: 
   const payoutBySeat = new Map<number, number>()
   for (const r of results) for (const w of r.winners) payoutBySeat.set(w.seat, (payoutBySeat.get(w.seat) ?? 0) + w.amount)
   for (const [seat, amount] of payoutBySeat) getPlayer(state, seat).stack += amount
+  if (hooks?.afterPayout) chaosEvents = [...chaosEvents, ...hooks.afterPayout(payoutBySeat)]
 
   const payouts = [...payoutBySeat].map(([seat, amount]) => ({ seat, amount })).sort((a, b) => a.seat - b.seat)
   const stacks = state.players.map((p) => ({ seat: p.seat, stack: p.stack }))
@@ -150,19 +164,21 @@ export function settle(state: HandState, events: GameEvent[], opts: { showdown: 
 
 /**
  * Aborts the hand: every chip committed this hand goes back to its owner and anything carried in stays carried out,
- * so no money is created or destroyed and no fee is charged.
+ * so no money is created or destroyed and no fee is charged. A stake card's dead money (BP-41 A1) goes back with it.
  */
 export function cancelHand(state: HandState, events: GameEvent[], reason: string): void {
   const refunds: { seat: number; amount: number }[] = []
   for (const p of state.players) {
-    if (p.totalCommitted > 0) {
-      p.stack += p.totalCommitted
-      refunds.push({ seat: p.seat, amount: p.totalCommitted })
+    const back = p.totalCommitted + (state.chaos?.deadMoney?.find((d) => d.seat === p.seat)?.amount ?? 0)
+    if (back > 0) {
+      p.stack += back
+      refunds.push({ seat: p.seat, amount: back })
     }
     p.totalCommitted = 0
     p.betThisStreet = 0
     p.allIn = false
   }
+  if (state.chaos?.deadMoney) delete state.chaos.deadMoney
   const carryOverOut = state.carryOverIn
   state.pot = 0
   const stacks = state.players.map((p) => ({ seat: p.seat, stack: p.stack }))
@@ -174,11 +190,13 @@ export function cancelHand(state: HandState, events: GameEvent[], reason: string
 }
 
 export function carryOverAll(state: HandState, events: GameEvent[], hooks?: SettleHooks): void {
+  // BP-41 A5: nobody won, but a bomb on its last hand still goes off (the pot stays whole: it carries over).
+  const moved = hooks?.afterPayout?.(new Map()) ?? []
   const stacks = state.players.map((p) => ({ seat: p.seat, stack: p.stack }))
   state.result = { pots: [], fee: 0, payouts: [], stacks, showdown: null, carryOverOut: state.pot, uncalledReturned: null }
   state.phase = 'COMPLETE'
   state.actingSeat = null
-  if (hooks) events.push(...hooks.beforeSettlement())
+  if (hooks) events.push(...moved, ...hooks.beforeSettlement())
   events.push({ type: 'SETTLEMENT', payouts: [], fee: 0, pots: [], carryOverOut: state.pot, stacks, uncalledReturned: null })
   events.push({ type: 'HAND_COMPLETE' })
 }

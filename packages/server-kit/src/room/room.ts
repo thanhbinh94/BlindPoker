@@ -7,7 +7,7 @@ import type { TimerHandle } from '../infra/clock.js'
 import { newId } from '../infra/ids.js'
 import { InsufficientBalanceError, type BalanceEntry, type HandSummary, type SettlementMeta } from '../repositories.js'
 import { HandRunner } from './hand-runner.js'
-import { ChaosTable } from './room-chaos.js'
+import { ChaosTable, countedTitles } from './room-chaos.js'
 import { RoomError, type AdminRoomSummary, type RoomDeps, type RoomPlayer } from './types.js'
 
 export interface RoomInit {
@@ -926,7 +926,16 @@ export class Room {
       if (rp) rp.stack = hp.stack
       summary.players.push({ playerId: hp.playerId, seat: hp.seat, isBot: hp.isBot, net, won: net > 0, bestCategory: result.showdown?.find((h) => h.seat === hp.seat)?.category ?? null })
     }
-    if (state.chaos && !runner.wasCancelled) summary.chaosUsed = state.chaos.used.map((u) => ({ seat: u.seat, cardId: u.cardId, outcome: u.outcome }))
+    if (state.chaos && !runner.wasCancelled) {
+      summary.chaosUsed = state.chaos.used.map((u) => ({ seat: u.seat, cardId: u.cardId, outcome: u.outcome }))
+      // BP-41 A12 / G12: the hand's title marks, counted only when ≥ 2 humans were dealt in (Ruling 19), never a bot's,
+      // never a bot Thần's fall. Earned when the hand settles: a cancelled hand marks nothing (Ruling 7b-1).
+      const titles = countedTitles(state)
+      for (const sp of summary.players) {
+        const marks = titles.get(sp.seat)
+        if (marks) sp.chaosTitles = marks
+      }
+    }
     this.carryOverPot = result.carryOverOut
     this.runner = null
     this.deadlineAt = null
@@ -1245,7 +1254,7 @@ export class Room {
     // cycle's draft is not given back.
     const had = p.chaos
     p.chaos = undefined
-    this.chaos?.seatCleared(p, had)
+    this.chaos?.seatCleared(p, had, seat)
     this.chaos?.dropOffer(p.identity.playerId)
     p.ready = false
     p.standAfterHand = false

@@ -3,6 +3,7 @@ import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppliedChaosView } from '../client/types.js'
 import { createI18n } from '../i18n/index.js'
+import { DICE_ROLL_MS, TOAST_AFTER_LANDING_MS } from './chaos-detail.js'
 import { ChaosToasts, NARROW_LANDSCAPE_QUERY, TOAST_MS, type ChaosToastsProps } from './ChaosToasts.js'
 import TABLE_CSS from './table.module.css?raw'
 import s from './table.module.css'
@@ -309,5 +310,116 @@ describe('the toast band in the stylesheet', () => {
   it('lists the toast’s entrance under reduced motion', () => {
     const off = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
     expect(off).toMatch(/\.chaosToastIn\b/)
+  })
+})
+
+// BP-41 (spec 2026-10-28 §8): every new kind of effect says what it did after its line.
+describe('ChaosToasts, BP-41 lines', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  const line = (item: AppliedChaosView, curse: ChaosToastsProps['curse'] = null): string => {
+    mount({ applied: [item], layout: 'desktop', curse })
+    return texts()[0] ?? ''
+  }
+
+  it('says who paid whom: a duel, a bomb, Ép chia thưởng', () => {
+    // Paid, the payment says it all: the wagers due are not said again.
+    expect(line(applied(0, 'g_duel', { effect: 'duel', targets: [2], wagers: 2, transfers: [{ from: 2, to: 0, amount: 2000 }] }))).toBe('Ann dùng Thách đấu vàng → Chi · Chi → Ann: 2.000')
+  })
+
+  it('a duel not yet paid says who pays the wagers due: the target, or the user when it was turned round (fix wave 30)', () => {
+    expect(line(applied(0, 's_duel', { effect: 'duel', targets: [1], wagers: 2 }))).toContain('Bảo trả 2 mức cược')
+    document.body.innerHTML = ''
+    expect(line(applied(0, 's_duel', { effect: 'duel', targets: [1], wagers: 2, outcome: 'reflected' }))).toContain('Ann trả 2 mức cược')
+    document.body.innerHTML = ''
+    // The Thần's curse reaches several seats: the wagers are said as due.
+    expect(line(applied(2, 'd_carp', { effect: 'carp', targets: [0, 1], wagers: 1 }))).toContain('Phải trả 1 mức cược')
+  })
+
+  it('says a bomb going off with its payment', () => {
+    expect(line(applied(1, 'd_time_bomb', { effect: 'timeBomb', targets: [3], transfers: [{ from: 3, to: 1, amount: 1000 }] }))).toContain('Dũng → Bảo: 1.000')
+  })
+
+  it('says a stake, a die and the cards it added, a card switched off, a reign and the Thần’s curse', () => {
+    expect(line(applied(0, 'd_adventurer', { effect: 'adventurer', stake: 4 }))).toContain('Mức cược ×4')
+    document.body.innerHTML = ''
+    expect(line(applied(0, 'g_fate_die', { effect: 'fateDie', dice: [6], holeDelta: 1 }))).toContain('Xúc xắc: 6 · +1 lá')
+    document.body.innerHTML = ''
+    expect(line(applied(0, 's_spoiler', { effect: 'spoiler', targets: [1], off: 's_shield' }))).toContain('Tắt thẻ Khiên gỗ')
+    document.body.innerHTML = ''
+    expect(line(applied(2, 'd_carp', { effect: 'carp', reign: 'god' }))).toContain('Hóa Thần Bài!')
+    document.body.innerHTML = ''
+    // The curse falls on the whole table: the line does not list it.
+    expect(line(applied(2, 'd_carp', { effect: 'carp', targets: [0, 1] }), 3)).toBe('Chi dùng Cá chép hóa rồng · Lời nguyền của Thần: Thần tráo bài')
+    document.body.innerHTML = ''
+    // The curse the line took when it came wins over the table's now (Task 9 M4).
+    expect(line(applied(2, 'd_carp', { effect: 'carp', targets: [0, 1], curse: 1 }), 3)).toBe('Chi dùng Cá chép hóa rồng · Lời nguyền của Thần: Thần rút bài')
+  })
+
+  it('says a dice roll and a Trộm điểm, which the room tells outside the hand', () => {
+    expect(line(applied(1, 'd_dice', { effect: 'fortuneDice', dice: [6, 6, 6], roll: { jackpot: 60_000, triple: true, herald: true } }))).toContain('Xúc xắc: 6-6-6 · Bộ ba! · Nổ hũ 60.000')
+    document.body.innerHTML = ''
+    expect(line(applied(0, 'g_steal_points', { effect: 'stealPoints', targets: [1], steal: { from: 1, to: 0, amount: 5 } }))).toContain('Bảo → Ann: 5 điểm hỗn loạn')
+  })
+
+  it('keeps a roll’s faces and result back until the dice land, then tells the faces the panel landed on (Ruling 22)', () => {
+    const rolledAt = Date.now()
+    const roll = applied(1, 'd_dice', { effect: 'fortuneDice', dice: [6, 6, 6], roll: { jackpot: 60_000, triple: true, herald: true }, rolledAt })
+    expect(line(roll)).toBe('Bảo dùng Xúc xắc vận may kim cương · Đang gieo…')
+    // Past the landing, by a few frames: never before the panel has drawn its landed dice.
+    advance(DICE_ROLL_MS + TOAST_AFTER_LANDING_MS - 20)
+    expect(texts()[0]).not.toContain('6-6-6')
+    advance(60)
+    expect(texts()[0]).toBe('Bảo dùng Xúc xắc vận may kim cương · Xúc xắc: 6-6-6 · Bộ ba! · Nổ hũ 60.000')
+  })
+
+  it('the fall of a Thần is a line of its own: who beat it, then the Thần; several slayers joined (fix wave 28)', () => {
+    expect(line(applied(0, 'd_carp', { effect: 'carp', targets: [1], reign: 'godslain' }))).toBe('Bảo hạ Thần Bài Ann')
+    document.body.innerHTML = ''
+    expect(line(applied(0, 'd_carp', { effect: 'carp', targets: [1, 3], reign: 'godslain' }))).toBe('Bảo, Dũng hạ Thần Bài Ann')
+  })
+
+  it('under reduced motion a roll’s line tells its faces at once, as the panel does (follow-up R3)', () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: (query: string) => ({ matches: query.includes('prefers-reduced-motion'), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }),
+    })
+    try {
+      const roll = applied(1, 'd_dice', { effect: 'fortuneDice', dice: [6, 6, 6], roll: { jackpot: 60_000, triple: true, herald: true }, rolledAt: Date.now() })
+      expect(line(roll)).toBe('Bảo dùng Xúc xắc vận may kim cương · Xúc xắc: 6-6-6 · Bộ ba! · Nổ hũ 60.000')
+    } finally {
+      Reflect.deleteProperty(window, 'matchMedia')
+    }
+  })
+
+  it('a capped jackpot reads what was paid on the line, as the reducer rewrote it (follow-up R2)', () => {
+    const roll = applied(1, 'd_dice', { effect: 'fortuneDice', dice: [6, 6, 6], roll: { jackpot: 25_000, triple: true, herald: true } })
+    expect(line(roll)).toContain('Nổ hũ 25.000')
+  })
+
+  it('while the reveal hold runs, the settlement’s lines wait and a line already up tells no payment; both come when it ends (Ruling 28)', () => {
+    const duel = applied(0, 'g_duel', { effect: 'duel', targets: [2], wagers: 2 })
+    // The duel was told before the hold; the hand then completes with a showdown that turns cards over.
+    const view = mount({ applied: [duel], layout: 'desktop', held: false })
+    expect(texts()).toEqual(['Ann dùng Thách đấu vàng → Chi · Chi trả 2 mức cược'])
+    const paid = { ...duel, transfers: [{ from: 2, to: 0, amount: 2000 }], amount: 2000 }
+    const slain = applied(1, 'd_carp', { effect: 'carp', targets: [0], reign: 'godslain' })
+    view.again({ applied: [paid, slain], layout: 'desktop', held: true })
+    expect(texts()).toEqual(['Ann dùng Thách đấu vàng → Chi · Chi trả 2 mức cược'])
+    advance(1_200)
+    expect(texts()).toHaveLength(1)
+    expect(texts()[0]).not.toContain('2.000')
+    // The hold ends with the result: the payment and the fall of the Thần show, the new line for its own 4 s.
+    view.again({ applied: [paid, slain], layout: 'desktop', held: false, resultOpen: true })
+    expect(texts()).toEqual(['Ann dùng Thách đấu vàng → Chi · Chi → Ann: 2.000', 'Ann hạ Thần Bài Bảo'])
+    advance(TOAST_MS - 100)
+    expect(texts()).toContain('Ann hạ Thần Bài Bảo')
+    advance(200)
+    expect(texts()).not.toContain('Ann hạ Thần Bài Bảo')
+  })
+
+  it('a plain card says nothing more', () => {
+    expect(line(applied(0, 's_shield'))).toBe('Ann dùng Khiên gỗ')
   })
 })

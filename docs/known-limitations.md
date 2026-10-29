@@ -928,7 +928,8 @@ strings took the entry chunk to about 136 KB gzip of a 140 KB budget (under 4 KB
 (Ruling 13). BP-31's bet panel and phone tray took it to 140.3 KB, and the budget rose again to 150 KB (the SRS's own
 limit in §24 is 500 KB). Plan 37's chaos table (the 47 cards' vi and en texts, the draft, the banner, the icons and the GM tab)
 took it to 152.0 KB, and the budget rose to 160 KB (a Task 8 ruling, accepted in the final review). BP-39 (toasts, the result strip, "Bỏ qua", the bonus hand) took it to 160.9 KB, and the budget rose to 170 KB
-(fix-wave Ruling FW-8).
+(fix-wave Ruling FW-8). BP-41 (the 39 new cards' texts, the herald, the dice, the seat marks) took it to 171.5 KB, and the budget rose
+to 180 KB (fix-wave Ruling 27).
 *Why it stays:* splitting namespaces per lazy screen is a change to the i18n bootstrap for about 10 KB.
 *Tracked:* `apps/normal-web/test/footprint.test.ts`.
 
@@ -1107,6 +1108,86 @@ retried after the next hand or before a cash-out) lives in the room's memory: a 
 stack behind them.
 *Why it stays:* the room that would retry is in the same process and does not survive a restart either; a hard kill loses the stack anyway.
 *Tracked:* `apps/normal-server/src/chaos/chaos-service.ts` (`credit`); `docs/normal-server.md` ("Poker hỗn loạn").
+
+### Round three (BP-41, spec 2026-10-28)
+
+**The LAN host must not be redeployed with this build on its current database.** The stats path reads `player_stats`' three title
+columns (migration 0008) for every player, and the LAN host's Neon database still lacks 0004–0008. A `run.ps1 -NoMigrate` deploy of this
+build there would fail on the first hand a player finishes. The VPS runs its migrations at boot (Docker), so it is fine.
+*Why it stays:* a migration writes the user's Neon database, and CLAUDE.md §4–§5 make that the user's yes. Until then the LAN host stays on
+its last build.
+*Tracked:* `apps/normal-server/drizzle/0004…0008`; CLAUDE.md §4 step 4; BP-41 Task 8 report.
+
+**The herald's glow and shake, the dice's tumble and the ♛ ✦ ✹ marks are checked in Chromium only.** The ops pack (F-14a–d) forces a Thần and
+a diamond roll at 1440 × 900, 360 × 780 and 780 × 360, and the ui-kit tests cover the reduced-motion paths, but no real phone has shown the
+band's motion or the dice, and the three glyphs come from the system's fonts: on Firefox and Safari they are unchecked and may fall back to
+another font's shape.
+*Why it stays:* only Chromium is installed (CLAUDE.md §3), and the real-phone checks are the user's.
+*Tracked:* `packages/ui-kit/src/table/ChaosHerald.tsx`, `ChaosDice.tsx`, `Seat.tsx` (`REIGN_GLYPH`); BP-41 Task 9 report.
+
+**F-14 forces the Thần with a test-only change to the cards.** The GM rules can choose which cards are drawn but not a Cá chép's energy, so
+the ops server lays `apps/normal-web/e2e/ops/chaos-cards.ops.json` over the shipped cards (`E2E_CHAOS_CARDS`): Cá chép starts at 100 %
+energy and is off unless a rule turns it on. The energy that grows 5–7 % a lost hand in production is covered by `@bp/core`'s unit tests,
+not by a browser.
+*Why it stays:* playing a table until a natural 5–7 % roll lands would take tens of hands and be luck. The file is read only by
+`e2e-entry.ts`, which never ships.
+*Tracked:* `apps/normal-server/src/e2e-options.ts` (`chaosCardsFromEnv`); plan BP-41 amendment A-ops.
+
+**A dice loss whose sink write fails twice is logged, not retried later.** The room lowers the stack at once and writes the `chaos_dice`
+sink row, retrying once; a second failure is logged (`chaos dice sink failed`, with its key) and the points have left the stack without a
+ledger row, as for a lost table fee. Nothing replays it after the hand.
+*Why it stays:* it is the table fee's rule (amendment A6); a sink that never lands breaks the money view's sum, not a player's balance.
+*Tracked:* `packages/server-kit/src/room/room-chaos.ts` (`payDebit`); BP-41 Task 7b review (M1).
+
+**A reconnect mid-decision forgets the uncapped call.** `ClientHand.myCall` (from `DECISION_PHASE.calls`) is not in the snapshot, so after a
+reconnect during a play-or-fold choice a multiplied stake (Mạo hiểm gia, Sới lớn) that takes the whole stack reads "Chơi" rather than "Tất
+tay" until the next decision. The amount played is the server's either way.
+*Why it stays:* a label only; adding it to the snapshot's hand view is a protocol change for one word.
+*Tracked:* `packages/ui-kit/src/client/reducer.ts` (`myCall`); BP-41 Task 9 review (M10).
+
+**"Gậy ông đập lưng ông" pressed during a hand works from the next hand.** It turns back debuffs from the deal on, so as a bonus card pressed
+at the play-or-fold choice it is armed for the next hand, not the one being played (the card popup's timing says "Lúc lật").
+*Why it stays:* the deal of the current hand is already over; Ruling 4-2 lets it act from the deal so deal-time debuffs bounce too.
+*Tracked:* `packages/core/src/chaos/bonus.ts` (`MID_HAND_EFFECTS`); BP-41 Task 3b and Task 4 reports.
+
+**A Cấp độ card can give fewer cards than it says.** Each card it draws goes through the stacking rule like any card received, so one
+that duplicates a stronger card the seat already holds is dropped (the stronger stays). With 50 / 35 / 15 tiers and round three's 86
+cards, a Kim cương Cấp độ ("2 cards") now and then lands one.
+*Why it stays:* it is the stacking rule every card follows (spec §3.4); a redraw would be a new rule for one card.
+*Tracked:* `packages/core/src/chaos/hold.ts` (`receiveCard`); BP-41 Task 1 report (`hold.test.ts`).
+
+**A bomb's owner who sits out for good keeps the bomb on the table.** A Bom nổ chậm plays only in a hand its owner is dealt into (Ruling
+5b-6), so while the owner sits out the bomb waits with its carrier, not counted down. It goes when the owner or the carrier leaves the seat.
+*Why it stays:* a bomb that ran down without its owner would pay nobody; the seat leaving clears it.
+*Tracked:* `packages/core/src/chaos/plan.ts` (`passBombs`), `packages/server-kit/src/room/room-chaos.ts` (`seatCleared`); BP-41 Task 5b review.
+
+**F-13c at 780 × 360 once scrolled the stage by 5 px, and the cause is not known.** One run in six of the BP-41 gate's ops pack saw it;
+the fix wave ran the case eight times more in a row at `s25l` with `expectRoomFits`' new diagnostic (it names what reaches past the
+stage's foot) and it did not come back.
+*Why it stays:* nothing to fix without a reproduction; if it returns, the diagnostic's message names the element.
+*Tracked:* `apps/normal-web/e2e/ops/10-chaos.spec.ts` (F-13c), `apps/normal-web/e2e/support.ts` (`overflowOf`); BP-41 Task 11 review (I1).
+
+**Cày điểm is not listed in "Thẻ đã dùng".** Since the fix wave, Mồi lửa (whenever it fired) and Tích
+tiểu thành đại (when its holder won no pot) have their line there; Cày điểm's doubling still has none — it acts on the points in
+`afterHand`, after the summary is written.
+*Why it stays:* the points it adds show in the seat's chaos points; a line would need the streak's outcome at the settlement.
+*Tracked:* `packages/core/src/chaos/engine.ts` (`summarisePoints`); BP-41 fix wave item 7.
+
+**Tay bạc never rolls a round-three card that waits, acts on receipt or at the hand's end, or carries a charge.** Its roll fires for one hand
+with no held card behind it, so Nâng tầm uy lực, Cao thủ, Bia đỡ đạn, Trộm điểm, the dice, Cá chép, Siêu cộng dồn vàng, Đảo bài and every
+diamond-only rule are left out of its pool (`GAMBLER_EXCLUDED`).
+*Why it stays:* none of them can act without a card to keep its state or its moment.
+*Tracked:* `packages/core/src/chaos/plan.ts` (`GAMBLER_EXCLUDED`); BP-41 Task 2 review.
+
+**The card balance waits for the user's numbers.** The 39 new cards' odds, payments and the 50 / 35 / 15 tiers are the spec's first guess;
+nothing has been tuned against real play (bug-log H6 for the 47 older cards).
+*Why it stays:* the user asked to tune with statistics from real tables; a GM can switch any card off or reweight it meanwhile.
+*Tracked:* spec `2026-10-28-chaos-round-three-design.md` §1 ("không cân lại 47 thẻ cũ"); `docs/bug-log.md` H6.
+
+**The round-three English copy is unreviewed.** The herald lines ("Card God", "Demigod"), the curse names, "Lucky dice", "No folding this
+hand" and the 39 cards' names and descriptions were drafted in English by the implementers.
+*Why it stays:* CLAUDE.md §6 — English copy changes only when the user asks.
+*Tracked:* `packages/ui-kit/src/i18n/locales/en/game.json` (`chaos.*`); BP-41 Task 9 report.
 
 ---
 

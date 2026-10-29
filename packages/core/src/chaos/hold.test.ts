@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { seededRng } from '../cards/rng.js'
 import { CHAOS_CARDS_SPEC } from './fixtures.js'
-import { receiveCard, stackHeld, toHeld, toHeldCardView } from './hold.js'
-import { EMPTY_CHAOS_SEAT, type ChaosCardDef, type ChaosSeat } from './types.js'
+import { receiveCard, stackHeld, toChaosTableView, toHeld, toHeldCardView } from './hold.js'
+import { EMPTY_CHAOS_SEAT, EMPTY_CHAOS_TABLE, type ChaosCardDef, type ChaosSeat, type ChaosTableState } from './types.js'
 
 const card = (id: string): ChaosCardDef => {
   const c = CHAOS_CARDS_SPEC.find((x) => x.id === id)
@@ -47,6 +47,11 @@ describe('receiveCard', () => {
       expect(received).toHaveLength(2)
       expect(received[1]!.tier).toBe('gold')
       expect(received[1]!.effect).not.toBe('levelUp')
+      // BP-41 Trộm điểm (gold) acts on receipt and is never held: the caller resolves it.
+      if (received[1]!.effect === 'stealPoints') {
+        expect(seat.cards).toEqual([])
+        continue
+      }
       expect(seat.cards).toHaveLength(1)
       expect(seat.cards[0]!.cardId).toBe(received[1]!.id)
     }
@@ -62,8 +67,11 @@ describe('receiveCard', () => {
 
   it('a Diamond levelUp yields two cards of any tier, none of them a levelUp', () => {
     const tiers = new Set<string>()
+    // One card per effect, so the stacking rule (spec §3.4) never drops the second draw as a lower-tier duplicate of the
+    // first — under the 50/35/15 tiers (BP-41) some seeds in this range would draw one.
+    const onePerEffect = pool.filter((c, i) => pool.findIndex((x) => x.effect === c.effect) === i)
     for (let seed = 1; seed <= 80; seed++) {
-      const { received } = receiveCard(EMPTY_CHAOS_SEAT, card('d_level'), uids(), pool, 'none', seededRng(seed))
+      const { received } = receiveCard(EMPTY_CHAOS_SEAT, card('d_level'), uids(), onePerEffect, 'none', seededRng(seed))
       expect(received[0]!.id).toBe('d_level')
       const got = received.slice(1)
       expect(got).toHaveLength(2)
@@ -124,6 +132,30 @@ describe('toHeldCardView', () => {
   it('shows only what the table may see', () => {
     const held = give(EMPTY_CHAOS_SEAT, ['g_crit']).cards[0]!
     expect(toHeldCardView(held)).toEqual({ uid: held.uid, cardId: 'g_crit', tier: 'gold', handsLeft: 3 })
+  })
+
+  it('BP-41: carries the card’s charge when it keeps one (Cá chép’s energy), and no charge field otherwise', () => {
+    const held = give(EMPTY_CHAOS_SEAT, ['g_crit']).cards[0]!
+    expect(toHeldCardView({ ...held, charge: 42 })).toEqual({ uid: held.uid, cardId: 'g_crit', tier: 'gold', handsLeft: 3, charge: 42 })
+    expect('charge' in toHeldCardView(held)).toBe(false)
+  })
+})
+
+describe('toChaosTableView (BP-41)', () => {
+  it('shows the reign, the curse and the bombs by seat, never a player id', () => {
+    const table: ChaosTableState = {
+      god: { seat: 2, playerId: 'p2', isBot: false, handsLeft: 4, curse: 3, cardId: 'd_carp', uid: 7, params: {} },
+      demigods: [{ seat: 0, playerId: 'p0', isBot: true, handsLeft: 5, cardId: 'd_carp', uid: 8, params: {} }],
+      bombs: [{ owner: 1, carrier: 3, handsLeft: 2, cardId: 'd_bomb', uid: 9 }],
+    }
+    const view = toChaosTableView(table)
+    expect(view).toEqual({
+      god: { seat: 2, handsLeft: 4, curse: 3 },
+      demigods: [{ seat: 0, handsLeft: 5 }],
+      bombs: [{ owner: 1, carrier: 3, handsLeft: 2 }],
+    })
+    expect(JSON.stringify(view)).not.toMatch(/p[0-3]|playerId|uid/)
+    expect(toChaosTableView(EMPTY_CHAOS_TABLE)).toEqual({ god: null, demigods: [], bombs: [] })
   })
 })
 

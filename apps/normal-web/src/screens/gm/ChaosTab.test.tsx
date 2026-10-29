@@ -2,7 +2,9 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError, type GmChaosCardDto, type GmChaosDto, type NormalApi } from '../../api.js'
+import catalogue from '../../../../normal-server/data/chaos-cards.json'
 import viNormal from '../../locales/vi/normal.json'
+import gameVi from '../../../../../packages/ui-kit/src/i18n/locales/vi/game.json'
 import { renderWithI18n } from '../../test-i18n.js'
 import { ChaosTab, dayStartOf, economyDayOf } from './ChaosTab.js'
 
@@ -318,6 +320,47 @@ describe('ChaosTab', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(c.error)
     await user.click(screen.getByRole('button', { name: viNormal.screens.retry }))
     await waitFor(() => expect(screen.getByRole('heading', { name: c.config.title, level: 2 })).toBeInTheDocument())
+  })
+})
+
+describe('ChaosTab with the real 86-card catalogue (Plan 41)', () => {
+  const real: GmChaosCardDto[] = (catalogue as { id: string; tier: GmChaosCardDto['tier']; family: string; effect: string; modes: string[]; enabled: boolean }[]).map(
+    (def) => ({ id: def.id, tier: def.tier, family: def.family, effect: def.effect, modes: def.modes, fileEnabled: def.enabled, rule: null, activeNow: def.enabled }) as GmChaosCardDto,
+  )
+
+  it('lists all 86 cards by tier, every one by its name and family and never by its id', async () => {
+    setup({ cards: real, config: { ...CONFIG, tierWeights: { silver: 50, gold: 35, diamond: 15 } } })
+
+    expect(await section('Bạc · 30/30 thẻ đang bật')).toBeTruthy()
+    expect(await section('Vàng · 28/28 thẻ đang bật')).toBeTruthy()
+    expect(await section('Kim cương · 28/28 thẻ đang bật')).toBeTruthy()
+    expect(real).toHaveLength(86)
+
+    const rows = screen.getAllByRole('row').filter((row) => within(row).queryByRole('checkbox') !== null)
+    expect(rows).toHaveLength(86)
+    const names = (gameVi.chaos.cards as Record<string, { name?: string }>)
+    for (const card of real) {
+      const name = names[card.id]?.name
+      expect(name, `game chaos.cards.${card.id}.name`).toBeTypeOf('string')
+      expect(screen.getAllByLabelText(c.enabledOf.replace('{{card}}', name!)).length, card.id).toBeGreaterThan(0)
+      expect(screen.queryByText(card.id), card.id).toBeNull()
+    }
+    // A family with no label would print its key; the god and dice families have theirs.
+    const families = new Set(real.map((card) => card.family))
+    for (const family of families) {
+      expect((c.family as Record<string, string>)[family], `gm.chaos.family.${family}`).toBeTypeOf('string')
+    }
+    expect(families.has('god')).toBe(true)
+    expect(families.has('dice')).toBe(true)
+  })
+
+  it('shows the server’s tier odds, 50 / 35 / 15 by default', async () => {
+    setup({ cards: real, config: { ...CONFIG, tierWeights: { silver: 50, gold: 35, diamond: 15 } } })
+    const config = await section(c.config.title)
+
+    expect(config.getByLabelText(c.config.weightSilver)).toHaveValue('50')
+    expect(config.getByLabelText(c.config.weightGold)).toHaveValue('35')
+    expect(config.getByLabelText(c.config.weightDiamond)).toHaveValue('15')
   })
 })
 

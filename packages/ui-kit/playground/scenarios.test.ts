@@ -169,4 +169,38 @@ describe('the chaos worst-case pages', () => {
     expect(cards).toHaveLength(3)
     expect(cards[0]).toHaveAccessibleName('Chia lại lá chung (Vàng) · Đã đặt dùng · ván này')
   })
+
+  // BP-41: the pages Task 9 takes its screenshots from.
+  it('#worst/chaosGod/6/vi: the herald, the Thần’s aura and mark, the Bán Thần, a bomb, and no "Bỏ bài"', () => {
+    draw('#worst/chaosGod/6/vi')
+    expect(screen.getByText('Cảnh báo: Bot 1 đã tích luỹ đủ năng lượng và trở thành Thần Bài!')).toBeInTheDocument()
+    expect(document.querySelector('[data-seat="1"]')).toHaveAttribute('data-reign', 'god')
+    expect(screen.getByRole('img', { name: 'Thần Bài · còn 5 ván' })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Bán Thần · còn 5 ván' })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Đang giữ bom · còn 2 ván' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Bỏ bài' })).toBeNull()
+    expect(screen.getByText('Không được bỏ bài ván này')).toBeInTheDocument()
+  })
+
+  it('#worst/chaosDice/6/vi: the dice roll for the table beside the result', () => {
+    draw('#worst/chaosDice/6/vi')
+    expect(screen.getByRole('region', { name: 'Xúc xắc vận may' })).toHaveTextContent('Bot 1')
+    expect(screen.getByRole('heading', { name: 'Người thắng' })).toBeInTheDocument()
+    expect(screen.getByText(/Nổ hũ \+120\.000/)).toBeInTheDocument()
+  })
+
+  it('#worst/chaosSlain/6/vi: the fall of the Thần — its banner and its own toast line beside the result', () => {
+    draw('#worst/chaosSlain/6/vi')
+    expect(screen.getByText(/đã đánh bại Thần Bài!$/)).toBeInTheDocument()
+    expect(document.querySelector('[data-chaos-toast][data-reign="godslain"]')).toHaveTextContent(/hạ Thần Bài Bot 1$/)
+    expect(screen.getByRole('heading', { name: 'Người thắng' })).toBeInTheDocument()
+  })
+
+  it('#worst/chaosSix/6/vi: six board cards, my five hole cards with the wild one marked, one seat down to one card', () => {
+    draw('#worst/chaosSix/6/vi')
+    expect(screen.getByRole('group', { name: 'Bài chung' }).querySelectorAll('[data-card]')).toHaveLength(6)
+    expect(document.querySelector('[data-me="true"] [data-hand]')!.querySelectorAll('[data-card]')).toHaveLength(5)
+    expect(document.querySelector('[data-seat="1"] [data-hand]')!.children).toHaveLength(1)
+    expect(document.querySelector('[data-seat="2"] [data-hand]')).toHaveAttribute('data-count', '5')
+  })
 })

@@ -14,7 +14,7 @@
  * - **Credit.** The only place a chaos card creates points. One transaction per credit: the player row is locked, the
  *   economy day's chaos credits are summed, the amount is cut to what the daily cap (and, for Cấp cứu, the daily count)
  *   leaves, the key is claimed in `ledger_keys`, and two rows are written under it through `creditWithin` — the source
- *   (`chaos_rescue|chaos_crit|chaos_fortune`, +n) and `chaos_to_table` (−n). They cancel on the balance: the points were
+ *   (`chaos_rescue|chaos_crit|chaos_fortune|chaos_jackpot`, +n) and `chaos_to_table` (−n). They cancel on the balance: the points were
  *   never in the account, they go straight to the table stack, which the room raises by `credited`. A source row with no
  *   matching transfer would put the points in the account as well, and the stack would be paid twice.
  */
@@ -94,7 +94,7 @@ const LIMITS = {
   dailyRescues: [0, 20],
 } as const
 
-const CREDIT_REASONS: readonly ChaosCreditReason[] = ['chaos_rescue', 'chaos_crit', 'chaos_fortune']
+const CREDIT_REASONS: readonly ChaosCreditReason[] = ['chaos_rescue', 'chaos_crit', 'chaos_fortune', 'chaos_jackpot']
 
 const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v)
 
@@ -329,7 +329,7 @@ export function createChaosService(deps: ChaosServiceDeps): ChaosService {
             select coalesce(sum(amount), 0) as paid, count(*) filter (where reason = 'chaos_rescue') as rescues
             from ${pointTransactions}
             where player_id = ${playerId}::uuid
-              and reason in ('chaos_rescue', 'chaos_crit', 'chaos_fortune')
+              and reason in ('chaos_rescue', 'chaos_crit', 'chaos_fortune', 'chaos_jackpot')
               and created_at >= ${from} and created_at < ${to}`),
         )
         const paid = Number(sums?.paid ?? 0)

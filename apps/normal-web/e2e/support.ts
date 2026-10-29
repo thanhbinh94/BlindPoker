@@ -392,13 +392,25 @@ export async function expectNoTextOverlapAt(page: Page, label: string, viewports
 }
 
 /** How far the page and the room's stage (the room's one `<main>`, the felt between the header and the tray) scroll. */
-async function overflowOf(page: Page): Promise<{ page: number; stage: number | null }> {
+async function overflowOf(page: Page): Promise<{ page: number; stage: number | null; past: string[] }> {
   return page.evaluate(async () => {
     // Two frames: a resize re-runs the table's container queries before anything is worth measuring.
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
     const root = document.documentElement
     const stage = document.querySelector('main')
-    return { page: root.scrollHeight - root.clientHeight, stage: stage === null ? null : stage.scrollHeight - stage.clientHeight }
+    // What reaches past the stage's foot or its right edge, for the message when it scrolls (BP-41: a 5 px scroll seen once
+    // could not be traced after the run).
+    const past: string[] = []
+    if (stage !== null && stage.scrollHeight - stage.clientHeight > 1) {
+      const box = stage.getBoundingClientRect()
+      for (const el of Array.from(stage.querySelectorAll('*'))) {
+        const r = el.getBoundingClientRect()
+        if (r.height === 0 || r.bottom <= box.bottom + 0.5 || past.length >= 12) continue
+        const data = Array.from(el.attributes).filter((a) => a.name.startsWith('data-')).map((a) => `${a.name}=${a.value}`).join(' ')
+        past.push(`${el.tagName.toLowerCase()}.${String(el.className).split(' ')[0] ?? ''}${data === '' ? '' : ` [${data}]`} +${Math.round(r.bottom - box.bottom)} px`)
+      }
+    }
+    return { page: root.scrollHeight - root.clientHeight, stage: stage === null ? null : stage.scrollHeight - stage.clientHeight, past }
   })
 }
 
@@ -421,9 +433,9 @@ export async function expectRoomFits(page: Page, state: string, viewports = ROOM
   try {
     for (const viewport of viewports) {
       await page.setViewportSize(viewport)
-      const { page: overflow, stage } = await overflowOf(page)
+      const { page: overflow, stage, past } = await overflowOf(page)
       if (overflow > 1 || stage === null || stage > 1) {
-        problems.push(`${viewport.width}×${viewport.height}: the page scrolls ${overflow} px, the stage ${stage ?? '(no <main>)'} px`)
+        problems.push(`${viewport.width}×${viewport.height}: the page scrolls ${overflow} px, the stage ${stage ?? '(no <main>)'} px${past.length === 0 ? '' : ` — past the stage's foot: ${past.join('; ')}`}`)
       }
     }
   } finally {

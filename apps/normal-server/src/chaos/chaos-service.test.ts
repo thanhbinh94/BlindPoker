@@ -71,10 +71,10 @@ const SILVER = CHAOS_CARDS_SPEC.filter((c) => c.tier === 'silver').map((c) => c.
 describe('active()', () => {
   it('follows the file when there are no rules: every card on, each at weight 1 and marked enabled', async () => {
     const { cards, weights } = await chaos.active()
-    expect(cards).toHaveLength(47)
+    expect(cards).toHaveLength(47 + 39)
     expect(cards.every((c) => c.enabled)).toBe(true)
     expect([...weights.values()].every((w) => w === 1)).toBe(true)
-    expect(weights.size).toBe(47)
+    expect(weights.size).toBe(47 + 39)
   })
 
   it('leaves out a card the file has off, and a rule inside its window can turn it on with a weight', async () => {
@@ -121,7 +121,7 @@ describe('active()', () => {
 
   it('is what the port serves as the catalogue, with the config beside it', async () => {
     const port = createChaosPort(chaos)
-    expect((await port.catalogue()).cards).toHaveLength(47)
+    expect((await port.catalogue()).cards).toHaveLength(47 + 39)
     expect(await port.config()).toEqual(DEFAULT_CHAOS_CONFIG)
   })
 })
@@ -133,7 +133,7 @@ describe('rules()', () => {
       { cardId: 'g_crit', enabled: true, weight: 12, startsAt: clock + 5_000, endsAt: clock + 9_000 },
     ])
     const list = await chaos.rules()
-    expect(list).toHaveLength(47)
+    expect(list).toHaveLength(47 + 39) // Plan 37's 47 and BP-41's 39
     expect(list.map((c) => c.id)).toEqual(idsOf(CHAOS_CARDS_SPEC))
     expect(list.find((c) => c.id === 's_charge')).toMatchObject({
       tier: 'silver', family: 'points', effect: 'chaosPoints', fileEnabled: true, activeNow: false,
@@ -272,7 +272,7 @@ describe('config()/setConfig()', () => {
   it('fills a stored row that lacks a field, or holds a wrong one, from the defaults', async () => {
     await db.insert(chaosConfig).values({ key: 'chaos', value: { pointsThreshold: 20, draftMs: 'soon', tierWeights: { gold: 7 } } })
     expect((await chaos.config()).resultMs).toBe(10_000) // a stored row from before BP-39 has no result time
-    expect(await chaos.config()).toEqual({ ...DEFAULT_CHAOS_CONFIG, pointsThreshold: 20, tierWeights: { silver: 60, gold: 7, diamond: 10 } })
+    expect(await chaos.config()).toEqual({ ...DEFAULT_CHAOS_CONFIG, pointsThreshold: 20, tierWeights: { silver: 50, gold: 7, diamond: 15 } })
     await db.update(chaosConfig).set({ value: 'garbage' }).where(eq(chaosConfig.key, 'chaos'))
     clock += CONFIG_CACHE_MS // a row edited by hand is seen once the cache runs out
     expect(await chaos.config()).toEqual(DEFAULT_CHAOS_CONFIG)
@@ -310,8 +310,21 @@ describe('config()/setConfig()', () => {
 })
 
 describe('credit()', () => {
-  const credit = (playerId: string, amount: number, reason: 'chaos_rescue' | 'chaos_crit' | 'chaos_fortune', key: string) =>
+  const credit = (playerId: string, amount: number, reason: 'chaos_rescue' | 'chaos_crit' | 'chaos_fortune' | 'chaos_jackpot', key: string) =>
     chaos.credit({ playerId, roomId: 'room-1', amount, reason, key })
+
+  it('BP-41: pays a jackpot as its own source row, under the same daily cap as the other chaos credits', async () => {
+    const p = await seedPlayer()
+    await setConfig({ ...DEFAULT_CHAOS_CONFIG, dailyCapPoints: 50_000 })
+    expect(await credit(p, 30_000, 'chaos_crit', 'kc')).toEqual({ credited: 30_000, capped: false })
+    expect(await credit(p, 30_000, 'chaos_jackpot', 'kj')).toEqual({ credited: 20_000, capped: true })
+    expect(await credit(p, 1_000, 'chaos_crit', 'kc2')).toEqual({ credited: 0, capped: true })
+    expect((await ledger(p)).filter((r) => r.refId === 'kj')).toEqual([
+      { amount: 20_000, reason: 'chaos_jackpot', refId: 'kj' },
+      { amount: -20_000, reason: 'chaos_to_table', refId: 'kj' },
+    ])
+    expect(await balanceOf(p)).toBe(BALANCE)
+  })
 
   it('writes the source row and the transfer to the table under one key, and leaves the balance alone', async () => {
     const p = await seedPlayer()
@@ -422,13 +435,13 @@ describe('credit()', () => {
   it('keeps the books: balances are untouched, the sources and the table transfers cancel, and the stack gain equals the sources', async () => {
     const [a, b] = [await seedPlayer(), await seedPlayer()]
     let paid = 0
-    for (const [i, [who, amount, reason]] of ([[a, 30_000, 'chaos_crit'], [b, 80_000, 'chaos_fortune'], [a, 90_000, 'chaos_crit'], [b, 5_000, 'chaos_rescue'], [a, 2_000, 'chaos_rescue']] as const).entries()) {
+    for (const [i, [who, amount, reason]] of ([[a, 30_000, 'chaos_crit'], [b, 80_000, 'chaos_fortune'], [a, 90_000, 'chaos_crit'], [b, 5_000, 'chaos_rescue'], [a, 2_000, 'chaos_rescue'], [b, 6_000, 'chaos_jackpot']] as const).entries()) {
       paid += (await credit(who, amount, reason, `k${String(i)}`)).credited
     }
     const [totals] = rowsOf<{ balances: string | number; ledger: string | number; sources: string | number; toTable: string | number }>(
       await db.execute(sql`select (select coalesce(sum(balance), 0) from players) as balances,
         (select coalesce(sum(amount), 0) from point_transactions) as ledger,
-        (select coalesce(sum(amount), 0) from point_transactions where reason in ('chaos_rescue', 'chaos_crit', 'chaos_fortune')) as sources,
+        (select coalesce(sum(amount), 0) from point_transactions where reason in ('chaos_rescue', 'chaos_crit', 'chaos_fortune', 'chaos_jackpot')) as sources,
         (select coalesce(sum(amount), 0) from point_transactions where reason = 'chaos_to_table') as "toTable"`),
     )
     expect(Number(totals!.balances)).toBe(2 * BALANCE)
@@ -437,6 +450,7 @@ describe('credit()', () => {
     expect(Number(totals!.sources)).toBe(paid)
     expect(Number(totals!.toTable)).toBe(-paid)
     // The second Bạo kích of the first player is cut to the cap (70 000 of 90 000), and the Cấp cứu after it finds none left.
-    expect(paid).toBe(30_000 + 80_000 + 70_000 + 5_000 + 0)
+    // BP-41: a jackpot is a source like the others; the second player's cap still had 6 000 left.
+    expect(paid).toBe(30_000 + 80_000 + 70_000 + 5_000 + 0 + 6_000)
   })
 })

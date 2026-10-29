@@ -605,7 +605,7 @@ refusal shows inside the hand, not as the room's error slip. `ChaosDraft`'s land
 All new motion (`.draft`, `.chaosToastIn`, `.strip`, `.bonusError`, `.critShout`, the card hover) is in the "Motion off" block of
 `table.module.css`; the toast's slide class is only applied when not `prefers-reduced-motion`.
 
-**Card names** are `chaos.cards.<id>.name|desc` in `game.json` for all 47 ids, vi and en; the tier of a card that has just acted (a
+**Card names** are `chaos.cards.<id>.name|desc` in `game.json` for all 47 ids (86 since BP-41), vi and en; the tier of a card that has just acted (a
 one-shot is no longer held) is read from the id's prefix (`s_`, `g_`, `d_`). Bạc/Vàng/Kim cương are `chaos.tier.*`, and `errors.CHAOS_UNAVAILABLE`
 and `errors.CHAOS_NO_OFFER` are in `common.json`. BP-39 adds `errors.CHAOS_CANNOT_USE`, `chaos.toast.*` (`use`, `useOn`,
 `more_one|_other`, `all`), `chaos.result.*` (`skip`, `skipped`, `skipCount`, `more_one|_other`), `chaos.bonus.*` (`title`, `use`,
@@ -618,6 +618,67 @@ at once; its result wait emits `RESULT_SKIPS 0/1`, and `playBonus` arms through 
 `#worst/<state>/…` gains `chaosDraft`, `chaosReveal` (not a restored snapshot, so its toasts play), `chaosFour`, `chaosPeel`,
 `chaosBlind`, `chaosResult`, and since BP-39 `chaosBonus` (a full bonus hand, the other seats' counts), `chaosArmed` (a card set to
 play) and `chaosBurst` (eight seats fired one card each, live: three toasts and "+5" beside the open result, `resultSkips` 3/5).
+
+**Round three (BP-41, spec 2026-10-28 §4.5, §5, §8).** `ClientChaos` gains `table` (`ChaosTableView | null`: the Thần, the Bán Thần
+and the bombs with their hands left, from `CHAOS_TABLE`, `CHAOS_STATE.table` and the snapshot's `chaos.table`), `heralds`
+(`ClientHerald { id, kind: 'god' | 'demigod' | 'godslain' | 'dice', seat, name, amount?, dice?, at }`, the name read when the event
+arrives), `rolls` (`ClientDiceRoll { id, seat, name, cardId, dice, result, at }` from `CHAOS_DICE`), `wild` and `hawk` (the viewer's
+own wild card and the cards its Mắt diều hâu saw, cleared by the next hand). `heralds` and `rolls` keep the last 8, share one id
+sequence, survive `HAND_STARTED` (the god herald comes before the deal) and a snapshot, which makes none up. `AppliedChaosView` carries
+the event's extra fields (`dice`, `holeDelta`, `wild`, `off`, `wagers`, `stake`, `transfers`, `reign`) and two room-told kinds, `roll`
+(`CHAOS_DICE`) and `steal` (`CHAOS_STEAL`); a duel's or the Thần's payment (`CHAOS_APPLIED.transfers`) joins the earlier line of the same
+card when its payers and payees are that line's seats, and `CHAOS_SUMMARY` entries with the same seat, card, outcome and reign collapse
+into one line (`collapseUses`). `CHAOS_DICE` lowers the finished hand's seat stack as `CHAOS_CREDIT` raises it. `ClientHand.myCall` is
+the uncapped call from `DECISION_PHASE.calls`, so a multiplied stake (Mạo hiểm gia, Sới lớn) that takes the whole stack reads "Tất tay".
+
+| Component | Props |
+| --- | --- |
+| `ChaosHerald` | `heralds`, `lang`, `held` — the Thần's banner: one full-width band (`button[data-herald=<kind>]`, a line per herald `[data-kind]`, at most 3), gold on red with a glow and a gentle shake, the spec's words exactly ("Cảnh báo: {{name}} đã tích luỹ đủ năng lượng và trở thành Thần Bài!", the Bán Thần's, "{{name}} đã đánh bại Thần Bài!", and a 6-6-6 roll's jackpot). `HERALD_MS` 3 000 from arrival. `heraldWindow`: a dice herald shows from the landing (`DICE_ROLL_MS` after the roll came) until `DICE_MS`, so it leaves with the panel and covers the result 1.5 s at most — the same window under reduced motion (Ruling 20b); a `godslain` herald that would show while the result's reveal hold runs (`held`, from `useRevealHold`) waits for the hold's end and then shows its full 3 s, so the band never names the winner while the cards still turn (Ruling 21). A tap puts it and every earlier herald away. A herald that arrived before the component mounted shows only for the time it has left. Inside an always-mounted `role="status"` (`aria-live="assertive"`, named "Thông báo của bàn"). The band has a `background-color` (0.94 alpha) under its gradients, so `expectNoTextOverlap` reads the seat names it passes over as covered, as they are (BP-41 Task 11) |
+| `ChaosDice` | `rolls`, `lang` — Xúc xắc vận may for the whole table: a `<section>` named "Xúc xắc vận may" (`data-surface="night"`) round one `<button>` (a tap or a key puts it away), a row per roll (at most 4) with the roller's name (`<strong>`), CSS dice with pips (`role="img"`, "Đang gieo…" while they tumble, then "Xúc xắc: 3-4-5") and the result in words (`role="status"`, `rollText`: "Bộ ba! · Nổ hũ 60.000 · 2 thẻ Kim cương", "Mất 2.000"). The dice tumble for `DICE_ROLL_MS` 1 500 (a new face every 90 ms, from the clock: nothing random to test; `data-rolling="true"` on the row), then land; the panel goes `DICE_MS` 3 000 after arrival, or on a tap. Reduced motion: no tumble, the result at once |
+
+**The moment layer.** `RoomScreen` mounts both in `.moments` (`screens.module.css`): `position: fixed; inset: 0`, `z-index:
+var(--z-toast)`, one column from `clamp(40px, 16vh, 150px)` down, `overflow: hidden` (a shake past the edge is clipped) and
+`pointer-events: none` except on the band and the panel. So neither ever scrolls the page, and the two stack instead of lying on each
+other. They cover the result or the draft no longer than their 3 s. The roll's line also reaches the toasts, as a toast of its own,
+or under "+N thẻ khác" when the result is already open (BP-39's rule). It arrives with the roll but keeps its faces and result back
+until the dice land: `AppliedChaosView.rolledAt` is the arrival, and `chaosDetail` says "Đang gieo…" until `rolledAt + DICE_ROLL_MS`
+and `TOAST_AFTER_LANDING_MS` (80 ms, so the line never beats the panel's own landing; the panel's last tumble step stops at the
+landing) (Ruling 22), so neither the toast nor the 6-6-6 band tells the roll while the panel's dice still tumble; under reduced motion,
+where the panel shows the faces at once, the line does too. `ChaosToasts` takes `held` (the reveal hold): a line that arrives while
+it runs — the settlement's payments, the fall of a Thần — arrives at its end, and a payment merged into a line already up is not
+said before then (Ruling 28). A dice jackpot cut by the daily cap (`CHAOS_CREDIT.capped`, matched to its roll by `cardId`) is
+rewritten on the roll, its herald and its toast line, so all three say what was paid. The herald's live region is a
+real box (`.heraldSlot`, not `display: contents`). The Thần's and the dice's colours are tokens (`--chaos-god-*`, `--chaos-die-*` in
+`tokens.css`).
+
+**Seats.** `Seat` takes `reign?: { kind: 'god' | 'demigod'; handsLeft; curse? } | null` and `bomb?: { handsLeft } | null`. The Thần's
+plate breathes a gold-red ring (`.seatGod .plate::after`; still under reduced motion) and the seat carries `data-reign="god"` (or
+`"demigod"`); a pill on the plate's corner reads "♛ N" (`role="img"`, "Thần Bài · còn N ván"), "✦ N" for a Bán Thần ("Bán Thần · còn N
+ván"), "✹ N" for a bomb carrier ("Đang giữ bom · còn N ván"). Each pill is a `ChaosCardInfo` trigger for Cá chép hóa rồng (the reign,
+the hands left and the Thần's curse as a note line) or Bom nổ chậm (the fuse). The pills sit on the top-left corner of the plate; in the
+stack layout on the bottom-left, since the stage clips anything above the first row.
+
+**The tray.** A seat whose `DECISION_PHASE` legal actions lack `fold` (Cấm bỏ bài, a Thần at a "Chơi hoặc bỏ" table) gets, where "Bỏ
+bài" stood, the note "Không được bỏ bài ván này" (`[data-no-fold]`, capped at 34 % of the row so "Chơi" keeps its width at 360 px); "Chơi"
+is the button right after it.
+
+**Cards and board.** `CommunityCards` takes `slots` (default 5): six once a public `sixthBoard` has applied or six cards are on the
+board, the cards at 86 % (`data-board="6"`); a reconnect mid-hand shows five until the river brings the sixth. A seat's hand of 4 or more
+cards overlaps by `data-count` (five cards in the width of three); the viewer's fan has rotations for 4–6 cards, a single card lies
+flat. The wild card (Lá ma) has a diamond ring, a ✦ corner and a hidden "Lá ma: …" line, on the viewer's hand from
+`CHAOS_APPLIED.wild` or the snapshot and on every seat at the showdown from `ShowdownHand.wild`; the cards the viewer's Mắt diều hâu
+saw lie face up with a dashed outline on that seat while the hand runs. The card popup shows Cá chép's energy ("Năng lượng: N%") and
+Siêu cộng dồn's chance ("Tỉ lệ ra lá A: N%") from `HeldCardView.charge`; other charges stay hidden.
+
+**Toast lines.** `chaos-detail.ts` (`detailOf`, `rollText`, `diceText`) adds a "· …" part to each round-three line: payments
+("Lan → Bình: 1.000") and the wagers a duel owes, a stake ×N, dice faces, ±N cards, the wild card, the card Kẻ phá đám switched off, a
+reign ("Hóa Thần Bài!", "Thành Bán Thần!", "Thần Bài bị hạ!"), the Thần's curse (no targets: the whole table), a roll's result and a
+Trộm điểm's points. `chaos.credit.chaos_jackpot` reads "Nổ hũ +N". All 86 card ids have `chaos.cards.<id>.name|desc` in vi and en.
+
+**Playground.** `#worst/chaosGod/<n>/<lang>` (the herald, the Thần's aura and crown, a Bán Thần, a bomb, no "Bỏ bài", the viewer's Cá
+chép at 35 %), `#worst/chaosDice/…` (a Kim cương 6-6-6 roll with its herald and the viewer's Bạc die beside the result) and
+`#worst/chaosSix/…` (six board cards, five hole cards with the wild one, seats holding one and five cards); `scenarios.test.ts` covers
+the three. The ops pack's F-14 (`apps/normal-web/e2e/ops/10-chaos.spec.ts`) forces a Thần and a diamond roll on the real build.
 
 ### Avatars (`src/avatar2d/`)
 
@@ -1289,8 +1350,9 @@ full-viewport, for measuring a layout against a screen size.
   purpose: at 1440 × 900 its right edge covers the left half of the lower-right opponent's plate while the draft is open); the
   English card names and descriptions are unreviewed by the user; the 320 px room header is 30 px taller with the badge. BP-39: the
   Galaxy S25 sizes are checked in Chromium only; the bonus icons and seat icons are 26–28 px tap targets; nine seats in landscape
-  crowd the top line's badges; at 1024 × 768 the desktop result card covers part of the toast column. All in
-  `docs/known-limitations.md`.
+  crowd the top line's badges; at 1024 × 768 the desktop result card covers part of the toast column. BP-41: the herald's glow and
+  shake and the dice are driven in Chromium only, and the ♛ ✦ ✹ marks rely on system fonts (unchecked on Firefox and Safari); a
+  reconnect loses `myCall` until the next `DECISION_PHASE`. All in `docs/known-limitations.md`.
 - **The bet slider has been driven by keyboard only, in Chromium** (BP-31): no touch drag on a real phone, and a screen
   reader's "increase" swipe can seem stuck (it moves the native range by 1 point, which rounds back to the same cell).
   After a hand at a table of seven opponents and more a chip's hand name is cut with "…" when it is long, and the dock's

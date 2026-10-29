@@ -1,6 +1,6 @@
-import type { GameEvent, HandView, HeldCardView, LegalActions, RoomEvent, RoomView, ServerMessage } from '@bp/core'
+import type { ChaosDiceResult, ChaosTableView, GameEvent, HandView, HeldCardView, LegalActions, RoomEvent, RoomView, ServerMessage } from '@bp/core'
 import { initialChaos, initialClientState } from './types.js'
-import type { ClientAction, ClientChaos, ClientHand, ClientHandResult, ClientSeat, ClientState } from './types.js'
+import type { AppliedChaosView, ClientAction, ClientChaos, ClientDiceRoll, ClientHand, ClientHandResult, ClientHerald, ClientSeat, ClientState } from './types.js'
 
 export { initialClientState }
 
@@ -81,7 +81,57 @@ function startHand(state: ClientState, event: Extract<GameEvent, { type: 'HAND_S
   // A new hand closes whatever the last one left: a draft that every seat finished at once is over, and the banner,
   // the credits and the peek were that hand's. The seats' cards stay.
   // The result wait (and its "Bỏ qua" count) is over with the deal. The bonus hand stays: it belongs to the player.
-  return { ...state, hand, deadlineAt: null, preAction: null, resultSkips: null, chaos: { ...state.chaos, draft: null, applied: [], credits: [], awarded: [], peek: null, reverse: false, blindfolded: null } }
+  // The table's own state (BP-41: the Thần, the Bán Thần, the bombs) and the heralds and dice outlive the hand: a herald comes
+  // just before the deal it announces.
+  return {
+    ...state, hand, deadlineAt: null, preAction: null, resultSkips: null,
+    chaos: { ...state.chaos, draft: null, applied: [], credits: [], awarded: [], peek: null, reverse: false, blindfolded: null, wild: null, hawk: null },
+  }
+}
+
+/**
+ * BP-41 Thách đấu and the Thần's duels are told twice: at the reveal (who challenged whom) and at the settlement (who paid
+ * whom, `transfers`). The payment joins the reveal's line — the same card, every payer and payee among its seats — so the
+ * toasts say it once, with the points; one with no such line (a bomb going off, Ép chia thưởng, Thuế thắng) is a line of its
+ * own. A Thần's curse pays one duel per opponent, all onto its one line.
+ */
+function withApplied(applied: readonly AppliedChaosView[], event: AppliedChaosView): AppliedChaosView[] {
+  const paid = event.transfers
+  if (paid !== undefined && (event.effect === 'duel' || event.effect === 'carp')) {
+    const parties = paid.flatMap((t) => [t.from, t.to])
+    const at = applied.findIndex(
+      (a) =>
+        a.cardId === event.cardId && a.effect === event.effect && a.reign === undefined && (a.transfers === undefined || a.effect === 'carp') &&
+        parties.every((seat) => seat === a.seat || a.targets.includes(seat)),
+    )
+    const line = applied[at]
+    if (line !== undefined) {
+      const merged: AppliedChaosView = { ...line, transfers: [...(line.transfers ?? []), ...paid], amount: (line.amount ?? 0) + (event.amount ?? 0) }
+      return applied.map((a, i) => (i === at ? merged : a))
+    }
+  }
+  return [...applied, event]
+}
+
+/**
+ * "Thẻ đã dùng" (`CHAOS_SUMMARY`), one line per card a seat played: a card that hit several seats in several entries (BP-41
+ * Cướp đoạt takes from each victim) reads as one line with every target.
+ */
+function collapseUses(used: Extract<GameEvent, { type: 'CHAOS_SUMMARY' }>['used']): NonNullable<ClientHandResult['chaosUsed']> {
+  const lines: NonNullable<ClientHandResult['chaosUsed']> = []
+  const byKey = new Map<string, number>()
+  for (const u of used) {
+    const key = `${u.seat}|${u.cardId}|${u.outcome}|${u.reign ?? ''}`
+    const at = byKey.get(key)
+    if (at === undefined) {
+      byKey.set(key, lines.length)
+      lines.push({ seat: u.seat, cardId: u.cardId, outcome: u.outcome, targets: [...u.targets] })
+      continue
+    }
+    const line = lines[at]!
+    for (const target of u.targets) if (!line.targets.includes(target)) line.targets.push(target)
+  }
+  return lines
 }
 
 /**
@@ -208,12 +258,18 @@ function applyHandEvent(state: ClientState, hand: ClientHand, event: GameEvent &
       const seat = mine === null ? undefined : hand.seats.find((s) => s.seat === mine)
       // A seat the ante emptied is played for it (plan 27 D1) and never asked; a short one plays what it has left,
       // as `blindLegalActions` says: min(stack, wager), which the button reads as "Tất tay N".
+      // BP-41 (chaos): a card may have multiplied the seat's stake (`calls`, A1) or taken its fold away (`noFold`, A2);
+      // the server says so per seat, and the client mirrors `blindLegalActions` rather than assume the fixed wager.
       const undecided = mine !== null && seat !== undefined && event.seats.includes(mine) && !seat.hasDecided && !seat.allIn
-      const wager = state.room?.config.blind?.fixedWager ?? 0
+      const wager = event.calls?.find((c) => c.seat === mine)?.amount ?? state.room?.config.blind?.fixedWager ?? 0
+      const kinds: LegalActions['kinds'] = mine !== null && event.noFold?.includes(mine) === true ? ['play'] : ['play', 'fold']
       const legal: LegalActions | null = undecided
-        ? { seat: mine, kinds: ['play', 'fold'], callAmount: Math.min(seat.stack, wager), minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 }
+        ? { seat: mine, kinds, callAmount: Math.min(seat.stack, wager), minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 }
         : null
-      return { ...state, deadlineAt: event.deadlineAt ?? null, hand: { ...hand, phase: 'DECISION', actingSeat: null, legal } }
+      // The stake the seat was asked for before its stack capped it: the tray reads "Tất tay" when a multiplied stake takes the
+      // whole stack, even where the cap lands exactly on the fixed wager.
+      const myCall = event.calls?.find((c) => c.seat === mine)?.amount
+      return { ...state, deadlineAt: event.deadlineAt ?? null, hand: { ...hand, phase: 'DECISION', actingSeat: null, legal, ...(myCall === undefined ? {} : { myCall }) } }
     }
     case 'DECISION_MADE':
       return withHand(state, hand, {
@@ -262,9 +318,14 @@ function applyHandEvent(state: ClientState, hand: ClientHand, event: GameEvent &
     // Poker hỗn loạn: the table reads the cards that acted from `state.chaos`. A card that re-deals the board
     // (redealBoard, the storm) carries the new board: it lands like a street, so the cards come out of the deck again.
     case 'CHAOS_APPLIED': {
-      const { type: _type, ...applied } = event
+      const { type: _type, privateTo: _private, ...told } = event
+      // BP-41: the Thần's curse line (Cá chép with no reign) keeps the curse it told, whatever the table holds later (Task 9 M4).
+      const curse = event.effect === 'carp' && event.reign === undefined ? (state.chaos.table?.god?.curse ?? null) : null
+      const applied: AppliedChaosView = curse === null ? told : { ...told, curse }
       const reverse = state.chaos.reverse || (event.effect === 'reverseRank' && event.outcome === 'applied')
-      const chaos = { ...state.chaos, applied: [...state.chaos.applied, applied], reverse }
+      // BP-41 Lá ma: the wild card reaches its owner alone (`filterEvent`); it stays wild while the owner holds it.
+      const wild = event.wild !== undefined && event.seat === hand.mySeat && event.outcome === 'applied' ? event.wild : state.chaos.wild
+      const chaos = { ...state.chaos, applied: withApplied(state.chaos.applied, applied), reverse, wild }
       const board = event.community === undefined ? hand : { ...hand, community: event.community.slice(), boardAt: now }
       return { ...state, hand: board, chaos }
     }
@@ -272,8 +333,12 @@ function applyHandEvent(state: ClientState, hand: ClientHand, event: GameEvent &
     case 'CHAOS_PEEK':
       if (event.seat !== hand.mySeat) return state
       return { ...state, chaos: { ...state.chaos, peek: { seat: event.seat, cards: event.cards.slice() } } }
+    // BP-41 Mắt diều hâu: what I saw of `target`'s cards (another seat's look comes with its cards blanked: only the toast says it).
+    case 'CHAOS_HAWK':
+      if (event.seat !== hand.mySeat || event.cards.length === 0) return state
+      return { ...state, chaos: { ...state.chaos, hawk: { target: event.target, cards: event.cards.slice() } } }
     case 'CHAOS_SUMMARY':
-      return withHand(state, hand, { result: { ...(hand.result ?? NO_RESULT), chaosUsed: event.used.map((u) => ({ seat: u.seat, cardId: u.cardId, outcome: u.outcome, targets: u.targets })) } })
+      return withHand(state, hand, { result: { ...(hand.result ?? NO_RESULT), chaosUsed: collapseUses(event.used) } })
   }
 }
 
@@ -326,34 +391,119 @@ function applyRoomEvent(room: RoomView, event: RoomEvent): RoomView {
       return room
     // Poker hỗn loạn: these live in `ClientState.chaos` (`applyChaosRoomEvent`), not in the roster.
     // A credit raises the seat's stack (absolute, from the server): between hands the roster is what the next deal reads.
+    // BP-41: a dice loss lowers it the same way (`stack` is after the loss).
     case 'CHAOS_CREDIT':
+    case 'CHAOS_DICE':
       return { ...room, players: room.players.map((p) => (p.seat === event.seat ? { ...p, stack: event.stack } : p)) }
     case 'CHAOS_DRAFT':
     case 'CHAOS_PICKED':
     case 'CHAOS_STATE':
     case 'CHAOS_AWARDED':
+    case 'CHAOS_HERALD':
+    case 'CHAOS_TABLE':
+    case 'CHAOS_STEAL':
     case 'RESULT_SKIPS': // the count lives in `ClientState.resultSkips`
       return room
   }
 }
 
-/** The chaos half of a room event. `mySeat` is the viewer's seat before the event (null when it has none). */
-function applyChaosRoomEvent(chaos: ClientChaos, event: RoomEvent, mySeat: number | null, seatOf: (playerId: string) => number | null): ClientChaos {
+/** What `applyChaosRoomEvent` reads of the room around the event. */
+interface ChaosRoomContext {
+  /** The viewer's seat before the event (null when it has none). */
+  mySeat: number | null
+  seatOf: (playerId: string) => number | null
+  /** A seat's display name now (a herald and a roll keep it: the player may leave before the banner is read). */
+  nameOfSeat: (seat: number) => string
+  nameOfPlayer: (playerId: string) => string | null
+  /** The client clock at the frame's arrival. */
+  now: number
+}
+
+/** How many heralds and rolls the state keeps: what one settlement can bring, with room to spare. */
+const KEPT_MOMENTS = 8
+
+const nextMomentId = (chaos: ClientChaos): number =>
+  Math.max(0, ...chaos.heralds.map((h) => h.id), ...chaos.rolls.map((r) => r.id)) + 1
+
+const keepLast = <T,>(list: readonly T[], item: T): T[] => [...list, item].slice(-KEPT_MOMENTS)
+
+/** An empty table view (no Thần, no Bán Thần, no bomb) is `null`, as `CHAOS_STATE` says it by leaving `table` out. */
+const tableOrNull = (table: ChaosTableView | undefined): ChaosTableView | null =>
+  table === undefined || (table.god === null && table.demigods.length === 0 && table.bombs.length === 0) ? null : table
+
+/** The chaos half of a room event. */
+function applyChaosRoomEvent(chaos: ClientChaos, event: RoomEvent, ctx: ChaosRoomContext): ClientChaos {
+  const { mySeat, seatOf } = ctx
   switch (event.type) {
     case 'CHAOS_DRAFT': {
       const open = chaos.draft
-      // The offer may have beaten the draft frame here (they travel on different paths): same draft, keep it.
-      if (open && open.tier === event.tier && open.deadlineAt === event.deadlineAt) return chaos
+      // The offer may have beaten the draft frame here (they travel on different paths): same draft, keep it — and its
+      // tier, which may be above the table's (BP-41 Nâng tầm uy lực: the seat's own offer names its own tier).
+      if (open && open.deadlineAt === event.deadlineAt) return chaos
       return { ...chaos, draft: { tier: event.tier, deadlineAt: event.deadlineAt, totalMs: event.draftMs, offer: null, picked: false } }
     }
     case 'CHAOS_PICKED':
       return chaos.draft && event.seat === mySeat ? { ...chaos, draft: { ...chaos.draft, picked: true } } : chaos
     // Sent after a draft and after each hand: a draft is over by then.
+    // BP-41: its `table` is the table's whole public state; absent = none.
     case 'CHAOS_STATE':
-      return { ...chaos, draft: null, seats: Object.fromEntries(event.seats.map((s) => [s.seat, { cards: s.cards, points: s.points, bonusCount: s.bonusCount }])) }
+      return {
+        ...chaos, draft: null, table: tableOrNull(event.table),
+        seats: Object.fromEntries(event.seats.map((s) => [s.seat, { cards: s.cards, points: s.points, bonusCount: s.bonusCount }])),
+      }
+    case 'CHAOS_TABLE':
+      return { ...chaos, table: tableOrNull(event.table) }
+    case 'CHAOS_HERALD': {
+      const herald: ClientHerald = { id: nextMomentId(chaos), kind: event.kind, seat: event.seat, name: ctx.nameOfPlayer(event.playerId) ?? ctx.nameOfSeat(event.seat), at: ctx.now }
+      return { ...chaos, heralds: keepLast(chaos.heralds, herald) }
+    }
+    // BP-41 §5: the roll the table watches, a line in the toasts like any card, and — for 18 or 6-6-6 — a banner of its own.
+    case 'CHAOS_DICE': {
+      const id = nextMomentId(chaos)
+      const name = ctx.nameOfSeat(event.seat)
+      const roll: ClientDiceRoll = { id, seat: event.seat, name, cardId: event.cardId, dice: event.dice.slice(), result: event.result, at: ctx.now }
+      const line: AppliedChaosView = {
+        seat: event.seat, cardId: event.cardId, effect: 'fortuneDice', targets: [], outcome: 'applied', dice: event.dice.slice(), roll: event.result,
+        rolledAt: ctx.now,
+      }
+      const heralds =
+        event.result.herald === true
+          ? keepLast(chaos.heralds, { id: id + 1, kind: 'dice' as const, seat: event.seat, name, dice: event.dice.slice(), ...(event.result.jackpot === undefined ? {} : { amount: event.result.jackpot }), at: ctx.now })
+          : chaos.heralds
+      return { ...chaos, rolls: keepLast(chaos.rolls, roll), heralds, applied: [...chaos.applied, line] }
+    }
+    // BP-41 Trộm điểm, told to all: a line in the toasts; the points themselves come with the next `CHAOS_STATE`.
+    case 'CHAOS_STEAL': {
+      const line: AppliedChaosView = {
+        seat: event.seat, cardId: event.cardId, effect: 'stealPoints', targets: event.targets.slice(), outcome: event.outcome,
+        steal: { from: event.from, to: event.to, amount: event.amount },
+      }
+      return { ...chaos, applied: [...chaos.applied, line] }
+    }
     case 'CHAOS_CREDIT': {
       const { type: _type, stack: _stack, ...credit } = event
-      return { ...chaos, credits: [...chaos.credits, credit] }
+      // BP-41: a dice jackpot cut by the daily cap — the roll that won it (it comes just before, and shows only once the dice
+      // land) says what was paid, everywhere it is told: its herald (no amount at all when the cap left nothing), the dice panel
+      // and its toast line (Task 9 M3, follow-up R2). Matched by the card that paid (`cardId`): a Mạo hiểm gia's is not a roll.
+      if (event.reason !== 'chaos_jackpot' || !event.capped || event.cardId === undefined) return { ...chaos, credits: [...chaos.credits, credit] }
+      const lastIndex = <T,>(list: readonly T[], hit: (x: T) => boolean): number => list.reduce((last, x, i) => (hit(x) ? i : last), -1)
+      const rollAt = lastIndex(chaos.rolls, (r) => r.seat === event.seat && r.cardId === event.cardId && r.result.jackpot !== undefined)
+      if (rollAt < 0) return { ...chaos, credits: [...chaos.credits, credit] }
+      const capResult = (result: ChaosDiceResult): ChaosDiceResult => {
+        const { jackpot: _was, ...rest } = result
+        return event.amount > 0 ? { ...rest, jackpot: event.amount } : rest
+      }
+      const roll = chaos.rolls[rollAt]!
+      const rolls = chaos.rolls.map((r, i) => (i === rollAt ? { ...r, result: capResult(r.result) } : r))
+      const heraldAt = lastIndex(chaos.heralds, (h) => h.kind === 'dice' && h.seat === event.seat)
+      const heralds = chaos.heralds.map((h, i) => {
+        if (i !== heraldAt) return h
+        const { amount: _was, ...rest } = h
+        return event.amount > 0 ? { ...rest, amount: event.amount } : rest
+      })
+      const lineAt = lastIndex(chaos.applied, (a) => a.seat === event.seat && a.cardId === roll.cardId && a.roll !== undefined)
+      const applied = chaos.applied.map((a, i) => (i === lineAt && a.roll !== undefined ? { ...a, roll: capResult(a.roll) } : a))
+      return { ...chaos, credits: [...chaos.credits, credit], heralds, rolls, applied }
     }
     case 'CHAOS_AWARDED':
       return { ...chaos, awarded: [...chaos.awarded, { seat: event.seat, cardIds: event.cardIds }] }
@@ -378,7 +528,14 @@ function dropSeat(chaos: ClientChaos, seat: number): ClientChaos {
 }
 
 /** The seats' chaos cards as a snapshot's roster carries them; a chaos table gives every seated player an entry. */
-function chaosFromSnapshot(room: RoomView, draft: ClientChaos['draft'], hand: HandView | null, bonus: ClientChaos['bonus'] | undefined): ClientChaos {
+function chaosFromSnapshot(
+  room: RoomView,
+  draft: ClientChaos['draft'],
+  hand: HandView | null,
+  bonus: ClientChaos['bonus'] | undefined,
+  tableView: ChaosTableView | undefined,
+  kept: ClientChaos,
+): ClientChaos {
   const table = room.config.blind?.chaosCycle !== undefined
   const seats: ClientChaos['seats'] = {}
   for (const p of room.players) {
@@ -388,7 +545,13 @@ function chaosFromSnapshot(room: RoomView, draft: ClientChaos['draft'], hand: Ha
   const view = hand?.chaos
   const mine = hand?.mySeat ?? null
   const peek = view !== undefined && view.peek.length > 0 && mine !== null ? { seat: mine, cards: view.peek.slice() } : null
-  return { ...initialChaos, seats, draft, peek, reverse: view?.reverse ?? false, blindfolded: view === undefined ? null : view.blindfolded, bonus: bonus ?? initialChaos.bonus }
+  // BP-41: the table's reign and bombs, and the viewer's own wild card and hawk's look. A snapshot is no arrival: the heralds and
+  // rolls already received stay (the banner and the dice play only what is new), and none is made up.
+  const hawk = view?.hawk === undefined || view.hawk.cards.length === 0 ? null : { target: view.hawk.seat, cards: view.hawk.cards.slice() }
+  return {
+    ...initialChaos, seats, draft, peek, reverse: view?.reverse ?? false, blindfolded: view === undefined ? null : view.blindfolded, bonus: bonus ?? initialChaos.bonus,
+    table: tableOrNull(tableView), heralds: kept.heralds, rolls: kept.rolls, wild: view?.wild ?? null, hawk,
+  }
 }
 
 const TIERS: ReadonlySet<unknown> = new Set(['silver', 'gold', 'diamond'])
@@ -448,7 +611,7 @@ function applyChaosOffer(chaos: ClientChaos, payload: unknown): ClientChaos {
   if (!Array.isArray(p.cardIds) || !p.cardIds.every((c) => typeof c === 'string')) return chaos
   const offer = { offerId: p.offerId, cardIds: p.cardIds as string[] }
   const open = chaos.draft
-  const same = open !== null && open.tier === p.tier && open.deadlineAt === p.deadlineAt
+  const same = open !== null && open.deadlineAt === p.deadlineAt
   const picked = same && open.offer?.offerId === offer.offerId ? open.picked : false
   // The window's length rides on the offer too (it may beat the draft frame here); without it, the draft frame's, else the default.
   const totalMs = typeof p.draftMs === 'number' && p.draftMs > 0 ? p.draftMs : same ? open.totalMs : DEFAULT_DRAFT_MS
@@ -504,7 +667,7 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
         roomStale: false,
         roomReturns: state.roomStale ? state.roomReturns + 1 : state.roomReturns,
         hand: msg.hand ? handFromView(msg.hand, msg.room) : null,
-        chaos: chaosFromSnapshot(msg.room, draftFromSnapshot(msg.chaos?.draft ?? null), msg.hand, msg.chaos?.bonus),
+        chaos: chaosFromSnapshot(msg.room, draftFromSnapshot(msg.chaos?.draft ?? null), msg.hand, msg.chaos?.bonus, msg.chaos?.table, state.chaos),
         resultSkips: skipsFromSnapshot(msg.resultSkips),
         seq: msg.seq,
         deadlineAt: msg.deadlineAt,
@@ -562,13 +725,22 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
       }
       const myPlayer = state.me !== null ? state.room?.players.find((p) => p.playerId === state.me!.playerId) : undefined
       const stopsAutoPlay = mine && (event.type === 'PLAYER_STOOD' || (event.type === 'PLAYER_SIT_OUT' && event.sittingOut))
-      // A card credit lands after the hand settled; the finished hand is still on the table, so its plate shows the raise too.
-      const credited = event.type === 'CHAOS_CREDIT' && state.hand !== null && state.hand.seats.some((x) => x.seat === event.seat)
+      // A card credit lands after the hand settled; the finished hand is still on the table, so its plate shows the raise too —
+      // and a dice loss (BP-41) the fall.
+      const credited = (event.type === 'CHAOS_CREDIT' || event.type === 'CHAOS_DICE') && state.hand !== null && state.hand.seats.some((x) => x.seat === event.seat)
+      const players = state.room?.players ?? []
+      const ctx: ChaosRoomContext = {
+        mySeat: myPlayer?.seat ?? null,
+        seatOf: (id) => players.find((p) => p.playerId === id)?.seat ?? null,
+        nameOfSeat: (seat) => players.find((p) => p.seat === seat)?.displayName ?? state.hand?.seats.find((x) => x.seat === seat)?.displayName ?? String(seat + 1),
+        nameOfPlayer: (id) => players.find((p) => p.playerId === id)?.displayName ?? state.hand?.seats.find((x) => x.playerId === id)?.displayName ?? null,
+        now,
+      }
       return {
         ...state,
         hand: credited ? { ...state.hand!, seats: mapSeat(state.hand!, event.seat, (x) => ({ ...x, stack: event.stack })) } : state.hand,
         room: state.room ? applyRoomEvent(state.room, event) : null,
-        chaos: applyChaosRoomEvent(state.chaos, event, myPlayer?.seat ?? null, (id) => state.room?.players.find((p) => p.playerId === id)?.seat ?? null),
+        chaos: applyChaosRoomEvent(state.chaos, event, ctx),
         resultSkips: skipsAfter(state.resultSkips, event),
         seq: msg.seq,
         resyncNeeded,

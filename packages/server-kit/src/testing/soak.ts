@@ -214,9 +214,10 @@ export async function runSoak(server: TestServer, opts: SoakOptions): Promise<So
       // Blind's legal set is a literal, unlike the branch above: `DECISION_PHASE` is
       // `{ seats, turnSeq }` (`packages/core/src/hand/types.ts`) and carries no `legal`, so there is
       // nothing server-advertised to read. play/fold is the whole of §8.2's decision — unless the ante emptied the
-      // seat, which the server then plays all in itself and never asks (spec R14).
+      // seat, which the server then plays all in itself and never asks (spec R14). A seat on `noFold` (BP-41 Cấm bỏ bài)
+      // may only play.
       else if (e.type === 'DECISION_PHASE' && e.seats.includes(s.seat)) {
-        if (!s.autoPlayed) act(s, ['play', 'fold'], m.seq)
+        if (!s.autoPlayed) act(s, e.noFold?.includes(s.seat) ? ['play'] : ['play', 'fold'], m.seq)
       } else if ((e.type === 'DECISION_MADE' && e.seat === s.seat) || (e.type === 'PLAYER_ACTED' && e.seat === s.seat)) {
         // A timed-out seat's PLAYER_ACTED is the timer's work, not ours: it is not a latency sample.
         const timedOut = e.type === 'PLAYER_ACTED' && e.timedOut

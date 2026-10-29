@@ -17,6 +17,7 @@
  * **A hand nobody was paid for is not a hand played.** A cancelled hand moves no counter, and
  * neither does one whose settlement failed (`summary.settlementError`) — see `onHandSettled`.
  */
+import type { ChaosTitles } from '@bp/core'
 import type { HandSummary } from '@bp/server-kit'
 import { eq, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
@@ -58,6 +59,9 @@ const COLUMNS = {
   totalLoginDays: playerStats.totalLoginDays,
   loginStreak: playerStats.loginStreak,
   bestLoginStreak: playerStats.bestLoginStreak,
+  chaosAscensions: playerStats.chaosAscensions,
+  chaosDemigods: playerStats.chaosDemigods,
+  chaosGodsSlain: playerStats.chaosGodsSlain,
 } as const satisfies Record<StatMetric, unknown>
 
 /** `column + n`, evaluated against the row's pre-update value. */
@@ -76,8 +80,18 @@ function atLeast(metric: StatMetric, value: number): SQL {
  * Pure, and returned as a patch rather than applied, so the whole rule set of §10.3 is readable in
  * one place and testable without a database.
  */
-export function patchForHand(summary: HandSummary, seat: { net: number; won: boolean; bestCategory: number | null }): Patch {
+export function patchForHand(
+  summary: HandSummary,
+  seat: { net: number; won: boolean; bestCategory: number | null; chaosTitles?: ChaosTitles | undefined },
+): Patch {
   const patch: Patch = { gamesCompleted: inc('gamesCompleted') }
+  // BP-41 (spec 2026-10-28 §4.4, the exception to Q13): the three title counters are the only chaos-hand stats beyond the
+  // "played" ones, so they are counted before the chaos return below. The room already left a mark out unless the hand
+  // settled at a table of two or more humans, the row is a human's, and (for `slew`) the Thần was a human.
+  const titles = seat.chaosTitles
+  if (titles?.ascended === true) patch.chaosAscensions = inc('chaosAscensions')
+  if (titles?.demigod === true) patch.chaosDemigods = inc('chaosDemigods')
+  if (titles?.slew !== undefined && titles.slew > 0) patch.chaosGodsSlain = inc('chaosGodsSlain', titles.slew)
   // Plan 37: a Poker hỗn loạn hand is played, not won. Cards bend its result, so it feeds no win count, record or streak,
   // and a chaos hand neither extends a streak nor breaks one: the streaks simply skip it.
   const chaos = isChaosHand(summary)
@@ -148,6 +162,7 @@ export function createStatsService(deps: StatsServiceDeps): StatsService {
     // then pay a real, ledgered credit (`big_win_500k` is 30,000 points) for a win the ledger says
     // never happened. A hand nobody was paid for is not a hand played. The row is still in `games`
     // with its `settlement_error`, and `app.ts` logs it, so the operator reconciles from there.
+    // BP-41 Ruling 7: a chaos hand's title marks (`chaosTitles`) are lost with it, like every other counter.
     if (summary.cancelled || summary.settlementError !== undefined) return
     for (const seat of summary.players) {
       if (seat.isBot) continue

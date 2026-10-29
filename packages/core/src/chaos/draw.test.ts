@@ -5,13 +5,14 @@ import { CHAOS_CARDS_SPEC } from './fixtures.js'
 import { DEFAULT_CHAOS_CONFIG, type ChaosTier } from './types.js'
 
 describe('drawTier', () => {
-  it('lands within ±2 % of 60/30/10 over 10 000 seeded draws', () => {
+  it('defaults to 50/35/15 (BP-41 G8) and lands within ±2 % of it over 10 000 seeded draws', () => {
+    expect(DEFAULT_CHAOS_CONFIG.tierWeights).toEqual({ silver: 50, gold: 35, diamond: 15 })
     const rng = seededRng(37)
     const counts: Record<ChaosTier, number> = { silver: 0, gold: 0, diamond: 0 }
     for (let i = 0; i < 10_000; i++) counts[drawTier(DEFAULT_CHAOS_CONFIG.tierWeights, rng)]++
-    expect(Math.abs(counts.silver - 6_000)).toBeLessThanOrEqual(200)
-    expect(Math.abs(counts.gold - 3_000)).toBeLessThanOrEqual(200)
-    expect(Math.abs(counts.diamond - 1_000)).toBeLessThanOrEqual(200)
+    expect(Math.abs(counts.silver - 5_000)).toBeLessThanOrEqual(200)
+    expect(Math.abs(counts.gold - 3_500)).toBeLessThanOrEqual(200)
+    expect(Math.abs(counts.diamond - 1_500)).toBeLessThanOrEqual(200)
   })
 
   it('never draws a tier of weight 0', () => {
@@ -50,7 +51,11 @@ describe('drawOffer', () => {
     }
     expect(seen.has('g_luck_3')).toBe(false)
     expect(seen.has('g_farm')).toBe(false)
-    expect(seen.get('g_crit')).toBeGreaterThan(450)
+    // Weight 20 among 23 weight-1 gold cards on a 'none' table (g_luck_3 and g_farm out, the ✱ cards out): in about 4
+    // offers out of 5, and far above any other.
+    expect(seen.get('g_crit')).toBeGreaterThan(380)
+    const rest = [...seen].filter(([id]) => id !== 'g_crit').map(([, n]) => n)
+    expect(Math.max(...rest) * 5).toBeLessThan(seen.get('g_crit')!)
   })
 
   it('offers what exists when a tier has fewer active cards, and falls back a tier when it has none', () => {

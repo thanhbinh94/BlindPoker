@@ -274,8 +274,8 @@ describe('docs/test-matrix.md', () => {
     // wagers, the phone table in M-06), and Plan 37's four (spec 2026-10-26: the chaos credits' books in the room and in the
     // database, the history's "Thẻ đã dùng" line, the chaos table in a browser in F-13, F-13b and F-13c), and BP-39's three
     // (spec 2026-10-27, at the Galaxy S25's sizes: the result strip and "Bỏ qua" in F-13d/e, eight cards at one reveal in
-    // F-13f, the bonus hand in F-13g)
-    expect(rows).toBe(43 + 10 + 4 + 7 + 5 + 8 + 3 + 5 + 5 + 3 + 3 + 2 + 4 + 4 + 3)
+    // F-13f, the bonus hand in F-13g), and BP-41's two (spec 2026-10-28: a Thần forced in F-14a/b, the dice of fortune in F-14c/d)
+    expect(rows).toBe(43 + 10 + 4 + 7 + 5 + 8 + 3 + 5 + 5 + 3 + 3 + 2 + 4 + 4 + 3 + 2)
     expect(citations.length).toBeGreaterThanOrEqual(40)
   })
 

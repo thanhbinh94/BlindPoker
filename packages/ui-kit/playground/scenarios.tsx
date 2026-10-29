@@ -71,10 +71,29 @@ export type WorstState = 'waiting' | 'turn' | 'result' | 'blindS' | 'blindP' | '
  *   them), the result wait running with "Bỏ qua" at 3 of 5 and not pressed by me, one bonus card in my hand.
  * - `chaosArmed`: `chaosBonus` after I pressed "Dùng" on the board re-deal: it waits marked "Đã đặt dùng · ván này" for this hand's
  *   reveal, the other two cards still in my hand with their "Dùng" greyed.
+ *
+ * BP-41, round three (each herald and roll plays from the page's load, for its 3 s; reload to see it again):
+ * - `chaosGod`: the deal of a Thần's first hand — the herald across the screen, Bot 1 the Thần with its aura and "♛ 5",
+ *   Bot 2 a Bán Thần ("✦ 5"), Bot 3 carrying my bomb ("✹ 2"); my decision round with "Bỏ bài" gone and the reason in its
+ *   place; the herald's and the curse's lines in the toasts; my Cá chép at 35 % energy among my cards.
+ * - `chaosDice`: the hand over and the dice of fortune rolling for the table — Bot 1's Kim cương 6-6-6 (the jackpot's banner
+ *   once the dice land) and my Bạc die — beside the result, its jackpot credit, and the dice lines in the toasts.
+ * - `chaosSlain` (fix wave): the hand over and I beat Bot 1, the Thần — the fall's banner and its toast line ("… hạ Thần Bài Bot 1")
+ *   beside the result; the throne empty.
+ * - `chaosSix`: after the river with Lá chung thứ sáu — six board cards — my five hole cards (one of them wild, Lá ma) fanned,
+ *   Bot 1 down to one card, Bot 2 holding five face down.
  */
-export type ChaosState = 'chaosDraft' | 'chaosReveal' | 'chaosFour' | 'chaosPeel' | 'chaosBlind' | 'chaosResult' | 'chaosBoard' | 'chaosBonus' | 'chaosBurst' | 'chaosArmed'
+export type ChaosState =
+  | 'chaosDraft' | 'chaosReveal' | 'chaosFour' | 'chaosPeel' | 'chaosBlind' | 'chaosResult' | 'chaosBoard' | 'chaosBonus' | 'chaosBurst' | 'chaosArmed'
+  | 'chaosGod' | 'chaosDice' | 'chaosSix' | 'chaosSlain'
 
-const CHAOS_STATES: readonly ChaosState[] = ['chaosDraft', 'chaosReveal', 'chaosFour', 'chaosPeel', 'chaosBlind', 'chaosResult', 'chaosBoard', 'chaosBonus', 'chaosBurst', 'chaosArmed']
+const CHAOS_STATES: readonly ChaosState[] = [
+  'chaosDraft', 'chaosReveal', 'chaosFour', 'chaosPeel', 'chaosBlind', 'chaosResult', 'chaosBoard', 'chaosBonus', 'chaosBurst', 'chaosArmed',
+  'chaosGod', 'chaosDice', 'chaosSix', 'chaosSlain',
+]
+/** The states whose hand is over (the result out). */
+const isOver = (state: ChaosState): boolean =>
+  state === 'chaosDraft' || state === 'chaosResult' || state === 'chaosBurst' || state === 'chaosDice' || state === 'chaosSlain'
 const isChaos = (state: WorstState): state is ChaosState => (CHAOS_STATES as readonly string[]).includes(state)
 
 /** `/short`: the box the room is laid out in, the user's 855 × 319 phone (bug log §10, E1/E2). */
@@ -212,7 +231,7 @@ function room(n: number, state: WorstState, now: number, long: boolean): RoomVie
       hostPlayerId: ME,
       players: players(n, state, long),
       carryOverPot: 0,
-      nextHandAt: state === 'chaosDraft' ? now + 15_000 : state === 'chaosBurst' ? now + 10_000 : null,
+      nextHandAt: state === 'chaosDraft' ? now + 15_000 : state === 'chaosBurst' || state === 'chaosDice' || state === 'chaosSlain' ? now + 10_000 : null,
     }
   }
   const squeeze = state === 'blindS'
@@ -249,12 +268,17 @@ const THIRD = ['2s', '3h', '3d', '4h', '4s', '6c', '8c', '9h', 'Jc']
 /** Four cards for the viewer when "Thêm lá" is on a three-card table. */
 const FOURTH = '2h'
 
+/** `chaosSix`: my five hole cards (Hên xui, Đảo bài and Thêm lá together), none on the six-card board. */
+const MY_FIVE = 'Ah Kh 2s 5c 8d'
+const SIX_BOARD = 'Ac Kc 9h 4h 3d 7s'
+
 function chaosSeat(i: number, state: ChaosState, long: boolean): ClientSeat {
   const mine = i === 0
-  const over = state === 'chaosDraft' || state === 'chaosResult' || state === 'chaosBurst'
+  const over = isOver(state)
   const four = (state === 'chaosFour' || state === 'chaosPeel') && mine
-  const count = four ? 4 : state === 'chaosFour' && i === 2 ? 4 : 3
-  const own = `${HANDS[i]!.hole} ${THIRD[i]!}${four ? ` ${FOURTH}` : ''}`
+  const six = state === 'chaosSix'
+  const count = six ? (mine ? 5 : i === 1 ? 1 : i === 2 ? 5 : 3) : four ? 4 : state === 'chaosFour' && i === 2 ? 4 : 3
+  const own = six && mine ? MY_FIVE : `${HANDS[i]!.hole} ${THIRD[i]!}${four ? ` ${FOURTH}` : ''}`
   const turned = state === 'chaosPeel' && i === 1
   const shown = over || (mine && state !== 'chaosBlind') || turned
   return {
@@ -269,7 +293,7 @@ function chaosSeat(i: number, state: ChaosState, long: boolean): ClientSeat {
     cardCount: count,
     holeCards: shown ? cards(count === 4 && !mine ? `${own} ${FOURTH}` : own) : null,
     ...(state === 'chaosPeel' ? { revealed: turned } : {}),
-    hasDecided: state === 'chaosBoard' || (!mine && (state === 'chaosReveal' || state === 'chaosFour' || state === 'chaosBlind' || state === 'chaosBonus' || state === 'chaosArmed')),
+    hasDecided: state === 'chaosBoard' || six || (!mine && (state === 'chaosReveal' || state === 'chaosFour' || state === 'chaosBlind' || state === 'chaosBonus' || state === 'chaosArmed' || state === 'chaosGod')),
     decision: null,
     lastAction: null,
     timedOut: false,
@@ -362,24 +386,28 @@ const BONUS_HAND = [
 /** A chaos hand: the round it is in, and — for a hand that is over — a result that pays the viewer, with the cards that acted. */
 function chaosHand(n: number, state: ChaosState, long: boolean): ClientHand {
   const all = Array.from({ length: n }, (_, i) => i)
-  const over = state === 'chaosDraft' || state === 'chaosResult' || state === 'chaosBurst'
+  const over = isOver(state)
   const base: ClientHand = {
     handId: `worst-${state}`,
     mode: 'blind',
-    phase: over ? 'COMPLETE' : state === 'chaosPeel' ? 'SQUEEZE' : state === 'chaosBoard' ? 'REVEAL' : 'DECISION',
-    community: over || state === 'chaosBoard' ? cards('Ac Kc 9h 4h 3d') : [],
+    phase: over ? 'COMPLETE' : state === 'chaosPeel' ? 'SQUEEZE' : state === 'chaosBoard' || state === 'chaosSix' ? 'REVEAL' : 'DECISION',
+    community: state === 'chaosSix' ? cards(SIX_BOARD) : over || state === 'chaosBoard' ? cards('Ac Kc 9h 4h 3d') : [],
     pot: over ? 0 : n * BLIND_WAGER,
     carryOverIn: 0,
     button: Math.min(3, n - 1),
     actingSeat: null,
     seats: all.map((i) => chaosSeat(i, state, long)),
     mySeat: 0,
-    legal: over || state === 'chaosPeel' || state === 'chaosBoard' ? null : { seat: 0, kinds: ['play', 'fold'], callAmount: BLIND_WAGER, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 },
+    legal:
+      over || state === 'chaosPeel' || state === 'chaosBoard' || state === 'chaosSix'
+        ? null
+        // A Thần at the table (BP-41 G11): nobody may fold.
+        : { seat: 0, kinds: state === 'chaosGod' ? ['play'] : ['play', 'fold'], callAmount: BLIND_WAGER, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 },
     result: null,
     potPulse: 1,
     // The toasts play for a live hand (the burst's eight cards arrive with its settlement, in one batch); every other state
     // is a snapshot, which replays nothing.
-    restored: state !== 'chaosReveal' && state !== 'chaosBoard' && state !== 'chaosBurst',
+    restored: state !== 'chaosReveal' && state !== 'chaosBoard' && state !== 'chaosBurst' && state !== 'chaosGod' && state !== 'chaosSix' && state !== 'chaosSlain' && state !== 'chaosDice',
     dealtAt: null,
     boardAt: null,
     showdownAt: null,
@@ -482,8 +510,67 @@ function chaosState(n: number, state: ChaosState, now: number): ClientChaos {
       ],
     }
   }
+  // BP-41 round three.
+  if (state === 'chaosGod') {
+    const carp = { uid: 990, cardId: 'd_carp', tier: 'diamond' as const, handsLeft: null, charge: 35 }
+    return {
+      ...chaos,
+      seats: { ...seats, 0: { ...seats[0]!, cards: [carp, ...(seats[0]?.cards ?? []).slice(0, 2)] } },
+      table: {
+        god: { seat: 1, handsLeft: 5, curse: 2 },
+        demigods: n > 2 ? [{ seat: 2, handsLeft: 5 }] : [],
+        bombs: n > 3 ? [{ owner: 0, carrier: 3, handsLeft: 2 }] : [],
+      },
+      heralds: [
+        { id: 1, kind: 'god', seat: 1, name: 'Bot 1', at: now },
+        ...(n > 2 ? [{ id: 2, kind: 'demigod' as const, seat: 2, name: 'Bot 2', at: now }] : []),
+      ],
+      applied: [
+        { seat: 1, cardId: 'd_carp', effect: 'carp', targets: [], outcome: 'applied', reign: 'god' },
+        { seat: 1, cardId: 'd_carp', effect: 'carp', targets: all(n).filter((i) => i !== 1), outcome: 'applied' },
+      ],
+    }
+  }
+  if (state === 'chaosDice') {
+    const jackpot = { jackpot: 60 * BLIND_WAGER, cards: [{ tier: 'diamond' as const, count: 2 }], triple: true as const, herald: true as const }
+    const mine = { cards: [{ tier: 'silver' as const, count: 1 }] }
+    return {
+      ...chaos,
+      rolls: [
+        { id: 1, seat: 1, name: 'Bot 1', cardId: 'd_dice', dice: [6, 6, 6], result: jackpot, at: now },
+        { id: 2, seat: 0, name: nameOf(0, false), cardId: 's_dice', dice: [5], result: mine, at: now },
+      ],
+      heralds: [{ id: 3, kind: 'dice', seat: 1, name: 'Bot 1', dice: [6, 6, 6], amount: jackpot.jackpot, at: now }],
+      credits: [{ seat: 1, amount: jackpot.jackpot, reason: 'chaos_jackpot', capped: false }],
+      applied: [
+        // The lines keep their faces back until the dice land (Ruling 22).
+        { seat: 1, cardId: 'd_dice', effect: 'fortuneDice', targets: [], outcome: 'applied', dice: [6, 6, 6], roll: jackpot, rolledAt: now },
+        { seat: 0, cardId: 's_dice', effect: 'fortuneDice', targets: [], outcome: 'applied', dice: [5], roll: mine, rolledAt: now },
+      ],
+    }
+  }
+  if (state === 'chaosSlain') {
+    return {
+      ...chaos,
+      heralds: [{ id: 1, kind: 'godslain', seat: 0, name: nameOf(0, false), at: now }],
+      applied: [{ seat: 1, cardId: 'd_carp', effect: 'carp', targets: [0], outcome: 'applied', reign: 'godslain' }],
+    }
+  }
+  if (state === 'chaosSix') {
+    return {
+      ...chaos,
+      wild: cards('5c')[0]!,
+      applied: [
+        { seat: 2, cardId: 'g_sixth_board', effect: 'sixthBoard', targets: [], outcome: 'applied' },
+        { seat: 0, cardId: 'd_wild_card', effect: 'wildCard', targets: [], outcome: 'applied', wild: cards('5c')[0]! },
+        { seat: 1, cardId: 'd_risky_hand', effect: 'riskyHand', targets: [], outcome: 'applied', holeDelta: -2 },
+      ],
+    }
+  }
   return chaos
 }
+
+const all = (n: number): number[] => Array.from({ length: n }, (_, i) => i)
 
 function hand(n: number, state: WorstState, long: boolean): ClientHand | null {
   if (state === 'waiting' || state === 'blindW') return null
@@ -623,9 +710,9 @@ export function WorstPage({ spec }: { spec: WorstSpec }) {
       roomStale: false,
       room: room(spec.seats, spec.state, now, spec.long),
       hand: hand(spec.seats, spec.state, spec.long),
-      deadlineAt: spec.state === 'turn' ? now + 25_000 : spec.state === 'blindS' || spec.state === 'blindP' || (isChaos(spec.state) && spec.state !== 'chaosDraft' && spec.state !== 'chaosResult') ? now + 15_000 : null,
+      deadlineAt: spec.state === 'turn' ? now + 25_000 : spec.state === 'blindS' || spec.state === 'blindP' || (isChaos(spec.state) && !isOver(spec.state)) ? now + 15_000 : null,
       ...(isChaos(spec.state) ? { chaos: chaosState(spec.seats, spec.state, now) } : {}),
-      ...(spec.state === 'chaosBurst' ? { resultSkips: { skipped: 3, total: 5, mine: false } } : {}),
+      ...(spec.state === 'chaosBurst' || spec.state === 'chaosDice' ? { resultSkips: { skipped: 3, total: 5, mine: false } } : {}),
     })
   }, [spec])
   useEffect(() => {

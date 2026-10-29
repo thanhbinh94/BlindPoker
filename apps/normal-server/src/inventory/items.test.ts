@@ -118,9 +118,10 @@ function fixtureWith(...defs: ItemDef[]): string {
 describe('the shipped catalogue', () => {
   const catalog = loadItemCatalog()
 
-  it('has a hundred and twenty-seven items spread across all eleven slots', () => {
+  it('has a hundred and thirty items spread across all eleven slots', () => {
     const all = catalog.all()
-    expect(all.length).toBe(127)
+    // BP-41: 127 + the three chaos titles (`title_god`, `title_demigod`, `title_godslayer`).
+    expect(all.length).toBe(130)
     expect(SLOTS).toHaveLength(11)
     for (const slot of SLOTS) expect(all.some((d) => d.slot === slot), slot).toBe(true)
     // The v2 slots are gone: a wardrobe piece is one PNG layer now, not a body part it dresses.
@@ -149,6 +150,10 @@ describe('the shipped catalogue', () => {
     expect(catalog.get('aura_gold_cards01')).toMatchObject({ slot: 'aura', rarity: 'epic' })
     expect(catalog.get('badge_veteran')).toMatchObject({ slot: 'badge', rarity: 'epic' })
     expect(catalog.get('badge_monthly')).toMatchObject({ slot: 'badge', rarity: 'rare' })
+    // BP-41: the chaos titles, words like every `title_*` (no asset).
+    for (const id of ['title_god', 'title_demigod', 'title_godslayer']) {
+      expect(catalog.get(id), id).toEqual({ id, slot: 'title', rarity: 'epic', nameKey: `items.${id}`, assetKey: `title/${id}`, isDefault: false })
+    }
     // The v2 ids: gone from the catalogue outright. `item-aliases.json` is what keeps them readable.
     expect(catalog.get('hat_crown')).toBeUndefined()
     expect(catalog.get('accessory_glasses')).toBeUndefined()

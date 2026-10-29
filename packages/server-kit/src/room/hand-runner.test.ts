@@ -1,4 +1,4 @@
-import { createBotStrategy, seededRng, type BlindRules, type GameEvent, type HoldemRules } from '@bp/core'
+import { createBotStrategy, seededRng, type BlindRules, type ChaosHandPlan, type GameEvent, type HoldemRules } from '@bp/core'
 import { describe, expect, it } from 'vitest'
 import { silentLogger } from '../infra/logger.js'
 import { ManualClock } from '../testing/manual-clock.js'
@@ -7,7 +7,7 @@ import { HandRunner, type HandRunnerDeps } from './hand-runner.js'
 const HOLDEM: HoldemRules = { mode: 'holdem', smallBlind: 50, bigBlind: 100, tableFeeRate: 0.02, tableFeeCapBB: 1 }
 const BLIND_B: BlindRules = { mode: 'blind', holeCards: 2, decisionMode: 'playOrFold', fixedWager: 1000, tableFeeRate: 0.02 }
 
-function setup(rules: HoldemRules | BlindRules, seats: { seat: number; stack: number; isBot: boolean }[], over: Partial<HandRunnerDeps> = {}) {
+function setup(rules: HoldemRules | BlindRules, seats: { seat: number; stack: number; isBot: boolean }[], over: Partial<HandRunnerDeps> = {}, chaos?: ChaosHandPlan) {
   const clock = new ManualClock()
   const batches: { events: GameEvent[]; deadlineAt: number | null }[] = []
   let completed = 0
@@ -25,7 +25,7 @@ function setup(rules: HoldemRules | BlindRules, seats: { seat: number; stack: nu
     onComplete: () => completed++,
     ...over,
   }
-  const runner = new HandRunner(deps, { handId: 'h1', rules, seats: seats.map((s) => ({ ...s, playerId: `p${s.seat}` })), button: 0, carryOverIn: 0 })
+  const runner = new HandRunner(deps, { handId: 'h1', rules, seats: seats.map((s) => ({ ...s, playerId: `p${s.seat}` })), button: 0, carryOverIn: 0, ...(chaos ? { chaos } : {}) })
   runner.start()
   const all = () => batches.flatMap((b) => b.events)
   return { clock, runner, batches, all, completed: () => completed }
@@ -127,6 +127,50 @@ describe('HandRunner — blind mode B', () => {
     expect(runner.state.players[0]!.decision).toBe('fold')
     runner.submit({ type: 'ACTION', seat: 1, action: { kind: 'play' } })
     expect(runner.isComplete).toBe(true) // one player plays → wins immediately
+  })
+
+  describe('BP-41 A2: a hand nobody may fold (Cấm bỏ bài, a Thần)', () => {
+    const noFold = (seats: number[]): ChaosHandPlan => ({
+      seats: seats.map((seat) => ({ seat, effects: [], shield: null, blindfolded: false })), reverse: false, noFoldSeats: seats,
+    })
+
+    it('Ruling 14: a no-fold seat that left plays (not a timeout); the timer plays the seats still there', () => {
+      const { clock, runner, all } = setup(BLIND_B, [0, 1, 2].map((seat) => ({ seat, stack: 20000, isBot: false })), { turnTimerMs: 15_000 }, noFold([0, 1, 2]))
+      runner.markAutoFold(1)
+      expect(runner.state.players[1]!.decision).toBe('play')
+      clock.advance(15_000)
+      const acted = all().filter((e): e is Extract<GameEvent, { type: 'PLAYER_ACTED' }> => e.type === 'PLAYER_ACTED')
+      expect(acted.map((e) => [e.seat, e.action.kind, e.timedOut])).toEqual([[0, 'play', true], [1, 'play', false], [2, 'play', true]])
+      while (!runner.isComplete) clock.advance(1_500)
+    })
+
+    it('a seat that left and may fold (the Cấm bỏ bài holder) still folds (FORFEIT)', () => {
+      const { clock, runner, all } = setup(BLIND_B, [0, 1, 2].map((seat) => ({ seat, stack: 20000, isBot: false })), { turnTimerMs: 15_000 }, noFold([0, 2]))
+      runner.markAutoFold(1)
+      expect(runner.state.players[1]!.decision).toBe('fold')
+      runner.markAutoFold(0)
+      expect(runner.state.players[0]!.decision).toBe('play')
+      clock.advance(15_000)
+      const acted = all().filter((e): e is Extract<GameEvent, { type: 'PLAYER_ACTED' }> => e.type === 'PLAYER_ACTED')
+      expect(acted.map((e) => [e.seat, e.action.kind, e.timedOut])).toEqual([[0, 'play', false], [1, 'fold', false], [2, 'play', true]])
+      while (!runner.isComplete) clock.advance(1_500)
+    })
+
+    it('a bot plays and the hand completes', () => {
+      const { clock, runner, all } = setup(BLIND_B, [0, 1, 2].map((seat) => ({ seat, stack: 20000, isBot: true })), {}, noFold([0, 1, 2]))
+      clock.advance(1_000)
+      const revealed = all().find((e): e is Extract<GameEvent, { type: 'DECISIONS_REVEALED' }> => e.type === 'DECISIONS_REVEALED')!
+      expect(revealed.decisions.map((d) => d.decision)).toEqual(['play', 'play', 'play'])
+      while (!runner.isComplete) clock.advance(1_500)
+    })
+
+    it('a bot whose strategy throws falls back to "play", the only safe choice it has', () => {
+      const bot = { decide: () => { throw new Error('boom') } }
+      const { clock, all } = setup(BLIND_B, [0, 1].map((seat) => ({ seat, stack: 20000, isBot: true })), { bot }, noFold([0, 1]))
+      clock.advance(1_000)
+      const revealed = all().find((e): e is Extract<GameEvent, { type: 'DECISIONS_REVEALED' }> => e.type === 'DECISIONS_REVEALED')!
+      expect(revealed.decisions.map((d) => d.decision)).toEqual(['play', 'play'])
+    })
   })
 
   it('a stale decision timer is ignored once the phase resolved', () => {

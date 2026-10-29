@@ -3,8 +3,8 @@ import { seededRng } from '../cards/rng.js'
 import type { BlindRules } from '../hand/types.js'
 import { CHAOS_CARDS_SPEC } from './fixtures.js'
 import { receiveCard, toHeld } from './hold.js'
-import { planHand } from './plan.js'
-import { EMPTY_CHAOS_SEAT, type ChaosCardDef, type ChaosSeat } from './types.js'
+import { GAMBLER_EXCLUDED, planHand } from './plan.js'
+import { EMPTY_CHAOS_SEAT, EMPTY_CHAOS_TABLE, type ChaosCardDef, type ChaosSeat, type ChaosTableState } from './types.js'
 
 const card = (id: string): ChaosCardDef => {
   const c = CHAOS_CARDS_SPEC.find((x) => x.id === id)
@@ -150,6 +150,39 @@ describe('planHand', () => {
     expect(rolled.size).toBeGreaterThan(15)
   })
 
+  it('BP-41: the gambler never rolls a round-three card that waits, acts on receipt or at the end, carries a charge, or is a Kim cương rule', () => {
+    // Every round-three card switched on (as Task 7b will ship them), and every card but the excluded ones weighted 0:
+    // the roll finds nothing to fire.
+    const allOn = CHAOS_CARDS_SPEC.map((c) => ({ ...c, enabled: true }))
+    const excluded = allOn.filter((c) => GAMBLER_EXCLUDED.has(c.effect))
+    expect(excluded.filter((c) => c.tier !== 'diamond').map((c) => c.id)).toEqual([
+      's_rescue', 's_fortune', 's_level', 'g_rescue', 'g_fortune', 'g_level',
+      's_tier_up', 's_master', 's_dice', 'g_aces_charge', 'g_flip_flop', 'g_steal_points', 'g_scapegoat', 'g_dice',
+    ])
+    for (const kind of ['carp', 'riskyHand', 'adventurer', 'shareWinnings', 'plunder', 'shuffleHoles', 'swapLeader', 'backfire', 'deluge', 'eclipse', 'wildCard', 'timeBomb'] as const) {
+      expect(GAMBLER_EXCLUDED.has(kind), kind).toBe(true)
+    }
+    const onlyExcluded = new Map(allOn.filter((c) => !GAMBLER_EXCLUDED.has(c.effect)).map((c) => [c.id, 0]))
+    for (const decisionMode of ['playOrFold', 'none'] as const) {
+      for (let seed = 1; seed <= 30; seed++) {
+        const seats = [{ seat: 0, isBot: false, chaos: holding(['d_gambler']) }, { seat: 1, isBot: false, chaos: EMPTY_CHAOS_SEAT }]
+        const r = planHand({ seats, rules: { ...RULES, decisionMode }, pool: allOn, rng: seededRng(seed), nextUid: counter(1_000), weights: onlyExcluded })
+        expect(effectsOf(r, 0)).toMatchObject({ effects: [], shield: null })
+      }
+    }
+    // With the round-three cards on and nothing weighted out, a roll can land on one the gambler may use.
+    const rolled = new Set<string>()
+    for (let seed = 1; seed <= 400; seed++) {
+      const seats = [{ seat: 0, isBot: false, chaos: holding(['d_gambler']) }, { seat: 1, isBot: false, chaos: EMPTY_CHAOS_SEAT }]
+      const r = planHand({ seats, rules: RULES, pool: allOn, rng: seededRng(seed), nextUid: counter(1_000) })
+      for (const e of effectsOf(r, 0).effects) {
+        expect(GAMBLER_EXCLUDED.has(e.effect), e.cardId).toBe(false)
+        rolled.add(e.cardId)
+      }
+    }
+    expect([...rolled].some((id) => ['s_duel', 's_coin_flip', 'g_big_table', 'g_curse', 'g_win_tax'].includes(id))).toBe(true)
+  })
+
   it("the gambler's roll respects the one-debuff rule and the weights", () => {
     const debuffOnly = new Map(CHAOS_CARDS_SPEC.filter((c) => !c.debuff).map((c) => [c.id, 0]))
     for (let seed = 1; seed <= 30; seed++) {
@@ -257,5 +290,94 @@ describe('planHand', () => {
     const snapshot = JSON.stringify(chaos)
     expect(plan(chaos, RULES, 9).plan).toEqual(plan(chaos, RULES, 9).plan)
     expect(JSON.stringify(chaos)).toBe(snapshot)
+  })
+
+  describe('BP-41 plumbing', () => {
+    const DICE: ChaosCardDef = {
+      id: 'x_dice', tier: 'silver', family: 'dice', effect: 'fortuneDice', params: { dice: 1 }, timing: 'end',
+      modes: ['playOrFold', 'none'], debuff: false, enabled: true,
+    }
+
+    it('an end-of-hand card (the dice) never fires at the plan, like a wait card (A10)', () => {
+      const chaos = { ...holding(['g_luck_3']), cards: [toHeld(DICE, 77), ...holding(['g_luck_3']).cards] }
+      const r = planHand({ seats: [{ seat: 0, isBot: false, chaos }, { seat: 1, isBot: false, chaos: EMPTY_CHAOS_SEAT }], rules: RULES, pool: [...pool, DICE], rng: seededRng(1), nextUid: counter(1_000) })
+      expect(ids(r, 0)).toEqual(['g_luck_3'])
+    })
+
+    it('takes the table state in and gives it back (A3); absent, the table is empty', () => {
+      expect(plan({ 0: EMPTY_CHAOS_SEAT, 1: EMPTY_CHAOS_SEAT }).table).toEqual(EMPTY_CHAOS_TABLE)
+      const table: ChaosTableState = {
+        god: { seat: 1, playerId: 'p1', isBot: false, handsLeft: 5, curse: 2, cardId: 'd_carp', uid: 9, params: {} },
+        demigods: [],
+        bombs: [{ owner: 0, carrier: 1, handsLeft: 3, cardId: 'x_bomb', uid: 5 }],
+      }
+      const r = planHand({ seats: [{ seat: 0, isBot: false, chaos: EMPTY_CHAOS_SEAT }, { seat: 1, isBot: false, chaos: EMPTY_CHAOS_SEAT }], rules: RULES, pool, rng: seededRng(1), nextUid: counter(1), table })
+      expect(r.table).toEqual(table)
+      // Task 6: the Thần acts this hand, so nobody may fold on this "Chơi hoặc bỏ" table.
+      expect(r.plan.god).toMatchObject({ seat: 1, curse: 2 })
+      expect(r.plan.noFoldSeats).toEqual([0, 1])
+    })
+  })
+})
+
+describe('planHand — BP-41 charge cards', () => {
+  const chargeOf = (r: ReturnType<typeof plan>, seat: number, cardId: string) => r.seats.get(seat)!.cards.find((c) => c.cardId === cardId)!.charge
+  it('Siêu cộng dồn grows its chance by 5..7 % each hand before it rolls; the plan and the seat carry the grown charge', () => {
+    let chaos = holding(['d_aces_charge'])
+    expect(chaos.cards[0]!.charge).toBeUndefined()
+    let last = 0
+    for (let hand = 0; hand < 5; hand++) {
+      const r = plan({ 0: chaos, 1: EMPTY_CHAOS_SEAT }, RULES, 10 + hand)
+      const now = chargeOf(r, 0, 'd_aces_charge')!
+      expect(now - last).toBeGreaterThanOrEqual(5)
+      expect(now - last).toBeLessThanOrEqual(7)
+      expect(effectsOf(r, 0).effects[0]).toMatchObject({ cardId: 'd_aces_charge', charge: now })
+      last = now
+      chaos = r.seats.get(0)!
+    }
+  })
+  it('the charge stops at the card cap: 60 % for the Vàng card, 100 % for the Kim cương', () => {
+    const gold = holding(['g_aces_charge'])
+    const r = plan({ 0: { ...gold, cards: [{ ...gold.cards[0]!, charge: 58 }] }, 1: EMPTY_CHAOS_SEAT })
+    expect(chargeOf(r, 0, 'g_aces_charge')).toBe(60)
+    const diamond = holding(['d_aces_charge'])
+    const d = plan({ 0: { ...diamond, cards: [{ ...diamond.cards[0]!, charge: 97 }] }, 1: EMPTY_CHAOS_SEAT })
+    expect(chargeOf(d, 0, 'd_aces_charge')).toBe(100)
+  })
+  it('the reigning Thần’s Siêu cộng dồn does not grow (Ruling 25), and the other seats’ plans draw as before', () => {
+    const god: ChaosTableState = {
+      god: { seat: 0, playerId: 'p0', isBot: false, handsLeft: 4, curse: null, cardId: 'd_carp', uid: 99, params: {} }, demigods: [], bombs: [],
+    }
+    const held = holding(['d_aces_charge'])
+    const chaos = { ...held, cards: [{ ...held.cards[0]!, charge: 20 }] }
+    const run = (table?: ChaosTableState) =>
+      planHand({ seats: [{ seat: 0, isBot: false, chaos }, { seat: 1, isBot: false, chaos }], rules: RULES, pool, rng: seededRng(7), nextUid: counter(1), ...(table ? { table } : {}) })
+    const reigning = run(god)
+    expect(reigning.seats.get(0)!.cards[0]!.charge).toBe(20)
+    expect(effectsOf(reigning, 0).effects.find((e) => e.effect === 'acesCharge')).toMatchObject({ charge: 20 })
+    // The seat beside it grows as ever, by the same draw it would make with no Thần at the table.
+    const plain = run()
+    expect(reigning.seats.get(1)!.cards[0]!.charge).toBe(plain.seats.get(1)!.cards[0]!.charge)
+    expect(plain.seats.get(0)!.cards[0]!.charge).toBeGreaterThan(20)
+  })
+  it('a frozen seat neither rolls nor grows', () => {
+    const chaos = holding(['d_aces_charge'], { frozenNextHand: true })
+    const r = plan({ 0: chaos, 1: EMPTY_CHAOS_SEAT })
+    expect(chargeOf(r, 0, 'd_aces_charge')).toBeUndefined()
+    expect(effectsOf(r, 0).effects).toEqual([])
+  })
+  it('Đảo bài goes into the plan with its phase (0 before its first hand); a card with no charge carries none', () => {
+    const r = plan({ 0: holding(['g_flip_flop', 's_luck_1']), 1: EMPTY_CHAOS_SEAT })
+    expect(effectsOf(r, 0).effects.find((e) => e.effect === 'flipFlop')!.charge).toBe(0)
+    expect(effectsOf(r, 0).effects.find((e) => e.effect === 'bestOfN')).not.toHaveProperty('charge')
+    // The phase itself moves in afterHand, not here.
+    expect(chargeOf(r, 0, 'g_flip_flop')).toBeUndefined()
+  })
+  it('a second copy of a charge card adds its hands and keeps the held card\'s charge (Ruling 6)', () => {
+    const held = holding(['d_aces_charge'])
+    const charged = { ...held, cards: [{ ...held.cards[0]!, charge: 30, handsLeft: 4 }] }
+    const got = receiveCard(charged, card('d_aces_charge'), counter(7_000), pool, 'playOrFold', seededRng(1)).seat
+    expect(got.cards).toHaveLength(1)
+    expect(got.cards[0]).toMatchObject({ charge: 30, handsLeft: 24 })
   })
 })

@@ -278,6 +278,8 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
         metric: def.metric,
         threshold: def.threshold,
         reward: def.reward,
+        // BP-41: only an achievement that names its own reputation (the chaos titles) says how much it adds.
+        ...(def.reputation !== undefined ? { reputation: def.reputation } : {}),
         progress: progress.get(def.id)?.progress ?? 0,
         unlockedAt: progress.get(def.id)?.unlockedAt ?? null,
       })),

@@ -14,20 +14,24 @@ export interface CommunityCardsProps {
   handId?: string | null
   /** "Nhìn trộm": the next board cards, for this viewer alone, face up in the first empty slots with a tag over the first. */
   peek?: CardId[]
+  /**
+   * How many slots the board has: five, or six when a chaos card deals a sixth board card (BP-41 Lá chung thứ sáu; the river
+   * then brings two). Never fewer than the cards on it. Defaults to five.
+   */
+  slots?: number
 }
 
-const SLOTS = [0, 1, 2, 3, 4]
-
 /**
- * The five board slots. Empty slots stay as outlined ghosts so the board never reflows as streets arrive. A dealt flop's
- * three cards come in `BOARD_STAGGER_MS` apart, each sliding in while the one before it turns; the turn and the river
- * come alone. A board that was already out shows at once.
+ * The board's slots, five (six with BP-41's Lá chung thứ sáu). Empty slots stay as outlined ghosts so the board never reflows
+ * as streets arrive. A dealt flop's three cards come in `BOARD_STAGGER_MS` apart, each sliding in while the one before it
+ * turns; the turn and the river come alone. A board that was already out shows at once.
  */
-export function CommunityCards({ cards, highlight, dealt = false, handId = null, peek = [] }: CommunityCardsProps) {
+export function CommunityCards({ cards, highlight, dealt = false, handId = null, peek = [], slots = 5 }: CommunityCardsProps) {
   const { t } = useTranslation()
+  const count = Math.max(slots, cards.length)
   return (
-    <div className={s.community} role="group" aria-label={t('labels.community')}>
-      {SLOTS.map((i) => {
+    <div className={s.community} role="group" aria-label={t('labels.community')} data-board={count > 5 ? String(count) : undefined}>
+      {Array.from({ length: count }, (_, i) => i).map((i) => {
         const card = cards[i]
         if (card === undefined) {
           const seen = peek[i - cards.length]

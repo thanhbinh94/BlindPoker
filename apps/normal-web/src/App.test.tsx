@@ -624,7 +624,7 @@ describe('App — a rename (T7)', () => {
     [
       'handsPlayedHoldem', 'handsWonHoldem', 'handsPlayedBlind', 'handsWonBlind', 'botHands', 'currentWinStreak', 'bestWinStreak',
       'currentLoseStreak', 'bestLoseStreak', 'bestHandRank', 'biggestWin', 'roomsJoined', 'gamesCompleted', 'totalLoginDays',
-      'loginStreak', 'bestLoginStreak',
+      'loginStreak', 'bestLoginStreak', 'chaosAscensions', 'chaosDemigods', 'chaosGodsSlain',
     ].map((key) => [key, 0]),
   )
 

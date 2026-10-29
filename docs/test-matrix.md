@@ -357,6 +357,21 @@ core, server-kit and ui-kit unit tests named in the plan's tasks.
 | Spec §3.1 (many cards at once): eight seats — one human, seven bots, pure luck — each holding a reveal card fire them at one reveal; the band shows at most 2 card toasts either way (an eight-seat table upright, BP-39 final wave), the rest under "+N thẻ khác", and the two account for all eight seats, and in no frame does a toast meet the result strip, the board or the tray; the page does not scroll and no text lies over text | `apps/normal-web/e2e/ops/10-chaos.spec.ts` | F-13f: @s25p @s25l eight seats fire their cards at one reveal on the Galaxy S25 | added in BP-39 — runs outside `pnpm test` |
 | Spec §3.4–§3.5 (the bonus hand): at a points threshold of 1 a hand earns a bonus card, shown in "Thẻ thưởng" by the felt's left edge under the result strip; a tap opens its popup (name, tier, description) and only "Dùng" plays it; it reads "Đã đặt dùng · ván sau", fires in the next hand — the result's "Thẻ đã dùng" names it after the viewer — and leaves the hand | `apps/normal-web/e2e/ops/10-chaos.spec.ts` | F-13g: @s25p a bonus card earned at the table — tap it, "Dùng", and it fires in the next hand | added in BP-39 — runs outside `pnpm test` |
 
+## BP-41 — Poker hỗn loạn, round three, in a browser (spec 2026-10-28)
+
+F-14a and F-14c run in the ops pack's `desktop` project (1440 × 900), F-14b and F-14d in the Galaxy S25's `s25p` and `s25l`. Each forces
+its card through the GM console (`PUT /api/gm/chaos/rules` and `…/config`: diamond only, and only the card under test with Gương phản
+chiếu and Cấp cứu kim cương on) and puts the diamond rules and the settings back in a `finally`. The GM rules cannot set a Cá chép's
+energy, so the ops server lays `apps/normal-web/e2e/ops/chaos-cards.ops.json` over the shipped cards (`E2E_CHAOS_CARDS`, read only by
+the never-shipped `e2e-entry.ts`): Cá chép starts at 100 % energy and is off unless a rule turns it on (plan amendment A-ops). F-13…F-13e
+play with the other 85 cards on. The rules underneath (the reign, the curse, the Thần's immunity, the dice tables, the dice sink, the titles)
+are held by the core, server-kit, normal-server and ui-kit unit tests named in the plan's tasks. All run outside `pnpm test`.
+
+| Rule | Test file | Test name | Status |
+|---|---|---|---|
+| Spec §4.2, §4.5, G7, G11 in a browser: at a "Chơi hoặc bỏ" table a seat holding Cá chép at full energy becomes the Thần before the first hand; the herald crosses the screen with "Cảnh báo: {tên} đã tích luỹ đủ năng lượng và trở thành Thần Bài!", inside the screen, scrolling nothing and lying over no text; one seat — the one the herald named — wears the crown "Thần Bài · còn N ván"; while it reigns the decision has no "Bỏ bài", the tray says "Không được bỏ bài ván này" and "Chơi" beside it plays the hand; the room fits, no text over text — at 1440 × 900, 360 × 780 and 780 × 360 | `apps/normal-web/e2e/ops/10-chaos.spec.ts` | F-14a: a Thần Bài forced on a "Chơi hoặc bỏ" table · F-14b: @s25p @s25l a Thần Bài on the Galaxy S25 | added in BP-41 — runs outside `pnpm test` |
+| Spec §5, G9 in a browser: a seat holding Xúc xắc vận may kim cương rolls at the end of its first hand; the panel "Xúc xắc vận may" names it, its three dice tumble ("Đang gieo…") and land on faces said in words with the result; the panel stays inside the screen and scrolls nothing, no text over text; the roll is told among the cards' toasts ("… dùng Xúc xắc vận may kim cương · Xúc xắc: a-b-c · …"), its own toast or in "+N thẻ khác"'s list, and no toast meets the result, the board or the tray (a phone's strip neither) — at 1440 × 900, 360 × 780 and 780 × 360 | `apps/normal-web/e2e/ops/10-chaos.spec.ts` | F-14c: the dice of fortune — a diamond dice drafted · F-14d: @s25p @s25l the dice of fortune on the Galaxy S25 | added in BP-41 — runs outside `pnpm test` |
+
 ## Ruling recorded: the `reqId` cache is per connection
 
 Plan 7's first review round raised the `reqId` ring buffer as an open question, with a

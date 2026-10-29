@@ -120,6 +120,9 @@ async function measureTextOverlaps(args: MeasureArgs): Promise<Overlap[]> {
   }
 
   // --- 2. the visible text runs ------------------------------------------------------------------------------------
+  // From here on it all runs in one go: the page's clock now is when the boxes were read. A case that needs to know what stood
+  // on screen when the rule measured compares it with its own frame record (BP-41 ops F-14).
+  ;(window as unknown as { __overlapMeasuredAt?: number }).__overlapMeasuredAt = performance.now()
   const root = document.documentElement
   const viewport = { left: 0, top: 0, right: root.clientWidth, bottom: root.clientHeight }
   const LAYERS = '[role="dialog"][aria-modal="true"], [role="region"]:has(> [role="alert"], > [role="status"])'

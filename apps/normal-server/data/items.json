@@ -71,6 +71,9 @@
   { "id": "title_night_owl", "slot": "title", "rarity": "rare", "nameKey": "items.title_night_owl", "assetKey": "title/title_night_owl", "isDefault": false },
   { "id": "title_devoted", "slot": "title", "rarity": "rare", "nameKey": "items.title_devoted", "assetKey": "title/title_devoted", "isDefault": false },
   { "id": "title_hot_hand", "slot": "title", "rarity": "epic", "nameKey": "items.title_hot_hand", "assetKey": "title/title_hot_hand", "isDefault": false },
+  { "id": "title_god", "slot": "title", "rarity": "epic", "nameKey": "items.title_god", "assetKey": "title/title_god", "isDefault": false },
+  { "id": "title_demigod", "slot": "title", "rarity": "epic", "nameKey": "items.title_demigod", "assetKey": "title/title_demigod", "isDefault": false },
+  { "id": "title_godslayer", "slot": "title", "rarity": "epic", "nameKey": "items.title_godslayer", "assetKey": "title/title_godslayer", "isDefault": false },
 
   { "id": "badge_bronze", "slot": "badge", "rarity": "common", "nameKey": "items.badge_bronze", "assetKey": "badge/badge_bronze", "isDefault": false },
   { "id": "badge_silver", "slot": "badge", "rarity": "common", "nameKey": "items.badge_silver", "assetKey": "badge/badge_silver", "isDefault": false },

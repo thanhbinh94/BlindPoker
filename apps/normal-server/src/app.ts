@@ -27,6 +27,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import type { IncomingMessage } from 'node:http'
 import { isAbsolute, join, resolve } from 'node:path'
 import type { Duplex } from 'node:stream'
+import type { ChaosCardDef } from '@bp/core'
 import {
   assetSourceFromDir,
   createRateLimiter,
@@ -203,6 +204,11 @@ export interface AppDeps {
   sessionSweepIntervalMs?: number
   /** Test-only: mounts extra routes before `ready()` (the e2e entry's loopback promote). Production passes none. */
   extraRoutes?: (fastify: FastifyInstance) => void
+  /**
+   * Test-only (BP-41 A-ops): the chaos cards in place of `data/chaos-cards.json` — the ops pack's copy whose Cá chép starts at
+   * 100 % energy, so a GM rule can force a Thần. Production passes none and reads the shipped file.
+   */
+  chaosCatalogue?: ChaosCardDef[]
 }
 
 /** Everything `buildApp` constructed, for tests and for anything Task 7 mounts beside it. */
@@ -284,7 +290,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
   // file and its problem in the message (spec 2026-10-12 §6). A month a GM set that no longer validates is warned about
   // and skipped instead (Plan 26): the file is the operator's, the rows are history.
   // Plan 37: the chaos cards, checked at boot like the other catalogues — a bad file stops it with the file named.
-  const chaos = createChaosService({ db, catalogue: loadChaosCatalogue(), timezone: config.timezone, ...(deps.now ? { now: deps.now } : {}) })
+  const chaos = createChaosService({ db, catalogue: deps.chaosCatalogue ?? loadChaosCatalogue(), timezone: config.timezone, ...(deps.now ? { now: deps.now } : {}) })
   const gifts = await createGiftScheduleStore({ db, catalog, defaults: readDailyGiftsRaw(), timezone: config.timezone, log, ...(deps.now ? { now: deps.now } : {}) })
   // Before anything reads or grants an item: every reward is a foreign key into this table.
   await catalog.seed(db)

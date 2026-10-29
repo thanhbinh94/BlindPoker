@@ -1,4 +1,4 @@
-import type { ChaosCreditReason, ChaosTier, HeldCardView } from '../chaos/types.js'
+import type { ChaosCreditReason, ChaosCritMultiplier, ChaosDiceResult, ChaosOutcome, ChaosTableView, ChaosTier, HeldCardView } from '../chaos/types.js'
 import type { GameEvent, PlayerAction } from '../hand/types.js'
 import type { HandView } from '../hand/view.js'
 
@@ -123,13 +123,44 @@ export type RoomEvent =
   | { type: 'CHAOS_DRAFT'; tier: ChaosTier; deadlineAt: number; draftMs: number; seats: number[] }
   /** The draft is over: what each seat received (every card, a Cấp độ's results included). */
   | { type: 'CHAOS_PICKED'; seat: number; cardIds: string[] }
-  /** Every seat's held cards and chaos points, after a draft and after each hand. */
-  | { type: 'CHAOS_STATE'; seats: { seat: number; cards: HeldCardView[]; points: number; bonusCount: number }[] }
+  /**
+   * Every seat's held cards and chaos points, after a draft and after each hand. `table` (BP-41): the Thần, the Bán Thần
+   * and the bombs, public; absent = none of them.
+   */
+  | { type: 'CHAOS_STATE'; seats: { seat: number; cards: HeldCardView[]; points: number; bonusCount: number }[]; table?: ChaosTableView }
   /**
    * New points a card paid onto the seat's stack (`amount` as credited; `capped` when the daily cap cut it). `stack` is
    * the seat's stack after the credit, absolute, so a client never has to add it up (a seat at 0 rescued between hands).
+   * `multiplier`: Bạo kích only, ×2…×5 (BP-41). `cardId`: a jackpot only (BP-41), the card that paid it, so a client can say a
+   * capped amount on the roll that won it (a Xúc xắc vận may) and not on a Mạo hiểm gia's.
    */
-  | { type: 'CHAOS_CREDIT'; seat: number; amount: number; stack: number; reason: ChaosCreditReason; capped: boolean; multiplier?: 2 | 3 }
+  | { type: 'CHAOS_CREDIT'; seat: number; amount: number; stack: number; reason: ChaosCreditReason; capped: boolean; multiplier?: ChaosCritMultiplier; cardId?: string }
+  /**
+   * BP-41 §4.5 (G7): the table-wide banner, to everyone in the room — `god`: the seat became the Thần Bài; `demigod`: a
+   * Bán Thần; `godslain`: the seat beat the Thần (one event per winner). Sent at the deal (god, demigod) or at the
+   * settlement (godslain).
+   */
+  | { type: 'CHAOS_HERALD'; kind: 'god' | 'demigod' | 'godslain'; seat: number; playerId: string }
+  /**
+   * BP-41 §5: a Xúc xắc vận may rolled at the end of the hand, public — the faces, what they gave, and the seat's stack
+   * after any loss (absolute, like `CHAOS_CREDIT`). Prize cards are named by tier and count only (A7).
+   */
+  | { type: 'CHAOS_DICE'; seat: number; cardId: string; dice: number[]; result: ChaosDiceResult; stack: number }
+  /**
+   * BP-41: the table's public chaos state alone (the Thần, the Bán Thần, the bombs; empty lists and a null `god` = none),
+   * told when it changes outside a `CHAOS_STATE` — before a hand is dealt (an ascension, a bomb passed on) and when a
+   * seat that reigned or owned a bomb leaves. Never the seats' held cards, so it may go out while a hand is live.
+   */
+  | { type: 'CHAOS_TABLE'; table: ChaosTableView }
+  /**
+   * BP-41 Trộm điểm, public: `seat` received it (a draft pick, a prize or bonus card) and it was aimed at `targets` (after
+   * any Bia đỡ đạn; empty when nobody had a point). `amount` chaos points went `from` → `to` (a mirror turns it round;
+   * 0 and nulls when blocked or fizzled). `spent`: the shield, mirror or Bia đỡ đạn cards it used up on the way.
+   */
+  | {
+    type: 'CHAOS_STEAL'; seat: number; cardId: string; outcome: ChaosOutcome; targets: number[]; from: number | null; to: number | null
+    amount: number; spent: { seat: number; cardId: string; passedTo?: number }[]
+  }
   /** Bonus or prize cards the seat received at the end of a hand. */
   | { type: 'CHAOS_AWARDED'; seat: number; cardIds: string[] }
   /** A chaos table's result wait: how many humans pressed "Bỏ qua" out of how many are waited for (BP-39). */
@@ -138,6 +169,10 @@ export type RoomEvent =
 /** `NOTIFICATION { kind: 'CHAOS_OFFER' }`'s payload: the three cards offered privately to one player in a draft. */
 export interface ChaosOfferPayload {
   offerId: string
+  /**
+   * The tier of this player's own offer: the draft's (`CHAOS_DRAFT.tier`), or higher when the seat held a Nâng tầm uy
+   * lực (BP-41; the snapshot's `draft.tier` says the viewer's own tier too).
+   */
   tier: ChaosTier
   cardIds: string[]
   deadlineAt: number
@@ -161,6 +196,11 @@ export interface ChaosBonusPayload {
 export interface ChaosSnapshot {
   draft: { tier: ChaosTier; deadlineAt: number; draftMs: number; offer: { offerId: string; cardIds: string[] } | null; picked: boolean } | null
   bonus?: ChaosBonusPayload
+  /**
+   * BP-41: the table's public chaos state, as `CHAOS_STATE.table` / `CHAOS_TABLE` say it, so a reconnect sees the reign
+   * and the bombs; absent = none of them.
+   */
+  table?: ChaosTableView
 }
 
 /**

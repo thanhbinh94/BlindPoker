@@ -1,13 +1,14 @@
-import type { Card as CardId, HeldCardView, RoomPlayerView } from '@bp/core'
+import type { Card as CardId, ChaosCritMultiplier, ChaosGodCurse, HeldCardView, RoomPlayerView } from '@bp/core'
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Chibi, type ChibiSubject, type Expression } from '../avatar2d/index.js'
 import type { ClientSeat } from '../client/types.js'
-import { formatPoints, type Language } from '../i18n/index.js'
+import { cardLabel, formatPoints, type Language } from '../i18n/index.js'
 import { Badge, type BadgeTone } from '../primitives/Badge.js'
 import { cx } from '../primitives/cx.js'
 import { Card } from './Card.js'
 import { ChaosCardRow } from './ChaosCardIcon.js'
+import { ChaosCardInfo } from './ChaosCardInfo.js'
 import { SHOWDOWN_STAGGER_MS, dealStaggerMs } from './motion.js'
 import type { RoomFrame } from './frame.js'
 import { PeelCard } from './PeelCard.js'
@@ -178,8 +179,8 @@ export interface SeatProps {
   chaosCards?: readonly HeldCardView[]
   /** The viewer's own cards are face down because "Bịt mắt" hit them: the seat says so instead of leaving a bare back. */
   blindfolded?: boolean
-  /** "Bạo kích ×2!" for the seat that won with it (2 or 3), drawn with its payout. */
-  critMultiplier?: 2 | 3 | null
+  /** "Bạo kích ×2!" for the seat that won with it (×2 to ×5 since BP-41), drawn with its payout. */
+  critMultiplier?: ChaosCritMultiplier | null
   /** The dense strip of opponents (seven or more, on a phone): the seat's cards are one icon with their number, not a row of them. */
   chaosSummary?: boolean
   /**
@@ -192,7 +193,22 @@ export interface SeatProps {
    * tag on it; `highlighted` when it is one of the winning five (the board's gold edge). Absent or `null`: nothing.
    */
   borrowed?: { card: CardId; highlighted: boolean } | null
+  /**
+   * BP-41 §4.5: the seat reigns — the Thần Bài (`god`: a gold-red aura round the plate, its curse while it lasts) or a Bán Thần
+   * (`demigod`) — with the hands of the reign still to play, as a mark on the plate's corner that opens the card's popup.
+   */
+  reign?: { kind: 'god' | 'demigod'; handsLeft: number; curse?: ChaosGodCurse | null } | null
+  /** BP-41 Bom nổ chậm: the seat carries a bomb, `handsLeft` hands before it goes off (the soonest of them, when several). */
+  bomb?: { handsLeft: number } | null
+  /** BP-41 Lá ma: the hole card of this seat that ranks as wild — marked where it lies. */
+  wildCard?: CardId | null
+  /** BP-41 Mắt diều hâu: this seat's cards the viewer saw, face up for the viewer alone while the others stay down. */
+  hawkCards?: readonly CardId[] | null
 }
+
+/** The reign's mark: the Thần's crown, the Bán Thần's star; the bomb's spark. */
+const REIGN_GLYPH = { god: '♛', demigod: '✦' } as const
+const BOMB_GLYPH = '✹'
 
 /** What a seat knows of its own cards in a squeeze round, for one hand (see `Seat`). */
 interface TurnedUp {
@@ -247,6 +263,10 @@ export function Seat({
   chaosSummary = false,
   bonusCount = 0,
   borrowed = null,
+  reign = null,
+  bomb = null,
+  wildCard = null,
+  hawkCards = null,
 }: SeatProps) {
   const { t } = useTranslation()
   const name = seat.displayName === '' ? (player?.displayName ?? '') : seat.displayName
@@ -266,7 +286,9 @@ export function Seat({
             ? { tone: 'teal', text: t('labels.decided') }
             : null
 
-  const faces = seat.holeCards ?? Array.from({ length: seat.cardCount }, () => null)
+  // A hawk's look (BP-41) turns the cards the viewer saw face up, first in the row; the rest stay down.
+  const seen = seat.holeCards === null && hawkCards !== null ? hawkCards.slice(0, seat.cardCount) : []
+  const faces: (CardId | null)[] = seat.holeCards ?? Array.from({ length: seat.cardCount }, (_, i) => seen[i] ?? null)
   const cardSize = isMe ? 'md' : 'sm'
   const payoutText = winnerPayout === null ? '' : `+${formatPoints(winnerPayout, lang)}`
   /**
@@ -383,6 +405,33 @@ export function Seat({
       </span>
     )
   const stackFigure = <span className={s.seatStack}>{formatPoints(seat.stack, lang)}</span>
+  // BP-41 §4.5: the reign's mark and a carried bomb's, on the plate's corner — a crown or a star with the hands left, a spark
+  // with the fuse. Each opens its card's popup, with the reign (and the Thần's curse) or the fuse said in words.
+  const reignLabel = reign === null ? null : t(reign.kind === 'god' ? 'chaos.reign.godSeat' : 'chaos.reign.demigodSeat', { count: reign.handsLeft })
+  const curseLine =
+    reign?.kind === 'god' && reign.curse !== undefined && reign.curse !== null ? t('chaos.reign.curse', { curse: t(`chaos.reign.curses.${reign.curse}`) }) : null
+  const bombLabel = bomb === null ? null : t('chaos.reign.bombSeat', { count: bomb.handsLeft })
+  const marks =
+    reign === null && bomb === null ? null : (
+      <span className={s.seatMarks} data-seat-marks="">
+        {reign === null || reignLabel === null ? null : (
+          <ChaosCardInfo cardId="d_carp" label={reignLabel} note={curseLine === null ? reignLabel : `${reignLabel} · ${curseLine}`} className={s.markTrigger}>
+            <span className={s.reignMark} data-reign={reign.kind} role="img" aria-label={reignLabel}>
+              <span aria-hidden="true">{REIGN_GLYPH[reign.kind]}</span>
+              <span aria-hidden="true">{reign.handsLeft}</span>
+            </span>
+          </ChaosCardInfo>
+        )}
+        {bomb === null || bombLabel === null ? null : (
+          <ChaosCardInfo cardId="d_time_bomb" label={bombLabel} note={bombLabel} className={s.markTrigger}>
+            <span className={s.bombMark} role="img" aria-label={bombLabel}>
+              <span aria-hidden="true">{BOMB_GLYPH}</span>
+              <span aria-hidden="true">{bomb.handsLeft}</span>
+            </span>
+          </ChaosCardInfo>
+        )}
+      </span>
+    )
 
   return (
     <div
@@ -395,7 +444,10 @@ export function Seat({
         winnerPayout !== null && s.seatWin,
         seat.folded && s.seatFolded,
         player?.connected === false && s.seatOffline,
+        reign?.kind === 'god' && s.seatGod,
+        reign?.kind === 'demigod' && s.seatDemigod,
       )}
+      data-reign={reign?.kind}
       style={style}
       data-seat={seat.seat}
       data-half={position !== null && position.y < 50 ? 'top' : 'bottom'}
@@ -416,7 +468,13 @@ export function Seat({
         {faces.length > 0 ? (
           // The strip's fan (BP-31 R1): two or three cards splay from their feet; a hand to peel lies flat (`none`), since
           // the peel measures the drag across the card's own box.
-          <div className={s.seatCards} data-hand="" data-fan={strip ? (peeling ? 'none' : String(faces.length)) : undefined}>
+          // BP-41: four cards or more overlap, so a five-card hand is no wider than a three-card one (`data-count`).
+          <div
+            className={s.seatCards}
+            data-hand=""
+            data-fan={strip ? (peeling ? 'none' : String(faces.length)) : undefined}
+            data-count={faces.length >= 4 ? String(Math.min(faces.length, 6)) : undefined}
+          >
             {faces.map((card, i) =>
               peeling && card !== null ? (
                 <PeelCard
@@ -438,9 +496,13 @@ export function Seat({
                   reveal={reveal}
                   delayMs={dealDelay(i)}
                   turnDelayMs={liftAfter + i * SHOWDOWN_STAGGER_MS}
+                  className={cx(card !== null && card === wildCard && s.cardWild, i < seen.length && s.cardHawk)}
                 />
               ),
             )}
+            {/* What the marks on the cards mean, for a screen reader: the wild card, the cards a hawk's look turned up. */}
+            {wildCard !== null && faces.includes(wildCard) ? <span className={s.sr}>{t('chaos.detail.wild', { card: cardLabel(wildCard, t) })}</span> : null}
+            {seen.length > 0 ? <span className={s.sr}>{t('chaos.hawkMark')}</span> : null}
             {borrowed === null ? null : (
               <span className={s.borrowSlot} data-borrowed="" title={t('chaos.borrowedHint')}>
                 <Card card={borrowed.card} size={cardSize} highlighted={borrowed.highlighted} className={s.borrowedCard} />
@@ -520,6 +582,7 @@ export function Seat({
               {DEALER_GLYPH}
             </span>
           ) : null}
+          {marks}
         </div>
       </div>
 

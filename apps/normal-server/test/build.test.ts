@@ -112,6 +112,13 @@ describe.skipIf(SKIP)('the production build', () => {
     }
   })
 
+  it('never ships the e2e card overrides (BP-41)', async () => {
+    // `E2E_CHAOS_CARDS` lays an ops file over the shipped cards (Cá chép at 100 %); only `e2e-entry.ts` reads it.
+    for (const name of ENTRY_FILES) {
+      expect(await readFile(join(DIST, name), 'utf8'), `dist/${name}`).not.toContain('E2E_CHAOS_CARDS')
+    }
+  })
+
   it('inlines the workspace packages instead of importing them', async () => {
     for (const name of ENTRY_FILES) {
       const { eager, deferred } = await specifiersOf(name)

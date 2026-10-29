@@ -2,7 +2,8 @@ import type { Rng } from '../cards/rng.js'
 import { drawOffer, drawTier } from './draw.js'
 import {
   CHAOS_TIERS, DEFAULT_CHAOS_CONFIG,
-  type ChaosCardDef, type ChaosConfig, type ChaosMode, type ChaosSeat, type ChaosTier, type HeldCard, type HeldCardView,
+  type ChaosCardDef, type ChaosConfig, type ChaosMode, type ChaosSeat, type ChaosTableState, type ChaosTableView, type ChaosTier,
+  type HeldCard, type HeldCardView,
 } from './types.js'
 
 const TIER_RANK: Readonly<Record<ChaosTier, number>> = { silver: 1, gold: 2, diamond: 3 }
@@ -14,10 +15,14 @@ export const tierFromParam = (n: number | undefined): ChaosTier | undefined => (
 export const farmHandsOf = (cards: readonly HeldCard[]): number =>
   cards.find((c) => c.effect === 'farm' && c.handsLeft !== null)?.handsLeft ?? 0
 
-/** A card as a seat holds it, under `uid`: a duration card starts with its full `hands`. */
+/**
+ * A card as a seat holds it, under `uid`: a duration card starts with its full `hands`. BP-41 Cá chép hóa rồng starts with
+ * its `energy0` % of energy (0 in production data; the ops pack sets 100 to force a Thần, A-ops), at most 100.
+ */
 export const toHeld = (def: ChaosCardDef, uid: number): HeldCard => ({
   uid, cardId: def.id, tier: def.tier, effect: def.effect, params: def.params, timing: def.timing, debuff: def.debuff,
   handsLeft: def.params.hands ?? null,
+  ...(def.effect === 'carp' ? { charge: Math.max(0, Math.min(100, def.params.energy0 ?? 0)) } : {}),
 })
 
 /**
@@ -53,7 +58,8 @@ export function stackHeld(cards: readonly HeldCard[], card: HeldCard): HeldCard[
 
 /**
  * A seat receives a card (a draft pick, a bonus card, a Thần tài prize). "Now" cards act at once — Cấp độ turns into
- * its cards (spec §5.6, never another Cấp độ), Tích lũy adds its points — and the rest are held, under spec §3.4's
+ * its cards (spec §5.6, never another Cấp độ), Tích lũy adds its points, BP-41's Trộm điểm is only listed in `received`
+ * for the caller to resolve — and the rest are held, under spec §3.4's
  * rule for duration cards of the same effect: a higher tier replaces the held one, the same card adds its hands, another
  * card of the same tier replaces it (with its own params), a lower tier is dropped. `received` lists every card that reached the seat, a Cấp độ first and then what it became; a
  * dropped card is not in it. The input seat is never changed.
@@ -82,6 +88,12 @@ export function receiveCard(
       received.push(d)
       return
     }
+    // BP-41 Trộm điểm acts on receipt against another seat: the caller, which sees every seat, resolves it
+    // (`stealPoints`, steal.ts). It is never held.
+    if (d.effect === 'stealPoints') {
+      received.push(d)
+      return
+    }
     const hands = d.params.hands
     if (hands !== undefined) {
       const rule = stackRule(cards, { effect: d.effect, tier: d.tier, cardId: d.id })
@@ -104,6 +116,30 @@ export function receiveCard(
   return { seat: { ...seat, cards, points, farmHandsLeft: farmHandsOf(cards) }, received }
 }
 
+/**
+ * BP-41 Nâng tầm uy lực (spec §6.3): the seat's next card received — a draft offer or a bonus / prize card — comes `steps`
+ * tiers above `tier` (Kim cương stays Kim cương). The oldest held one is used up by it: the returned seat no longer holds
+ * it (the same object when the seat holds none, and `tier` comes back as it was). The draft reads the tier for the seat's
+ * own offer here (`draftTierFor`) and keeps the returned seat once the offer is made.
+ */
+export function liftTier(seat: ChaosSeat, tier: ChaosTier): { seat: ChaosSeat; tier: ChaosTier; spent?: HeldCard } {
+  const card = seat.cards.find((c) => c.effect === 'tierUp')
+  if (!card) return { seat, tier }
+  const rank = Math.min(CHAOS_TIERS.length, TIER_RANK[tier] + Math.max(0, card.params.steps ?? 1))
+  return { seat: { ...seat, cards: seat.cards.filter((c) => c.uid !== card.uid) }, tier: CHAOS_TIERS[rank - 1]!, spent: card }
+}
+
+/** The tier of the seat's own draft offer (BP-41 Nâng tầm uy lực): the table's, or higher when it holds one. Pure. */
+export const draftTierFor = (seat: ChaosSeat, tableTier: ChaosTier): ChaosTier => liftTier(seat, tableTier).tier
+
 export const toHeldCardView = (card: HeldCard): HeldCardView => ({
   uid: card.uid, cardId: card.cardId, tier: card.tier, handsLeft: card.handsLeft,
+  ...(card.charge === undefined ? {} : { charge: card.charge }),
+})
+
+/** The public face of the table's chaos state (BP-41): seats and hands left, no player id. */
+export const toChaosTableView = (table: ChaosTableState): ChaosTableView => ({
+  god: table.god ? { seat: table.god.seat, handsLeft: table.god.handsLeft, curse: table.god.curse } : null,
+  demigods: table.demigods.map((d) => ({ seat: d.seat, handsLeft: d.handsLeft })),
+  bombs: table.bombs.map((b) => ({ owner: b.owner, carrier: b.carrier, handsLeft: b.handsLeft })),
 })

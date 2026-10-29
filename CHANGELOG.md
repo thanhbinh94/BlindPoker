@@ -9,6 +9,99 @@ below are the real history.
 
 ---
 
+## Plan 41 — Poker hỗn loạn, round three: 39 new cards, Cá chép hóa rồng and the Thần Bài, dice of fortune, three titles, tiers 50/35/15 — merged `MERGE` (2026-10-29)
+
+Brainstormed with the user on 2026-10-28 ("lập plan để bổ sung các lá sau…", "mở rào để tăng độ vui", "có thẻ nào đột biến…
+cá chép hóa rồng", "mở trong 5 ván", "tăng thưởng hơn nữa", "thêm thẻ gieo súc sắc", "kim cương lấy đủ cả 3", "1 a, 2 → ok, nếu
+thần là bot thì không tính danh hiệu"), then "viết spec rồi lập plan và triển khai/deploy luôn". Spec
+`2026-10-28-chaos-round-three-design.md` (user decisions G1–G12), plan `2026-10-29-plan41-chaos-round-three.md` with its
+pre-flight amendments A1–A16, A-ops, A-churn. Branch `feature/BP-41-chaos-round-three`. Normal edition only.
+
+- **What a player gets.**
+  - **39 new chaos cards** (12 Bạc, 13 Vàng, 14 Kim cương; 86 in all), among them the ten the players asked for (Siêu cộng
+    dồn, Liều ăn nhiều, Nâng tầm uy lực, Mạo hiểm gia, Đảo bài, Ép chia thưởng, Cướp đoạt, the renamed Ép cược, Cấm bỏ bài,
+    Thách đấu). **The money fence is open** for the cards marked 🔓 (G1): they may raise the stake, move points between players
+    (duels, bombs, win tax, split winnings), add dead money, forbid folding, or credit a jackpot. The GM switches any card off in
+    "Thẻ hỗn loạn" if it plays badly.
+  - **Cá chép hóa rồng** (Kim cương) gains 5–7 % energy each hand its holder loses and rolls on it before each deal; on a hit
+    (or at 100 %) the holder becomes **Thần Bài for 5 hands**, one Thần per table: dealt only Aces, crits ×2/×3/×4 on a win,
+    immune to every steal / swap / shuffle / re-deal card, untouched by Nhật thực and Kẻ phá đám, and for the first 3 hands every
+    other player carries one curse drawn at the ascension ("Thần rút bài", "Thần thách đấu", "Thần tráo bài"). Whoever wins a
+    hand the Thần played and lost **dethrones** it and gets 2 random Kim cương cards. A holder who wins before ascending becomes
+    **Bán Thần** for 5 hands (best of three hands, crits ×2/×3). At a "Chơi hoặc bỏ" table **nobody may fold while a Thần
+    reigns** — the tray shows "Không được bỏ bài ván này" with "Chơi" (G11).
+  - **Heralds across the screen** for every player in the room, about 3 s, in the spec's exact words ("Cảnh báo: … trở thành
+    Thần Bài!", "… trở thành Bán Thần!", "… đã đánh bại Thần Bài!", and a 6-6-6 jackpot); none tells a result before the cards
+    have turned. A crown ♛ with "còn N ván" on the Thần's seat, ✦ on a Bán Thần, ✹ on a bomb carrier.
+  - **Xúc xắc vận may** in three tiers: the dice tumble in a panel every seat sees, then land; Kim cương sums three dice, a
+    triple doubles the prize, 6-6-6 is the jackpot. The roll's toast says "Đang gieo…" until the dice land.
+  - **Three titles** with their own "Poker hỗn loạn" section on the achievements screen and counters on the profile: **Hóa
+    Thần** 300.000 điểm + 300 danh vọng + the title item, **Bán Thần** 150.000 + 150, **Kẻ Sát Thần** (beat a Thần twice)
+    500.000 + 500. They count only at tables with at least two humans dealt into the hand, and never against a bot Thần (G12).
+  - **Draft tiers 50 / 35 / 15** (Bạc / Vàng / Kim cương), up from 60 / 30 / 10.
+  - The board can show a sixth card, hands run from 1 to 6 cards, a wild card is marked, the card popup shows Cá chép's energy
+    and Siêu cộng dồn's chance, and the ledger names "Thẻ nổ hũ" (jackpot) and "Thẻ xúc xắc" (dice loss).
+- **Under it.** Core: 33 new effect kinds; `engine-core.ts` (`isImmune`, `resolveHoleDebuff`, `resolveDebuff` with Gậy ông and
+  Bia đỡ đạn, `privateTo`), `engine-round3.ts`, `engine-reveal.ts` (duels, swaps, Đại hồng thủy, hawk's eye), `engine-stake.ts`
+  (dead money, `FORFEIT`), `engine-transfer.ts` (`afterPayout` transfers capped at the payer's stack), `god.ts` /
+  `engine-god.ts` (reigns, curse, dethrone), `dice.ts` (`rollFortuneDice`), `steal.ts`, `evaluate.ts` (any hand size, wild
+  cards); the catalogue is 86 cards with the 39 on. Protocol: `CHAOS_TABLE`, `CHAOS_HERALD`, `CHAOS_DICE`, `CHAOS_STEAL`,
+  `CHAOS_HAWK`, `CHAOS_APPLIED.transfers` / `.wild` / `.privateTo`, `HandSummary.chaosTitles`. server-kit: table state carried
+  across hands, `seatCleared` on every seat-vacating path, the `chaos_dice` sink written under a per-roll key, titles counted from
+  the hand's dealt-in humans. Normal server: migration **`0008_chaos_titles`** (three `player_stats` counters, additive), three
+  achievements in a new `chaos` category with a reputation override, three epic title items off sale, `chaos_jackpot` as a
+  credit source under the daily cap, the e2e-only `E2E_CHAOS_CARDS` catalogue overlay (never in `dist`, pinned by
+  `build.test.ts`). ui-kit: `ChaosHerald`, `ChaosDice` in a fixed moment layer, seat marks, the no-fold note, a 6-slot board.
+  Web: achievements bucket and reputation badge, profile counters, ledger labels, the GM tab over all 86 cards.
+- **Tests.** core 645 (incl. a seeded multi-hand fuzz: table carried, sitting-out seats, leavers, conservation, card
+  uniqueness, no fold while a Thần acts), server-kit 262 (a 120-hand room run that pays dice, jackpot, duels, bombs and win tax
+  with the books at 0 every hand; the privacy scans), ui-kit 1,113, normal-web 1,121, normal-server 860 (the dice sink at the
+  ledger, the jackpot in the conservation sums, migration 0008, titles once each). Ops: **F-14a/b** (a forced Thần: the herald's
+  exact words, the crown, no "Bỏ bài"; desktop and both S25 sizes, the viewer as Thần every run on the S25) and **F-14c/d** (the
+  Kim cương dice: tumble, landing, the toast never ahead of the dice), 72 cases.
+- **Docs.** `docs/player-guide.md` §6a (the 39 cards by tier, the Thần, the dice, the titles, the fence) and §9 (47
+  achievements), `docs/ui-kit.md` (round three), `docs/server-kit.md`, `docs/normal-server.md`, `docs/normal-web.md`,
+  `docs/known-limitations.md`, `docs/test-matrix.md` (two rows; the pin and `CLAUDE.md` §3 updated, ops 72 cases).
+- **Khác với spec / Deviations from the spec.**
+  1. `DEAL_RESERVE` stays 10, 11 only on a hand with the sixth board card (A9 said 10 → 11), so the old 47 cards deal exactly as
+     before on crowded tables.
+  2. A deck that runs short fills from the remaining cards, not from "the strongest" (3b-3).
+  3. Gậy ông đập lưng ông acts from the deal, not only from the reveal (4-2); pressed mid-hand it applies next hand.
+  4. A no-fold seat whose player leaves, or whose reconnect lapses, during the decision **plays** instead of forfeiting
+     (Ruling 14 over A2: G11 "luôn có người đối đầu"). A kick cannot reach it: the room refuses mid-hand kicks.
+  5. Gương phản chiếu turns back only the Thần's curse, not the Thần's protection (A16).
+  6. A human's dice prize that needs no press is listed in the public `awarded` line (held cards are public anyway).
+  7. Crits multiply a hand's net including transfer income (duel curse, Thách đấu, Thuế thắng), so a crit can turn transfer
+     income into new points; inside the daily cap (Ruling 2 of Task 5c, kept).
+  8. Duels and bombs pay `wagers × the base fixed wager`, not × the Sới lớn / Mạo hiểm gia stake (Ruling 15).
+  9. A cancelled ascension hand keeps the reign but marks no title (7b-1).
+- **Rulings.** 12 the new one-shot reveal cards may be pressed mid-hand. 13 an immune seat keeps its hand under Đại hồng thủy.
+  14 a leaving no-fold seat plays. 15 duels and bombs pay the base wager. 16 a carried-in pot counts as the winner's profit for Ép
+  chia thưởng / Thuế thắng. 17 on a crit tie the round-three card is credited. 18 the duel curse is blocked by Khiên. 19 "≥ 2
+  humans" means humans dealt into the hand. 20b the 6-6-6 band shows from the landing and leaves with the dice panel at 3 s. 21 the
+  "đánh bại Thần Bài" herald waits out the reveal hold. 22 the roll's toast holds its faces until the dice land. 23 the ledger
+  calls a dice loss "Thẻ xúc xắc". 24 Mồi lửa pays every seated player, sitting out or not. 25 a reigning Thần's Siêu cộng dồn
+  neither rolls nor grows. 26 "Không được bỏ bài ván này" keeps its words and fits two lines at 780×360. 27 the first-paint budget
+  rises from 170 to 180 KB gzip (the branch reached 171.5 KB). 28 toast lines that arrive during the reveal hold (the dethrone line,
+duel and transfer payments) appear when it ends, with the result; a capped jackpot shows the paid amount on the dice panel, the
+herald and the toast alike (`CHAOS_CREDIT.cardId`, optional). 9 a blindfolded owner gets no private Siêu cộng dồn event.
+  10 under Thế giới đảo ngược the wild card makes the weakest hand (the winning one). 11 a tier upgrade replaces the card and resets
+  its charge. Task rulings are in the plan's SDD reports; the ops ones: the pack's catalogue is an overlay file of changes (Cá
+  chép at 100 % energy and off unless a GM rule turns it on), the Thần case runs under reduced motion.
+- **New English copy to review** (the session's draft): the heralds ("Card God", "Demigod", "… dethroned …"), the curse names
+  ("God's Draw", "God's Duel", "God's Shuffle"), "Lucky dice", "No folding this hand", the 39 cards' names and texts
+  (`chaos.cards.*`), hawk / energy / Ace chance / jackpot / triple / stake / wagers lines (`chaos.detail.*`), "{{name}} pays
+  {{count}} wagers", the three titles and achievements, "Dice card", "Jackpot card".
+- **Gate** GATE
+- **Deployed** DEPLOYED
+- **Still open.** Card balance waits for the user's statistics (the fence is open; the GM switches off a card that misbehaves).
+  The Thần's, Bán Thần's and Kẻ Sát Thần's outfits and aura are a later phase (G10). Real-phone checks: the herald's glow and
+  shake, the dice, the glyphs ♛ ✦ ✹ on Safari and Firefox. F-13c's 5 px scroll at 780×360 (once in 6 runs, never in 8 more). A
+  dice sink that fails twice is logged, not retried. The LAN host still lacks migrations 0004–0008 and must not take this build
+  with `-NoMigrate` (the stats path reads 0008's columns).
+
+---
+
 ## BP-40 — from the second chaos draft on, the draft panel stands whole on a phone instead of being cut short and scrolling — merged `883776b` (2026-10-28)
 
 The user's report, 2026-10-28, with two phone screenshots (`docs/bug-log.md` §12 H10): on a phone, upright and on its side, every

@@ -2159,6 +2159,14 @@
   gap: var(--space-1);
 }
 
+/* The corner's row is as wide as what it holds, so the note's 34 % cap resolved against itself and wrapped "Không được bỏ
+   bài ván này" to three lines at 780 × 360 (BP-41 Ruling 26). Here it takes a width of its own: two lines beside "Chơi",
+   and it still shrinks on a corner narrower than both. */
+.trayRight .noFoldNote {
+  flex: 0 1 8.5rem;
+  max-width: 8.5rem;
+}
+
 /* `overflow: hidden` is the last resort for a figure no query foresaw: a clipped label, never one over the plate. */
 .trayRight .trayRow > button {
   flex: 0 1 auto;
@@ -4380,6 +4388,395 @@
   visibility: hidden;
 }
 
+/* ---------------- BP-41: Thần Bài, Bán Thần, bombs, dice ---------------- */
+
+/* What a round-three card did, after its toast line ("Lan → Bình: 1.000"): part of the same run of text. */
+.chaosToastDetail {
+  font-weight: 600;
+  color: var(--gold);
+}
+
+/* The reign's mark and a carried bomb's, on the plate's top-left corner (the dealer's button has the top-right): small pills
+   with a glyph and the hands left, each the button that opens its card's popup. */
+.seatMarks {
+  position: absolute;
+  left: -6px;
+  top: -9px;
+  z-index: 2;
+  display: flex;
+  gap: 2px;
+}
+
+/* The stack (a phone held upright): the first row of opponents starts at the stage's very top, which clips what hangs above a
+   plate — so the marks sit on the plate's lower-left corner instead, over the foot of the avatar's disc. */
+.stack .seatMarks {
+  top: auto;
+  bottom: -3px;
+  left: -3px;
+}
+
+/* The viewer's own strip is the last thing in the room's scroll box (see `.meStrip .timerText`): a mark or an aura hanging below
+   its plate scrolled the stage by 6 px at 360 × 780 when the viewer reigned (BP-41 Task 11, ops F-14b). Both stay inside the
+   plate there; the aura's glow is a shadow, which scrolls nothing. */
+.meStrip .seatMarks {
+  bottom: 2px;
+  left: 0;
+}
+
+.meStrip.seatGod .plate::after,
+.meStrip.seatDemigod .plate::after {
+  inset: 0;
+}
+
+.markTrigger {
+  border-radius: var(--radius-pill);
+}
+
+.reignMark,
+.bombMark {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 2px 5px rgba(3, 6, 16, 0.55);
+}
+
+.reignMark[data-reign='god'] {
+  border: 1px solid #ffd77a;
+  background: linear-gradient(180deg, #c8323c, #7a1219);
+  color: #ffe9a8;
+}
+
+.reignMark[data-reign='demigod'] {
+  border: 1px solid var(--tier-gold);
+  background: linear-gradient(180deg, #2b3557, #141b31);
+  color: var(--tier-gold-ink);
+}
+
+.bombMark {
+  border: 1px solid #f08a4b;
+  background: linear-gradient(180deg, #3a2414, #1c120b);
+  color: #ffb27a;
+}
+
+/* The Thần's aura: a gold-red ring round the plate that breathes for as long as the reign lasts (still under reduced motion). */
+.seatGod .plate::after,
+.seatDemigod .plate::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.seatGod .plate::after {
+  border: 2px solid var(--chaos-god-edge);
+  box-shadow:
+    0 0 10px 2px rgba(240, 180, 67, 0.55),
+    0 0 22px 6px rgba(200, 50, 60, 0.45);
+  animation: godAura 2.4s ease-in-out infinite;
+}
+
+.seatDemigod .plate::after {
+  border: 1.5px solid color-mix(in srgb, var(--tier-gold) 75%, transparent);
+  box-shadow: 0 0 10px 1px rgba(217, 164, 65, 0.35);
+}
+
+@keyframes godAura {
+  50% {
+    box-shadow:
+      0 0 16px 4px rgba(255, 210, 110, 0.7),
+      0 0 32px 10px rgba(220, 60, 60, 0.55);
+  }
+}
+
+/* Lá ma: the wild hole card, ringed in the Kim cương colour with a star on its corner. */
+.cardWild {
+  position: relative;
+  outline: 2px solid var(--tier-diamond);
+  outline-offset: 1px;
+}
+
+.cardWild::after {
+  content: '✦';
+  position: absolute;
+  right: -5px;
+  top: -6px;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--tier-diamond);
+  color: #06212a;
+  font-size: 9px;
+  line-height: 1;
+}
+
+/* Mắt diều hâu: an opponent's card the viewer saw, face up for them alone, dashed like a peeked board card. */
+.cardHawk {
+  opacity: 0.85;
+  outline: 1.5px dashed var(--rarity-epic);
+  outline-offset: 1px;
+}
+
+/* Four hole cards or more (BP-41: Liều ăn nhiều, Hên xui, Đảo bài, Thêm lá together) overlap, so a hand of five takes the
+   width of three; one card stands alone. Card after card only (Task 9 M5): nothing else that ever joins the row is pulled in. */
+.seatCards[data-count='4'] > .card + .card {
+  margin-left: calc(var(--card-w, 46px) * -0.33);
+}
+
+.seatCards[data-count='5'] > .card + .card {
+  margin-left: calc(var(--card-w, 46px) * -0.5);
+}
+
+.seatCards[data-count='6'] > .card + .card {
+  margin-left: calc(var(--card-w, 46px) * -0.6);
+}
+
+.mine [data-fan='4'],
+.mine [data-fan='5'],
+.mine [data-fan='6'] {
+  gap: 0;
+}
+
+.mine [data-fan='4'] > .card,
+.mine [data-fan='5'] > .card,
+.mine [data-fan='6'] > .card {
+  transform-origin: 50% 100%;
+}
+
+.mine [data-fan='4'] > .card:nth-child(1) { rotate: -10deg; }
+.mine [data-fan='4'] > .card:nth-child(2) { rotate: -3.5deg; }
+.mine [data-fan='4'] > .card:nth-child(3) { rotate: 3.5deg; }
+.mine [data-fan='4'] > .card:nth-child(4) { rotate: 10deg; }
+.mine [data-fan='5'] > .card:nth-child(1) { rotate: -12deg; }
+.mine [data-fan='5'] > .card:nth-child(2) { rotate: -6deg; }
+.mine [data-fan='5'] > .card:nth-child(4) { rotate: 6deg; }
+.mine [data-fan='5'] > .card:nth-child(5) { rotate: 12deg; }
+.mine [data-fan='6'] > .card:nth-child(1) { rotate: -12deg; }
+.mine [data-fan='6'] > .card:nth-child(2) { rotate: -7deg; }
+.mine [data-fan='6'] > .card:nth-child(3) { rotate: -2deg; }
+.mine [data-fan='6'] > .card:nth-child(4) { rotate: 2deg; }
+.mine [data-fan='6'] > .card:nth-child(5) { rotate: 7deg; }
+.mine [data-fan='6'] > .card:nth-child(6) { rotate: 12deg; }
+
+/* A board six wide (BP-41 Lá chung thứ sáu): the gaps close up and each card gives a little, so the row is no wider than five. */
+.community[data-board] {
+  gap: var(--space-1);
+}
+
+.community[data-board] > * {
+  --card-w: calc(var(--card-lg, clamp(40px, 10.4vw, 62px)) * 0.86);
+  width: var(--card-w);
+}
+
+/* "Không được bỏ bài ván này" where "Bỏ bài" would stand (BP-41 Cấm bỏ bài, a Thần at the table). */
+.noFoldNote {
+  display: inline-flex;
+  align-items: center;
+  /* never more than a third of the row: "Chơi" keeps its width beside "Tự động chơi" on a 360 px phone */
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(11rem, 34%);
+  padding: 0 var(--space-1);
+  font-size: 0.6875rem;
+  font-style: italic;
+  line-height: 1.15;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+
+/* The herald (BP-41 §4.5): a band across the whole screen, gold words on a deep red with a glow, a gentle shake as it lands. */
+/* The herald's live region is a real box — a `display: contents` element is dropped from the accessibility tree by some
+   browsers, and its announcements with it (BP-41 Task 9 M6). Empty, it has no height; it lets presses through. */
+.heraldSlot {
+  width: 100%;
+}
+
+.herald {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  margin: 0;
+  padding: clamp(8px, 1.6vh, 16px) var(--space-4);
+  border: 0;
+  border-block: 2px solid var(--chaos-god-edge);
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 210, 110, 0.18) 50%, transparent),
+    linear-gradient(180deg, var(--chaos-god-band-top), var(--chaos-god-band-foot));
+  /* Under the gradients, the band's own colour: it hides the seat names it passes over, and says so to the text-overlap rule,
+     which reads a gradient with a clear stop as see-through (BP-41 Task 11, ops F-14). */
+  background-color: var(--chaos-god-band);
+  box-shadow:
+    0 0 24px 4px rgba(240, 180, 67, 0.45),
+    0 0 60px 12px rgba(200, 50, 60, 0.35);
+  font-family: var(--font-display);
+  font-size: clamp(1rem, 2.6vw, 1.75rem);
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  color: var(--chaos-god-ink);
+  text-shadow:
+    0 0 8px rgba(255, 190, 80, 0.75),
+    0 0 18px rgba(220, 60, 60, 0.6);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.herald:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -4px;
+}
+
+.heraldLine {
+  display: block;
+}
+
+.heraldMotion {
+  animation:
+    heraldIn 320ms var(--ease) backwards,
+    heraldShake 520ms ease-in-out 320ms 2,
+    heraldGlow 1.4s ease-in-out 320ms 2;
+}
+
+@keyframes heraldIn {
+  from {
+    opacity: 0;
+    transform: scaleY(0.4);
+  }
+}
+
+@keyframes heraldShake {
+  20% { transform: translateX(-3px) rotate(-0.3deg); }
+  40% { transform: translateX(3px) rotate(0.3deg); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+
+@keyframes heraldGlow {
+  50% {
+    box-shadow:
+      0 0 36px 8px rgba(255, 210, 110, 0.6),
+      0 0 80px 18px rgba(220, 60, 60, 0.5);
+  }
+}
+
+/* The dice of fortune (BP-41 §5): a panel at the top of the moment layer, a row per roll — the name, the dice, what they gave.
+   The panel is one button (a tap puts it away); the section round it only names it. */
+.diceSlot {
+  display: flex;
+  justify-content: center;
+  max-width: 100%;
+}
+
+.dicePanel {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+  max-width: min(30rem, calc(100vw - 32px));
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1.5px solid var(--tier-gold);
+  border-radius: var(--radius-md);
+  background: rgba(10, 18, 32, 0.95);
+  box-shadow: var(--shadow-2);
+  font: inherit;
+  text-align: center;
+  color: var(--ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dicePanel:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.diceRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px var(--space-2);
+  font-size: 0.8125rem;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.diceName {
+  overflow: hidden;
+  max-width: 12rem;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.diceFaces {
+  display: inline-flex;
+  gap: 5px;
+}
+
+.diceResult {
+  font-weight: 600;
+  color: var(--gold);
+}
+
+.diceRow[data-herald] .diceResult {
+  color: var(--chaos-god-ink);
+  text-shadow: 0 0 8px rgba(255, 190, 80, 0.7);
+}
+
+.die {
+  display: grid;
+  grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  padding: 4px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, var(--chaos-die-face-top), var(--chaos-die-face-foot));
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18), 0 2px 4px rgba(3, 6, 16, 0.5);
+}
+
+.diePip,
+.dieCell {
+  place-self: center;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.diePip {
+  background: var(--chaos-die-pip);
+}
+
+.diceRow[data-herald] .diePip {
+  background: var(--chaos-die-pip-hot);
+}
+
+.dieTumble {
+  animation: dieTumble 300ms ease-in-out infinite;
+}
+
+@keyframes dieTumble {
+  25% { transform: translateY(-4px) rotate(-14deg); }
+  50% { transform: translateY(0) rotate(8deg); }
+  75% { transform: translateY(-2px) rotate(-6deg); }
+}
+
 /* ---------------- Motion off ---------------- */
 @media (prefers-reduced-motion: reduce) {
   .card,
@@ -4398,7 +4795,10 @@
   .critShout,
   .cardInfo,
   .bonusError,
-  .seatWin .plate {
+  .seatWin .plate,
+  .heraldMotion,
+  .dieTumble,
+  .seatGod .plate::after {
     animation: none;
   }
 

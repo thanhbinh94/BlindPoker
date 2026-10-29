@@ -1,4 +1,5 @@
 import { Badge, Button, Panel, formatPoints, type Language } from '@bp/ui-kit'
+import { Fragment } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import type { AchievementProgressDto, NormalApi } from '../api.js'
@@ -9,20 +10,31 @@ import { useAsync } from './useAsync.js'
 
 /** The earned row's tick, a named value rather than a literal in the markup (`react/jsx-no-literals`). */
 const CHECK_GLYPH = '✓'
+/** Between a reward's points and its item. */
+const REWARD_SEP = ' · '
 
-/** `apps/normal-server/data/achievements.json` — the four buckets, in the order the screen reads best. */
-export const CATEGORY_ORDER = ['login', 'holdem', 'blind', 'social']
+/** `apps/normal-server/data/achievements.json` — the five buckets, in the order the screen reads best. */
+export const CATEGORY_ORDER = ['login', 'holdem', 'blind', 'social', 'chaos']
 
-/** A reward is points, an item, or both. Anything with neither is a definition bug, and prints nothing. */
+/** A reward is points, an item, or both (reputation, which an achievement may also name, is its own badge). Anything with neither is a definition bug, and prints nothing. */
 export function rewardText(row: AchievementProgressDto, lang: Language, t: TFunction): string {
-  const parts: string[] = []
-  if (row.reward.points !== undefined) parts.push(`${formatPoints(row.reward.points, lang)} ${t('common:units.pointsShort')}`)
-  if (row.reward.itemId !== undefined) parts.push(itemName(row.reward.itemId, t))
-  return parts.join(' · ')
+  return rewardParts(row, lang, t).map((part) => part.text).join(REWARD_SEP)
 }
 
 /**
- * A category order that a server-side addition cannot fall out of: the four known buckets first, in order,
+ * The reward's parts, points then item. `whole`: kept on one line — the points, and a title's name ("Hóa Thần", "Kẻ Sát Thần").
+ * A wardrobe item's longer name ("Áo măng tô thám tử") may wrap between its words, so a phone's badge column stays narrow
+ * (fix-wave follow-up R5). A line never breaks inside a title's name.
+ */
+export function rewardParts(row: AchievementProgressDto, lang: Language, t: TFunction): { text: string; whole: boolean }[] {
+  const parts: { text: string; whole: boolean }[] = []
+  if (row.reward.points !== undefined) parts.push({ text: `${formatPoints(row.reward.points, lang)} ${t('common:units.pointsShort')}`, whole: true })
+  if (row.reward.itemId !== undefined) parts.push({ text: itemName(row.reward.itemId, t), whole: row.reward.itemId.startsWith('title_') })
+  return parts
+}
+
+/**
+ * A category order that a server-side addition cannot fall out of: the five known buckets first, in order,
  * then anything else in the order it arrived.
  */
 export function categoriesOf(rows: AchievementProgressDto[]): string[] {
@@ -99,6 +111,7 @@ export function AchievementsScreen({ api, lang }: AchievementsScreenProps) {
                 // degenerate case reads as "there was nothing to do" rather than as a broken bar.
                 const filled = row.threshold === 0 ? 100 : (done / row.threshold) * 100
                 const reward = rewardText(row, lang, t)
+                const parts = rewardParts(row, lang, t)
                 // Grouped like every other number on screen — "0 trên 100.000", not "0 trên 100000" (layout
                 // audit L7); `formatPoints` is the kit's integer formatter, points or not.
                 const counter = t('achievements.ui.progress', {
@@ -144,9 +157,19 @@ export function AchievementsScreen({ api, lang }: AchievementsScreenProps) {
 
                     <span className={s.achReward}>
                       {reward === '' ? null : (
-                        <Badge tone={unlocked ? 'gold' : 'muted'}>
+                        <Badge tone={unlocked ? 'gold' : 'muted'} className={s.achBadge}>
                           <span className="visually-hidden">{t('achievements.ui.reward')}</span>
-                          {reward}
+                          {parts.map((part, i) => (
+                            <Fragment key={part.text}>
+                              {i === 0 ? null : REWARD_SEP}
+                              <span className={part.whole ? s.achPart : undefined}>{part.text}</span>
+                            </Fragment>
+                          ))}
+                        </Badge>
+                      )}
+                      {row.reputation === undefined ? null : (
+                        <Badge tone={unlocked ? 'gold' : 'muted'} className={s.achBadge}>
+                          {t('achievements.ui.reputation', { points: formatPoints(row.reputation, lang) })}
                         </Badge>
                       )}
                       {row.unlockedAt === null ? null : (

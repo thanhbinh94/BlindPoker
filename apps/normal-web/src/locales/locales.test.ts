@@ -30,7 +30,7 @@ describe('normal locales', () => {
 
   it.each(bundles)('names every catalogue item in %s', (_lang, bundle) => {
     const named = bundle.items as Record<string, string | undefined>
-    expect(itemDefs.length).toBe(127)
+    expect(itemDefs.length).toBe(130)
     for (const def of itemDefs) expect(named[def.id], `items.${def.id}`).toBeTypeOf('string')
     // …and nothing more: a string for an id the server does not serve is a name nobody will ever read.
     expect(Object.keys(named).sort()).toEqual(itemDefs.map((d) => d.id).sort())
@@ -38,7 +38,7 @@ describe('normal locales', () => {
 
   it.each(bundles)('names and describes every achievement in %s', (_lang, bundle) => {
     const named = bundle.achievements as Record<string, { name?: string; desc?: string } | undefined>
-    expect(achievementDefs.length).toBe(44)
+    expect(achievementDefs.length).toBe(47)
     for (const def of achievementDefs) {
       expect(named[def.id]?.name, `achievements.${def.id}.name`).toBeTypeOf('string')
       expect(named[def.id]?.desc, `achievements.${def.id}.desc`).toBeTypeOf('string')

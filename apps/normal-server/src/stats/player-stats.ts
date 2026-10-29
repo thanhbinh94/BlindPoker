@@ -1,7 +1,7 @@
 /**
  * The lifetime counters of spec §10.3, and nothing else.
  *
- * `PlayerStats` is *exactly* the sixteen numeric metrics, with no `playerId` and no `updatedAt`,
+ * `PlayerStats` is *exactly* the nineteen numeric metrics, with no `playerId` and no `updatedAt`,
  * because `keyof PlayerStats` is a type an achievement definition is written against
  * (`AchievementDef.metric`, §14.1). Widening it with a bookkeeping field would make
  * `{ metric: 'updatedAt' }` a well-typed achievement, which it is not.
@@ -30,6 +30,12 @@ export interface PlayerStats {
   totalLoginDays: number
   loginStreak: number
   bestLoginStreak: number
+  /** BP-41 (spec 2026-10-28 §4.4): times this player became the Thần Bài, at a table of two or more humans. */
+  chaosAscensions: number
+  /** BP-41: times this player became a Bán Thần, at a table of two or more humans. */
+  chaosDemigods: number
+  /** BP-41: hands this player won against a human Thần, at a table of two or more humans. */
+  chaosGodsSlain: number
 }
 
 export type StatMetric = keyof PlayerStats
@@ -59,6 +65,9 @@ export const STAT_METRICS = [
   'totalLoginDays',
   'loginStreak',
   'bestLoginStreak',
+  'chaosAscensions',
+  'chaosDemigods',
+  'chaosGodsSlain',
 ] as const satisfies readonly StatMetric[]
 
 const METRICS = new Set<string>(STAT_METRICS)
@@ -90,5 +99,8 @@ export function zeroStats(): PlayerStats {
     totalLoginDays: 0,
     loginStreak: 0,
     bestLoginStreak: 0,
+    chaosAscensions: 0,
+    chaosDemigods: 0,
+    chaosGodsSlain: 0,
   }
 }

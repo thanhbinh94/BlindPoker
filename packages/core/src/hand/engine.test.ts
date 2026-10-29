@@ -187,6 +187,8 @@ describe('simulation invariants', () => {
     expect(fnv(parts.join('\n'))).toBe(GOLDEN_NON_CHAOS)
   })
   it('500 seeded chaos hands, planned from the spec catalogue, keep every point (Σ stacks + fee + carry-over)', () => {
+    // The cards a table can deal today: all 86 since BP-41 Task 7b turned the 39 on (A-churn).
+    const DEALT = CHAOS_CARDS_SPEC.filter((c) => c.enabled)
     const rng = seededRng(3737)
     let uid = 0
     const nextUid = () => ++uid
@@ -201,7 +203,7 @@ describe('simulation invariants', () => {
         let chaos: ChaosSeat = { ...EMPTY_CHAOS_SEAT, frozenNextHand: rng.int(10) === 0, blindfoldedNextHand: rng.int(8) === 0 }
         const held = 1 + rng.int(5)
         for (let k = 0; k < held; k++) {
-          const def = CHAOS_CARDS_SPEC[rng.int(CHAOS_CARDS_SPEC.length)]!
+          const def = DEALT[rng.int(DEALT.length)]!
           chaos = receiveCard(chaos, def, nextUid, CHAOS_CARDS_SPEC, rules.decisionMode, rng).seat
         }
         return { seat, isBot: false, chaos }
@@ -217,10 +219,15 @@ describe('simulation invariants', () => {
       for (const e of events) if (e.type === 'CHAOS_APPLIED' && e.outcome !== 'fizzled') kinds.add(e.effect)
       if (state.result!.showdown) for (const h of state.result!.showdown) expect(h.cards.length).toBeGreaterThan(0)
     }
-    // The sample reaches every effect the engine applies.
+    // The sample reaches every effect the engine applies in the hand (CHAOS_APPLIED): the 17 of Plan 37 and 26 of
+    // BP-41's. The rest are told by their own events (Mắt diều hâu's peek), act after the hand (`afterHand`: the dice,
+    // Mồi lửa, Cao thủ…) or between hands (Trộm điểm, Nâng tầm uy lực).
     expect([...kinds].sort()).toEqual([
-      'bestOfN', 'blindfold', 'borrowHole', 'extraHole', 'freeFold', 'freeze', 'highCard', 'lowerHole', 'redealBoard', 'redealWeak',
-      'refundStake', 'reverseRank', 'stealHole', 'suited', 'swapAll', 'swapHands', 'swapLowest',
+      'acesCharge', 'adventurer', 'backfire', 'bestOfN', 'bigTable', 'blindfold', 'borrowHole', 'carp', 'coinFlip', 'curse', 'deluge',
+      'duel', 'eclipse', 'extraHole', 'fateDie', 'flipFlop', 'freeFold', 'freeze', 'highCard', 'lowerHole', 'neighbourSwap', 'noFold',
+      'plunder', 'redealBoard', 'redealHole', 'redealWeak', 'refundStake', 'reverseRank', 'riskyHand', 'scapegoat', 'shareWinnings',
+      'shuffleHoles', 'sixthBoard', 'spoiler', 'stealHole', 'suited', 'swapAll', 'swapHands', 'swapLeader', 'swapLowest', 'timeBomb',
+      'wildCard', 'winTax',
     ])
   })
   it('createHand forwards a chaos plan to a Blind hand', () => {

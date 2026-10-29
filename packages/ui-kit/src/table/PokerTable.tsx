@@ -1,4 +1,4 @@
-import type { Card as CardId, RoomPlayerView, RoomView, ShowdownHand } from '@bp/core'
+import type { Card as CardId, ChaosCritMultiplier, RoomPlayerView, RoomView, ShowdownHand } from '@bp/core'
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { botChibi, type ChibiSubject, type Expression } from '../avatar2d/index.js'
@@ -10,7 +10,7 @@ import { Deck } from './Deck.js'
 import { DeckAnchorProvider } from './deck-anchor.js'
 import { DEAL_MS, DEAL_WINDOW_MS, FLIP_MS, dealOrderOf, showdownWithBoard } from './motion.js'
 import { Pot } from './Pot.js'
-import { Seat } from './Seat.js'
+import { Seat, type SeatProps } from './Seat.js'
 import { STACK_LAYOUT_QUERY, type FrameTier, type RoomFrame } from './frame.js'
 import { ringPositions, shortRingPositions } from './geometry.js'
 import { useMediaQuery } from './useMediaQuery.js'
@@ -216,12 +216,30 @@ export function PokerTable({
   const squeezeDecides = squeezeRound && hand.phase === 'DECISION'
 
   // A Bạo kích that paid shows on the winner's seat with the payout; held back with the rest of the result.
-  const crits = new Map<number, 2 | 3>()
+  const crits = new Map<number, ChaosCritMultiplier>()
   for (const c of resultPending ? [] : (chaos?.credits ?? [])) if (c.reason === 'chaos_crit' && c.multiplier !== undefined) crits.set(c.seat, c.multiplier)
   const chaosRoom = room.config.blind?.chaosCycle !== undefined
   // The next board cards, while they are still to come: once any of them is on the board the peek has done its job.
   const peeked = chaos?.peek?.cards ?? []
   const peek = peeked.some((c) => community.includes(c)) ? [] : peeked
+  // BP-41 Lá chung thứ sáu: a sixth board slot from the moment the card is told (public, at the deal), so the river's two cards
+  // land in slots already there; a board dealt six wide always has it.
+  const sixth = chaosRoom && (chaos?.applied ?? []).some((a) => a.effect === 'sixthBoard' && a.outcome === 'applied')
+  const slots = Math.max(sixth ? 6 : 5, community.length, community.length + peek.length)
+  // BP-41: the table's reign and bombs, seat by seat; the wild card (mine while the hand runs, everyone's at the showdown).
+  const table = chaosRoom ? (chaos?.table ?? null) : null
+  const reignOf = (index: number): SeatProps['reign'] => {
+    if (table?.god?.seat === index) return { kind: 'god', handsLeft: table.god.handsLeft, curse: table.god.curse }
+    const demigod = table?.demigods.find((d) => d.seat === index)
+    return demigod === undefined ? null : { kind: 'demigod', handsLeft: demigod.handsLeft }
+  }
+  const bombOf = (index: number): SeatProps['bomb'] => {
+    const carried = (table?.bombs ?? []).filter((b) => b.carrier === index)
+    return carried.length === 0 ? null : { handsLeft: Math.min(...carried.map((b) => b.handsLeft)) }
+  }
+  const wildOf = (index: number): CardId | null =>
+    showdown.get(index)?.wild?.card ?? (index === mySeat && hand !== null && hand.phase !== 'COMPLETE' ? (chaos?.wild ?? null) : null)
+  const hawk = chaos?.hawk ?? null
 
   const renderSeat = (index: number): ReactNode => {
     const player = seated.get(index)
@@ -313,6 +331,10 @@ export function PokerTable({
         critMultiplier={crits.get(index) ?? null}
         // Seven opponents or more on a phone: a chip has no line to spare for a row of icons, so it gets the one with the count.
         chaosSummary={mode === 'stack' && !isMe && order.length - (mySeat === null ? 0 : 1) > 6}
+        reign={reignOf(index)}
+        bomb={bombOf(index)}
+        wildCard={wildOf(index)}
+        hawkCards={hawk !== null && hawk.target === index && hand !== null && hand.phase !== 'COMPLETE' ? hawk.cards : null}
       />
     )
   }
@@ -324,7 +346,7 @@ export function PokerTable({
   // strip — finds no deck and fades in: a table that has just mounted shows its cards where they lie.
   const centre = (
     <div className={s.centre}>
-      <CommunityCards cards={community} highlight={highlight} dealt={boardDealt} handId={hand?.handId ?? null} peek={peek} />
+      <CommunityCards cards={community} highlight={highlight} dealt={boardDealt} handId={hand?.handId ?? null} peek={peek} slots={slots} />
       <div className={s.centreRow}>
         <Deck ref={deckRef} />
         {showPot ? (

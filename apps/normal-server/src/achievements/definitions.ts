@@ -17,7 +17,8 @@ import { packageRoot } from '../db/migrate.js'
 import type { ItemCatalog } from '../inventory/items.js'
 import { isStatMetric, type StatMetric } from '../stats/player-stats.js'
 
-export type AchievementCategory = 'login' | 'holdem' | 'blind' | 'social'
+/** BP-41 adds `chaos`: the three Poker hỗn loạn titles (spec 2026-10-28 §4.4). */
+export type AchievementCategory = 'login' | 'holdem' | 'blind' | 'social' | 'chaos'
 
 export interface AchievementReward {
   points?: number
@@ -32,9 +33,15 @@ export interface AchievementDef {
   /** Unlocked when the metric reaches this value. */
   threshold: number
   reward: AchievementReward
+  /**
+   * BP-41 (spec 2026-10-28 §4.4): the reputation this unlock adds, overriding the rule its reward tier would pay
+   * (`achievementRuleFor`). A positive whole number; absent on every achievement older than the chaos titles, which keep
+   * paying their rule.
+   */
+  reputation?: number
 }
 
-const CATEGORIES = new Set<string>(['login', 'holdem', 'blind', 'social'])
+const CATEGORIES = new Set<string>(['login', 'holdem', 'blind', 'social', 'chaos'])
 
 function defaultAchievementsPath(): string {
   return join(packageRoot(), 'data', 'achievements.json')
@@ -76,7 +83,15 @@ function parseDef(path: string, raw: unknown, at: number, catalog: ItemCatalog):
   // otherwise be a row that unlocks silently and pays nobody.
   if (reward.points === undefined && reward.itemId === undefined) fail(path, `${id} grants neither points nor an item`)
 
-  return { id, category: category as AchievementCategory, metric, threshold, reward }
+  const def: AchievementDef = { id, category: category as AchievementCategory, metric, threshold, reward }
+  if (r['reputation'] !== undefined) {
+    const reputation = r['reputation']
+    // Whole and positive, as `grantWithin` takes it: a fraction would roll the unlock's transaction back, and a 0 would be
+    // an override that silently pays nothing (leave the field out to pay the rule).
+    if (typeof reputation !== 'number' || !Number.isInteger(reputation) || reputation <= 0) fail(path, `${id} has a reputation that is not a positive whole number`)
+    def.reputation = reputation
+  }
+  return def
 }
 
 /**

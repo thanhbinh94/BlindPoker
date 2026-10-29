@@ -297,13 +297,15 @@ describe('the chaos cards (Plan 37)', () => {
   const chaos = async (): Promise<ChaosBody> => (await gmReq('GET', '/api/gm/chaos')).json() as ChaosBody
   const rule = (cardId: string, weight: number, enabled = true) => ({ cardId, enabled, weight, startsAt: null, endsAt: null })
 
-  it('GET /api/gm/chaos lists the 47 cards, each on now, with the settings', async () => {
+  it('GET /api/gm/chaos lists the 86 cards, each on now, with the settings', async () => {
     const res = await gmReq('GET', '/api/gm/chaos')
     expect(res.statusCode).toBe(200)
     const body = res.json() as ChaosBody
-    expect(body.cards).toHaveLength(47)
-    expect(body.cards.every((c) => c.activeNow && c.rule === null)).toBe(true)
-    expect(body.config.tierWeights).toEqual({ silver: 60, gold: 30, diamond: 10 })
+    // Plan 37's 47 and BP-41's 39.
+    expect(body.cards).toHaveLength(47 + 39)
+    expect(body.cards.filter((c) => c.activeNow)).toHaveLength(47 + 39)
+    expect(body.cards.every((c) => c.rule === null)).toBe(true)
+    expect(body.config.tierWeights).toEqual({ silver: 50, gold: 35, diamond: 15 })
   })
 
   it('a write without a reason is exactly 400 INVALID_REASON, before its body is looked at', async () => {

@@ -19,7 +19,7 @@ export const HISTORY_LIMIT = 20
 type StatKey = keyof PlayerStatsDto
 
 /**
- * The sixteen counters of §10.3, in five groups.
+ * The sixteen counters of §10.3 in five groups, and the three chaos-title counters of Plan 41 in a sixth.
  *
  * The grouping is what makes them readable: "hands played" appears twice, once under each mode, and only the
  * heading above it says which is which — which is also why the labels are per-metric rather than per-group.
@@ -30,6 +30,7 @@ export const STAT_GROUPS: { key: string; metrics: StatKey[] }[] = [
   { key: 'streaks', metrics: ['currentWinStreak', 'bestWinStreak', 'currentLoseStreak', 'bestLoseStreak'] },
   { key: 'login', metrics: ['totalLoginDays', 'loginStreak', 'bestLoginStreak'] },
   { key: 'social', metrics: ['botHands', 'roomsJoined', 'gamesCompleted'] },
+  { key: 'chaos', metrics: ['chaosAscensions', 'chaosDemigods', 'chaosGodsSlain'] },
 ]
 
 /** The one counter that is points rather than a tally, so the only one that carries a unit. */

@@ -191,7 +191,9 @@
         "extra": "Extra card",
         "board": "Board",
         "rule": "Table rule",
-        "gambler": "Gambler"
+        "gambler": "Gambler",
+        "god": "Card God",
+        "dice": "Dice"
       },
       "config": {
         "title": "Chaos numbers",
@@ -587,8 +589,12 @@
         "blind": "Blind Poker",
         "streaks": "Streaks",
         "login": "Check-in",
-        "social": "At the table"
+        "social": "At the table",
+        "chaos": "Chaos Poker"
       },
+      "chaosAscensions": "Times ascended",
+      "chaosDemigods": "Times a Demigod",
+      "chaosGodsSlain": "Card Gods slain",
       "handsPlayedHoldem": "Hands played",
       "handsWonHoldem": "Hands won",
       "bestHandRank": "Best hand",
@@ -648,6 +654,8 @@
       "chaos_crit": "Chaos critical card",
       "chaos_fortune": "Chaos fortune card",
       "chaos_to_table": "Chaos card to table",
+      "chaos_jackpot": "Jackpot card",
+      "chaos_dice": "Dice card",
       "other": "Other"
     }
   },
@@ -876,6 +884,9 @@
     "title_night_owl": "Night Owl",
     "title_devoted": "Devoted",
     "title_hot_hand": "Hot Hand",
+    "title_god": "Ascended",
+    "title_demigod": "Demigod",
+    "title_godslayer": "Godslayer",
     "badge_bronze": "Bronze badge",
     "badge_silver": "Silver badge",
     "badge_gold": "Gold badge",
@@ -982,8 +993,10 @@
         "login": "Check-in",
         "holdem": "Texas Hold'em",
         "blind": "Blind Poker",
-        "social": "At the table"
+        "social": "At the table",
+        "chaos": "Chaos Poker"
       },
+      "reputation": "{{points}} reputation",
       "unlocked": "Unlocked"
     },
     "login_days_7": {
@@ -1157,6 +1170,18 @@
     "games_500": {
       "name": "Five hundred hands through",
       "desc": "See 500 hands through from deal to settlement."
+    },
+    "chaos_god": {
+      "name": "Ascended",
+      "desc": "Become the Card God for the first time at a chaos poker table."
+    },
+    "chaos_demigod": {
+      "name": "Demigod",
+      "desc": "Become a Demigod for the first time at a chaos poker table."
+    },
+    "chaos_godslayer": {
+      "name": "Godslayer",
+      "desc": "Defeat the Card God 2 times."
     },
     "games_1000": {
       "name": "A thousand hands through",

@@ -1,7 +1,8 @@
 import { createDeck } from '../cards/cards.js'
 import type { Rng } from '../cards/rng.js'
 import { shuffle } from '../cards/shuffle.js'
-import { applyDealEffects, applyRevealEffects, chaosSettleHooks, emitPeeks, initialChaosState, isBlindfolded, refundFreeFolds } from '../chaos/engine.js'
+import { applyRevealEffects, dealChaosHand, chaosSettleHooks, emitPeeks, initialChaosState, isBlindfolded, refundFreeFolds } from '../chaos/engine.js'
+import { mayNotFold, recordStakes, stakeOf, takeDeadMoney } from '../chaos/engine-stake.js'
 import type { ChaosHandPlan } from '../chaos/types.js'
 import { ECONOMY } from '../constants/economy.js'
 import { cancelHand, carryOverAll, clone, commit, dealCards, getPlayer, revealNext, seatsClockwiseFrom, settle } from './common.js'
@@ -80,20 +81,29 @@ export function createBlindHand(input: CreateBlindInput, rng: Rng): EngineResult
   const events: GameEvent[] = [
     { type: 'HAND_STARTED', handId: state.handId, mode: 'blind', button: state.button, seats: state.players.map((p) => p.seat), carryOverIn: input.carryOverIn },
   ]
-  const posts = state.players.map((p) => ({ seat: p.seat, amount: commit(state, p, input.rules.fixedWager), kind: 'ANTE' as const }))
+  // BP-41 A1: a seat whose stake a card multiplied antes the real wager first, then the rest as dead money — keeping back
+  // the real "Chơi" wager on a "Chơi hoặc bỏ" table. Its post tells the whole amount.
+  recordStakes(state, events)
+  const wager = input.rules.fixedWager
+  const reserve = input.rules.decisionMode === 'playOrFold' ? wager : 0
+  const posts = state.players.map((p) => ({ seat: p.seat, amount: commit(state, p, wager) + takeDeadMoney(state, p, wager, reserve), kind: 'ANTE' as const }))
   events.push({ type: 'BLINDS_POSTED', posts })
   events.push({ type: 'POT_UPDATED', pot: state.pot })
 
-  const order = seatsClockwiseFrom(state, state.button)
-  for (let round = 0; round < input.rules.holeCards; round++) for (const p of order) p.holeCards.push(...dealCards(state, 1))
-  applyDealEffects(state, events)
+  // A chaos hand deals through its pre-deal hook (BP-41 A4: Aces and hole counts before the deal, then the deal-time
+  // cards); a plain hand deals here.
+  if (state.chaos) dealChaosHand(state, events, rng)
+  else {
+    const order = seatsClockwiseFrom(state, state.button)
+    for (let round = 0; round < input.rules.holeCards; round++) for (const p of order) p.holeCards.push(...dealCards(state, 1))
+  }
   // A blindfolded seat is dealt face down even to itself.
   for (const p of state.players) events.push({ type: 'CARDS_DEALT', seat: p.seat, cards: isBlindfolded(input.chaos, p.seat) ? [] : p.holeCards.slice(), cardCount: p.holeCards.length })
 
   if (state.phase === 'DECISION') {
     state.turnSeq += 1
-    events.push({ type: 'DECISION_PHASE', seats: state.players.map((p) => p.seat), turnSeq: state.turnSeq })
-    emitPeeks(state, events)
+    events.push({ type: 'DECISION_PHASE', seats: state.players.map((p) => p.seat), turnSeq: state.turnSeq, ...decisionRules(state) })
+    emitPeeks(state, events, rng)
     autoPlayAllIn(state, events)
   } else if (state.phase === 'SQUEEZE') {
     state.turnSeq += 1
@@ -108,7 +118,25 @@ export function blindLegalActions(state: HandState, seat: number): LegalActions 
   const none: LegalActions = { seat, kinds: [], callAmount: 0, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 }
   if (state.phase !== 'DECISION' || p.decision !== null || p.allIn) return none
   // A seat short of the wager plays all in for what it has: `resolveDecisions` commits through `commit`, which caps.
-  return { ...none, kinds: ['play', 'fold'], callAmount: Math.min(p.stack, rulesOf(state).fixedWager) }
+  // BP-41: a card may multiply the seat's stake (A1) or take its fold away (A2).
+  const kinds: LegalActions['kinds'] = mayNotFold(state.chaos, seat) ? ['play'] : ['play', 'fold']
+  return { ...none, kinds, callAmount: Math.min(p.stack, rulesOf(state).fixedWager * stakeOf(state.chaos, seat)) }
+}
+
+/**
+ * BP-41's additions to `DECISION_PHASE` (A1, A2): the seats that may only play, and what playing costs each seat whose
+ * stake a card multiplied. Nothing on a hand without either, so the event reads as it always has.
+ */
+function decisionRules(state: HandState): { noFold?: number[]; calls?: { seat: number; amount: number }[] } {
+  const out: { noFold?: number[]; calls?: { seat: number; amount: number }[] } = {}
+  const noFold = state.players.filter((p) => mayNotFold(state.chaos, p.seat)).map((p) => p.seat)
+  if (noFold.length > 0) out.noFold = noFold
+  const calls = state.players
+    // A seat the ante left all in has nothing more to put in: it is not asked, so it has no call to read (5a).
+    .filter((p) => !p.allIn && stakeOf(state.chaos, p.seat) > 1)
+    .map((p) => ({ seat: p.seat, amount: Math.min(p.stack, rulesOf(state).fixedWager * stakeOf(state.chaos, p.seat)) }))
+  if (calls.length > 0) out.calls = calls
+  return out
 }
 
 /**
@@ -152,7 +180,13 @@ export function applyBlindCommand(input: HandState, cmd: HandCommand, rng: Rng):
       // A table-wide timer may fire for seats that already decided: treat those as a no-op so timers stay idempotent.
       const p = getPlayer(state, cmd.seat)
       if (state.phase !== 'DECISION' || p.decision !== null) return { state, events }
-      decide(state, events, cmd.seat, { kind: 'fold' }, true)
+      // BP-41 A2: a seat that may not fold plays when its time runs out, as "Tự động chơi" would.
+      decide(state, events, cmd.seat, { kind: mayNotFold(state.chaos, cmd.seat) ? 'play' : 'fold' }, true)
+      return { state, events }
+    }
+    case 'FORFEIT': {
+      // BP-41 A2: the seat left — nobody is there to play its no-fold hand, so it folds whatever the rules say.
+      decide(state, events, cmd.seat, { kind: 'fold' }, false, true)
       return { state, events }
     }
     case 'REVEALED': {
@@ -171,12 +205,13 @@ export function applyBlindCommand(input: HandState, cmd: HandCommand, rng: Rng):
  * phase is still `DECISION`: stacks, `totalCommitted` and the pot would otherwise reveal who played. `timedOut` (the
  * `TIMEOUT` command, which folds the seat) is kept on the seat and told with its `PLAYER_ACTED` once every seat has
  * decided — the room counts those towards the three that stand a player up (spec §8.7), exactly as in Hold'em.
+ * `forfeit` (BP-41 `FORFEIT`): a fold the no-fold rule does not refuse.
  */
-function decide(state: HandState, events: GameEvent[], seat: number, action: PlayerAction, timedOut = false): void {
+function decide(state: HandState, events: GameEvent[], seat: number, action: PlayerAction, timedOut = false, forfeit = false): void {
   const p = getPlayer(state, seat)
   const legal = blindLegalActions(state, seat)
   if (legal.kinds.length === 0) throw new EngineError('NOT_YOUR_TURN', `seat ${seat} has nothing to decide`)
-  if (!legal.kinds.includes(action.kind)) throw new EngineError('ILLEGAL_ACTION', `${action.kind} is not legal in blind poker`)
+  if (!legal.kinds.includes(action.kind) && !(forfeit && action.kind === 'fold')) throw new EngineError('ILLEGAL_ACTION', `${action.kind} is not legal in blind poker`)
   // In a squeeze room a decision shows the cards it was made on: the seat counts as turned from here (§4.2.4).
   if (rulesOf(state).squeeze === true && !p.revealed) {
     p.revealed = true
@@ -246,7 +281,8 @@ function resolveDecisions(state: HandState, events: GameEvent[]): void {
   const wager = rulesOf(state).fixedWager
   const played = new Map<number, number>()
   for (const x of state.players) {
-    if (x.decision === 'play') played.set(x.seat, commit(state, x, wager))
+    // BP-41 A1: the real wager first, then a multiplied stake's dead money; the seat's PLAYER_ACTED tells both.
+    if (x.decision === 'play') played.set(x.seat, commit(state, x, wager) + takeDeadMoney(state, x, wager))
     else x.folded = true
   }
   const freeFolds = refundFreeFolds(state) // "Bỏ không mất" takes its ante back before the dead excess is worked out

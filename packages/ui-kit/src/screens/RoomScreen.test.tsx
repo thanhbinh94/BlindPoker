@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultChibi, useTableExpressions } from '../avatar2d/index.js'
-import type { ClientHand, ClientState } from '../client/types.js'
+import { initialChaos, type ClientHand, type ClientState } from '../client/types.js'
 import type { GameClientApi } from '../client/useGameClient.js'
 import { createI18n } from '../i18n/index.js'
 import primitives from '../primitives/primitives.module.css'
@@ -1669,8 +1669,26 @@ describe('RoomScreen on a Poker hỗn loạn table', () => {
   const offer = { offerId: 'o1', cardIds: ['s_swap_one', 's_shield', 's_peek_1'] }
   const drafting = { tier: 'silver' as const, deadlineAt: 1_015_000, totalMs: 15_000, offer, picked: false }
   const stateWith = (chaos: Partial<ClientState['chaos']>, hand: ClientHand | null = finished): ClientState =>
-    makeState({ room: chaosRoom, hand, chaos: { draft: null, seats: {}, applied: [], credits: [], awarded: [], peek: null, reverse: false, blindfolded: null, bonus: { cards: [], armed: null }, ...chaos } })
+    makeState({ room: chaosRoom, hand, chaos: { ...initialChaos, ...chaos } })
   const PICK_A_SILVER = { name: 'Pick a Silver card' }
+
+  it('BP-41: lays the herald and the dice in one layer fixed over the room, the herald first', () => {
+    const now = Date.now()
+    const client = fakeClient(
+      stateWith({
+        heralds: [{ id: 2, kind: 'godslain', seat: 1, name: 'Bob', at: now }],
+        rolls: [{ id: 1, seat: 1, name: 'Bob', cardId: 's_dice', dice: [5], result: { cards: [{ tier: 'silver', count: 1 }] }, at: now }],
+      }),
+    )
+    wrap(client)
+    const layer = document.querySelector(`.${screens.moments}`)!
+    expect(layer).not.toBeNull()
+    expect(layer.parentElement).toHaveClass(screens.room!)
+    const [herald, dice] = [...layer.querySelectorAll('[data-herald], section')]
+    expect(herald).toHaveTextContent('Bob has defeated the Card God!')
+    expect(dice).toHaveAccessibleName('Lucky dice')
+    expect(declarationsOf(SCREENS_CSS, /^\.moments$/)).toMatchObject({ position: 'fixed', 'pointer-events': 'none', overflow: 'hidden' })
+  })
 
   it('opens the draft over the felt, and a pick goes to the client', async () => {
     const client = fakeClient(stateWith({ draft: drafting }))

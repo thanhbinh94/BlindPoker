@@ -57,6 +57,13 @@
       "when": 1792977164664,
       "tag": "0007_chaos",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793219960868,
+      "tag": "0008_chaos_titles",
+      "breakpoints": true
     }
   ]
 }

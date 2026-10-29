@@ -1,5 +1,5 @@
 import type { IncomingMessage } from 'node:http'
-import type { GameMode, HandCategory, PlayerIdentity, RoomConfig } from '@bp/core'
+import type { ChaosTitles, GameMode, HandCategory, PlayerIdentity, RoomConfig } from '@bp/core'
 
 export interface PlayerRecord {
   playerId: string
@@ -44,6 +44,8 @@ export type TxReason =
   | 'chaos_rescue'
   | 'chaos_crit'
   | 'chaos_fortune'
+  /** BP-41: a dice or Mạo hiểm gia jackpot, new points like the three above, paired with `chaos_to_table` the same way. */
+  | 'chaos_jackpot'
   | 'chaos_to_table'
 
 export interface BalanceEntry {
@@ -60,11 +62,13 @@ export interface BalanceEntry {
  * - `carry_over` — an undistributable remainder of a released carry-over pot, or the whole
  *   pot when nobody was seated to receive it (`refId` = roomId).
  * - `shop` — the price of a cosmetic bought in the shop (Plan 27, `refId` = itemId).
+ * - `chaos_dice` — points an unlucky Xúc xắc vận may roll took off a table stack (BP-41 A6,
+ *   `refId` = `chaos_dice:<room>:<hand>:<seat>:<uid>`).
  */
 export interface SettlementMeta {
   refId: string
   fee: number
-  kind: 'table_fee' | 'carry_over' | 'shop'
+  kind: 'table_fee' | 'carry_over' | 'shop' | 'chaos_dice'
 }
 
 /** A `RoomConfig` safe to hand to clients, history and analytics: the password is replaced by a flag. */
@@ -134,6 +138,8 @@ export interface HandSummaryPlayer {
   net: number
   won: boolean
   bestCategory: HandCategory | null
+  /** BP-41 A12: a chaos hand's title marks for this seat (became the Thần, a Bán Thần, beat the Thần), for the stats. */
+  chaosTitles?: ChaosTitles
 }
 
 export interface HandSummary {

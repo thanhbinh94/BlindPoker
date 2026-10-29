@@ -31,6 +31,8 @@ const REASONS = new Set([
   'chaos_crit',
   'chaos_fortune',
   'chaos_to_table',
+  'chaos_jackpot',
+  'chaos_dice',
 ])
 
 /** A reason the server invented after this bundle shipped still reads as *something*, never as a raw key. */

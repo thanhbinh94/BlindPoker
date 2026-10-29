@@ -510,7 +510,7 @@ and holds four budgets:
 
 | | Budget | Today |
 |---|---:|---:|
-| entry chunk (first paint) | 170 KB (BP-39 fix wave, Ruling FW-8; 140 KB since Plan 27, 150 KB BP-31, 160 KB Plan 37) | ~161 KB |
+| entry chunk (first paint) | 180 KB (BP-41 fix wave, Ruling 27; 140 KB since Plan 27, 150 KB BP-31, 160 KB Plan 37, 170 KB BP-39) | ~172 KB |
 | every JS chunk together | 900 KB | ~174 KB |
 | the stylesheet | 60 KB | ~23 KB |
 | `public/avatar/*@2x.png`, raw bytes (design §8) | 32 MB total (design: 6 MB; raised 2026-09-24 for real art) | ~17 MB (the v4 art) |

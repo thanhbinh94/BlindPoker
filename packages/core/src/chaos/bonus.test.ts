@@ -47,7 +47,11 @@ describe('armBonus', () => {
       const seat = withBonus([id])
       expect(armBonus(seat, seat.bonus[0]!.uid, DECISION), id).toMatchObject({ armed: { hand: 'next' } })
     }
-    expect([...MID_HAND_EFFECTS].sort()).toEqual(['borrowHole', 'lowerHole', 'redealBoard', 'stealHole', 'swapHands'])
+    // BP-41 controller Ruling 12 adds the round-three one-shot reveal cards that act on the hands.
+    expect([...MID_HAND_EFFECTS].sort()).toEqual([
+      'borrowHole', 'deluge', 'duel', 'fateDie', 'lowerHole', 'neighbourSwap', 'redealBoard', 'redealHole', 'shuffleHoles', 'stealHole',
+      'swapHands', 'swapLeader',
+    ])
   })
 
   it('applies next hand when the live plan seat fired a deal-time debuff or plans the same effect (A2)', () => {
@@ -113,7 +117,14 @@ describe('armBonus', () => {
 describe('needsNoPress and returnToBonus', () => {
   it('the wait and on-receipt cards need no press; every other card does', () => {
     const noPress = CHAOS_CARDS_SPEC.filter(needsNoPress).map((c) => c.effect)
-    expect([...new Set(noPress)].sort()).toEqual(['chaosPoints', 'fortune', 'levelUp', 'mirror', 'rescue', 'shield'])
+    expect([...new Set(noPress)].sort()).toEqual([
+      'carp', 'chaosPoints', 'fortune', 'fortuneDice', 'levelUp', 'master', 'mirror', 'rescue', 'scapegoat', 'shield', 'stealPoints', 'tierUp',
+    ])
+  })
+
+  it('BP-41 Ruling 5: an end-of-hand card (the dice) needs no press either', () => {
+    expect(needsNoPress({ timing: 'end' })).toBe(true)
+    expect(needsNoPress({ timing: 'deal' })).toBe(false)
   })
 
   it('puts a card back at its old place, by uid', () => {
