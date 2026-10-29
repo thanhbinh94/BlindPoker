@@ -1150,6 +1150,29 @@ at the play-or-fold choice it is armed for the next hand, not the one being play
 *Why it stays:* the deal of the current hand is already over; Ruling 4-2 lets it act from the deal so deal-time debuffs bounce too.
 *Tracked:* `packages/core/src/chaos/bonus.ts` (`MID_HAND_EFFECTS`); BP-41 Task 3b and Task 4 reports.
 
+**A Cấp độ card can give fewer cards than it says.** Each card it draws goes through the stacking rule like any card received, so one
+that duplicates a stronger card the seat already holds is dropped (the stronger stays). With 50 / 35 / 15 tiers and round three's 86
+cards, a Kim cương Cấp độ ("2 cards") now and then lands one.
+*Why it stays:* it is the stacking rule every card follows (spec §3.4); a redraw would be a new rule for one card.
+*Tracked:* `packages/core/src/chaos/hold.ts` (`receiveCard`); BP-41 Task 1 report (`hold.test.ts`).
+
+**A bomb's owner who sits out for good keeps the bomb on the table.** A Bom nổ chậm plays only in a hand its owner is dealt into (Ruling
+5b-6), so while the owner sits out the bomb waits with its carrier, not counted down. It goes when the owner or the carrier leaves the seat.
+*Why it stays:* a bomb that ran down without its owner would pay nobody; the seat leaving clears it.
+*Tracked:* `packages/core/src/chaos/plan.ts` (`passBombs`), `packages/server-kit/src/room/room-chaos.ts` (`seatCleared`); BP-41 Task 5b review.
+
+**F-13c at 780 × 360 once scrolled the stage by 5 px, and the cause is not known.** One run in six of the BP-41 gate's ops pack saw it;
+the fix wave ran the case eight times more in a row at `s25l` with `expectRoomFits`' new diagnostic (it names what reaches past the
+stage's foot) and it did not come back.
+*Why it stays:* nothing to fix without a reproduction; if it returns, the diagnostic's message names the element.
+*Tracked:* `apps/normal-web/e2e/ops/10-chaos.spec.ts` (F-13c), `apps/normal-web/e2e/support.ts` (`overflowOf`); BP-41 Task 11 review (I1).
+
+**Cày điểm is not listed in "Thẻ đã dùng".** Since the fix wave, Mồi lửa (whenever it fired) and Tích
+tiểu thành đại (when its holder won no pot) have their line there; Cày điểm's doubling still has none — it acts on the points in
+`afterHand`, after the summary is written.
+*Why it stays:* the points it adds show in the seat's chaos points; a line would need the streak's outcome at the settlement.
+*Tracked:* `packages/core/src/chaos/engine.ts` (`summarisePoints`); BP-41 fix wave item 7.
+
 **Tay bạc never rolls a round-three card that waits, acts on receipt or at the hand's end, or carries a charge.** Its roll fires for one hand
 with no held card behind it, so Nâng tầm uy lực, Cao thủ, Bia đỡ đạn, Trộm điểm, the dice, Cá chép, Siêu cộng dồn vàng, Đảo bài and every
 diamond-only rule are left out of its pool (`GAMBLER_EXCLUDED`).

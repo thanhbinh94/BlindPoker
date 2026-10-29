@@ -364,7 +364,7 @@ its card through the GM console (`PUT /api/gm/chaos/rules` and `…/config`: dia
 chiếu and Cấp cứu kim cương on) and puts the diamond rules and the settings back in a `finally`. The GM rules cannot set a Cá chép's
 energy, so the ops server lays `apps/normal-web/e2e/ops/chaos-cards.ops.json` over the shipped cards (`E2E_CHAOS_CARDS`, read only by
 the never-shipped `e2e-entry.ts`): Cá chép starts at 100 % energy and is off unless a rule turns it on (plan amendment A-ops). F-13…F-13e
-play with all 86 cards on. The rules underneath (the reign, the curse, the Thần's immunity, the dice tables, the dice sink, the titles)
+play with the other 85 cards on. The rules underneath (the reign, the curse, the Thần's immunity, the dice tables, the dice sink, the titles)
 are held by the core, server-kit, normal-server and ui-kit unit tests named in the plan's tasks. All run outside `pnpm test`.
 
 | Rule | Test file | Test name | Status |

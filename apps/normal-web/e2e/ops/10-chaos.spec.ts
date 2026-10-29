@@ -38,8 +38,9 @@ import {
  * eight seats firing at one reveal (F-13f) and a bonus card played with "Dùng" (F-13g). Those two run last and put the
  * console's chaos settings back in a `finally`.
  *
- * BP-41 (spec 2026-10-28), round three: the 86 cards are all in play for F-13…F-13e. F-14a/b force a Thần Bài — the GM rules
- * leave only Cá chép hóa rồng and two waiting cards in the diamond draft, and the pack's cards (`chaos-cards.ops.json`, set in
+ * BP-41 (spec 2026-10-28), round three: 85 of the 86 cards are in play for F-13…F-13e (Cá chép is off in the pack). F-14a/b
+ * force a Thần Bài — the GM rules leave only Cá chép hóa rồng and two waiting cards in the diamond draft, and the pack's cards
+ * (`chaos-cards.ops.json`, set in
  * `ops.config.ts`) start Cá chép at 100 % energy, which the rules alone cannot (A-ops) — and check the herald, the crown and the
  * tray's "no fold" at the desktop and the S25's sizes; F-14c/d force Xúc xắc vận may kim cương the same way and watch the roll.
  * They run last, after F-13f/g, and put the console's diamond rules and settings back.
@@ -907,32 +908,45 @@ const GOD_HERALD = /^Cảnh báo: (.+) đã tích luỹ đủ năng lượng và
  *
  * Under reduced motion from the start: the herald stands 3 s, and the text-overlap rule (which measures under reduced motion
  * anyway) must not first wait out its entrance. The motion itself is the ui-kit's tests' (`ChaosHerald.test.tsx`).
+ *
+ * `mustReign` (F-14b, fix wave 34): the case is about the viewer's own seat as the Thần, so a table where a bot won the
+ * throne is left and another opened, up to `REIGN_TRIES` tables (each bot takes Cá chép one time in three and the throne goes
+ * to a holder at random: the viewer reigns about three tables in five, so six miss together about once in two hundred runs).
  */
-async function godReigns({ id, who, phone }: { id: string; who: Player; phone: boolean }): Promise<void> {
+const REIGN_TRIES = 6
+async function godReigns({ id, who, phone, mustReign = false }: { id: string; who: Player; phone: boolean; mustReign?: boolean }): Promise<void> {
   const page = who.page
   const screen = page.viewportSize()!
   const how = phone ? 'tap' : 'click'
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  // 30 s a decision: time to measure the tray before the clock plays the hand for the seat.
-  await createBlind(page, { name: unique(`Bàn ${id} `), bots: 3, mode: 'Chơi hoặc bỏ', timer: '30 giây', chaos: 5 })
-  await takeSeat(page, 0, undefined, phone ? { via: 'menu' } : undefined)
-  await ready(page)
-  await start(page)
-  const opened = await readDraft(page)
-  expect(opened.title).toBe('Chọn một thẻ Kim cương')
-  expect([...opened.names].sort(), 'only Cá chép and the two waiting cards are drawn').toEqual([CARP.name, ...DIAMOND_WAITERS.map((c) => c.name)].sort())
-  await watchMoments(page)
-  await pickNamed(page, CARP.name, how)
-
-  // The herald, before the first hand: the spec's words, a name in them.
   const herald = page.locator('button[data-herald="god"]')
-  await expect(herald, 'the Thần’s herald crosses the screen').toBeVisible({ timeout: 30_000 })
+  let line = ''
+  let godName: string | undefined
+  for (let attempt = 1; ; attempt++) {
+    // 30 s a decision: time to measure the tray before the clock plays the hand for the seat.
+    await createBlind(page, { name: unique(`Bàn ${id} `), bots: 3, mode: 'Chơi hoặc bỏ', timer: '30 giây', chaos: 5 })
+    await takeSeat(page, 0, undefined, phone ? { via: 'menu' } : undefined)
+    await ready(page)
+    await start(page)
+    const opened = await readDraft(page)
+    expect(opened.title).toBe('Chọn một thẻ Kim cương')
+    expect([...opened.names].sort(), 'only Cá chép and the two waiting cards are drawn').toEqual([CARP.name, ...DIAMOND_WAITERS.map((c) => c.name)].sort())
+    await watchMoments(page)
+    await pickNamed(page, CARP.name, how)
+
+    // The herald, before the first hand: the spec's words, a name in them.
+    await expect(herald, 'the Thần’s herald crosses the screen').toBeVisible({ timeout: 30_000 })
+    line = (await herald.locator('[data-kind="god"]').first().textContent())?.trim() ?? ''
+    godName = GOD_HERALD.exec(line)?.[1]
+    if (!mustReign || godName === who.who.displayName || attempt >= REIGN_TRIES) break
+    await readMoments(page)
+    await leave(page)
+  }
+  if (mustReign) expect(godName, `${id}: the viewer reigns at one of ${REIGN_TRIES} tables`).toBe(who.who.displayName)
   await expectNoPageScroll(page, `${id}, the Thần's herald`)
   await expectNoTextOverlapAt(page, `${id}, the Thần's herald`)
   await expectMeasuredWhileUp(page, 'herald', 'the herald stood when the overlap rule measured')
   await shot(page, `chaos-${id}-herald`)
-  const line = (await herald.locator('[data-kind="god"]').first().textContent())?.trim() ?? ''
-  const godName = GOD_HERALD.exec(line)?.[1]
   expect(godName, `the herald reads "Cảnh báo: … trở thành Thần Bài!" (${line})`).toBeDefined()
 
   // The crown on the Thần's seat, with the hands left of its five, and it is the seat the herald named.
@@ -986,7 +1000,8 @@ test('F-14a: a Thần Bài forced on a "Chơi hoặc bỏ" table — the herald 
 })
 
 test('F-14b: @s25p @s25l a Thần Bài on the Galaxy S25 — the herald fits the phone, the crown shows, and the tray says nobody may fold', async ({ browser }) => {
-  test.setTimeout(300_000)
+  // Up to six tables before the viewer reigns (`mustReign`).
+  test.setTimeout(600_000)
   const phone = await newPlayer(browser, 'Cp')
   const page = phone.page
   let before: GmChaos | null = null
@@ -997,7 +1012,7 @@ test('F-14b: @s25p @s25l a Thần Bài on the Galaxy S25 — the herald fits the
     before = await readChaos(page)
     await forceDiamond(page, before, CARP.id)
     const sideways = page.viewportSize()!.width > page.viewportSize()!.height
-    await godReigns({ id: `F14b-${sideways ? '780x360' : '360x780'}`, who: phone, phone: true })
+    await godReigns({ id: `F14b-${sideways ? '780x360' : '360x780'}`, who: phone, phone: true, mustReign: true })
     failed = false
   } finally {
     await restoreAndClose(page, before, [phone], failed, 'diamond')
