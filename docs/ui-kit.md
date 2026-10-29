@@ -643,7 +643,11 @@ other. They cover the result or the draft no longer than their 3 s. The roll's l
 or under "+N thẻ khác" when the result is already open (BP-39's rule). It arrives with the roll but keeps its faces and result back
 until the dice land: `AppliedChaosView.rolledAt` is the arrival, and `chaosDetail` says "Đang gieo…" until `rolledAt + DICE_ROLL_MS`
 and `TOAST_AFTER_LANDING_MS` (80 ms, so the line never beats the panel's own landing; the panel's last tumble step stops at the
-landing) (Ruling 22), so neither the toast nor the 6-6-6 band tells the roll while the panel's dice still tumble. The herald's live region is a
+landing) (Ruling 22), so neither the toast nor the 6-6-6 band tells the roll while the panel's dice still tumble; under reduced motion,
+where the panel shows the faces at once, the line does too. `ChaosToasts` takes `held` (the reveal hold): a line that arrives while
+it runs — the settlement's payments, the fall of a Thần — arrives at its end, and a payment merged into a line already up is not
+said before then (Ruling 28). A dice jackpot cut by the daily cap (`CHAOS_CREDIT.capped`, matched to its roll by `cardId`) is
+rewritten on the roll, its herald and its toast line, so all three say what was paid. The herald's live region is a
 real box (`.heraldSlot`, not `display: contents`). The Thần's and the dice's colours are tokens (`--chaos-god-*`, `--chaos-die-*` in
 `tokens.css`).
 
