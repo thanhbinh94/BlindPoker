@@ -9,7 +9,7 @@ below are the real history.
 
 ---
 
-## Plan 41 — Poker hỗn loạn, round three: 39 new cards, Cá chép hóa rồng and the Thần Bài, dice of fortune, three titles, tiers 50/35/15 — merged `MERGE` (2026-10-29)
+## Plan 41 — Poker hỗn loạn, round three: 39 new cards, Cá chép hóa rồng and the Thần Bài, dice of fortune, three titles, tiers 50/35/15 — merged `9069cfe` (2026-10-29)
 
 Brainstormed with the user on 2026-10-28 ("lập plan để bổ sung các lá sau…", "mở rào để tăng độ vui", "có thẻ nào đột biến…
 cá chép hóa rồng", "mở trong 5 ván", "tăng thưởng hơn nữa", "thêm thẻ gieo súc sắc", "kim cương lấy đủ cả 3", "1 a, 2 → ok, nếu
@@ -92,8 +92,10 @@ herald and the toast alike (`CHAOS_CREDIT.cardId`, optional). 9 a blindfolded ow
   ("God's Draw", "God's Duel", "God's Shuffle"), "Lucky dice", "No folding this hand", the 39 cards' names and texts
   (`chaos.cards.*`), hawk / energy / Ace chance / jackpot / triple / stake / wagers lines (`chaos.detail.*`), "{{name}} pays
   {{count}} wagers", the three titles and achievements, "Dice card", "Jackpot card".
-- **Gate** GATE
-- **Deployed** DEPLOYED
+- **Gate** (the branch's final tree `826999e`; `main` had not moved). typecheck and lint clean. Unit 253 files, 4,436 passed,
+  14 skipped. `build:normal` ok; `build:lite` up to the Node 22 exe step (Node 24 here); `avatar:check` ok; e2e Normal 24/24;
+  e2e Lite 4/4; ops 72/72 (22.6 min).
+- **Deployed.** Pending (VPS by git bundle, migration 0008, tiers 50/35/15 in the live config).
 - **Still open.** Card balance waits for the user's statistics (the fence is open; the GM switches off a card that misbehaves).
   The Thần's, Bán Thần's and Kẻ Sát Thần's outfits and aura are a later phase (G10). Real-phone checks: the herald's glow and
   shake, the dice, the glyphs ♛ ✦ ✹ on Safari and Firefox. F-13c's 5 px scroll at 780×360 (once in 6 runs, never in 8 more). A

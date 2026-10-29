@@ -1548,7 +1548,7 @@ See the CHANGELOG's "Still open" and `docs/known-limitations.md` → "Poker hỗ
 (H6) waits for the user's statistics; real-phone checks; small tap targets; nine seats on a phone on its side; the 1024 px desktop
 card over part of the toast column; leaving mid-hand then creating at once; the new English copy for the user's review.
 
-## Plan 41 — Poker hỗn loạn, round three (merged `MERGE`, 2026-10-29)
+## Plan 41 — Poker hỗn loạn, round three (merged `9069cfe`, 2026-10-29)
 
 Spec `docs/superpowers/specs/2026-10-28-chaos-round-three-design.md` (the user's decisions G1–G12: the money fence opened,
 Cá chép hóa rồng with the Thần Bài / Bán Thần, 5-hand reigns, titles 300.000 / 150.000 / 500.000, dice of fortune, tiers
