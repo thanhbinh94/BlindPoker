@@ -95,7 +95,10 @@ herald and the toast alike (`CHAOS_CREDIT.cardId`, optional). 9 a blindfolded ow
 - **Gate** (the branch's final tree `826999e`; `main` had not moved). typecheck and lint clean. Unit 253 files, 4,436 passed,
   14 skipped. `build:normal` ok; `build:lite` up to the Node 22 exe step (Node 24 here); `avatar:check` ok; e2e Normal 24/24;
   e2e Lite 4/4; ops 72/72 (22.6 min).
-- **Deployed.** Pending (VPS by git bundle, migration 0008, tiers 50/35/15 in the live config).
+- **Deployed.** On the VPS since 2026-10-29, by git bundle ahead of the push (`828c11c..7fe925b`; backup `bp-2026-10-29-0852`;
+  migration `0008_chaos_titles` applied; rooms 0; health ok). The live chaos config now draws 50 / 35 / 15 and keeps its daily
+  cap of 10.000.000 (BP-40's operations note). The LAN host is not touched. Lite was rebuilt locally up to the exe step, not
+  shipped (Lite has no chaos).
 - **Still open.** Card balance waits for the user's statistics (the fence is open; the GM switches off a card that misbehaves).
   The Thần's, Bán Thần's and Kẻ Sát Thần's outfits and aura are a later phase (G10). Real-phone checks: the herald's glow and
   shake, the dice, the glyphs ♛ ✦ ✹ on Safari and Firefox. F-13c's 5 px scroll at 780×360 (once in 6 runs, never in 8 more). A
