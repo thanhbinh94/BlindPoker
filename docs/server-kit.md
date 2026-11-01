@@ -435,6 +435,27 @@ that was not offered is `ILLEGAL_ACTION`), `CHAOS_USE { uid }` (above) and `RESU
 viewer's draft and bonus hand after a reconnect, and `ROOM_SNAPSHOT.resultSkips` the "Bỏ qua" tally; `RoomPlayerView.chaos` carries a seat's cards, points and `bonusCount`. Game events (from the engine): `CHAOS_APPLIED`,
 `CHAOS_PEEK`, `CHAOS_SUMMARY` (each use with its `targets`). Error code `CHAOS_CANNOT_USE` answers every refused `CHAOS_USE`.
 
+### Title entrances (BP-42)
+
+A human who sits down wearing a Thần title (Thần Bài, Bán Thần, Kẻ Sát Thần) is announced to the whole room with
+`ROOM_EVENT TITLE_ENTRANCE { title: 'god' | 'demigod' | 'godslayer', seat, playerId }`, sent to everyone connected, the sitter
+included, in one `broadcastRoomEvent` (one `seq`). The server decides; a client only shows it. It is a moment, not state: it is in
+no snapshot, so a reconnect or a late joiner never sees an old one.
+
+**The port.** `RoomDeps.titles?: TitlePort` (from `createGameServer({ titles })`), one call: `equippedTitle(playerId)` answers the
+title the player has equipped, or `null` for any other title or none. Without a port (Lite) nobody is announced.
+
+**When.** `Room.sitDown` asks the port right after `PLAYER_SAT`, **off the room's queue** (`void`), so the sit, its ACK and
+`PLAYER_SAT` never wait on it. The answer comes back through `enqueue` and is told only if the player still sits in the same
+seat with the same `sitId` and the room is not closing or closed. A rejected lookup logs `title lookup failed` as a warning and
+announces nothing; a failure on the room's side of the announcement logs `title entrance not sent` instead, and a room that closed
+before the answer drops it without a word. A bot never announces, a reconnect and sit-out/sit-in never announce, and the host's own first sit is announced like
+anyone's.
+
+**Cooldown.** The room keeps `Map<playerId, at>` on its injected clock: a player announced less than
+`entranceCooldownMs` (default 600,000, ten minutes) ago is not even looked up. The time is recorded when the event is sent, and a
+`null` answer records nothing, so equipping a title and sitting again is heralded. The map lives and dies with the room.
+
 ### Sitting out (spec §11.3)
 
 `SIT_OUT` keeps the seat and asks to be skipped; `SIT_IN` takes it back.
@@ -473,6 +494,7 @@ falls back to `OPEN`.
 | `carryOverReleaseMs` | 60,000 | How long a room may sit unable to start a hand before its carry-over pot is released (spec §8.4) |
 | `consecutiveTimeoutsToStand` | 3 | Timed-out actions in a row before a human is stood up automatically: a Hold'em turn, or a Blind play-or-fold decision the timer folded (`PLAYER_ACTED{timedOut}`, told with the other decisions when the round resolves — never earlier, which would give the fold away). Any other action resets the count; the squeeze round running out is neither |
 | `handsSatOutToStand` | 5 | Hands started without a player who asked to sit out before the seat is taken back (spec §11.3) |
+| `entranceCooldownMs` | 600,000 | A player wearing a Thần title is announced at most once per room in this long (BP-42) |
 | `turnTimerMsOverride` | — | Test hook: overrides `config.turnTimerSec * 1000` when set |
 
 `createGameServer` also takes `shutdownTimeoutMs` (default 10,000) — the

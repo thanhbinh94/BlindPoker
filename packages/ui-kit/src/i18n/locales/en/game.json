@@ -779,5 +779,15 @@
   "avatar": {
     "turn": "Turn",
     "greet": "Your figure, tap to say hi"
+  },
+  "sound": {
+    "mute": "Mute",
+    "unmute": "Unmute"
+  },
+  "entrance": {
+    "label": "Entrance",
+    "god": "The Card God {{name}} has descended!",
+    "demigod": "The Demigod {{name}} has appeared!",
+    "godslayer": "The Godslayer {{name}} has taken a seat — beware, Card God!"
   }
 }

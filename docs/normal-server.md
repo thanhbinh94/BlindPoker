@@ -59,6 +59,7 @@ src/
                      inventory-service.ts (ownership, alias-aware) · outfits-service.ts (five saved outfits, read as v4)
                      avatar.ts (config v4 + validation) · avatar-migrate.ts (reads a v1/v2/v3 config back as v4)
                      colour.ts (Lab and ΔE76, for the migration's eye rule)
+                     title-port.ts (the TitlePort server-kit's rooms are handed): "The Thần entrance (BP-42)"
   achievements/      definitions.ts (loader) · achievement-service.ts (listens, grants)
   stats/             player-stats.ts (the 16 counters) · stats-service.ts (listens, counts) · chaos-hand.ts (is this hand a chaos hand?)
   chaos/             chaos-catalogue.ts (loads and checks data/chaos-cards.json) · chaos-service.ts (the rules a GM edits, the config,
@@ -777,6 +778,18 @@ the config), `PUT /api/gm/chaos/rules` `{ changes, reason }` (a change is a whol
 
 **Deploying it.** The migration writes the database once (`run.ps1` without `-NoMigrate`; Docker at boot), and `data/chaos-cards.json` is
 a build sidecar, shipped with `dist/` and `data/` as siblings. A server without the file does not boot.
+
+---
+
+## The Thần entrance (BP-42)
+
+`createGameServer({ …, titles: createTitlePort(repos.players) })` hands every room a `TitlePort`. `inventory/title-port.ts` answers
+`equippedTitle(playerId)` from `players.equipped_title` (`findByIdFull`): `title_god` → `'god'`, `title_demigod` → `'demigod'`,
+`title_godslayer` → `'godslayer'`, and `null` for any other title, no title or an unknown player. The room asks after a human's
+successful sit, off its queue, so a slow or failing read never holds a sit; it then broadcasts `TITLE_ENTRANCE` once per room per
+`entranceCooldownMs` (`docs/server-kit.md`). No table, column or migration: the title is the one the wardrobe already saves
+(`PUT /api/me/avatar`). Lite passes no port, so it never announces anyone. Pinned by `title-port.test.ts` and, through a real socket,
+`app.test.ts` → `a player wearing title_godslayer who sits at a Normal table is announced`.
 
 ---
 

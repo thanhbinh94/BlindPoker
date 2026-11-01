@@ -1,4 +1,4 @@
-import { HandCategory, parseCards, type Card, type ChaosEffectKind, type RoomPlayerView, type RoomView, type ShowdownHand } from '@bp/core'
+import { HandCategory, parseCards, type Card, type ChaosEffectKind, type EntranceTitle, type RoomPlayerView, type RoomView, type ShowdownHand } from '@bp/core'
 import { useEffect, useMemo } from 'react'
 import { I18nextProvider } from 'react-i18next'
 import type { AckOrError } from '../src/client/connection.js'
@@ -6,6 +6,7 @@ import { initialChaos, initialClientState, type AppliedChaosView, type ClientCha
 import type { GameClientApi } from '../src/client/useGameClient.js'
 import { SUPPORTED_LANGUAGES, createI18n, type Language } from '../src/i18n/index.js'
 import { RoomScreen } from '../src/screens/RoomScreen.js'
+import { createSoundEngine } from '../src/sound/engine.js'
 import type { RoomFrame } from '../src/table/frame.js'
 
 /**
@@ -42,6 +43,10 @@ import type { RoomFrame } from '../src/table/frame.js'
  *
  * `/short` lays the room out in an 855 × 319 box in the landscape frame, whatever the window — the user's phone with its
  * address bar (bug log §10): the stage measures 255 px, so the room takes the short tier.
+ *
+ * BP-42: `/enter-god`, `/enter-demigod` or `/enter-godslayer` has the player in seat 1 make that Thần title's entrance as the page
+ * loads — the band across the screen and the seat's flash, for its 3 s (reload to see it again). `/sound` gives the room a sound
+ * engine, so the header carries its mute button (nothing sounds: the page never unlocks the audio).
  */
 
 export type WorstState = 'waiting' | 'turn' | 'result' | 'blindS' | 'blindP' | 'blindW' | ChaosState
@@ -111,7 +116,15 @@ export interface WorstSpec {
   meRank?: number
   /** `/short`: the room in a box this size (and the landscape frame) rather than the whole window. */
   box?: { w: number; h: number }
+  /** `/enter-<title>`: seat 1 makes that title's entrance as the page loads (BP-42). */
+  entrance?: EntranceTitle
+  /** `/sound`: the room gets a sound engine, and the header its mute button (BP-42). */
+  sound?: true
 }
+
+const ENTRANCE_TITLES: readonly EntranceTitle[] = ['god', 'demigod', 'godslayer']
+/** The playground's one engine (`/sound`): never unlocked, so it only draws the mute button. */
+let playgroundSound: ReturnType<typeof createSoundEngine> | null = null
 
 const STATES: readonly WorstState[] = ['waiting', 'turn', 'result', 'blindS', 'blindP', 'blindW', ...CHAOS_STATES]
 
@@ -125,6 +138,7 @@ export function parseWorstHash(hash: string): WorstSpec | null {
   const n = Number(seats ?? 6)
   const meRank = flags.map((flag) => /^rank([1-5])$/.exec(flag)?.[1]).find((digit) => digit !== undefined)
   const short = flags.includes('short')
+  const entrance = ENTRANCE_TITLES.find((title) => flags.includes(`enter-${title}`))
   return {
     state: STATES.includes(state as WorstState) ? (state as WorstState) : 'result',
     seats: Number.isInteger(n) && n >= 2 && n <= 9 ? n : 6,
@@ -133,6 +147,8 @@ export function parseWorstHash(hash: string): WorstSpec | null {
     frame: short || flags.includes('landscape') ? 'landscape' : flags.includes('desktop') ? 'desktop' : null,
     ...(meRank === undefined ? {} : { meRank: Number(meRank) }),
     ...(short ? { box: { ...SHORT_BOX } } : {}),
+    ...(entrance === undefined ? {} : { entrance }),
+    ...(flags.includes('sound') ? { sound: true as const } : {}),
   }
 }
 
@@ -702,13 +718,19 @@ export function WorstPage({ spec }: { spec: WorstSpec }) {
   const i18n = useMemo(() => createI18n({ language: spec.lang, storage: null }), [spec.lang])
   const client = useMemo(() => {
     const now = Date.now()
+    const seated = room(spec.seats, spec.state, now, spec.long)
+    const herald = seated.players.find((p) => p.seat === 1)
     return frozenClient({
       ...initialClientState,
       status: 'open',
       me: { playerId: ME, displayName: nameOf(0, spec.long) },
       balance: 250_000,
       roomStale: false,
-      room: room(spec.seats, spec.state, now, spec.long),
+      room: seated,
+      entrances:
+        spec.entrance === undefined || herald === undefined
+          ? []
+          : [{ id: 1, title: spec.entrance, seat: 1, playerId: herald.playerId, name: herald.displayName, at: now }],
       hand: hand(spec.seats, spec.state, spec.long),
       deadlineAt: spec.state === 'turn' ? now + 25_000 : spec.state === 'blindS' || spec.state === 'blindP' || (isChaos(spec.state) && !isOver(spec.state)) ? now + 15_000 : null,
       ...(isChaos(spec.state) ? { chaos: chaosState(spec.seats, spec.state, now) } : {}),
@@ -726,6 +748,7 @@ export function WorstPage({ spec }: { spec: WorstSpec }) {
       captionFor={(p) => (p.isBot ? null : CAPTION)}
       rankFor={(p) => (p.playerId === ME && spec.meRank !== undefined ? spec.meRank : (RANKS[p.playerId] ?? null))}
       frame={spec.frame ?? undefined}
+      {...(spec.sound === true ? { sound: (playgroundSound ??= createSoundEngine()) } : {})}
     />
   )
   return (

@@ -1206,3 +1206,58 @@ describe('Poker hỗn loạn', () => {
     expect(reduceClient(skips(inChaosRoom(), 11, 1, 2), { type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: 30, room: chaosRoom(), hand: null, deadlineAt: null }, now: 1 }).resultSkips).toBeNull()
   })
 })
+
+describe('title entrances', () => {
+  const entrance = (s: ClientState, seq: number, now: number, playerId: string, seat: number, title: 'god' | 'demigod' | 'godslayer' = 'god') =>
+    reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq, event: { type: 'TITLE_ENTRANCE', title, seat, playerId } }, now })
+  const holdem = () => start('holdem', HOLDEM_RULES, [10000, 10000, 10000], 0)
+
+  it("an entrance is kept with the name at arrival and the frame's time", () => {
+    const s = entrance(holdem(), 11, 4200, 'p1', 1, 'demigod')
+    expect(s.entrances).toEqual([{ id: 1, title: 'demigod', seat: 1, playerId: 'p1', name: 'P1', at: 4200 }])
+    expect(s.seq).toBe(11)
+    // Not in the roster: the name falls back to the seat number.
+    expect(entrance(holdem(), 11, 5, 'ghost', 4).entrances[0]).toMatchObject({ name: '5', playerId: 'ghost' })
+  })
+
+  it('ids grow and only the latest six are kept', () => {
+    let s = holdem()
+    for (let i = 0; i < 8; i += 1) s = entrance(s, 11 + i, 100 * i, `p${i % 3}`, i % 3)
+    expect(s.entrances.map((e) => e.id)).toEqual([3, 4, 5, 6, 7, 8])
+    expect(s.entrances.map((e) => e.at)).toEqual([200, 300, 400, 500, 600, 700])
+  })
+
+  it('a snapshot keeps them and adds none', () => {
+    const s = entrance(holdem(), 11, 100, 'p1', 1)
+    const after = reduceClient(s, { type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: 20, room: roomView('holdem', HOLDEM_RULES, [10000, 10000, 10000]), hand: null, deadlineAt: null }, now: 9000 }).entrances
+    expect(after).toEqual(s.entrances)
+  })
+
+  it("a snapshot of another room clears them: one room's entrances never show at another's table", () => {
+    const s = entrance(holdem(), 11, 100, 'p1', 1)
+    const other = { ...roomView('holdem', HOLDEM_RULES, [10000, 10000, 10000]), roomId: 'r2' }
+    expect(reduceClient(s, { type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: 1, room: other, hand: null, deadlineAt: null }, now: 9000 }).entrances).toEqual([])
+  })
+
+  it('leaving, a close and NOT_IN_ROOM empty them', () => {
+    const s = entrance(holdem(), 11, 100, 'p1', 1)
+    expect(s.entrances).toHaveLength(1)
+    expect(reduceClient(s, { type: 'leftRoom' }).entrances).toEqual([])
+    expect(reduceClient(s, { type: 'reset' }).entrances).toEqual([])
+    expect(reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 12, event: { type: 'ROOM_CLOSED', reason: 'empty' } }, now: 1 }).entrances).toEqual([])
+    expect(reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 12, event: { type: 'PLAYER_LEFT', playerId: 'p0' } }, now: 1 }).entrances).toEqual([])
+    expect(reduceClient(s, { type: 'server', msg: { t: 'ERROR', code: 'NOT_IN_ROOM', message: 'x' }, now: 1 }).entrances).toEqual([])
+    // Someone else leaving is no reason to forget.
+    expect(reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 12, event: { type: 'PLAYER_LEFT', playerId: 'p2' } }, now: 1 }).entrances).toHaveLength(1)
+  })
+
+  it("a Hold'em room keeps them too", () => {
+    const s = holdem()
+    expect(s.room?.config.blind?.chaosCycle).toBeUndefined()
+    expect(s.chaos).toEqual(initialClientState.chaos)
+    const after = entrance(s, 11, 7, 'p2', 2, 'godslayer')
+    expect(after.entrances).toHaveLength(1)
+    expect(after.chaos).toEqual(initialClientState.chaos)
+    expect(initialClientState.entrances).toEqual([])
+  })
+})

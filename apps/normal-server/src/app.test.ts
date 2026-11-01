@@ -868,6 +868,40 @@ describe('rooms joined', () => {
   })
 })
 
+describe('a Thần title at the table (BP-42)', () => {
+  it('a player wearing title_godslayer who sits at a Normal table is announced', async () => {
+    const h = await harness()
+    const alice = await h.register()
+    const mai = await h.register(SECOND_ACCOUNT)
+    // Granted the way the GM does, worn the way the wardrobe does: the full avatar, saved with the title on it.
+    await h.app.services.gm.grantItem({ userId: null }, alice.playerId, 'title_godslayer', 'test')
+    const inventory = await h.app.fastify.inject({ method: 'GET', url: '/api/me/inventory', headers: h.auth(alice) })
+    const avatar = (inventory.json() as { avatar: Record<string, unknown> }).avatar
+    const saved = await h.app.fastify.inject({
+      method: 'PUT', url: '/api/me/avatar', headers: h.auth(alice), payload: { ...avatar, title: 'title_godslayer' },
+    })
+    expect(saved.statusCode).toBe(200)
+
+    const base = await listen(h)
+    const a = await connect(base, { cookie: alice.cookie })
+    const b = await connect(base, { cookie: mai.cookie })
+    await a.next('WELCOME')
+    await b.next('WELCOME')
+    a.send({ t: 'CREATE_ROOM', config: BLIND_ROOM })
+    const room = await a.next('ROOM_SNAPSHOT')
+    b.send({ t: 'JOIN_ROOM', code: room.room.code })
+    await b.next('ROOM_SNAPSHOT')
+
+    // Mai sits first and wears no title: nothing is announced for her.
+    b.send({ t: 'SIT_DOWN', seat: 1 })
+    await a.next('ROOM_EVENT', (m) => m.event.type === 'PLAYER_SAT' && m.event.playerId === mai.playerId)
+
+    a.send({ t: 'SIT_DOWN', seat: 0 })
+    const entrance = await b.next('ROOM_EVENT', (m) => m.event.type === 'TITLE_ENTRANCE')
+    expect(entrance.event).toEqual({ type: 'TITLE_ENTRANCE', title: 'godslayer', seat: 0, playerId: alice.playerId })
+  })
+})
+
 describe('a whole hand between two registered players', () => {
   it('settles through the ledger, takes no fee at a Blind table and moves both players’ counters', async () => {
     const h = await harness({ roomOptions: FAST_ROOM })

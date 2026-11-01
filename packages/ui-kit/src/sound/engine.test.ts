@@ -1,0 +1,492 @@
+import { describe, expect, it, vi } from 'vitest'
+import {
+  MAX_LOAD_ATTEMPTS,
+  MAX_SOUND_WAIT_S,
+  SOUND_EVENT,
+  SOUND_LEAD_S,
+  SOUND_MUTED_KEY,
+  attachGestureUnlock,
+  createSoundEngine,
+  type SoundEngine,
+  type SoundEngineDeps,
+  type SoundOutcome,
+} from './engine.js'
+import { FakeAudioContext, FakeCompressor, FakeGain, brokenStorage, memoryStorage } from './fake-audio.js'
+import * as stingers from './stingers.js'
+import type { StingerId } from './stingers.js'
+
+/** Lets the engine's lazy `import()` of the stingers settle. */
+const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
+
+interface Rig {
+  engine: SoundEngine
+  fake: FakeAudioContext
+  storage: Storage
+  createContext: ReturnType<typeof vi.fn>
+  scheduled: { id: StingerId; when: number }[]
+  emitted: [StingerId, SoundOutcome][]
+  hidden: { value: boolean }
+}
+
+const rig = (over: Partial<SoundEngineDeps> & { state?: AudioContextState } = {}): Rig => {
+  const fake = new FakeAudioContext({ state: over.state ?? 'running' })
+  const storage = over.storage ?? memoryStorage()
+  const scheduled: Rig['scheduled'] = []
+  const emitted: Rig['emitted'] = []
+  const hidden = { value: false }
+  const createContext = vi.fn(() => fake.asContext())
+  // The real master chain, a recording schedule: the composition has its own tests.
+  const module: typeof stingers = {
+    ...stingers,
+    scheduleStinger: (_ctx, _out, id, when) => {
+      scheduled.push({ id, when })
+      return stingers.STINGER_SECONDS[id]
+    },
+  }
+  const engine = createSoundEngine({
+    createContext,
+    storage,
+    isHidden: () => hidden.value,
+    emit: (id, outcome) => emitted.push([id, outcome]),
+    loadStingers: () => Promise.resolve(module),
+    ...over,
+  })
+  return { engine, fake, storage, createContext, scheduled, emitted, hidden }
+}
+
+const unlocked = async (over: Parameters<typeof rig>[0] = {}): Promise<Rig> => {
+  const r = rig(over)
+  r.engine.unlock()
+  await flush()
+  return r
+}
+
+/** The engine's channel: the one gain node feeding the master's input. */
+const channelOf = (fake: FakeAudioContext): FakeGain[] => {
+  const master = fake.nodes.find((n) => n instanceof FakeGain && n.connections.some((c) => c instanceof FakeCompressor))
+  return master === undefined ? [] : (fake.feeding(master) as FakeGain[])
+}
+
+/** The old channel ramps from where it is to 0 in 15 ms from `at` (no click), then is dropped from the master. */
+const expectFadedOut = async (channel: FakeGain, at: number): Promise<void> => {
+  const [hold, ramp] = channel.gain.events.slice(-2)
+  expect(hold).toEqual({ kind: 'set', value: 1, time: at })
+  expect(ramp!.kind).toBe('linear')
+  expect(ramp!.value).toBe(0)
+  expect(ramp!.time).toBeCloseTo(at + 0.015, 9)
+  expect(channel.disconnects).toBe(0) // still fading
+  await new Promise((resolve) => setTimeout(resolve, 80))
+  expect(channel.disconnects).toBe(1)
+  expect(channel.connections).toEqual([])
+}
+
+describe('the sound engine', () => {
+  it('starts unmuted and reads a stored mute', () => {
+    expect(rig().engine.muted).toBe(false)
+    expect(rig({ storage: memoryStorage({ [SOUND_MUTED_KEY]: '1' }) }).engine.muted).toBe(true)
+    expect(rig({ storage: null }).engine.muted).toBe(false)
+  })
+
+  it('a broken storage still works (unmuted, no throw)', () => {
+    const { engine } = rig({ storage: brokenStorage() })
+    expect(engine.muted).toBe(false)
+    expect(() => engine.setMuted(true)).not.toThrow()
+    expect(engine.muted).toBe(true)
+    expect(() => engine.setMuted(false)).not.toThrow()
+    expect(engine.muted).toBe(false)
+  })
+
+  it('setMuted persists and notifies', () => {
+    const { engine, storage } = rig()
+    const listener = vi.fn()
+    const off = engine.subscribe(listener)
+    engine.setMuted(true)
+    expect(storage.getItem(SOUND_MUTED_KEY)).toBe('1')
+    expect(listener).toHaveBeenCalledTimes(1)
+    engine.setMuted(false)
+    expect(storage.getItem(SOUND_MUTED_KEY)).toBeNull()
+    expect(listener).toHaveBeenCalledTimes(2)
+    off()
+    engine.setMuted(true)
+    expect(listener).toHaveBeenCalledTimes(2)
+  })
+
+  it("muted → 'muted', schedules nothing", async () => {
+    const r = await unlocked()
+    r.engine.setMuted(true)
+    expect(r.engine.play('entrance.god')).toBe('muted')
+    expect(r.scheduled).toEqual([])
+  })
+
+  it("hidden → 'hidden'", async () => {
+    const r = await unlocked()
+    r.hidden.value = true
+    expect(r.engine.play('entrance.god')).toBe('hidden')
+    expect(r.scheduled).toEqual([])
+  })
+
+  it("no AudioContext → 'unsupported'", async () => {
+    const r = rig({ createContext: () => null })
+    r.engine.unlock()
+    await flush()
+    expect(r.engine.play('moment.jackpot')).toBe('unsupported')
+    // and by default, in a page with no AudioContext at all (jsdom), before any gesture
+    const bare = createSoundEngine({ storage: null, isHidden: () => false, emit: () => {} })
+    expect(bare.play('moment.jackpot')).toBe('unsupported')
+  })
+
+  it("before unlock → 'blocked' and no context is created", () => {
+    const r = rig()
+    expect(r.engine.play('entrance.god')).toBe('blocked')
+    expect(r.createContext).not.toHaveBeenCalled()
+    expect(r.engine.running).toBe(false)
+  })
+
+  it("a context the browser keeps suspended, or stingers not yet loaded → 'blocked'", async () => {
+    const r = rig({ state: 'suspended' })
+    r.fake.resumeWorks = false
+    r.engine.unlock()
+    await flush()
+    expect(r.fake.resumes).toBe(1)
+    expect(r.engine.play('entrance.god')).toBe('blocked')
+
+    let release: (m: typeof stingers) => void = () => {}
+    const slow = rig({ loadStingers: () => new Promise((resolve) => (release = resolve)) })
+    slow.engine.unlock()
+    await flush()
+    expect(slow.engine.play('entrance.god')).toBe('blocked')
+    release(stingers)
+    await flush()
+    expect(slow.engine.play('entrance.god')).toBe('played')
+  })
+
+  it('loads the stingers once, on the first unlock, and tries again after a failed load', async () => {
+    const load = vi.fn<() => Promise<typeof stingers>>().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(stingers)
+    const r = rig({ loadStingers: load })
+    expect(load).not.toHaveBeenCalled()
+    r.engine.unlock()
+    await flush()
+    expect(r.engine.play('entrance.god')).toBe('blocked')
+    r.engine.unlock()
+    await flush()
+    r.engine.unlock()
+    await flush()
+    expect(load).toHaveBeenCalledTimes(2)
+    expect(r.engine.play('entrance.god')).toBe('played')
+  })
+
+  it("a lazy load that fails three times gives up: 'unsupported', and gestures stop re-importing", async () => {
+    expect(MAX_LOAD_ATTEMPTS).toBe(3)
+    const load = vi.fn<() => Promise<typeof stingers>>().mockRejectedValue(new Error('chunk gone'))
+    const r = rig({ loadStingers: load })
+    for (let i = 0; i < 5; i += 1) {
+      r.engine.unlock()
+      await flush()
+    }
+    expect(load).toHaveBeenCalledTimes(3)
+    expect(r.engine.running).toBe(false)
+    expect(r.engine.play('entrance.god')).toBe('unsupported')
+  })
+
+  it('a lazy import that resolves to nothing counts as a failed load, and is tried again', async () => {
+    const load = vi
+      .fn<() => Promise<typeof stingers>>()
+      .mockResolvedValueOnce(undefined as unknown as typeof stingers)
+      .mockResolvedValue(stingers)
+    const r = rig({ loadStingers: load })
+    r.engine.unlock()
+    await flush()
+    expect(r.engine.running).toBe(false)
+    expect(r.engine.play('entrance.god')).toBe('blocked') // not kept: no throw, no 'played'
+    r.engine.unlock()
+    await flush()
+    expect(load).toHaveBeenCalledTimes(2)
+    expect(r.engine.play('entrance.god')).toBe('played')
+    // three empty modules in all: given up, as for three rejections
+    const empty = rig({ loadStingers: () => Promise.resolve(null as unknown as typeof stingers) })
+    for (let i = 0; i < MAX_LOAD_ATTEMPTS; i += 1) {
+      empty.engine.unlock()
+      await flush()
+    }
+    expect(empty.engine.play('entrance.god')).toBe('unsupported')
+  })
+
+  it("after unlock → 'played' a lead after currentTime", async () => {
+    const r = await unlocked()
+    expect(r.createContext).toHaveBeenCalledTimes(1)
+    expect(r.engine.running).toBe(true)
+    expect(SOUND_LEAD_S).toBe(0.02)
+    r.fake.currentTime = 12.5
+    expect(r.engine.play('entrance.demigod')).toBe('played')
+    expect(r.scheduled).toHaveLength(1)
+    expect(r.scheduled[0]!.id).toBe('entrance.demigod')
+    expect(r.scheduled[0]!.when).toBeCloseTo(12.5 + 0.02, 9)
+  })
+
+  it('unlock resumes a suspended context and creates it only once', async () => {
+    const r = rig({ state: 'suspended' })
+    r.engine.unlock()
+    await flush()
+    expect(r.fake.state).toBe('running')
+    r.fake.state = 'suspended' // a phone suspends it when the screen locks
+    r.engine.unlock()
+    await flush()
+    expect(r.fake.resumes).toBe(2)
+    expect(r.createContext).toHaveBeenCalledTimes(1)
+  })
+
+  it('a second play waits for the first (scheduled at its end)', async () => {
+    const r = await unlocked()
+    r.fake.currentTime = 2
+    r.engine.play('entrance.god')
+    r.fake.currentTime = 3
+    expect(r.engine.play('moment.jackpot')).toBe('played')
+    expect(r.scheduled[0]!.when).toBeCloseTo(2.02, 9)
+    expect(r.scheduled[1]!.when).toBeCloseTo(2.02 + 3.5, 9)
+    // once the channel is free, the next starts at once
+    r.fake.currentTime = 20
+    r.engine.play('moment.demigod')
+    expect(r.scheduled[2]!.when).toBeCloseTo(20.02, 9)
+  })
+
+  it("one more than MAX_SOUND_WAIT_S ahead → 'busy'", async () => {
+    const r = await unlocked()
+    expect(MAX_SOUND_WAIT_S).toBe(4)
+    expect(r.engine.play('entrance.god')).toBe('played') // 0.02 → 3.52
+    expect(r.engine.play('entrance.godslayer')).toBe('played') // waits 3.52 s: 3.52 → 7.52
+    expect(r.engine.play('moment.jackpot')).toBe('busy') // would wait 7.52 s
+    expect(r.scheduled).toHaveLength(2)
+    r.fake.currentTime = 3.6 // 3.92 s ahead now
+    expect(r.engine.play('moment.jackpot')).toBe('played')
+    expect(r.scheduled[2]!.when).toBeCloseTo(7.52, 9)
+  })
+
+  it('a preempting play fades out what is sounding and starts now', async () => {
+    const r = await unlocked()
+    r.engine.play('entrance.godslayer')
+    const [first] = channelOf(r.fake)
+    expect(first).toBeDefined()
+    r.fake.currentTime = 1
+    expect(r.engine.play('moment.ascend', { preempt: true })).toBe('played')
+    await expectFadedOut(first!, 1)
+    expect(r.scheduled[1]!.id).toBe('moment.ascend')
+    expect(r.scheduled[1]!.when).toBeCloseTo(1.02, 9)
+    // a fresh channel feeds the master
+    const now = channelOf(r.fake)
+    expect(now).toHaveLength(1)
+    expect(now[0]).not.toBe(first)
+    // and the queue restarts from the preempting one
+    expect(r.engine.play('moment.demigod')).toBe('played')
+    expect(r.scheduled[2]!.when).toBeCloseTo(1.02 + 2.5, 9)
+  })
+
+  it('a moment never cuts a moment: a preempting moment over one sounding waits for it (scheduled at its end)', async () => {
+    const r = await unlocked()
+    r.fake.currentTime = 1
+    expect(r.engine.play('moment.ascend', { preempt: true })).toBe('played') // 1.02 → 3.52
+    // (the channel the first play built faded at its own preempt, with nothing on it; the newest is the live one)
+    const first = channelOf(r.fake).at(-1)
+    r.fake.currentTime = 1.5
+    expect(r.engine.play('moment.demigod', { preempt: true })).toBe('played')
+    expect(r.scheduled.map((x) => x.id)).toEqual(['moment.ascend', 'moment.demigod'])
+    expect(r.scheduled[1]!.when).toBeCloseTo(1.02 + 2.5, 9)
+    // nothing faded: the same channel still feeds the master
+    expect(first!.gain.events.some((e) => e.value === 0)).toBe(false)
+    expect(channelOf(r.fake).at(-1)).toBe(first)
+    // a moment that waits behind an entrance is not cut either: the preempting one queues after both
+    r.fake.currentTime = 20
+    r.engine.play('entrance.god') // 20.02 → 23.52
+    r.engine.play('moment.jackpot') // waits: 23.52 → 25.52
+    r.fake.currentTime = 20.5
+    expect(r.engine.play('moment.godslain', { preempt: true })).toBe('busy') // would wait 5.02 s
+    // once the moments are over, a preempt cuts an entrance again
+    r.fake.currentTime = 30
+    r.engine.play('entrance.demigod')
+    const sounding = channelOf(r.fake).at(-1)
+    r.fake.currentTime = 30.5
+    expect(r.engine.play('moment.ascend', { preempt: true })).toBe('played')
+    await expectFadedOut(sounding!, 30.5)
+    expect(r.scheduled.at(-1)!.when).toBeCloseTo(30.52, 9)
+  })
+
+  it('stop() fades out an entrance (sounding or waiting) and leaves a BP-41 moment alone', async () => {
+    const r = await unlocked()
+    r.engine.play('entrance.god')
+    const [first] = channelOf(r.fake)
+    r.fake.currentTime = 0.4
+    r.engine.stop()
+    await expectFadedOut(first!, 0.4)
+    // the channel is free again: the next play starts now
+    r.fake.currentTime = 0.6
+    r.engine.play('entrance.demigod')
+    expect(r.scheduled[1]!.when).toBeCloseTo(0.62, 9)
+    // a moment sounding: stop() leaves the channel (and what waits behind the moment) alone
+    r.fake.currentTime = 10
+    r.engine.play('moment.ascend', { preempt: true }) // cuts the demigod's entrance
+    const moment = channelOf(r.fake).at(-1)
+    r.engine.play('entrance.godslayer') // queues after the moment: 12.52
+    r.fake.currentTime = 10.5
+    r.engine.stop()
+    expect(channelOf(r.fake).at(-1)).toBe(moment)
+    expect(moment!.gain.events.some((e) => e.value === 0)).toBe(false)
+    r.fake.currentTime = 13
+    expect(r.engine.play('moment.demigod')).toBe('played')
+    expect(r.scheduled.at(-1)!.when).toBeCloseTo(12.52 + 4, 9) // still behind the godslayer's entrance
+  })
+
+  it('muting fades out what is sounding', async () => {
+    const r = await unlocked()
+    r.engine.play('entrance.god')
+    const [first] = channelOf(r.fake)
+    r.fake.currentTime = 0.3
+    r.engine.setMuted(true)
+    await expectFadedOut(first!, 0.3)
+    r.engine.setMuted(false)
+    // the channel is free again: the next play starts now, not after the stopped one
+    r.fake.currentTime = 0.5
+    r.engine.play('moment.jackpot')
+    expect(r.scheduled[1]!.when).toBeCloseTo(0.52, 9)
+  })
+
+  it("a stinger that throws while scheduling → 'unsupported', never a throw, and the engine still works", async () => {
+    let throwNext = true
+    const module: typeof stingers = {
+      ...stingers,
+      scheduleStinger: (...args) => {
+        if (throwNext) {
+          throwNext = false
+          throw new TypeError('ctx.createStereoPanner is not a function')
+        }
+        return stingers.scheduleStinger(...args)
+      },
+    }
+    const r = await unlocked({ loadStingers: () => Promise.resolve(module) })
+    const [before] = channelOf(r.fake)
+    expect(before).toBeUndefined()
+    let result: SoundOutcome | undefined
+    expect(() => (result = r.engine.play('entrance.god'))).not.toThrow()
+    expect(result).toBe('unsupported')
+    expect(r.emitted).toEqual([['entrance.god', 'unsupported']])
+    // the channel (and anything half built on it) fades out
+    const half = r.fake.nodes.filter((n): n is FakeGain => n instanceof FakeGain && n.gain.events.at(-1)?.value === 0)
+    expect(half.length).toBeGreaterThan(0)
+    expect(r.engine.play('moment.jackpot')).toBe('played')
+  })
+
+  it('every outcome is emitted with its id', async () => {
+    const r = rig()
+    r.engine.play('entrance.god') // blocked
+    r.engine.unlock()
+    await flush()
+    r.engine.play('entrance.demigod') // played
+    r.engine.play('entrance.godslayer') // played (waits)
+    r.engine.play('moment.ascend') // busy
+    r.hidden.value = true
+    r.engine.play('moment.demigod') // hidden
+    r.engine.setMuted(true)
+    r.engine.play('moment.godslain') // muted
+    expect(r.emitted).toEqual([
+      ['entrance.god', 'blocked'],
+      ['entrance.demigod', 'played'],
+      ['entrance.godslayer', 'played'],
+      ['moment.ascend', 'busy'],
+      ['moment.demigod', 'hidden'],
+      ['moment.godslain', 'muted'],
+    ])
+    const none = rig({ createContext: () => null })
+    none.engine.unlock()
+    none.engine.play('moment.jackpot')
+    expect(none.emitted).toEqual([['moment.jackpot', 'unsupported']])
+  })
+
+  it('by default the outcome is a window event', async () => {
+    const fake = new FakeAudioContext()
+    const engine = createSoundEngine({
+      createContext: () => fake.asContext(),
+      storage: null,
+      isHidden: () => false,
+      loadStingers: () => Promise.resolve(stingers),
+    })
+    const seen: unknown[] = []
+    const listener = (e: Event): void => void seen.push((e as CustomEvent).detail)
+    window.addEventListener(SOUND_EVENT, listener)
+    engine.play('moment.jackpot')
+    window.removeEventListener(SOUND_EVENT, listener)
+    expect(SOUND_EVENT).toBe('bp:sound')
+    expect(seen).toEqual([{ id: 'moment.jackpot', outcome: 'blocked' }])
+  })
+
+  it('unmuting never plays what was missed', async () => {
+    const r = await unlocked()
+    r.engine.setMuted(true)
+    r.engine.play('entrance.god')
+    r.hidden.value = true
+    r.engine.setMuted(false)
+    r.engine.play('moment.ascend')
+    r.hidden.value = false
+    await flush()
+    expect(r.scheduled).toEqual([])
+    expect(r.emitted.map(([, o]) => o)).toEqual(['muted', 'hidden'])
+  })
+
+  it('plays the real stingers through the master chain', async () => {
+    const fake = new FakeAudioContext()
+    const engine = createSoundEngine({
+      createContext: () => fake.asContext(),
+      storage: null,
+      isHidden: () => false,
+      emit: () => {},
+      loadStingers: () => Promise.resolve(stingers),
+    })
+    engine.unlock()
+    await flush()
+    expect(engine.play('entrance.god')).toBe('played')
+    expect(fake.oscillators().length).toBeGreaterThan(5)
+    expect(fake.feeding(fake.destination)).toHaveLength(1)
+  })
+})
+
+describe('attachGestureUnlock', () => {
+  const fakeEngine = (): SoundEngine & { unlock: ReturnType<typeof vi.fn>; running: boolean } => {
+    const e = {
+      muted: false,
+      running: false,
+      setMuted: () => {},
+      subscribe: () => () => {},
+      play: () => 'blocked' as const,
+      stop: () => {},
+      unlock: vi.fn(),
+    }
+    return e
+  }
+
+  it('calls unlock on each gesture until the context runs, again if it is suspended, and the remover detaches', () => {
+    const target = new EventTarget()
+    const engine = fakeEngine()
+    const remove = attachGestureUnlock(engine, target)
+    target.dispatchEvent(new Event('pointerdown'))
+    target.dispatchEvent(new Event('keydown'))
+    expect(engine.unlock).toHaveBeenCalledTimes(2)
+    engine.running = true
+    target.dispatchEvent(new Event('pointerdown'))
+    target.dispatchEvent(new Event('pointerup'))
+    expect(engine.unlock).toHaveBeenCalledTimes(2)
+    engine.running = false // the phone suspended it
+    target.dispatchEvent(new Event('pointerup'))
+    expect(engine.unlock).toHaveBeenCalledTimes(3)
+    remove()
+    target.dispatchEvent(new Event('pointerdown'))
+    target.dispatchEvent(new Event('keydown'))
+    target.dispatchEvent(new Event('pointerup'))
+    expect(engine.unlock).toHaveBeenCalledTimes(3)
+  })
+
+  it('listens on the window by default', () => {
+    const engine = fakeEngine()
+    const remove = attachGestureUnlock(engine)
+    window.dispatchEvent(new Event('keydown'))
+    remove()
+    window.dispatchEvent(new Event('keydown'))
+    expect(engine.unlock).toHaveBeenCalledTimes(1)
+  })
+})

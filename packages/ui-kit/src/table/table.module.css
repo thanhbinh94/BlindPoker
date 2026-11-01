@@ -2838,6 +2838,51 @@
   .metaFlow[data-chaos] > * {
     font-size: 0.6875rem;
   }
+
+  /* BP-42 A14: a header that holds the mute button (the app gave the room a sound engine) has the dot, the mute button, the menu
+     and "Rời phòng" in its right cell on a 360 px phone, beside a squeeze table's gold badge. The mute button and the menu's ⋯ are
+     drawn 32 px wide; "Rời phòng" takes 8 px of side padding, the dot its own 8 px and the gaps 6 px, so the room's name keeps what
+     it had before the mute button came (Ruling 12). Each icon's invisible pad (the compact header's trick below) stops where the
+     other's starts: the mute button reaches 5 px left (into the gap by the dot) and 3 px right, the ⋯ 3 px left and 5 px right
+     (into the gap by "Rời phòng", which has none), so each is 40 px wide to the thumb and the two never overlap. A header without
+     the button (Lite) keeps its old sizes. */
+  .header:has(> .headRight > .headMute) {
+    column-gap: 6px;
+  }
+
+  .headRight:has(> .headMute) {
+    gap: 6px;
+  }
+
+  .headRight:has(> .headMute) > .conn {
+    min-width: 8px;
+  }
+
+  .headRight > .headMute,
+  .headRight:has(> .headMute) [aria-haspopup='menu'] {
+    position: relative;
+    width: 32px;
+    min-width: 32px;
+    padding: 0;
+  }
+
+  .headRight > .headMute::after,
+  .headRight:has(> .headMute) [aria-haspopup='menu']::after {
+    content: '';
+    position: absolute;
+  }
+
+  .headRight > .headMute::after {
+    inset: -4px -3px -4px -5px;
+  }
+
+  .headRight:has(> .headMute) [aria-haspopup='menu']::after {
+    inset: -4px -5px -4px -3px;
+  }
+
+  .headRight:has(> .headMute) > .headLeave {
+    padding: 0 var(--space-2);
+  }
 }
 
 /* A phone on its side (Plan 26, B2): the identity bar is one 32 px strip, so the felt keeps the height. The connection,
@@ -3796,13 +3841,14 @@
 }
 
 /* A phone on its side: one row across the top, over the one-line header's middle — from past the connection pill (about
-   120 px) to short of the menu and "Rời phòng" (about 170 px), above the top seats' plates — two toasts side by side at
-   most, then "+N". The room name and the stakes it covers come back when the toasts go; the stage keeps its height. */
+   120 px) to short of the mute button, the menu and "Rời phòng" (about 215 px, BP-42 A2), above the top seats' plates — two
+   toasts side by side at most, then "+N". The room name and the stakes it covers come back when the toasts go; the stage
+   keeps its height. */
 .chaosToastBand[data-layout='landscape'] {
   position: absolute;
   top: var(--space-1);
   left: 8.5rem;
-  right: 11rem;
+  right: 14rem;
   z-index: 5;
   pointer-events: none;
 }
@@ -4664,11 +4710,89 @@
   80% { transform: translateX(2px); }
 }
 
+/* The glow's peak is the band's to set (`--herald-glow-peak`): the entrance bands pulse in their own title's colours. */
 @keyframes heraldGlow {
   50% {
-    box-shadow:
+    box-shadow: var(
+      --herald-glow-peak,
       0 0 36px 8px rgba(255, 210, 110, 0.6),
-      0 0 80px 18px rgba(220, 60, 60, 0.5);
+      0 0 80px 18px rgba(220, 60, 60, 0.5)
+    );
+  }
+}
+
+/* BP-42's entrance band (spec 2026-11-01 §4): the herald's slot, shape and motion, in the Thần title's colours. The Thần Bài's is
+   the herald's own gold on red; the Bán Thần's white, silver and pale gold; the Kẻ Sát Thần's black and crimson. */
+.entrance[data-title='demigod'] {
+  border-block-color: var(--entrance-demigod-edge);
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 236, 180, 0.35) 50%, transparent),
+    linear-gradient(180deg, var(--entrance-demigod-band-top), var(--entrance-demigod-band-foot));
+  background-color: var(--entrance-demigod-band);
+  box-shadow:
+    0 0 24px 4px rgba(255, 255, 255, 0.4),
+    0 0 60px 12px rgba(241, 213, 140, 0.35);
+  color: var(--entrance-demigod-ink);
+  text-shadow:
+    0 0 6px rgba(255, 255, 255, 0.95),
+    0 0 14px rgba(241, 213, 140, 0.8);
+  --herald-glow-peak: 0 0 36px 8px rgba(255, 255, 255, 0.55), 0 0 80px 18px rgba(241, 213, 140, 0.5);
+}
+
+.entrance[data-title='godslayer'] {
+  border-block-color: var(--entrance-slayer-edge);
+  background:
+    linear-gradient(90deg, transparent, rgba(209, 32, 47, 0.28) 50%, transparent),
+    linear-gradient(180deg, var(--entrance-slayer-band-top), var(--entrance-slayer-band-foot));
+  background-color: var(--entrance-slayer-band);
+  box-shadow:
+    0 0 24px 4px rgba(209, 32, 47, 0.5),
+    0 0 60px 12px rgba(0, 0, 0, 0.55);
+  color: var(--entrance-slayer-ink);
+  text-shadow:
+    0 0 8px rgba(209, 32, 47, 0.9),
+    0 0 18px rgba(120, 0, 10, 0.8);
+  --herald-glow-peak: 0 0 36px 8px rgba(230, 40, 55, 0.65), 0 0 80px 18px rgba(0, 0, 0, 0.6);
+}
+
+/* The heralded seat's flash: a ring of its own (`::before`), drawn by shadows from the plate's own box so it adds no scrollable
+   overflow, outside the reign's aura (`::after`, 3 px out), which it never replaces. It pulses while the band shows. With motion
+   off there is no flash at all: `RoomScreen` passes no `flash` then (Ruling 11), so this rule has no reduced-motion path. */
+.seat[data-entrance='god'] {
+  --entrance-flash-edge: var(--chaos-god-edge);
+  --entrance-flash-glow: rgba(220, 60, 60, 0.6);
+}
+
+.seat[data-entrance='demigod'] {
+  --entrance-flash-edge: #fff6dc;
+  --entrance-flash-glow: rgba(241, 213, 140, 0.65);
+}
+
+.seat[data-entrance='godslayer'] {
+  --entrance-flash-edge: var(--entrance-slayer-edge);
+  --entrance-flash-glow: rgba(130, 0, 14, 0.75);
+}
+
+.seat[data-entrance] .plate::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    0 0 0 5px var(--entrance-flash-edge),
+    0 0 18px 8px var(--entrance-flash-glow);
+  animation: entranceFlash 1s ease-in-out infinite;
+}
+
+@keyframes entranceFlash {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+
+  50% {
+    opacity: 1;
   }
 }
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { toChaosTableView } from '../chaos/hold.js'
 import { EMPTY_CHAOS_TABLE, type ChaosDebit, type ChaosHandState, type ChaosTableState } from '../chaos/types.js'
 import type { GameEvent } from '../hand/types.js'
-import type { ChaosSnapshot, RoomEvent, ServerMessage } from './messages.js'
+import type { ChaosSnapshot, EntranceTitle, RoomEvent, ServerMessage } from './messages.js'
 
 /**
  * BP-41 (chaos round three): the protocol's new shapes, as fixtures the compiler checks. No new client message: the Thần,
@@ -46,5 +46,14 @@ describe('BP-41 protocol fixtures', () => {
     const titles: NonNullable<ChaosHandState['titles']> = [{ seat: 1, ascended: true }, { seat: 2, slew: 1 }]
     const outcomes: NonNullable<ChaosHandState['outcomes']> = { fateCrit: [0], dethroned: [2], acesDealt: [] }
     expect([debit, titles, outcomes]).toHaveLength(3)
+  })
+})
+
+/** BP-42: a Thần title's entrance is one room event, three titles, and it survives JSON like every other frame. */
+describe('BP-42 protocol fixtures', () => {
+  it('the title entrance is a room event for each of the three titles', () => {
+    const titles: EntranceTitle[] = ['god', 'demigod', 'godslayer']
+    const frames: ServerMessage[] = titles.map((title, seq) => ({ t: 'ROOM_EVENT', seq, event: { type: 'TITLE_ENTRANCE', title, seat: seq, playerId: `p${seq}` } }))
+    expect(JSON.parse(JSON.stringify(frames))).toEqual(frames)
   })
 })

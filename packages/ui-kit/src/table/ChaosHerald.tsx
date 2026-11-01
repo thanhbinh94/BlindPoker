@@ -1,23 +1,18 @@
-import { useEffect, useReducer, useState } from 'react'
+import { useEffect, useReducer, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ClientHerald } from '../client/types.js'
 import { formatPoints, type Language } from '../i18n/index.js'
 import { cx } from '../primitives/cx.js'
 import { DICE_MS, DICE_ROLL_MS, diceText } from './chaos-detail.js'
+import { FRESH_MS } from './entrance-schedule.js'
+import { useHeldWindow, type HeraldHold } from './useHeldWindow.js'
 import { useMediaQuery } from './useMediaQuery.js'
 import s from './table.module.css'
 
+export type { HeraldHold } from './useHeldWindow.js'
+
 /** How long a herald stays up (spec 2026-10-28 §4.5: about 3 s), from its arrival — or from the end of the result's reveal hold. */
 export const HERALD_MS = 3_000
-
-/**
- * The result's reveal hold as the herald saw it (`useRevealHold`), in client time: `since` when it began, `until` when it ended
- * (`null` while it runs).
- */
-export interface HeraldHold {
-  since: number
-  until: number | null
-}
 
 /**
  * When a herald shows, in client time:
@@ -46,6 +41,16 @@ export interface ChaosHeraldProps {
    * of a Thần waits for the hold's end (Ruling 21).
    */
   held?: boolean
+  /**
+   * The hold's window as `useHeldWindow` saw it, tracked once by the room for this band and the entrance band (BP-42 A7). Given
+   * (even `null`), it replaces the herald's own tracking of `held`.
+   */
+  hold?: HeraldHold | null
+  /**
+   * BP-42: called once per herald id when it first shows, if that is within `FRESH_MS` of its window's start — the room plays its
+   * stinger then. A herald first shown later (a snapshot, a remount, a wait) is never announced.
+   */
+  onShow?: (herald: ClientHerald) => void
 }
 
 /**
@@ -58,19 +63,16 @@ export interface ChaosHeraldProps {
  * a remount — shows only for what is left of its time; none is replayed. A live region (assertive: it is the table's news).
  * Under `prefers-reduced-motion` the words simply show — no glow pulse, no shake.
  */
-export function ChaosHerald({ heralds, lang, held = false }: ChaosHeraldProps) {
+export function ChaosHerald({ heralds, lang, held = false, hold, onShow }: ChaosHeraldProps) {
   const { t } = useTranslation()
   const reduce = useMediaQuery('(prefers-reduced-motion: reduce)')
   /** The newest herald put away by a tap: it and every one before it stay down. */
   const [dismissed, setDismissed] = useState(0)
   const [, tick] = useReducer((n: number) => n + 1, 0)
   const now = Date.now()
-  // The reveal hold's start and end, noted in the render that sees them change (React's pattern for what earlier renders knew).
-  const [hold, setHold] = useState<HeraldHold | null>(null)
-  let seenHold = hold
-  if (held && (hold === null || hold.until !== null)) seenHold = { since: now, until: null }
-  else if (!held && hold !== null && hold.until === null) seenHold = { since: hold.since, until: now }
-  if (seenHold !== hold) setHold(seenHold)
+  // The reveal hold: the room's (tracked once, A7) when it gives one, else this band's own reading of `held`.
+  const ownHold = useHeldWindow(held)
+  const seenHold = hold === undefined ? ownHold : hold
   const windows = heralds.map((h) => ({ h, ...heraldWindow(h, seenHold) }))
   const shown = windows.filter((w) => w.h.id > dismissed && w.from <= now && now < w.until)
   // Wakes at the next moment something appears or leaves.
@@ -80,6 +82,20 @@ export function ChaosHerald({ heralds, lang, held = false }: ChaosHeraldProps) {
     const timer = setTimeout(tick, Math.max(0, next - Date.now()) + 16)
     return () => clearTimeout(timer)
   }, [next])
+
+  // BP-42: each herald is announced once, the first time it shows — and only when that is within `FRESH_MS` of its window's start.
+  const announced = useRef(new Set<number>())
+  const firstShown = shown.filter((w) => !announced.current.has(w.h.id)).map((w) => ({ herald: w.h, fresh: now - w.from < FRESH_MS }))
+  const firstKey = firstShown.map((f) => f.herald.id).join(',')
+  useEffect(() => {
+    for (const { herald, fresh } of firstShown) {
+      if (announced.current.has(herald.id)) continue
+      announced.current.add(herald.id)
+      if (fresh) onShow?.(herald)
+    }
+    // Keyed on the ids first shown in this render: the list itself is a new array every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firstKey])
 
   const textOf = (h: ClientHerald): string => {
     if (h.kind !== 'dice') return t(`chaos.herald.${h.kind}`, { name: h.name })

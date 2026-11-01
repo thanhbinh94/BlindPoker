@@ -123,6 +123,11 @@
       "dark": "Tối",
       "light": "Sáng"
     },
+    "sound": {
+      "title": "Âm thanh",
+      "on": "Bật",
+      "off": "Tắt"
+    },
     "language": {
       "title": "Ngôn ngữ"
     },

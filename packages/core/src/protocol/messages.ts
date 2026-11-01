@@ -103,6 +103,9 @@ export interface RoomView extends RoomSummary {
   nextHandAt: number | null
 }
 
+/** The Thần titles that have an entrance (BP-42): Thần Bài, Bán Thần, Kẻ Sát Thần. */
+export type EntranceTitle = 'god' | 'demigod' | 'godslayer'
+
 export type RoomEvent =
   | { type: 'PLAYER_JOINED'; player: RoomPlayerView }
   | { type: 'PLAYER_LEFT'; playerId: string }
@@ -141,6 +144,12 @@ export type RoomEvent =
    * settlement (godslain).
    */
   | { type: 'CHAOS_HERALD'; kind: 'god' | 'demigod' | 'godslain'; seat: number; playerId: string }
+  /**
+   * BP-42: a player wearing a Thần title (the one they have equipped) sat down, told to everyone in the room (the sitter
+   * included). The server decides — it looks the title up through its title port and keeps a ten-minute cooldown per player and room
+   * — so a client only shows it. A moment, never state: it is in no snapshot and a late joiner or a reconnect never sees it.
+   */
+  | { type: 'TITLE_ENTRANCE'; title: EntranceTitle; seat: number; playerId: string }
   /**
    * BP-41 §5: a Xúc xắc vận may rolled at the end of the hand, public — the faces, what they gave, and the seat's stack
    * after any loss (absolute, like `CHAOS_CREDIT`). Prize cards are named by tier and count only (A7).

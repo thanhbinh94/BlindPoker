@@ -4,12 +4,19 @@ import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultChibi, useTableExpressions } from '../avatar2d/index.js'
-import { initialChaos, type ClientHand, type ClientState } from '../client/types.js'
+import { initialChaos, type ClientEntrance, type ClientHand, type ClientHerald, type ClientState } from '../client/types.js'
 import type { GameClientApi } from '../client/useGameClient.js'
 import { createI18n } from '../i18n/index.js'
 import primitives from '../primitives/primitives.module.css'
 import PRIMITIVES_CSS from '../primitives/primitives.module.css?raw'
 import { makeHand, makePlayer, makeRoom, makeSeat, makeState } from '../test-fixtures.js'
+import { createSoundEngine, type PlayOptions, type SoundEngine, type SoundOutcome } from '../sound/engine.js'
+import { FakeAudioContext } from '../sound/fake-audio.js'
+import * as stingers from '../sound/stingers.js'
+import type { StingerId } from '../sound/stingers.js'
+import { DICE_ROLL_MS } from '../table/chaos-detail.js'
+import { HERALD_MS } from '../table/ChaosHerald.js'
+import { ENTRANCE_MS, FRESH_MS } from '../table/entrance-schedule.js'
 import s from '../table/table.module.css'
 import { declarationsOf } from '../theme/contrast.js'
 import TABLE_CSS from '../table/table.module.css?raw'
@@ -133,7 +140,7 @@ describe('RoomScreen', () => {
 
     await confirm('5') // below 50 BB
     expect(client.sitDown).toHaveBeenLastCalledWith(1, 10_000)
-  })
+  }, 15_000) // userEvent types and clicks a lot: about 2 s alone, past 5 s under the full run’s load
 
   it('shows the server\'s refusal of a Start as a toast (bug log §10 E6: "Not enough players")', async () => {
     const client = fakeClient(makeState({ room: readyRoom }), {
@@ -1017,7 +1024,8 @@ describe('RoomScreen', () => {
     it('sends one reveal once "Lật" has turned my cards', () => {
       const client = squeezing()
       wrap(client)
-      expect(screen.getByRole('status')).toHaveTextContent('Squeeze your cards — they turn when time is up')
+      // The tray's line, in the footer: every table also keeps the entrance band's live region (BP-42 A6).
+      expect(within(screen.getByRole('contentinfo')).getByRole('status')).toHaveTextContent('Squeeze your cards — they turn when time is up')
       expect(within(screen.getByRole('group', { name: 'Seat 1' })).getByRole('timer')).toHaveTextContent('15')
       fireEvent.click(screen.getByRole('button', { name: 'Turn' }))
       act(() => vi.advanceTimersByTime(1000))
@@ -1541,7 +1549,7 @@ describe('RoomScreen', () => {
       const dock = screen.getByRole('group', { name: 'Điều khiển bàn' })
       expect(within(dock).getByText((_, el) => el?.tagName === 'P' && /5 giây/.test(el.textContent ?? ''))).toBeInTheDocument()
       expect(screen.getByRole('group', { name: 'Hành động' })).toHaveAttribute('data-between', 'true')
-    })
+    }, 15_000) // userEvent: about 2 s alone, past 5 s under the full run’s load
 
     it('a spectator has no footer in the stack layout', () => {
       // Standing in a room someone else hosts: nothing to press under the felt, waiting or watching a hand.
@@ -2155,5 +2163,390 @@ describe('RoomScreen on a Poker hỗn loạn table', () => {
       })
       expect(within(handGroup()!).getByRole('alert')).toHaveTextContent('Chưa dùng được thẻ này lúc này')
     })
+  })
+})
+
+describe('RoomScreen: Thần entrances and sound (BP-42)', () => {
+  /** A recording engine: what was played, with what options, and how often `stop()` was asked; `muted` and the header's button follow `setMuted`. */
+  function fakeEngine(): SoundEngine & { played: [StingerId, PlayOptions | undefined][]; stops: number } {
+    const listeners = new Set<() => void>()
+    const engine = {
+      muted: false,
+      running: true,
+      played: [] as [StingerId, PlayOptions | undefined][],
+      stops: 0,
+      stop() {
+        engine.stops += 1
+      },
+      setMuted(m: boolean) {
+        engine.muted = m
+        for (const l of listeners) l()
+      },
+      subscribe(l: () => void) {
+        listeners.add(l)
+        return () => void listeners.delete(l)
+      },
+      unlock() {},
+      play(id: StingerId, opts?: PlayOptions): SoundOutcome {
+        engine.played.push([id, opts])
+        return 'played'
+      },
+    }
+    return engine
+  }
+
+  /**
+   * The real engine over a fake AudioContext (its clock stands still at 0), unlocked, with a recording schedule: what was
+   * scheduled when, and every outcome it answered.
+   */
+  async function recordingEngine() {
+    const fake = new FakeAudioContext()
+    const scheduled: { id: StingerId; when: number }[] = []
+    const emitted: [StingerId, SoundOutcome][] = []
+    const module: typeof stingers = {
+      ...stingers,
+      scheduleStinger: (_ctx, _out, id, when) => {
+        scheduled.push({ id, when })
+        return stingers.STINGER_SECONDS[id]
+      },
+    }
+    const engine = createSoundEngine({
+      createContext: () => fake.asContext(),
+      storage: null,
+      isHidden: () => false,
+      emit: (id, outcome) => void emitted.push([id, outcome]),
+      loadStingers: () => Promise.resolve(module),
+    })
+    engine.unlock()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    return { engine, scheduled, emitted }
+  }
+
+  const entrance = (patch: Partial<ClientEntrance> = {}): ClientEntrance => ({ id: 1, title: 'god', seat: 0, playerId: 'a', name: 'Ann', at: Date.now(), ...patch })
+  const screenWith = (state: ClientState, sound?: SoundEngine) => (
+    <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+      <RoomScreen client={fakeClient(state)} lang="en" onLeft={vi.fn()} {...(sound === undefined ? {} : { sound })} />
+    </I18nextProvider>
+  )
+  const drawWith = (state: ClientState, sound?: SoundEngine) => render(screenWith(state, sound))
+  const chaosRoom = makeRoom({
+    mode: 'blind',
+    config: {
+      name: 'T',
+      mode: 'blind',
+      maxPlayers: 4,
+      isPrivate: false,
+      turnTimerSec: 20,
+      autoStart: false,
+      hasPassword: false,
+      blind: { holeCards: 3, decisionMode: 'playOrFold', fixedWager: 1_000, botCount: 0, chaosCycle: 5 },
+    },
+    players: [makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'SEATED', stack: 19_800 }), makePlayer({ playerId: 'me', displayName: 'Mai' })],
+  })
+
+  /** A showdown that turns Ann's face-down cards over, seen from my seat: the river first, then the hand complete. */
+  const holdRoom = makeRoom({
+    players: [
+      makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'IN_HAND', stack: 19_800 }),
+      makePlayer({ playerId: 'me', displayName: 'Mai', seat: 2, status: 'IN_HAND', stack: 19_800 }),
+    ],
+  })
+  const river = makeHand({
+    handId: 'h7',
+    mySeat: 2,
+    actingSeat: 0,
+    seats: [
+      makeSeat({ seat: 0, playerId: 'a', displayName: 'Ann', stack: 19_800 }),
+      makeSeat({ seat: 2, playerId: 'me', displayName: 'Mai', stack: 19_800, holeCards: parseCards('Qs Qd') }),
+    ],
+  })
+  const shownDown: ClientHand = {
+    ...river,
+    phase: 'COMPLETE',
+    actingSeat: null,
+    seats: [{ ...river.seats[0]!, holeCards: parseCards('Js Th') }, river.seats[1]!],
+    result: {
+      pots: [],
+      fee: 0,
+      carryOverOut: 0,
+      uncalledReturned: null,
+      cancelled: false,
+      reason: null,
+      payouts: [{ seat: 2, amount: 600 }],
+      showdown: [
+        { seat: 0, cards: parseCards('Js Th'), rank: 1, category: HandCategory.HIGH_CARD, best: parseCards('Ah Kd Js Th 2c') },
+        { seat: 2, cards: parseCards('Qs Qd'), rank: 2, category: HandCategory.PAIR, best: parseCards('Qs Qd Ah Kd 2c') },
+      ],
+    },
+  }
+  const entranceBand = () => screen.queryByRole('button', { name: /has descended/ })
+
+  let reduceMotion = false
+  beforeEach(() => {
+    reduceMotion = false
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: (query: string) => ({
+        matches: reduceMotion && query.includes('prefers-reduced-motion: reduce'),
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    })
+  })
+  afterEach(() => {
+    Reflect.deleteProperty(window, 'matchMedia')
+  })
+
+  it("a Hold'em room shows an entrance band", () => {
+    drawWith(makeState({ room: standingRoom, entrances: [entrance()] }))
+    expect(standingRoom.config.blind).toBeUndefined()
+    const band = screen.getByRole('button', { name: 'The Card God Ann has descended!' })
+    expect(band).toHaveAttribute('data-herald', 'entrance')
+    expect(band.closest(`.${screens.moments}`)).not.toBeNull()
+    // The heralded seat flashes in the title's colour.
+    expect(document.querySelectorAll('[data-entrance]')).toHaveLength(1)
+    expect(document.querySelector('[data-entrance]')).toHaveAttribute('data-entrance', 'god')
+  })
+
+  it("the entrance's stinger is played once when its band shows", () => {
+    const engine = fakeEngine()
+    const state = makeState({ room: standingRoom, entrances: [entrance({ title: 'godslayer' })] })
+    const view = drawWith(state, engine)
+    expect(engine.played).toEqual([['entrance.godslayer', undefined]])
+    view.rerender(
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <RoomScreen client={fakeClient({ ...state })} lang="en" onLeft={vi.fn()} sound={engine} />
+      </I18nextProvider>,
+    )
+    expect(engine.played).toHaveLength(1)
+  })
+
+  it('no sound for an entrance that was already old when the screen mounted', () => {
+    const engine = fakeEngine()
+    drawWith(makeState({ room: standingRoom, entrances: [entrance({ at: Date.now() - FRESH_MS - 500 })] }), engine)
+    // Its band shows what is left of its time, silently.
+    expect(screen.getByRole('button', { name: /has descended/ })).toBeInTheDocument()
+    expect(engine.played).toEqual([])
+  })
+
+  it('on a phone held upright the band stands over the felt while an entrance shows, so the seat’s flash is seen (Ruling 13)', () => {
+    drawWith(makeState({ room: standingRoom, entrances: [entrance()] }))
+    // The rule keys on the room's stack layout and on the entrance's slot (first in the layer) holding the band.
+    const layer = document.querySelector(`.${screens.moments}`)!
+    expect(layer.firstElementChild).toContainElement(screen.getByRole('button', { name: /has descended/ }))
+    expect(declarationsOf(SCREENS_CSS, /^\.room\[data-layout='stack'\] > \.moments:has\(> :first-child:not\(:empty\)\)$/)).toMatchObject({
+      'justify-content': 'center',
+    })
+  })
+
+  it('a second entrance sounds in its turn, once the first band has ended (the id guard keeps one per entrance)', () => {
+    vi.useFakeTimers()
+    try {
+      const engine = fakeEngine()
+      const now = Date.now()
+      const state = makeState({
+        room: standingRoom,
+        entrances: [entrance({ at: now }), entrance({ id: 2, title: 'demigod', seat: 1, playerId: 'me', name: 'Mai', at: now + 100 })],
+      })
+      drawWith(state, engine)
+      expect(engine.played).toEqual([['entrance.god', undefined]])
+      act(() => void vi.advanceTimersByTime(ENTRANCE_MS + 50))
+      expect(screen.getByRole('button', { name: 'The Demigod Mai has appeared!' })).toBeInTheDocument()
+      expect(engine.played).toEqual([
+        ['entrance.god', undefined],
+        ['entrance.demigod', undefined],
+      ])
+      act(() => void vi.advanceTimersByTime(ENTRANCE_MS + 50))
+      expect(engine.played).toHaveLength(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  const MOMENTS: [ClientHerald['kind'], StingerId][] = [
+    ['god', 'moment.ascend'],
+    ['demigod', 'moment.demigod'],
+    ['godslain', 'moment.godslain'],
+    ['dice', 'moment.jackpot'],
+  ]
+  it.each(MOMENTS)('a %s herald plays %s, cutting what sounds (preempt)', (kind, stinger) => {
+    const engine = fakeEngine()
+    // A 6-6-6's band shows from the dice landing: its roll came `DICE_ROLL_MS` ago, so it lands now.
+    const herald: ClientHerald =
+      kind === 'dice'
+        ? { id: 1, kind, seat: 0, name: 'Ann', dice: [6, 6, 6], amount: 50_000, at: Date.now() - DICE_ROLL_MS }
+        : { id: 1, kind, seat: 0, name: 'Ann', at: Date.now() }
+    drawWith(makeState({ room: chaosRoom, chaos: { ...initialChaos, heralds: [herald] } }), engine)
+    expect(engine.played).toEqual([[stinger, { preempt: true }]])
+  })
+
+  it('a Thần and a Bán Thần heralded together both sound: the second moment waits for the first, never cuts it (spec §5.2)', async () => {
+    const r = await recordingEngine()
+    const now = Date.now()
+    const heralds: ClientHerald[] = [
+      { id: 1, kind: 'god', seat: 0, name: 'Ann', at: now },
+      { id: 2, kind: 'demigod', seat: 1, name: 'Mai', at: now },
+    ]
+    drawWith(makeState({ room: chaosRoom, chaos: { ...initialChaos, heralds } }), r.engine)
+    expect(r.emitted).toEqual([
+      ['moment.ascend', 'played'],
+      ['moment.demigod', 'played'],
+    ])
+    expect(r.scheduled[0]!.when).toBeCloseTo(0.02, 9)
+    expect(r.scheduled[1]!.when).toBeCloseTo(0.02 + stingers.STINGER_SECONDS['moment.ascend'], 9)
+  })
+
+  it('an entrance waits out the reveal hold: no band, no stinger and no seat flash until the turned cards have landed, then one of each', () => {
+    vi.useFakeTimers()
+    try {
+      const engine = fakeEngine()
+      const view = drawWith(makeState({ room: holdRoom, hand: river }), engine)
+      // The hand ends by turning Ann's cards over, and Ann's entrance arrives in the same frame.
+      view.rerender(screenWith(makeState({ room: holdRoom, hand: shownDown, entrances: [entrance({ at: Date.now() })] }), engine))
+      expect(entranceBand()).toBeNull()
+      expect(document.querySelector('[data-entrance]')).toBeNull()
+      expect(engine.played).toEqual([])
+      act(() => void vi.advanceTimersByTime(REVEAL_HOLD_MS - 1))
+      expect(entranceBand()).toBeNull()
+      expect(document.querySelector('[data-entrance]')).toBeNull()
+      expect(engine.played).toEqual([])
+      act(() => void vi.advanceTimersByTime(20))
+      expect(entranceBand()).toBeInTheDocument()
+      expect(document.querySelectorAll('[data-entrance]')).toHaveLength(1)
+      expect(engine.played).toEqual([['entrance.god', undefined]])
+      act(() => void vi.advanceTimersByTime(ENTRANCE_MS + 50))
+      expect(engine.played).toHaveLength(1)
+      expect(engine.stops).toBe(0) // it ran its full time
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("on a chaos table the Thần's herald sounds first, alone; the entrance's band and stinger follow once the herald is over", () => {
+    vi.useFakeTimers()
+    try {
+      const engine = fakeEngine()
+      const now = Date.now()
+      const herald: ClientHerald = { id: 1, kind: 'god', seat: 0, name: 'Ann', at: now }
+      drawWith(makeState({ room: chaosRoom, chaos: { ...initialChaos, heralds: [herald] }, entrances: [entrance({ seat: 1, playerId: 'me', name: 'Mai', at: now })] }), engine)
+      expect(engine.played).toEqual([['moment.ascend', { preempt: true }]])
+      expect(entranceBand()).toBeNull()
+      act(() => void vi.advanceTimersByTime(HERALD_MS - 1))
+      expect(entranceBand()).toBeNull()
+      expect(engine.played).toHaveLength(1)
+      act(() => void vi.advanceTimersByTime(50))
+      expect(screen.getByRole('button', { name: 'The Card God Mai has descended!' })).toBeInTheDocument()
+      expect(engine.played).toEqual([
+        ['moment.ascend', { preempt: true }],
+        ['entrance.god', undefined],
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a band put away by a tap stops its stinger; one that runs its time is left to finish', () => {
+    vi.useFakeTimers()
+    try {
+      const tapped = fakeEngine()
+      const first = drawWith(makeState({ room: standingRoom, entrances: [entrance()] }), tapped)
+      expect(tapped.played).toEqual([['entrance.god', undefined]])
+      act(() => void vi.advanceTimersByTime(500))
+      fireEvent.click(entranceBand()!)
+      expect(entranceBand()).toBeNull()
+      expect(tapped.stops).toBe(1)
+      first.unmount()
+
+      const ran = fakeEngine()
+      drawWith(makeState({ room: standingRoom, entrances: [entrance({ id: 2, at: Date.now() })] }), ran)
+      expect(ran.played).toHaveLength(1)
+      act(() => void vi.advanceTimersByTime(ENTRANCE_MS + 50))
+      expect(entranceBand()).toBeNull()
+      expect(ran.stops).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a band cut short by a reveal hold beginning inside it stops its stinger', () => {
+    vi.useFakeTimers()
+    try {
+      const engine = fakeEngine()
+      const entrances = [entrance()]
+      const view = drawWith(makeState({ room: holdRoom, hand: river, entrances }), engine)
+      expect(engine.played).toEqual([['entrance.god', undefined]])
+      act(() => void vi.advanceTimersByTime(800))
+      view.rerender(screenWith(makeState({ room: holdRoom, hand: shownDown, entrances }), engine))
+      expect(entranceBand()).toBeNull()
+      expect(engine.stops).toBe(1)
+      // and it does not come back once the hold is over
+      act(() => void vi.advanceTimersByTime(REVEAL_HOLD_MS + 50))
+      expect(entranceBand()).toBeNull()
+      expect(engine.played).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a herald that cuts a sounding band leaves its own moment playing: the band’s stop never reaches a BP-41 moment', async () => {
+    const r = await recordingEngine()
+    const now = Date.now()
+    const entrances = [entrance({ at: now })]
+    const view = drawWith(makeState({ room: chaosRoom, entrances }), r.engine)
+    expect(r.emitted).toEqual([['entrance.god', 'played']])
+    const herald: ClientHerald = { id: 1, kind: 'god', seat: 0, name: 'Ann', at: Date.now() }
+    view.rerender(screenWith(makeState({ room: chaosRoom, entrances, chaos: { ...initialChaos, heralds: [herald] } }), r.engine))
+    expect(entranceBand()).toBeNull()
+    expect(r.emitted.at(-1)).toEqual(['moment.ascend', 'played'])
+    expect(r.scheduled.at(-1)!.when).toBeCloseTo(0.02, 9) // it cut the entrance and started at once
+    // The moment still holds the channel: the next stinger waits for its end, as it would not after a stop.
+    expect(r.engine.play('moment.jackpot')).toBe('played')
+    expect(r.scheduled.at(-1)!.when).toBeCloseTo(0.02 + stingers.STINGER_SECONDS['moment.ascend'], 9)
+  })
+
+  it('no mute button without an engine', () => {
+    drawWith(makeState({ room: standingRoom }))
+    expect(within(screen.getByRole('banner')).queryByRole('button', { name: /^(Mute|Unmute)$/ })).toBeNull()
+  })
+
+  it('the mute button sits in the header when given one', () => {
+    const engine = fakeEngine()
+    drawWith(makeState({ room: standingRoom }), engine)
+    const header = screen.getByRole('banner')
+    const button = within(header).getByRole('button', { name: 'Mute' })
+    // A bare button, straight in the header's right cell (A14), before the way out.
+    expect(button.parentElement).toHaveClass(s.headRight!)
+    expect(button).toHaveClass(s.headMute!)
+    expect(button.compareDocumentPosition(within(header).getByRole('button', { name: 'Leave' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    fireEvent.click(button)
+    expect(engine.muted).toBe(true)
+    expect(within(header).getByRole('button', { name: 'Unmute' })).toBeInTheDocument()
+  })
+
+  it('no seat flash under reduced motion', () => {
+    reduceMotion = true
+    drawWith(makeState({ room: standingRoom, entrances: [entrance()] }))
+    expect(screen.getByRole('button', { name: /has descended/ })).toBeInTheDocument()
+    expect(document.querySelector('[data-entrance]')).toBeNull()
+  })
+
+  it('a muted engine is asked as usual and answers for itself; nothing is replayed on unmute', () => {
+    const engine = fakeEngine()
+    engine.setMuted(true)
+    const state = makeState({ room: standingRoom, entrances: [entrance()] })
+    const view = drawWith(state, engine)
+    expect(engine.played).toEqual([['entrance.god', undefined]])
+    fireEvent.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Unmute' }))
+    view.rerender(
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <RoomScreen client={fakeClient({ ...state })} lang="en" onLeft={vi.fn()} sound={engine} />
+      </I18nextProvider>,
+    )
+    expect(engine.played).toHaveLength(1)
   })
 })

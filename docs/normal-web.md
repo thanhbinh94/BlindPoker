@@ -39,6 +39,7 @@ apps/normal-web/
     session-gate.ts     useSessionGate — boot probe, 401 handling, the reconnect probe
     session.ts          the last email typed, remembered for the sign-in card only
     prefs.ts            theme and language, per device
+    sound.ts            the app's one sound engine (lazy), and startSound() for main.tsx
     notifications.ts    the kit's notification list, with achievement ids translated
     avatar/
       useAvatars.ts     the shared avatar cache (module scope, 60 s, one request per id)
@@ -477,6 +478,18 @@ mừng" button as the way back. While the gift waits the daily reminder does not
 
 ---
 
+## Sound (BP-42)
+
+`src/sound.ts` holds the app's one `SoundEngine`, created on first use (`soundEngine()`) and not when the module loads, because `App.tsx`
+is imported by tests. `main.tsx` calls `startSound()`: the first tap or key press unlocks the audio and loads the stingers. `App` hands the
+engine to `RoomScreen` (the header's mute button, the entrance and the BP-41 sounds) and to `SettingsScreen`, whose "Âm thanh" panel (Bật /
+Tắt, the same pill as the theme) flips the same engine through `useSoundMuted`, so the two controls cannot disagree.
+
+The seven stingers are a chunk of their own (`stingers-<hash>.js`, about 4 KB gzip), fetched by `import()` on the first unlock to keep the
+entry under its budget. A chunk gone after a deploy takes the stale-chunk path: Vite's preload helper fires `vite:preloadError`, `main.tsx`
+reloads the tab once (`stale-chunk.ts`), and a second miss inside 30 s is retried by the engine up to three times and then answered
+`'unsupported'`, so the game goes on silent.
+
 ## i18n
 
 Two bundles, `vi` (default) and `en`, both under the `normal` namespace, merged into the kit's i18n
@@ -510,8 +523,8 @@ and holds four budgets:
 
 | | Budget | Today |
 |---|---:|---:|
-| entry chunk (first paint) | 180 KB (BP-41 fix wave, Ruling 27; 140 KB since Plan 27, 150 KB BP-31, 160 KB Plan 37, 170 KB BP-39) | ~172 KB |
-| every JS chunk together | 900 KB | ~174 KB |
+| entry chunk (first paint) | 180 KB (BP-41 fix wave, Ruling 27; 140 KB since Plan 27, 150 KB BP-31, 160 KB Plan 37, 170 KB BP-39) | ~175 KB |
+| every JS chunk together | 900 KB | ~221 KB |
 | the stylesheet | 60 KB | ~23 KB |
 | `public/avatar/*@2x.png`, raw bytes (design §8) | 32 MB total (design: 6 MB; raised 2026-09-24 for real art) | ~17 MB (the v4 art) |
 

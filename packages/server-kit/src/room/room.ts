@@ -87,6 +87,8 @@ export class Room {
   private readonly resultSkips = new Set<string>()
   /** The last `RESULT_SKIPS` said in this wait, so a recount that changes nothing says nothing. */
   private resultTally: { skipped: number; total: number } | null = null
+  /** BP-42: when each human was last heralded as a Thần title's holder in this room (ms, the clock): the cooldown's memory. */
+  private readonly entranceAt = new Map<string, number>()
 
   constructor(init: RoomInit) {
     this.roomId = init.roomId
@@ -403,11 +405,40 @@ export class Room {
       p.handsSatOut = 0
       p.consecutiveTimeouts = 0
       this.broadcastRoomEvent({ type: 'PLAYER_SAT', playerId, seat, stack: p.stack })
+      this.announceEntrance(p, seat, sitId)
       this.changed()
       // The balance just moved to the table: the player's own bar must say so now, not at the next stand-up.
       await this.pushBalance(playerId)
       await this.recountResultSkips() // one more voter in a result wait
     })
+  }
+
+  /**
+   * BP-42: a human who has just sat is heralded to the whole room when they wear a Thần title. The edition's answer is
+   * awaited off the room's queue (`void`), so the sit, its ACK and `PLAYER_SAT` never wait on it; the answer then comes
+   * back through the queue and is told only if the same sitting still holds. A player already announced here inside
+   * `entranceCooldownMs` is not even looked up; a `null` answer records nothing, so equipping a title and sitting again is
+   * heralded. A lookup that fails only warns.
+   */
+  private announceEntrance(p: RoomPlayer, seat: number, sitId: string): void {
+    const titles = this.deps.titles
+    if (!titles || p.identity.isBot) return
+    const playerId = p.identity.playerId
+    const last = this.entranceAt.get(playerId)
+    if (last !== undefined && this.deps.clock.now() - last < this.deps.options.entranceCooldownMs) return
+    void Promise.resolve().then(() => titles.equippedTitle(playerId)).then(
+      (title) => {
+        if (title === null) return
+        // Its own catch: a failure on the room's side is not the lookup's, and must not be logged as one.
+        return this.enqueue(() => {
+          const now = this.players.get(playerId)
+          if (this.closing || this.status === 'CLOSED' || now === undefined || now.seat !== seat || now.sitId !== sitId) return
+          this.entranceAt.set(playerId, this.deps.clock.now())
+          this.broadcastRoomEvent({ type: 'TITLE_ENTRANCE', title, seat, playerId })
+        }).catch((err: unknown) => { this.deps.log.warn('title entrance not sent', { roomId: this.roomId, playerId, err: String(err) }) })
+      },
+      (err: unknown) => { this.deps.log.warn('title lookup failed', { roomId: this.roomId, playerId, err: String(err) }) },
+    )
   }
 
   standUp(playerId: string): Promise<void> {

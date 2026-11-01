@@ -600,6 +600,21 @@ describe('App — back into the room the server still holds (T5)', () => {
     expect(await screen.findByRole('button', { name: /Rời phòng/ })).toBeInTheDocument()
   })
 
+  it('the room gets a mute button, in the room header beside "Rời phòng"', async () => {
+    window.history.replaceState(null, '', '/#/lobby')
+    renderApp()
+    await settled()
+    await welcome()
+    await act(async () => {
+      socket().receive({ t: 'ROOM_SNAPSHOT', seq: 5, room: ROOM, hand: null, deadlineAt: null })
+    })
+
+    const leave = await screen.findByRole('button', { name: /Rời phòng/ })
+    const mute = screen.getByRole('button', { name: /^(Tắt|Bật) tiếng$/ })
+    // It sits in the header's right cell, beside "Rời phòng" — not in a dock of its own.
+    expect(mute.parentElement).toBe(leave.parentElement)
+  })
+
   it('stays in the lobby when the server holds no room for the player', async () => {
     window.history.replaceState(null, '', '/#/lobby')
     renderApp()

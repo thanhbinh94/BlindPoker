@@ -1,4 +1,4 @@
-import { Button, LanguageSwitch, Modal, Panel, Segmented, type Language } from '@bp/ui-kit'
+import { Button, LanguageSwitch, Modal, Panel, Segmented, useSoundMuted, type Language, type SoundEngine } from '@bp/ui-kit'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { MeDto, NormalApi, Role } from '../api.js'
@@ -24,6 +24,11 @@ export interface SettingsScreenProps {
    * both refuse anyone else, so this link is a convenience and never the lock.
    */
   role: Role
+  /**
+   * The app's one sound engine (`sound.ts`), passed rather than imported so this lazy chunk does not own a second one: the
+   * choice below and the room's mute button are the same switch, kept in step by `useSoundMuted`.
+   */
+  sound: SoundEngine
 }
 
 /**
@@ -33,9 +38,10 @@ export interface SettingsScreenProps {
  * Only the account section needs the network, so only it has a loading state; the theme and the language are
  * device preferences that are already known before the first render.
  */
-export function SettingsScreen({ api, lang, onLanguage, onSignedOut, version, role }: SettingsScreenProps) {
+export function SettingsScreen({ api, lang, onLanguage, onSignedOut, version, role, sound }: SettingsScreenProps) {
   const { t } = useTranslation('normal')
   const { theme, setTheme } = useThemePref()
+  const muted = useSoundMuted(sound)
   const account = useAsync<MeDto>(() => api.me())
   const [confirming, setConfirming] = useState(false)
   const me = account.data
@@ -58,6 +64,21 @@ export function SettingsScreen({ api, lang, onLanguage, onSignedOut, version, ro
             value={theme}
             onChange={setTheme}
             label={t('settings.theme.title')}
+          />
+        </div>
+      </Panel>
+
+      <Panel title={t('settings.sound.title')}>
+        {/* The same pill as the theme: one choice, one control. The room's header button flips the same engine. */}
+        <div className={s.choices}>
+          <Segmented
+            options={[
+              { value: 'on', label: t('settings.sound.on') },
+              { value: 'off', label: t('settings.sound.off') },
+            ]}
+            value={muted ? 'off' : 'on'}
+            onChange={(choice) => sound.setMuted(choice === 'off')}
+            label={t('settings.sound.title')}
           />
         </div>
       </Panel>

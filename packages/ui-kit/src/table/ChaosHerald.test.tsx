@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClientHerald } from '../client/types.js'
 import { createI18n, type Language } from '../i18n/index.js'
 import { DICE_MS, DICE_ROLL_MS } from './ChaosDice.js'
-import { ChaosHerald, HERALD_MS } from './ChaosHerald.js'
+import { ChaosHerald, HERALD_MS, type HeraldHold } from './ChaosHerald.js'
+import { FRESH_MS } from './entrance-schedule.js'
 import CSS from './table.module.css?raw'
 import s from './table.module.css'
 
@@ -136,6 +137,71 @@ describe('ChaosHerald (BP-41 §4.5)', () => {
       </I18nextProvider>,
     )
     expect(screen.getByText(/trở thành Thần Bài!/)).toBeInTheDocument()
+  })
+
+  describe('onShow (BP-42: the stinger’s cue)', () => {
+    const at = (heralds: ClientHerald[], onShow: (h: ClientHerald) => void, extra: { hold?: HeraldHold | null } = {}) => (
+      <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+        <ChaosHerald heralds={heralds} lang="vi" onShow={onShow} {...extra} />
+      </I18nextProvider>
+    )
+
+    it('is called once for a fresh herald, however often the band renders', () => {
+      const onShow = vi.fn()
+      const fresh = herald()
+      const { rerender } = render(at([fresh], onShow))
+      act(() => void vi.advanceTimersByTime(500))
+      rerender(at([fresh], onShow))
+      rerender(at([fresh, herald({ id: 2, kind: 'demigod', at: T0 - HERALD_MS - 10 })], onShow))
+      expect(onShow).toHaveBeenCalledTimes(1)
+      expect(onShow).toHaveBeenCalledWith(fresh)
+    })
+
+    it('is never called for a herald older than FRESH_MS when it first shows (a snapshot, a remount)', () => {
+      const onShow = vi.fn()
+      render(at([herald({ at: T0 - FRESH_MS - 1 })], onShow))
+      expect(band()).not.toBeNull()
+      act(() => void vi.advanceTimersByTime(500))
+      expect(onShow).not.toHaveBeenCalled()
+    })
+
+    it('a 6-6-6 herald is announced when the dice land, the start of its window', () => {
+      const onShow = vi.fn()
+      render(at([herald({ kind: 'dice', dice: [6, 6, 6], amount: 60_000 })], onShow))
+      expect(onShow).not.toHaveBeenCalled()
+      act(() => void vi.advanceTimersByTime(DICE_ROLL_MS + 20))
+      expect(onShow).toHaveBeenCalledTimes(1)
+    })
+
+    it('a fall that waited out the hold is fresh when the hold ends, from the room’s hold (A7)', () => {
+      const onShow = vi.fn()
+      const slain = herald({ kind: 'godslain', name: 'Châu', at: T0 + 100 })
+      act(() => void vi.advanceTimersByTime(100))
+      const { rerender } = render(at([slain], onShow, { hold: { since: T0, until: null } }))
+      expect(band()).toBeNull()
+      act(() => void vi.advanceTimersByTime(2_000))
+      rerender(at([slain], onShow, { hold: { since: T0, until: Date.now() } }))
+      expect(screen.getByText('Châu đã đánh bại Thần Bài!')).toBeInTheDocument()
+      expect(onShow).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('the room’s hold replaces its own: a fall waits for it though `held` is never passed (A7)', () => {
+    const slain = herald({ kind: 'godslain', name: 'Châu' })
+    const view = (hold: HeraldHold | null) => (
+      <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+        <ChaosHerald heralds={[slain]} lang="vi" hold={hold} />
+      </I18nextProvider>
+    )
+    const { rerender } = render(view({ since: T0 - 10, until: null }))
+    expect(band()).toBeNull()
+    act(() => void vi.advanceTimersByTime(500))
+    rerender(view({ since: T0 - 10, until: Date.now() }))
+    expect(band()).not.toBeNull()
+    act(() => void vi.advanceTimersByTime(HERALD_MS - 100))
+    expect(band()).not.toBeNull()
+    act(() => void vi.advanceTimersByTime(200))
+    expect(band()).toBeNull()
   })
 
   it('glows and shakes, and under reduced motion only shows its words (no motion class; the CSS stops it too)', () => {

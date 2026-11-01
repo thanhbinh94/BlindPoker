@@ -1,4 +1,4 @@
-import type { Card as CardId, ChaosCritMultiplier, RoomPlayerView, RoomView, ShowdownHand } from '@bp/core'
+import type { Card as CardId, ChaosCritMultiplier, EntranceTitle, RoomPlayerView, RoomView, ShowdownHand } from '@bp/core'
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { botChibi, type ChibiSubject, type Expression } from '../avatar2d/index.js'
@@ -81,6 +81,11 @@ export interface PokerTableProps {
    * face up in the ghost slots, and a viewer whose cards are down under a blindfold is told. Absent, the table is as it was.
    */
   chaos?: ClientChaos | null
+  /**
+   * BP-42: the seat whose Thần title's entrance band is on screen, and the title — that seat's plate flashes in its colour
+   * (`data-entrance`). `RoomScreen` passes `null` under reduced motion. Absent or `null`: no flash.
+   */
+  flash?: { seat: number; title: EntranceTitle } | null
 }
 
 /* The ring needs roughly 310 px of stage to seat everyone around it; a short window gets the vertical layout for the
@@ -169,6 +174,7 @@ export function PokerTable({
   note,
   feltCorner = null,
   chaos = null,
+  flash = null,
 }: PokerTableProps) {
   const { t } = useTranslation()
   const narrow = useMediaQuery(STACKED)
@@ -335,6 +341,7 @@ export function PokerTable({
         bomb={bombOf(index)}
         wildCard={wildOf(index)}
         hawkCards={hawk !== null && hawk.target === index && hand !== null && hand.phase !== 'COMPLETE' ? hawk.cards : null}
+        entrance={flash !== null && flash.seat === index ? flash.title : null}
       />
     )
   }

@@ -172,5 +172,8 @@ describe('App', () => {
     })
 
     await waitFor(() => expect(window.location.hash).toBe('#/room'))
+    // BP-42: Lite passes the room no sound engine, so its header has no mute button.
+    expect(await screen.findByRole('button', { name: /Rời phòng/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^(Tắt|Bật) tiếng$/ })).toBeNull()
   })
 })

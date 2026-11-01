@@ -372,6 +372,19 @@ are held by the core, server-kit, normal-server and ui-kit unit tests named in t
 | Spec §4.2, §4.5, G7, G11 in a browser: at a "Chơi hoặc bỏ" table a seat holding Cá chép at full energy becomes the Thần before the first hand; the herald crosses the screen with "Cảnh báo: {tên} đã tích luỹ đủ năng lượng và trở thành Thần Bài!", inside the screen, scrolling nothing and lying over no text; one seat — the one the herald named — wears the crown "Thần Bài · còn N ván"; while it reigns the decision has no "Bỏ bài", the tray says "Không được bỏ bài ván này" and "Chơi" beside it plays the hand; the room fits, no text over text — at 1440 × 900, 360 × 780 and 780 × 360 | `apps/normal-web/e2e/ops/10-chaos.spec.ts` | F-14a: a Thần Bài forced on a "Chơi hoặc bỏ" table · F-14b: @s25p @s25l a Thần Bài on the Galaxy S25 | added in BP-41 — runs outside `pnpm test` |
 | Spec §5, G9 in a browser: a seat holding Xúc xắc vận may kim cương rolls at the end of its first hand; the panel "Xúc xắc vận may" names it, its three dice tumble ("Đang gieo…") and land on faces said in words with the result; the panel stays inside the screen and scrolls nothing, no text over text; the roll is told among the cards' toasts ("… dùng Xúc xắc vận may kim cương · Xúc xắc: a-b-c · …"), its own toast or in "+N thẻ khác"'s list, and no toast meets the result, the board or the tray (a phone's strip neither) — at 1440 × 900, 360 × 780 and 780 × 360 | `apps/normal-web/e2e/ops/10-chaos.spec.ts` | F-14c: the dice of fortune — a diamond dice drafted · F-14d: @s25p @s25l the dice of fortune on the Galaxy S25 | added in BP-41 — runs outside `pnpm test` |
 
+## BP-42 — the Thần titles' entrance and the table's sound, in a browser (spec 2026-10-31)
+
+F-15 runs in the ops pack's `desktop` project (1440 × 900), F-15b in the Galaxy S25 upright `s25p` (360 × 780, touch). A GM gives the
+title through the console's own route (`POST /api/gm/players/:id/items`) and the player puts it on (`PUT /api/me/avatar`). Every page
+records the engine's `bp:sound` events from an init script; the third account's page forces `document.hidden` true. The rules underneath
+(the server's ten-minute cooldown, the title lookup off the room's queue, the band's schedule, the engine's mute, hidden and busy rules,
+the stingers' lengths) are held by the server-kit, normal-server and ui-kit unit tests named in the plan's tasks and by
+`apps/normal-web/e2e/sound.spec.ts`. All run outside `pnpm test`.
+
+| Rule | Test file | Test name | Status |
+|---|---|---|---|
+| Spec §4–§5 in a browser: a player wearing Thần Bài who sits down is heralded to the whole room — the host who did not sit, the player herself and a hidden tab — by one band "Thần Bài {tên} đã giáng lâm!" (`data-title="god"`), her seat flashing on the host's table; the band lies inside the screen, nothing scrolls, no text over text, and it is gone within 4 s; each page asks for `entrance.god` once, the two visible tabs not "muted" or "hidden", the hidden tab "hidden"; a stand-up and a second sit inside ten minutes bring no band and no second stinger; "Tắt tiếng" turns to "Bật tiếng" and stays so after F5 — at 1440 × 900 and 360 × 780 | `apps/normal-web/e2e/ops/11-entrance.spec.ts` | F-15: a player wearing Thần Bài sits down and the whole room sees "đã giáng lâm!" once, with its stinger, and the mute button holds after F5 · F-15b: a player wearing Thần Bài sits down | added in BP-42 — runs outside `pnpm test` |
+
 ## Ruling recorded: the `reqId` cache is per connection
 
 Plan 7's first review round raised the `reqId` ring buffer as an open question, with a

@@ -123,6 +123,21 @@
   pointer-events: none;
 }
 
+/* BP-42: the entrance band's slot comes first, and empty it takes no gap either, so the herald and the dice stand where they
+   always stood. The band never shows with them (`useEntrances`), so it takes their place when it does. */
+.moments > :first-child:empty {
+  margin-bottom: calc(-1 * var(--space-2));
+}
+
+/* Ruling 13: on a phone held upright the herald's slot lies over the first row of opponents, so the heralded seat's flash would
+   sit under the band. While an entrance shows (its slot, first, is not empty) the column stands a little below the middle of
+   the screen instead — over the felt, under the opponents' rows. The BP-41 herald and dice never show with it and keep their
+   place. */
+.room[data-layout='stack'] > .moments:has(> :first-child:not(:empty)) {
+  justify-content: center;
+  padding-top: 12vh;
+}
+
 .roomMain {
   position: relative;
   flex: 1;
