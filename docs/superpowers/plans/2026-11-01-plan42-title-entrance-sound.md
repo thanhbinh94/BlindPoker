@@ -62,6 +62,57 @@ Constants (exact):
 - **Ruling 4: a sit with no Thần title sets no cooldown,** so equipping the title and sitting again is heralded.
 - **Ruling 5: Cài đặt gets an "Âm thanh" choice** (spec §5.3 left it to the builder); it and the room's button are one engine.
 
+## Amendments (pre-flight 2026-11-01)
+
+An independent review against the code found these; each overrides the task text it names.
+
+- **A1 (T9, blocker):** F-14a–d already exist (BP-41). The new cases are **F-15** and **F-15b**; run with `-g "F-15"`.
+- **A2 (T6, blocker):** `.chaosToastBand[data-layout='landscape']` (`table.module.css` ~3801) keeps `right: 11rem` for the menu
+  and "Rời phòng"; a third header button needs `right: 14rem`. Check it in the 780×360 screenshot.
+- **A3 (T9):** the BP-42 matrix row starts a new section: add a `+ 1` term to the pinned matrix count in
+  `tooling/arch/acceptance-links.test.ts` (and its comment), and update CLAUDE.md §3: the matrix expression, e2e Normal 24→25
+  (T8), ops 72→74.
+- **A4 (T1):** `createRoomHarness` (`packages/server-kit/src/testing/room-harness.ts`) gains `titles?: TitlePort` into `deps`.
+  The lookup promise carries a `.catch` (no unhandled rejection). Bots never go through `sitDown`.
+- **A5 (T5):** the seat root is `packages/ui-kit/src/table/Seat.tsx` (~440): `Seat` gets `entrance?: EntranceTitle`, `PokerTable`
+  passes `flash` down. The flash must not fight the existing `seatGod`/`seatDemigod` glow on the same element (a separate
+  pseudo-element or outline layer).
+- **A6 (T6):** `RoomScreen.test.tsx` ~1020 queries `getByRole('status')` on a non-chaos room; a band slot with `role="status"` on
+  every table breaks it — scope that query.
+- **A7 (T5/T6):** the hold is tracked **once**: `RoomScreen` calls `useHeldWindow(held)` and passes the `HeraldHold` to both
+  `ChaosHerald` (new prop `hold?: HeraldHold`, replacing its own tracking; keep `held` working for its tests or migrate them)
+  and `useEntrances` (takes `hold` instead of `held`).
+- **A8 (T5):** `scheduleEntrances` gains `ended: ReadonlyMap<number, number>` (id → time dismissed): a dismissed one ends then,
+  frees the band and leaves the queue count. Test: dismissed at 1000 → the next starts at 1000.
+- **A9 (T4/T6):** `play(id, opts?: { preempt?: boolean })`: `preempt` stops what is sounding and resets `busyUntil`; the
+  BP-41 moments play with `preempt: true` (Ruling 3 for the ear). Engine test for it.
+- **A10 (T2/T9):** there is no `GET /api/me/avatar`; read `avatar` from `GET /api/me/inventory` (or `/api/me`) and `PUT
+  /api/me/avatar` the full config with `title: 'title_god'` (leaving `title` out unequips it). T2 grants with
+  `h.app.services.gm.grantItem({ userId: null }, playerId, 'title_godslayer', 'test')` and uses the socket harness at
+  `app.test.ts` ~871. T9 grants with `POST /api/gm/players/:id/items { itemId, reason }` (no 300,000 points), not the
+  achievement unlock.
+- **A11 (T9):** Bob creates the room and **does not sit** (a dealt hand's reveal hold would delay the band). The hidden-tab
+  check is a third account Carol (`newPlayer`) whose page forces `document.hidden = true` by init script, joined before
+  Alice's first sit: she logs `'hidden'` for the same `entrance.god`.
+- **A12 (T7):** the one engine lives in `apps/normal-web/src/sound.ts` (lazy creation; `attachGestureUnlock` called from
+  `main.tsx`, not on `App.tsx` import, which tests load). `RoomScreen` and the lazy `SettingsScreen` get it as a `sound` prop.
+- **A13 (T4/T7), Ruling 6:** the Normal entry chunk is 171.5 KB of the 180 KB gzip budget
+  (`apps/normal-web/test/footprint.test.ts`). The engine loads `stingers.ts` by dynamic `import()` on its first `unlock()`;
+  until it has loaded, `play` answers `'blocked'`. Costs if wrong: the first moment after the first tap may be silent.
+- **A14 (T6):** at ≤400 px wide the mute button is 32 px wide with a 44 px touch area by the `::after` pad trick
+  (`table.module.css` ~2895); `MuteButton` renders a bare `<button>` as a direct child of `.headRight` so the sideways 30 px
+  rule (~2888) applies. Squeeze tables upright: check the room name still shows (screenshot).
+- **A15 (T3):** `applyRoomEvent` has no default: add `case 'TITLE_ENTRANCE': return room`. Add/clear `entrances` at the
+  `ROOM_EVENT` return and the four clears (`NOT_IN_ROOM`, `ROOM_CLOSED`, `PLAYER_LEFT` mine, `leftRoom`) and `reset`.
+- **A16 (T8):** `vite` 5.4 resolves from `apps/normal-web`; pass the absolute path to `transformWithEsbuild` with
+  `{ format: 'iife', globalName }`. A `dist` must exist for the config's web server. Start the limiter at threshold ≈ −3 dB,
+  ratio 20, knee 0 (the compressor adds makeup gain).
+- **A17 (T5):** each title's band background has alpha ≥ 0.9 (the overlap check looks through thinner ones); no `data-kind` on
+  the entrance's lines (BP-41's watcher reads `button[data-herald] [data-kind]`).
+- **A18, Rulings 7–8:** Ruling 7 — the host's own first sit is announced like anyone's (usually to an empty room). Ruling 8 —
+  `attachGestureUnlock` keeps resuming on every gesture while the context is not `running` (phones suspend it), not once.
+  Add the Chromium-only sound residual to `docs/known-limitations.md` (T9's docs).
+
 ## Review Focus
 
 1. **Muted or hidden at the moment a band shows:** no sound, and unmuting or returning to the tab later never plays the
