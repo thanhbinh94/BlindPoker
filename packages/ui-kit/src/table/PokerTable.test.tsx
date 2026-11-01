@@ -886,3 +886,18 @@ describe('PokerTable', () => {
     }
   })
 })
+
+describe('the entrance flash (BP-42)', () => {
+  const props = { room: fullRoom, hand: null, myPlayerId: 'p0', deadlineAt: null, serverNow: () => 0, turnTimerMs: 30000, lang: 'en' as const, layout: 'ring' as const, canSit: false }
+
+  it('puts data-entrance with the title on the heralded seat alone', () => {
+    wrap(<PokerTable {...props} flash={{ seat: 4, title: 'godslayer' }} />)
+    expect(document.querySelector('[data-seat="4"]')).toHaveAttribute('data-entrance', 'godslayer')
+    expect(document.querySelectorAll('[data-entrance]')).toHaveLength(1)
+  })
+
+  it('flashes no seat without one', () => {
+    wrap(<PokerTable {...props} />)
+    expect(document.querySelectorAll('[data-entrance]')).toHaveLength(0)
+  })
+})

@@ -783,5 +783,11 @@
   "sound": {
     "mute": "Tắt tiếng",
     "unmute": "Bật tiếng"
+  },
+  "entrance": {
+    "label": "Màn ra mắt",
+    "god": "Thần Bài {{name}} đã giáng lâm!",
+    "demigod": "Bán Thần {{name}} đã xuất hiện!",
+    "godslayer": "Kẻ Sát Thần {{name}} đã vào bàn — Thần Bài hãy cẩn thận!"
   }
 }

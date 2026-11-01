@@ -4664,11 +4664,89 @@
   80% { transform: translateX(2px); }
 }
 
+/* The glow's peak is the band's to set (`--herald-glow-peak`): the entrance bands pulse in their own title's colours. */
 @keyframes heraldGlow {
   50% {
-    box-shadow:
+    box-shadow: var(
+      --herald-glow-peak,
       0 0 36px 8px rgba(255, 210, 110, 0.6),
-      0 0 80px 18px rgba(220, 60, 60, 0.5);
+      0 0 80px 18px rgba(220, 60, 60, 0.5)
+    );
+  }
+}
+
+/* BP-42's entrance band (spec 2026-11-01 §4): the herald's slot, shape and motion, in the Thần title's colours. The Thần Bài's is
+   the herald's own gold on red; the Bán Thần's white, silver and pale gold; the Kẻ Sát Thần's black and crimson. */
+.entrance[data-title='demigod'] {
+  border-block-color: var(--entrance-demigod-edge);
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 236, 180, 0.35) 50%, transparent),
+    linear-gradient(180deg, var(--entrance-demigod-band-top), var(--entrance-demigod-band-foot));
+  background-color: var(--entrance-demigod-band);
+  box-shadow:
+    0 0 24px 4px rgba(255, 255, 255, 0.4),
+    0 0 60px 12px rgba(241, 213, 140, 0.35);
+  color: var(--entrance-demigod-ink);
+  text-shadow:
+    0 0 6px rgba(255, 255, 255, 0.95),
+    0 0 14px rgba(241, 213, 140, 0.8);
+  --herald-glow-peak: 0 0 36px 8px rgba(255, 255, 255, 0.55), 0 0 80px 18px rgba(241, 213, 140, 0.5);
+}
+
+.entrance[data-title='godslayer'] {
+  border-block-color: var(--entrance-slayer-edge);
+  background:
+    linear-gradient(90deg, transparent, rgba(209, 32, 47, 0.28) 50%, transparent),
+    linear-gradient(180deg, var(--entrance-slayer-band-top), var(--entrance-slayer-band-foot));
+  background-color: var(--entrance-slayer-band);
+  box-shadow:
+    0 0 24px 4px rgba(209, 32, 47, 0.5),
+    0 0 60px 12px rgba(0, 0, 0, 0.55);
+  color: var(--entrance-slayer-ink);
+  text-shadow:
+    0 0 8px rgba(209, 32, 47, 0.9),
+    0 0 18px rgba(120, 0, 10, 0.8);
+  --herald-glow-peak: 0 0 36px 8px rgba(230, 40, 55, 0.65), 0 0 80px 18px rgba(0, 0, 0, 0.6);
+}
+
+/* The heralded seat's flash: a ring of its own (`::before`), drawn by shadows from the plate's own box so it adds no scrollable
+   overflow, outside the reign's aura (`::after`, 3 px out), which it never replaces. It pulses while the band shows; with motion
+   off it simply stands (the global rule stops the pulse, and the list below names it too). */
+.seat[data-entrance='god'] {
+  --entrance-flash-edge: var(--chaos-god-edge);
+  --entrance-flash-glow: rgba(220, 60, 60, 0.6);
+}
+
+.seat[data-entrance='demigod'] {
+  --entrance-flash-edge: #fff6dc;
+  --entrance-flash-glow: rgba(241, 213, 140, 0.65);
+}
+
+.seat[data-entrance='godslayer'] {
+  --entrance-flash-edge: var(--entrance-slayer-edge);
+  --entrance-flash-glow: rgba(130, 0, 14, 0.75);
+}
+
+.seat[data-entrance] .plate::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    0 0 0 5px var(--entrance-flash-edge),
+    0 0 18px 8px var(--entrance-flash-glow);
+  animation: entranceFlash 1s ease-in-out infinite;
+}
+
+@keyframes entranceFlash {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+
+  50% {
+    opacity: 1;
   }
 }
 
@@ -4798,7 +4876,8 @@
   .seatWin .plate,
   .heraldMotion,
   .dieTumble,
-  .seatGod .plate::after {
+  .seatGod .plate::after,
+  .seat[data-entrance] .plate::before {
     animation: none;
   }
 

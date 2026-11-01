@@ -1,4 +1,4 @@
-import type { Card as CardId, ChaosCritMultiplier, ChaosGodCurse, HeldCardView, RoomPlayerView } from '@bp/core'
+import type { Card as CardId, ChaosCritMultiplier, ChaosGodCurse, EntranceTitle, HeldCardView, RoomPlayerView } from '@bp/core'
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Chibi, type ChibiSubject, type Expression } from '../avatar2d/index.js'
@@ -204,6 +204,11 @@ export interface SeatProps {
   wildCard?: CardId | null
   /** BP-41 Mắt diều hâu: this seat's cards the viewer saw, face up for the viewer alone while the others stay down. */
   hawkCards?: readonly CardId[] | null
+  /**
+   * BP-42: this seat's player is being heralded — their Thần title's entrance band is on screen — and the plate flashes in the
+   * title's colour (`data-entrance` on the seat), a ring of its own outside the reign's aura. Absent or `null`: nothing.
+   */
+  entrance?: EntranceTitle | null
 }
 
 /** The reign's mark: the Thần's crown, the Bán Thần's star; the bomb's spark. */
@@ -267,6 +272,7 @@ export function Seat({
   bomb = null,
   wildCard = null,
   hawkCards = null,
+  entrance = null,
 }: SeatProps) {
   const { t } = useTranslation()
   const name = seat.displayName === '' ? (player?.displayName ?? '') : seat.displayName
@@ -448,6 +454,7 @@ export function Seat({
         reign?.kind === 'demigod' && s.seatDemigod,
       )}
       data-reign={reign?.kind}
+      data-entrance={entrance ?? undefined}
       style={style}
       data-seat={seat.seat}
       data-half={position !== null && position.y < 50 ? 'top' : 'bottom'}

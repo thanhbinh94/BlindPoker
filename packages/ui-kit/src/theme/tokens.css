@@ -206,6 +206,19 @@
   --chaos-die-face-foot: #ddd2b6;
   --chaos-die-pip: #1b1f2e;
   --chaos-die-pip-hot: #b3202a;
+  /* BP-42's entrance bands, per Thần title, on the same night surfaces (one value for both themes). The Thần Bài's is the herald's
+     gold on red above; the Bán Thần's white, silver and pale gold with deep ink; the Kẻ Sát Thần's black and crimson. Every band
+     is at least 0.9 opaque: the text-overlap check looks through anything thinner. */
+  --entrance-demigod-edge: #f1d58c;
+  --entrance-demigod-ink: #1a2140;
+  --entrance-demigod-band: rgba(222, 226, 236, 0.96);
+  --entrance-demigod-band-top: rgba(248, 249, 252, 0.96);
+  --entrance-demigod-band-foot: rgba(190, 197, 213, 0.96);
+  --entrance-slayer-edge: #d1202f;
+  --entrance-slayer-ink: #ffdcdc;
+  --entrance-slayer-band: rgba(16, 5, 8, 0.96);
+  --entrance-slayer-band-top: rgba(40, 8, 13, 0.96);
+  --entrance-slayer-band-foot: rgba(6, 2, 3, 0.96);
 
   --z-modal: 100;
   /* Above every dialog (BP-29, bug log §10 E5): a refusal that answers a dialog's own button — "Số dư không đủ" for a
