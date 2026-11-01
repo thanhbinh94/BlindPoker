@@ -146,7 +146,7 @@ export type RoomEvent =
   | { type: 'CHAOS_HERALD'; kind: 'god' | 'demigod' | 'godslain'; seat: number; playerId: string }
   /**
    * BP-42: a player wearing a Thần title (the one they have equipped) sat down, told to everyone in the room (the sitter
-   * included). The server decides — it asks the edition for the title and keeps a ten-minute cooldown per player and room
+   * included). The server decides — it looks the title up through its title port and keeps a ten-minute cooldown per player and room
    * — so a client only shows it. A moment, never state: it is in no snapshot and a late joiner or a reconnect never sees it.
    */
   | { type: 'TITLE_ENTRANCE'; title: EntranceTitle; seat: number; playerId: string }
