@@ -79,6 +79,7 @@ import { createInventoryService, type InventoryService } from './inventory/inven
 import { loadItemCatalog, type ItemCatalog } from './inventory/items.js'
 import { loadAvatarManifest, type AvatarManifest } from './inventory/manifest.js'
 import { createOutfitsService, type OutfitsService } from './inventory/outfits-service.js'
+import { createTitlePort } from './inventory/title-port.js'
 import { WS_PATH } from './http/routes-catalog.js'
 import { registerRoutes } from './http/routes.js'
 import { createRepositories, pruneLedgerKeys, type NormalRepositories } from './repos/index.js'
@@ -333,6 +334,8 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     },
     log,
     chaos: createChaosPort(chaos),
+    // BP-42: a Thần title holder who sits down is heralded; the room asks this off its queue.
+    titles: createTitlePort(repos.players),
     roomOptions: { reconnectWindowMs: config.reconnectWindowSec * 1000, ...deps.roomOptions },
     gatewayOptions: { allowedOrigins: config.allowedOrigins, ...deps.gatewayOptions },
     // The one place every domain event passes through, and therefore the one place a hand that was
