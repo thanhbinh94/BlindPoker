@@ -1595,6 +1595,31 @@ See the CHANGELOG's "Still open" and `docs/known-limitations.md` → round three
 Thần outfits are a later phase; real-phone checks (glow, shake, dice, glyphs on Safari and Firefox); F-13c's unreproduced 5 px scroll;
 a dice sink that fails twice; the LAN host lacks migrations 0004–0008; the new English copy for the user's review.
 
+## Plan 42 — the Thần titles' entrance and the game's first sound (merged `MERGE`, 2026-11-02)
+
+Rulings 1–16 are listed in the CHANGELOG section. The lessons behind them:
+
+- **A builder who cannot hear still needs objective audio checks and an ear.** The stingers are pinned by a recording fake
+  (ramps only, voices end before the silent tail, A440 grid, seeded noise, no DC) and by one Chromium `OfflineAudioContext`
+  render (length ±10 %, peak < 1, a silent last 150 ms, envelopes all different). Neither says whether it sounds good: render WAVs
+  from the committed code (`BP_SOUND_WAV_DIR`) and send them early, and hold the deploy for the user's ear.
+- **Web Audio's compressor adds makeup gain on its own.** A "limiter" at a gentle threshold clips; start at −3 dB, ratio 20,
+  knee 0, and measure the peak in a real render.
+- **The sound layer must never break the game.** A browser that lacks one node (old WebKit, no `createStereoPanner`) throws from
+  inside `play`; caught, it answers `unsupported`. Every audio call that runs from a React effect sits behind one try/catch.
+- **Preempt is a rule about kinds, not a flag.** "A moment cuts an entrance" written as `play(id, { preempt })` also let a moment
+  cut another moment — two heralds at one deal sounded only the second. The engine has to know what is sounding.
+- **One clock for the hold.** Two components each noting the reveal hold's start in their own render disagree by milliseconds;
+  one `useHeldWindow` passed down keeps the band and the herald on the same window.
+- **A unit test of a hook does not pin its wiring.** The scheduler was well tested, yet RoomScreen could have passed `hold: null`
+  with every test green; the anti-spoiler rule needs a test at the screen that owns the wiring.
+- **An e2e check that accepts "blocked" proves nothing about the shipped bundle.** The ops case is the only run of the real
+  lazy chunk and gesture unlock: require `played`.
+- **Adding a button to a phone header costs someone's width.** The mute button alone took a squeeze table's room name to 0 px at
+  360; measure the name before and after, and scope the shrink to headers that hold the new button.
+- **A dev-only flag in a test hook still needs its boundary checked**, here by grep that nothing in `src/` imports the
+  playground and that `stingers.ts` stays off the static graph (the entry is 174.7 of 180 KB).
+
 ## 5. Open items
 
 The single list is `docs/known-limitations.md`. As of this writing, the items a next session is most likely to meet:

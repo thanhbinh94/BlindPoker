@@ -9,6 +9,75 @@ below are the real history.
 
 ---
 
+## Plan 42 — the Thần titles' entrance and the game's first sound: a band and an EDM stinger for a title holder who sits down, stingers for the BP-41 moments, a mute button — merged `MERGE` (2026-11-02)
+
+Brainstormed with the user on 2026-10-31 ("khi vào bàn tôi muốn có những hiệu ứng hoặc thông báo… cho toàn bộ người chơi phải
+chú ý", "giống liên minh huyền thoại khi có pentakill", "có âm thanh, kèm nút tắt tiếng… generate 1 vài bài nhạc (không lời)
+dạng edm", "cả 2… note phần này cho phase sau"); the session wrote the spec alone, the user approved it on 2026-11-01 ("ok, lập
+plan và làm phần A luôn"). Spec `2026-10-31-title-entrance-design.md` (decisions H1–H5), Part A only; plan
+`2026-11-01-plan42-title-entrance-sound.md` with its pre-flight amendments A1–A18. Branch `feature/BP-42-title-entrance`.
+Normal edition only. **Not deployed:** spec §7.1 waits for the user to listen to the stingers and approve the copy.
+
+- **What a player gets.**
+  - **An entrance.** A player wearing a Thần title (Hóa Thần, Bán Thần or Kẻ Sát Thần, in the title slot) who sits down at any
+    Normal table — Blind or Hold'em, chaos or not — is heralded to everyone in the room: a band across the screen for 3 s in the
+    title's colours ("Thần Bài {tên} đã giáng lâm!", "Bán Thần {tên} đã xuất hiện!", "Kẻ Sát Thần {tên} đã vào bàn — Thần Bài hãy
+    cẩn thận!"), the seat flashing, and a stinger of its own. Once per player per room in 10 minutes; a reconnect, a seat change
+    inside that time or a plain sit never heralds. Bands come one at a time (three at most, dropped after 10 s waiting), never over
+    the BP-41 herald, the dice or the result's reveal hold; a tap puts one away. On a phone held upright the band stands over the
+    felt so the flashing seat is seen.
+  - **The game's first sound.** Seven instrumental EDM stingers composed in code and synthesised in the browser (Web Audio, no
+    files, no dependency): `entrance.god` (D major, majestic, 3.5 s), `entrance.demigod` (A major, bright arpeggio, 3 s),
+    `entrance.godslayer` (E minor, reese bass and a final slash, 4 s), and for the BP-41 moments `moment.ascend`,
+    `moment.demigod`, `moment.godslain` and `moment.jackpot` (6-6-6). One channel: a later stinger waits for the one sounding; a
+    BP-41 moment cuts an entrance. Silent in a hidden tab, nothing replayed later.
+  - **A mute button** (🔊/🔇, "Tắt tiếng" / "Bật tiếng") in the room header at every size, and **Âm thanh** (Bật / Tắt) in Cài
+    đặt — one switch, remembered on the device. Sound is on by default.
+- **Under it.** Core: `EntranceTitle` and `ROOM_EVENT TITLE_ENTRANCE` (never in a snapshot). server-kit: `TitlePort`,
+  `RoomOptions.entranceCooldownMs` (600 000); the room asks the port off its queue after a human's sit and sends the event only if
+  the same sitting is still there. Normal server: `createTitlePort` over `players.equipped_title` (no migration). ui-kit: the
+  client's `entrances` (outside `chaos`, kept through a snapshot of the same room), the pure `scheduleEntrances`, `useHeldWindow`
+  shared by the BP-41 herald and the band, `useEntrances`, `EntranceBand`, `Seat`'s entrance flash, the `sound/` module
+  (`stingers.ts` lazy-loaded as its own 4.3 KB chunk on the first tap; `createSoundEngine`, `attachGestureUnlock`,
+  `useSoundMuted`, `MuteButton`, the `bp:sound` event), `RoomScreen.sound`. normal-web: one engine in `src/sound.ts`, unlocked from
+  `main.tsx`. Playground: `#sounds` audition page and `#worst/…/enter-<title>` flags.
+- **Tests.** server-kit 274 (the room: announced to all, cooldown, no title no cooldown, off the queue, a failed lookup, a stale sitting by seat and by sitId, a closed room, bots and reconnects), normal-server (the port, and a socket test through the real avatar save), ui-kit 1,252 (the reducer, the scheduler, the band, the engine with a recording fake, the stingers, RoomScreen: every table, each moment's stinger, nothing during the reveal hold, the herald before an entrance), normal-web 1,123 (Cài đặt Âm thanh shared with the room). e2e: `sound.spec.ts` renders the seven stingers in Chromium (length within ±10 %, peak ≤ 0.912, the last 150 ms silent, envelopes all different). Ops: **F-15 / F-15b** (desktop and 360 × 780: the exact words on three pages, the seat flash, `played` for the visible tabs and `hidden` for a hidden one, no second band on a re-sit, the mute kept after F5), 74 cases.
+- **Docs.** `docs/ui-kit.md` (sound and entrances), `docs/server-kit.md` (title entrances), `docs/normal-server.md`,
+  `docs/normal-web.md`, `docs/operation-test-plan.md` (F-15, F-15b), `docs/test-matrix.md` (a BP-42 section; the pin and
+  `CLAUDE.md` §3 updated: e2e Normal 25, ops 74), `docs/known-limitations.md` (sound measured only in Chromium).
+- **Khác với spec / Deviations from the spec.**
+  1. No toast line for an entrance at a chaos table (spec §4): the toasts are card lines tied to a hand; the band says it at every
+     table (Ruling 1).
+  2. A BP-41 herald or 6-6-6 that comes while an entrance shows cuts the band short, and its stinger fades the entrance's (Ruling 3,
+     A9); a reveal hold beginning inside a showing band cuts it too. A moment never cuts a moment.
+  3. On a phone held upright the band stands over the felt, not in the herald's slot over the opponents' row (Ruling 13).
+  4. Cài đặt gets an "Âm thanh" choice besides the header button (spec §5.3 left it open; Ruling 5).
+  5. The mute button names its action and carries no `aria-pressed` (Ruling 10).
+  6. The ops case plays no hand (A11), so "the band never covers the result" is pinned by RoomScreen unit tests, not end to end.
+- **Rulings.** 1 no chaos toast line · 2 the queue's three include the one showing · 3 the BP-41 band wins · 4 a sit with no title
+  sets no cooldown · 5 Cài đặt "Âm thanh" · 6 stingers load on the first tap (`play` answers `blocked` until then) · 7 the host's
+  own first sit is heralded · 8 the gesture unlock keeps resuming while the context is suspended · 9 a stinger starts 20 ms ahead
+  · 10 no `aria-pressed` · 11 no seat flash under reduced motion · 12 at ≤ 400 px a header with the mute button draws it and ⋯
+  32 px wide (40 px touch pads, no overlap) and tightens "Rời phòng", so the room name keeps its width · 13 the upright band over
+  the felt · 14 Task 9 reviewed by the final review only · 15 `engine.stop()` never silences a BP-41 moment · 16 the `#sounds`
+  page waits its turn behind a moment.
+- **New English copy (the session's, for the user's review):** "The Card God {{name}} has descended!", "The Demigod {{name}} has
+  appeared!", "The Godslayer {{name}} has taken a seat — beware, Card God!", "Entrance" (the band's label), "Mute" / "Unmute",
+  "Sound" / "On" / "Off".
+- **Gate.** typecheck, lint, unit 4,591 passed (14 skipped), build:normal, avatar:check, e2e Normal 25, e2e Lite 4, ops 72 + F-15/F-15b = 73 passed with F-10 skipped as before; P-03 failed once on `net::ERR_NO_BUFFER_SPACE` (Windows socket buffers, 25 min into the run) and passed on its own. build:lite stops at the exe step as on this machine before (Node 24, the SEA blob wants 22); the Lite web build and its e2e pass.
+- **Still open.**
+  - **The user's audition** of the seven stingers (WAVs sent) and approval of the copy, then the VPS deploy (spec §7.1).
+  - Real phones: iOS Safari (the silent switch mutes Web Audio), Firefox Android, a phone that suspends audio on lock.
+  - The seat caption says "Hóa Thần" (the title item's name) while the band says "Thần Bài": the user's call.
+  - A stinger queued behind a moment still plays after its band was tapped away; a tapped-away BP-41 herald still holds an
+    entrance back for its 3 s; no cross-tab mute sync; reverb impulses are rebuilt on every play (cache them if a slow phone starts
+    late).
+  - The Normal entry chunk is 174.7 of 180 KB gzip: Part B must watch it.
+  - **Part B** (spec §6): the 15 pictures of the three wardrobe sets, the aura animation, the set grant and the items-only
+    retro-grant — needs the user present (ChatGPT). The looping table track is a later phase (spec §9).
+
+---
+
 ## Plan 41 — Poker hỗn loạn, round three: 39 new cards, Cá chép hóa rồng and the Thần Bài, dice of fortune, three titles, tiers 50/35/15 — merged `9069cfe` (2026-10-29)
 
 Brainstormed with the user on 2026-10-28 ("lập plan để bổ sung các lá sau…", "mở rào để tăng độ vui", "có thẻ nào đột biến…
