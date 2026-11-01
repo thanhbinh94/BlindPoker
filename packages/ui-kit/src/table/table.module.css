@@ -2838,6 +2838,41 @@
   .metaFlow[data-chaos] > * {
     font-size: 0.6875rem;
   }
+
+  /* BP-42 A14: the header's right cell holds the dot, the mute button, the menu and "Rời phòng" on a 360 px phone, beside a
+     squeeze table's gold badge. The mute button and the menu's ⋯ are drawn 32 px wide, an invisible pad either side keeping
+     each 42 px to the thumb (the compact header's trick below); "Rời phòng" takes 8 px of side padding, the dot its own 8 px
+     and the gaps 6 px, so the room's name keeps what it had before the mute button came (Ruling 12). */
+  .header {
+    column-gap: 6px;
+  }
+
+  .headRight {
+    gap: 6px;
+  }
+
+  .headRight > .conn {
+    min-width: 8px;
+  }
+
+  .headRight > .headMute,
+  .headRight [aria-haspopup='menu'] {
+    position: relative;
+    width: 32px;
+    min-width: 32px;
+    padding: 0;
+  }
+
+  .headRight > .headMute::after,
+  .headRight [aria-haspopup='menu']::after {
+    content: '';
+    position: absolute;
+    inset: -4px -5px;
+  }
+
+  .headRight > .headLeave {
+    padding: 0 var(--space-2);
+  }
 }
 
 /* A phone on its side (Plan 26, B2): the identity bar is one 32 px strip, so the felt keeps the height. The connection,
@@ -3796,13 +3831,14 @@
 }
 
 /* A phone on its side: one row across the top, over the one-line header's middle — from past the connection pill (about
-   120 px) to short of the menu and "Rời phòng" (about 170 px), above the top seats' plates — two toasts side by side at
-   most, then "+N". The room name and the stakes it covers come back when the toasts go; the stage keeps its height. */
+   120 px) to short of the mute button, the menu and "Rời phòng" (about 215 px, BP-42 A2), above the top seats' plates — two
+   toasts side by side at most, then "+N". The room name and the stakes it covers come back when the toasts go; the stage
+   keeps its height. */
 .chaosToastBand[data-layout='landscape'] {
   position: absolute;
   top: var(--space-1);
   left: 8.5rem;
-  right: 11rem;
+  right: 14rem;
   z-index: 5;
   pointer-events: none;
 }
@@ -4710,8 +4746,8 @@
 }
 
 /* The heralded seat's flash: a ring of its own (`::before`), drawn by shadows from the plate's own box so it adds no scrollable
-   overflow, outside the reign's aura (`::after`, 3 px out), which it never replaces. It pulses while the band shows; with motion
-   off it simply stands (the global rule stops the pulse, and the list below names it too). */
+   overflow, outside the reign's aura (`::after`, 3 px out), which it never replaces. It pulses while the band shows. With motion
+   off there is no flash at all: `RoomScreen` passes no `flash` then (Ruling 11), so this rule has no reduced-motion path. */
 .seat[data-entrance='god'] {
   --entrance-flash-edge: var(--chaos-god-edge);
   --entrance-flash-glow: rgba(220, 60, 60, 0.6);
@@ -4876,8 +4912,7 @@
   .seatWin .plate,
   .heraldMotion,
   .dieTumble,
-  .seatGod .plate::after,
-  .seat[data-entrance] .plate::before {
+  .seatGod .plate::after {
     animation: none;
   }
 

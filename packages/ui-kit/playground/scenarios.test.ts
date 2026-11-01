@@ -50,6 +50,11 @@ describe('parseWorstHash', () => {
     expect(parseWorstHash('#worst/nope/12/xx')).toEqual({ state: 'result', seats: 6, lang: 'vi', long: false, frame: null })
   })
 
+  it('reads /enter-<title> as seat 1’s Thần entrance and /sound as a room with a sound engine (BP-42)', () => {
+    expect(parseWorstHash('#worst/waiting/6/vi/enter-godslayer/sound')).toMatchObject({ entrance: 'godslayer', sound: true })
+    expect(parseWorstHash('#worst/waiting/6/vi/enter-nobody')).toEqual({ state: 'waiting', seats: 6, lang: 'vi', long: false, frame: null })
+  })
+
   it('is null for any other hash', () => {
     expect(parseWorstHash('#peel')).toBeNull()
     expect(parseWorstHash('')).toBeNull()

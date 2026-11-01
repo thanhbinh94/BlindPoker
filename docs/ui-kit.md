@@ -680,6 +680,65 @@ chép at 35 %), `#worst/chaosDice/…` (a Kim cương 6-6-6 roll with its herald
 `#worst/chaosSix/…` (six board cards, five hole cards with the wild one, seats holding one and five cards); `scenarios.test.ts` covers
 the three. The ops pack's F-14 (`apps/normal-web/e2e/ops/10-chaos.spec.ts`) forces a Thần and a diamond roll on the real build.
 
+### Sound and entrances (BP-42, spec 2026-10-31)
+
+**The entrance band.** When a player wearing a Thần title (Thần Bài, Bán Thần, Kẻ Sát Thần) sits down, the server sends a
+`TITLE_ENTRANCE` room event; the reducer keeps the room's latest four in `ClientState.entrances` (outside `chaos`: every table has
+them; a snapshot keeps them, leaving clears them). `RoomScreen` heralds each one at **every** table, Hold'em included:
+
+- `useEntrances({ entrances, heralds, rolls, hold })` (`table/EntranceBand.tsx`) runs the pure `scheduleEntrances`
+  (`table/entrance-schedule.ts`): one band at a time for `ENTRANCE_MS` (3 s), at most `ENTRANCE_QUEUE_MAX` (3, the one showing
+  included), each dropped after `ENTRANCE_STALE_MS` (10 s) waiting. It never shows over the Thần's herald, the dice panel or the
+  result's reveal hold, and a herald or a 6-6-6 that arrives cuts it short for good (Ruling 3). It answers `shown`, `fresh` (true
+  for the one committed render where `shown` first shows, if it began less than `FRESH_MS`, 1 s, ago) and `dismiss`.
+- The reveal hold is tracked once, by `useHeldWindow(held)` in `RoomScreen`, and the same `HeraldHold` goes to `useEntrances` and to
+  `ChaosHerald`'s `hold` (A7), so both read the same window.
+- `EntranceBand` sits first in the `.moments` layer, in the herald's slot, shape and motion, in the title's colours
+  (`--entrance-*` tokens, each band at least 0.9 opaque). Its live region (`role="status"`, "Màn ra mắt") is on every table, so a
+  test that looks for the room's one status must scope its query. Empty, the slot takes no gap, so the herald and the dice stand
+  where they always stood. Its button carries `data-herald="entrance"`; a BP-41 watcher matches
+  `button[data-herald]:not([data-herald="entrance"])`. A tap puts it away and lets the next one start.
+- `PokerTable`'s `flash` (`{ seat, title }`) makes that seat's plate pulse a ring in the title's colour (`.seat[data-entrance]
+  .plate::before`, a layer apart from the reign's aura) while the band shows. Under `prefers-reduced-motion` the band's words just
+  show, and `RoomScreen` passes `flash = null`: there is no flash at all (Ruling 11), so the ring has no reduced-motion rule.
+
+**The sound engine** (`src/sound/`). The game's only sound: seven EDM stingers synthesised with Web Audio (`stingers.ts`, no files),
+through one master (`MASTER_GAIN` 0.6 into a limiter). `createSoundEngine()` gives a `SoundEngine`: `play(id, { preempt? })`,
+`muted` / `setMuted` (remembered under `bp.sound.muted`, `'1'` = muted), `subscribe`, `unlock()` and `running`. It has one channel: a
+stinger waits for the one sounding, up to `MAX_SOUND_WAIT_S` (4 s), or is dropped (`'busy'`). It is silent while muted, in a hidden
+tab and before a gesture has unlocked the audio, and it never replays a sound it missed. `preempt` fades out what sounds and starts
+now. The stingers load by `import()` on the first `unlock()` (Ruling 6, Normal's entry budget); until then `play` answers
+`'blocked'`. `attachGestureUnlock(engine)` resumes the context on every gesture while it is not running (Ruling 8). `StingerId` is
+exported as a type only; write the ids literally (`'entrance.god'`, `'moment.ascend'`, …), since a value import of `stingers.ts`
+would pull it back into the entry chunk.
+
+| Moment | Stinger |
+| --- | --- |
+| An entrance band shows, fresh | `entrance.god` / `entrance.demigod` / `entrance.godslayer` |
+| The Thần's herald (`god`) | `moment.ascend`, `{ preempt: true }` |
+| A Bán Thần (`demigod`) | `moment.demigod`, `{ preempt: true }` |
+| The fall of a Thần (`godslain`) | `moment.godslain`, `{ preempt: true }` |
+| A 6-6-6 roll (`dice`) | `moment.jackpot`, `{ preempt: true }` |
+
+The BP-41 moments come through `ChaosHerald`'s `onShow`, once per herald id and only when it first shows within `FRESH_MS` of its
+window's start, so they keep the anti-spoiler timing of Rulings 20b, 21 and 22, and nothing sounds during the reveal hold.
+
+**The hook event.** Every `play` emits `bp:sound` (`SOUND_EVENT`) on `window`, a `CustomEvent<{ id, outcome }>` where `outcome` is
+`'played' | 'muted' | 'hidden' | 'blocked' | 'unsupported' | 'busy'`. The e2e suites listen to it, since a headless browser cannot be
+heard.
+
+**In the room.** `RoomScreenProps.sound?: SoundEngine`. Given, the header's `sound` slot gets `MuteButton` ("Tắt tiếng" / "Bật
+tiếng", no `aria-pressed`, Ruling 10), drawn before the seat menu: a bare `<button>` straight in `.headRight`, so the sideways
+header's 30 px rule and pad apply. At 400 px or less it and the menu's ⋯ are drawn 32 px wide with an invisible pad (`.headMute`,
+A14), and "Rời phòng" (`.headLeave`), the dot and the gaps give up a few pixels, so a squeeze table's name keeps the room it had
+before the button came (Ruling 12). The
+sideways chaos toast band stops `14rem` from the right to clear it (A2). Absent, there is no button and no sound, though the band
+still draws any entrance the state holds. Normal owns one engine (`apps/normal-web/src/sound.ts`) and hands it to the room and to
+Cài đặt's "Âm thanh". **Lite gets none:** it passes no `sound`, and its server never sends an entrance.
+
+**Playground.** Any `#worst/…` page takes `/enter-god`, `/enter-demigod` or `/enter-godslayer` (seat 1 makes that entrance as the
+page loads, for its 3 s) and `/sound` (the header's mute button; the page never unlocks the audio, so nothing sounds).
+
 ### Avatars (`src/avatar2d/`)
 
 The kit does render an avatar — a **chibi**: pre-rendered PNG layers on a shared frame, not a 3D rig or anything

@@ -1,5 +1,6 @@
 import type { EntranceTitle } from '@bp/core'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { useEffect } from 'react'
 import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClientDiceRoll, ClientEntrance, ClientHerald } from '../client/types.js'
@@ -92,20 +93,22 @@ describe('the entrance band’s colours and the seat flash (CSS)', () => {
     expect(CSS).toMatch(/\.entrance\[data-title='godslayer'\]\s*\{[^}]*background-color:\s*var\(--entrance-slayer-band\)/)
   })
 
-  it('the flash is a pulse of its own layer, which motion off stops (static ring)', () => {
+  it('the flash is a pulse of its own layer, with no reduced-motion path: the room passes no flash then (Ruling 11)', () => {
     expect(CSS).toMatch(/\.seat\[data-entrance\] \.plate::before\s*\{[^}]*animation:\s*entranceFlash/)
     const off = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(CSS)?.[1] ?? ''
-    expect(off).toContain('.seat[data-entrance] .plate::before')
+    expect(off).not.toContain('data-entrance')
     // the reign's aura keeps its own layer
     expect(CSS).not.toMatch(/\.seat\[data-entrance\][^{]*::after/)
   })
 })
 
-/** Drives `useEntrances` and draws its band; the latest answer lands in `seen`. */
+/** Drives `useEntrances` and draws its band; each committed answer lands in `seen` (a render React throws away does not count). */
 const seen: EntrancesNow[] = []
 function Harness(props: { entrances: ClientEntrance[]; heralds?: ClientHerald[]; rolls?: ClientDiceRoll[]; hold?: HeraldHold | null }) {
   const now = useEntrances({ entrances: props.entrances, heralds: props.heralds ?? [], rolls: props.rolls ?? [], hold: props.hold ?? null })
-  seen.push(now)
+  useEffect(() => {
+    seen.push(now)
+  })
   return <EntranceBand entrance={now.shown} onDismiss={now.dismiss} />
 }
 
@@ -150,9 +153,12 @@ describe('useEntrances (BP-42 spec §4)', () => {
   it('a tap puts it away, and the next starts at once', () => {
     draw({ entrances: [entrance(), entrance({ id: 2, title: 'godslayer', name: 'Châu', at: T0 })] })
     act(() => void vi.advanceTimersByTime(1_000))
+    seen.length = 0
     fireEvent.click(screen.getByRole('button'))
     expect(screen.queryByText(/Lan/)).toBeNull()
     expect(screen.getByText(/Kẻ Sát Thần Châu/)).toBeInTheDocument()
+    // It starts at the tap, so its stinger is due.
+    expect(seen.some((n) => n.fresh && n.shown?.id === 2)).toBe(true)
     act(() => void vi.advanceTimersByTime(ENTRANCE_MS - 100))
     expect(band()).not.toBeNull()
     act(() => void vi.advanceTimersByTime(200))

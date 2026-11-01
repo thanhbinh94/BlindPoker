@@ -818,7 +818,8 @@ async function watchMoments(page: Page): Promise<void> {
     const tick = (): void => {
       if (w.stop) return
       const at = performance.now()
-      const band = document.querySelector('button[data-herald]')
+      // BP-41's own band: BP-42's entrance band shares the herald's slot and class but is not what this watcher measures.
+      const band = document.querySelector('button[data-herald]:not([data-herald="entrance"])')
       // The band's own shake is clipped by the layer (`overflow: hidden`): measured once it stands.
       if (band !== null && band.getBoundingClientRect().height > 0) {
         w.heraldFrames += 1

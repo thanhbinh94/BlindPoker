@@ -25,6 +25,11 @@ export interface RoomHeaderProps {
    * the full header's right cell (a phone held upright, BP-31 P3). Nothing when not given (the desktop ring).
    */
   menu?: ReactNode
+  /**
+   * BP-42: the mute button (`MuteButton`), drawn just before `menu` — on the compact line and in the full header's right cell. A
+   * bare button, so the cell's rules size it. Nothing when not given (Lite has no sound).
+   */
+  sound?: ReactNode
 }
 
 const MODE_GLYPH: Record<string, string> = { holdem: '♠', blind: '⚄' }
@@ -37,7 +42,7 @@ const STATUS_KEY: Record<ConnectionStatus, string> = {
 }
 
 /** Room identity bar: name, mode/variant, code, stakes, connection state and the way out. */
-export function RoomHeader({ room, status, onLeave, lang, right, compact = false, menu }: RoomHeaderProps) {
+export function RoomHeader({ room, status, onLeave, lang, right, compact = false, menu, sound }: RoomHeaderProps) {
   const { t } = useTranslation()
   const holdem = room.config.holdem
   const blind = room.config.blind
@@ -65,7 +70,7 @@ export function RoomHeader({ room, status, onLeave, lang, right, compact = false
     </span>
   )
   const leave = (
-    <Button variant="danger" size="sm" onClick={onLeave}>
+    <Button variant="danger" size="sm" className={s.headLeave} onClick={onLeave}>
       {t('actions.leave')}
     </Button>
   )
@@ -80,6 +85,7 @@ export function RoomHeader({ room, status, onLeave, lang, right, compact = false
         {code}
         {stakes === '' ? null : <span className={s.stakes}>{stakes}</span>}
         <div className={s.headRight}>
+          {sound}
           {menu}
           {leave}
         </div>
@@ -119,6 +125,7 @@ export function RoomHeader({ room, status, onLeave, lang, right, compact = false
       <div className={s.headRight}>
         {conn}
         {right}
+        {sound}
         {menu}
         {leave}
       </div>

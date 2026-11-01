@@ -2,6 +2,7 @@ import type { PlayerAction, RoomPlayerView } from '@bp/core'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useTableExpressions, type ChibiSubject } from '../avatar2d/index.js'
+import type { ClientDiceRoll, ClientHerald } from '../client/types.js'
 import type { GameClientApi } from '../client/useGameClient.js'
 import { formatPoints, type Language } from '../i18n/index.js'
 import { Button } from '../primitives/Button.js'
@@ -9,18 +10,24 @@ import { Field } from '../primitives/Field.js'
 import { MenuButton, type MenuItem } from '../primitives/MenuButton.js'
 import { Modal } from '../primitives/Modal.js'
 import { cx } from '../primitives/cx.js'
+import { MuteButton } from '../sound/MuteButton.js'
+import type { SoundEngine } from '../sound/engine.js'
+import type { StingerId } from '../sound/stingers.js'
 import { ActionBar } from '../table/ActionBar.js'
 import { BonusHand } from '../table/BonusHand.js'
 import { ChaosDice } from '../table/ChaosDice.js'
 import { ChaosDraft } from '../table/ChaosDraft.js'
 import { ChaosHerald } from '../table/ChaosHerald.js'
 import { ChaosToasts } from '../table/ChaosToasts.js'
+import { EntranceBand, useEntrances } from '../table/EntranceBand.js'
 import { HandResult, ResultSkipControl, type ResultSkip } from '../table/HandResult.js'
 import { STACK_LAYOUT_QUERY, useRoomFrame, useStageTier, type RoomFrame } from '../table/frame.js'
 import { PokerTable, type TableLayout } from '../table/PokerTable.js'
 import { RankLabel } from '../table/RankLabel.js'
 import { RoomHeader } from '../table/RoomHeader.js'
+import { useHeldWindow } from '../table/useHeldWindow.js'
 import { useMediaQuery } from '../table/useMediaQuery.js'
+import tableStyles from '../table/table.module.css'
 import { useFullscreenNudge } from './fullscreen-nudge.js'
 import { useRevealHold } from './reveal-hold.js'
 import { useSeatClearance } from './seat-clearance.js'
@@ -47,9 +54,24 @@ export interface RoomScreenProps {
   layout?: TableLayout
   /** Forces the room's frame; by default a phone held sideways gets `landscape` and everything else `desktop`. */
   frame?: RoomFrame
+  /**
+   * BP-42: the app's one sound engine. Given, the header gets its mute button and the table sounds a Thần title's entrance and
+   * the BP-41 moments. Absent (Lite): no button and no sound — the entrance band still draws any entrance the state holds.
+   */
+  sound?: SoundEngine
 }
 
 const MIN_TO_START = 2
+/** A table without chaos has no heralds and no dice: one stable empty list each, for the entrance band's schedule. */
+const NO_HERALDS: readonly ClientHerald[] = []
+const NO_ROLLS: readonly ClientDiceRoll[] = []
+/** BP-42 spec §5.2: the BP-41 moment each herald sounds. */
+const MOMENT_STINGER: Record<ClientHerald['kind'], StingerId> = {
+  god: 'moment.ascend',
+  demigod: 'moment.demigod',
+  godslain: 'moment.godslain',
+  dice: 'moment.jackpot',
+}
 /** The full-screen nudge's close mark; its name is the button's `aria-label`. */
 const NUDGE_CLOSE_GLYPH = '✕'
 
@@ -100,7 +122,7 @@ function toggleFullscreen(): void {
  * Everything shown is derived from `client.state`; every button is one `GameClientApi` call. The screen decides
  * nothing about the game — not whose turn it is, not what a legal bet is, not who may start.
  */
-export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor, header, layout, frame: frameOverride }: RoomScreenProps) {
+export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor, header, layout, frame: frameOverride, sound }: RoomScreenProps) {
   const { t } = useTranslation()
   const { state } = client
   const room = state.room
@@ -193,10 +215,35 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
   const tier = useStageTier(stageRef, frame, room !== null)
   const [nudgeDone, dismissNudge] = useFullscreenNudge()
 
+  // BP-42 (spec 2026-11-01 §4–5): a Thần title's entrance at every table. The reveal hold is tracked once (A7), for the Thần's
+  // herald and for the entrance band, so the two read the same window; the band waits for the herald, the dice and the hold.
+  const hold = useHeldWindow(held)
+  const onChaosTable = room?.config.blind?.chaosCycle !== undefined
+  const entrances = useEntrances({
+    entrances: state.entrances,
+    heralds: onChaosTable ? state.chaos.heralds : NO_HERALDS,
+    rolls: onChaosTable ? state.chaos.rolls : NO_ROLLS,
+    hold,
+  })
+  const shownEntrance = entrances.shown
+  const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+  const soundRef = useRef(sound)
+  soundRef.current = sound
+  // The entrance's stinger, once, on the committed render where its band first shows within `FRESH_MS` of its start: an entrance
+  // seen late (a snapshot, a reconnect, a remount) is never sounded. The id guard keeps StrictMode's second effect quiet.
+  const soundedEntrance = useRef<number | null>(null)
+  useEffect(() => {
+    if (shownEntrance === null || !entrances.fresh || soundedEntrance.current === shownEntrance.id) return
+    soundedEntrance.current = shownEntrance.id
+    soundRef.current?.play(`entrance.${shownEntrance.title}`)
+  }, [shownEntrance, entrances.fresh])
+  // The BP-41 moments cut whatever sounds (A9, Ruling 3 for the ear), as their band cuts the entrance's.
+  const soundMoment = useCallback((h: ClientHerald) => void soundRef.current?.play(MOMENT_STINGER[h.kind], { preempt: true }), [])
+
   if (room === null) return null
 
   const holdem = room.config.holdem
-  const chaosTable = room.config.blind?.chaosCycle !== undefined
+  const chaosTable = onChaosTable
   const seatName = (seat: number): string =>
     room.players.find((p) => p.seat === seat)?.displayName ?? hand?.seats.find((x) => x.seat === seat)?.displayName ?? String(seat + 1)
   const seated = room.players.filter((p) => p.seat !== null)
@@ -457,6 +504,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
         // The stack keeps the full header — its meta line carries the stakes and the limit — and adds the menu (P3).
         compact={landscape}
         menu={menuShown ? <MenuButton label={t('room.more')} items={menuItems} /> : undefined}
+        sound={sound === undefined ? undefined : <MuteButton engine={sound} className={tableStyles.headMute} />}
       />
 
       {/* The cards' toasts (BP-39): one place in the tree for every frame, so a phone turning keeps them. Under the header on
@@ -482,14 +530,18 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
 
       {/* BP-41 (spec 2026-10-28 §4.5, §5): the table's moments — the Thần's herald across the screen and the dice of fortune —
           in a layer fixed to the screen over everything, laid out in one column so the two never cover each other's words.
-          It takes no room and catches no press but on what it shows, and each piece is gone after its 3 s. */}
-      {chaosTable ? (
-        <div className={s.moments} data-surface="night">
-          {/* The fall of a Thần names the winner: it waits out the reveal hold with the result (Ruling 21). */}
-          <ChaosHerald heralds={state.chaos.heralds} lang={lang} held={held} />
-          <ChaosDice rolls={state.chaos.rolls} lang={lang} />
-        </div>
-      ) : null}
+          It takes no room and catches no press but on what it shows, and each piece is gone after its 3 s. BP-42: on every
+          table it holds the entrance band, in the herald's slot; the band never shows with the herald or the dice. */}
+      <div className={s.moments} data-surface="night">
+        <EntranceBand entrance={shownEntrance} onDismiss={entrances.dismiss} />
+        {chaosTable ? (
+          <>
+            {/* The fall of a Thần names the winner: it waits out the reveal hold with the result (Ruling 21). */}
+            <ChaosHerald heralds={state.chaos.heralds} lang={lang} hold={hold} onShow={soundMoment} />
+            <ChaosDice rolls={state.chaos.rolls} lang={lang} />
+          </>
+        ) : null}
+      </div>
 
       {state.status === 'open' ? null : (
         <p className={s.banner} role="status">
@@ -523,6 +575,8 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
           note={(stack || (landscape && !short)) && waiting ? hint : null}
           feltCorner={stack ? bonusHand : null}
           chaos={chaosTable ? state.chaos : null}
+          // The heralded seat flashes while its band shows; under reduced motion there is no flash (Ruling 11).
+          flash={shownEntrance === null || reduceMotion ? null : { seat: shownEntrance.seat, title: shownEntrance.title }}
         />
 
         {/* The result card is dealt onto the felt, so it keeps the felt's night palette in either theme. The countdown

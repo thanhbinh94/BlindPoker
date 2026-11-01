@@ -123,6 +123,12 @@
   pointer-events: none;
 }
 
+/* BP-42: the entrance band's slot comes first, and empty it takes no gap either, so the herald and the dice stand where they
+   always stood. The band never shows with them (`useEntrances`), so it takes their place when it does. */
+.moments > :first-child:empty {
+  margin-bottom: calc(-1 * var(--space-2));
+}
+
 .roomMain {
   position: relative;
   flex: 1;

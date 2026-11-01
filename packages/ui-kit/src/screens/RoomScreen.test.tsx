@@ -4,12 +4,15 @@ import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultChibi, useTableExpressions } from '../avatar2d/index.js'
-import { initialChaos, type ClientHand, type ClientState } from '../client/types.js'
+import { initialChaos, type ClientEntrance, type ClientHand, type ClientHerald, type ClientState } from '../client/types.js'
 import type { GameClientApi } from '../client/useGameClient.js'
 import { createI18n } from '../i18n/index.js'
 import primitives from '../primitives/primitives.module.css'
 import PRIMITIVES_CSS from '../primitives/primitives.module.css?raw'
 import { makeHand, makePlayer, makeRoom, makeSeat, makeState } from '../test-fixtures.js'
+import type { PlayOptions, SoundEngine, SoundOutcome } from '../sound/engine.js'
+import type { StingerId } from '../sound/stingers.js'
+import { FRESH_MS } from '../table/entrance-schedule.js'
 import s from '../table/table.module.css'
 import { declarationsOf } from '../theme/contrast.js'
 import TABLE_CSS from '../table/table.module.css?raw'
@@ -1017,7 +1020,8 @@ describe('RoomScreen', () => {
     it('sends one reveal once "Lật" has turned my cards', () => {
       const client = squeezing()
       wrap(client)
-      expect(screen.getByRole('status')).toHaveTextContent('Squeeze your cards — they turn when time is up')
+      // The tray's line, in the footer: every table also keeps the entrance band's live region (BP-42 A6).
+      expect(within(screen.getByRole('contentinfo')).getByRole('status')).toHaveTextContent('Squeeze your cards — they turn when time is up')
       expect(within(screen.getByRole('group', { name: 'Seat 1' })).getByRole('timer')).toHaveTextContent('15')
       fireEvent.click(screen.getByRole('button', { name: 'Turn' }))
       act(() => vi.advanceTimersByTime(1000))
@@ -2155,5 +2159,154 @@ describe('RoomScreen on a Poker hỗn loạn table', () => {
       })
       expect(within(handGroup()!).getByRole('alert')).toHaveTextContent('Chưa dùng được thẻ này lúc này')
     })
+  })
+})
+
+describe('RoomScreen: Thần entrances and sound (BP-42)', () => {
+  /** A recording engine: what was played, with what options; `muted` and the header's button follow `setMuted`. */
+  function fakeEngine(): SoundEngine & { played: [StingerId, PlayOptions | undefined][] } {
+    const listeners = new Set<() => void>()
+    const engine = {
+      muted: false,
+      running: true,
+      played: [] as [StingerId, PlayOptions | undefined][],
+      setMuted(m: boolean) {
+        engine.muted = m
+        for (const l of listeners) l()
+      },
+      subscribe(l: () => void) {
+        listeners.add(l)
+        return () => void listeners.delete(l)
+      },
+      unlock() {},
+      play(id: StingerId, opts?: PlayOptions): SoundOutcome {
+        engine.played.push([id, opts])
+        return 'played'
+      },
+    }
+    return engine
+  }
+
+  const entrance = (patch: Partial<ClientEntrance> = {}): ClientEntrance => ({ id: 1, title: 'god', seat: 0, playerId: 'a', name: 'Ann', at: Date.now(), ...patch })
+  const drawWith = (state: ClientState, sound?: SoundEngine) =>
+    render(
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <RoomScreen client={fakeClient(state)} lang="en" onLeft={vi.fn()} {...(sound === undefined ? {} : { sound })} />
+      </I18nextProvider>,
+    )
+
+  let reduceMotion = false
+  beforeEach(() => {
+    reduceMotion = false
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: (query: string) => ({
+        matches: reduceMotion && query.includes('prefers-reduced-motion: reduce'),
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    })
+  })
+  afterEach(() => {
+    Reflect.deleteProperty(window, 'matchMedia')
+  })
+
+  it("a Hold'em room shows an entrance band", () => {
+    drawWith(makeState({ room: standingRoom, entrances: [entrance()] }))
+    expect(standingRoom.config.blind).toBeUndefined()
+    const band = screen.getByRole('button', { name: 'The Card God Ann has descended!' })
+    expect(band).toHaveAttribute('data-herald', 'entrance')
+    expect(band.closest(`.${screens.moments}`)).not.toBeNull()
+    // The heralded seat flashes in the title's colour.
+    expect(document.querySelectorAll('[data-entrance]')).toHaveLength(1)
+    expect(document.querySelector('[data-entrance]')).toHaveAttribute('data-entrance', 'god')
+  })
+
+  it("the entrance's stinger is played once when its band shows", () => {
+    const engine = fakeEngine()
+    const state = makeState({ room: standingRoom, entrances: [entrance({ title: 'godslayer' })] })
+    const view = drawWith(state, engine)
+    expect(engine.played).toEqual([['entrance.godslayer', undefined]])
+    view.rerender(
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <RoomScreen client={fakeClient({ ...state })} lang="en" onLeft={vi.fn()} sound={engine} />
+      </I18nextProvider>,
+    )
+    expect(engine.played).toHaveLength(1)
+  })
+
+  it('no sound for an entrance that was already old when the screen mounted', () => {
+    const engine = fakeEngine()
+    drawWith(makeState({ room: standingRoom, entrances: [entrance({ at: Date.now() - FRESH_MS - 500 })] }), engine)
+    // Its band shows what is left of its time, silently.
+    expect(screen.getByRole('button', { name: /has descended/ })).toBeInTheDocument()
+    expect(engine.played).toEqual([])
+  })
+
+  it("the Thần's herald plays moment.ascend", () => {
+    const engine = fakeEngine()
+    const chaosRoom = makeRoom({
+      mode: 'blind',
+      config: {
+        name: 'T',
+        mode: 'blind',
+        maxPlayers: 4,
+        isPrivate: false,
+        turnTimerSec: 20,
+        autoStart: false,
+        hasPassword: false,
+        blind: { holeCards: 3, decisionMode: 'playOrFold', fixedWager: 1_000, botCount: 0, chaosCycle: 5 },
+      },
+      players: [makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'SEATED', stack: 19_800 }), makePlayer({ playerId: 'me', displayName: 'Mai' })],
+    })
+    const herald: ClientHerald = { id: 1, kind: 'god', seat: 0, name: 'Ann', at: Date.now() }
+    drawWith(makeState({ room: chaosRoom, chaos: { ...initialChaos, heralds: [herald] } }), engine)
+    expect(engine.played).toEqual([['moment.ascend', { preempt: true }]])
+  })
+
+  it('no mute button without an engine', () => {
+    drawWith(makeState({ room: standingRoom }))
+    expect(within(screen.getByRole('banner')).queryByRole('button', { name: /^(Mute|Unmute)$/ })).toBeNull()
+  })
+
+  it('the mute button sits in the header when given one', () => {
+    const engine = fakeEngine()
+    drawWith(makeState({ room: standingRoom }), engine)
+    const header = screen.getByRole('banner')
+    const button = within(header).getByRole('button', { name: 'Mute' })
+    // A bare button, straight in the header's right cell (A14), before the way out.
+    expect(button.parentElement).toHaveClass(s.headRight!)
+    expect(button).toHaveClass(s.headMute!)
+    expect(button.compareDocumentPosition(within(header).getByRole('button', { name: 'Leave' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    fireEvent.click(button)
+    expect(engine.muted).toBe(true)
+    expect(within(header).getByRole('button', { name: 'Unmute' })).toBeInTheDocument()
+  })
+
+  it('no seat flash under reduced motion', () => {
+    reduceMotion = true
+    drawWith(makeState({ room: standingRoom, entrances: [entrance()] }))
+    expect(screen.getByRole('button', { name: /has descended/ })).toBeInTheDocument()
+    expect(document.querySelector('[data-entrance]')).toBeNull()
+  })
+
+  it('a muted engine is asked as usual and answers for itself; nothing is replayed on unmute', () => {
+    const engine = fakeEngine()
+    engine.setMuted(true)
+    const state = makeState({ room: standingRoom, entrances: [entrance()] })
+    const view = drawWith(state, engine)
+    expect(engine.played).toEqual([['entrance.god', undefined]])
+    fireEvent.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Unmute' }))
+    view.rerender(
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <RoomScreen client={fakeClient({ ...state })} lang="en" onLeft={vi.fn()} sound={engine} />
+      </I18nextProvider>,
+    )
+    expect(engine.played).toHaveLength(1)
   })
 })
