@@ -1595,7 +1595,7 @@ See the CHANGELOG's "Still open" and `docs/known-limitations.md` → round three
 Thần outfits are a later phase; real-phone checks (glow, shake, dice, glyphs on Safari and Firefox); F-13c's unreproduced 5 px scroll;
 a dice sink that fails twice; the LAN host lacks migrations 0004–0008; the new English copy for the user's review.
 
-## Plan 42 — the Thần titles' entrance and the game's first sound (merged `MERGE`, 2026-11-02)
+## Plan 42 — the Thần titles' entrance and the game's first sound (merged `8fbcd60`, 2026-11-02)
 
 Rulings 1–16 are listed in the CHANGELOG section. The lessons behind them:
 
