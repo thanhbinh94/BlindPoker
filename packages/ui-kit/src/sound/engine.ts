@@ -47,6 +47,13 @@ export const SOUND_MUTED_KEY = 'bp.sound.muted'
 export const SOUND_EVENT = 'bp:sound'
 /** How far ahead a stinger may wait for the one channel; further than this, it is dropped (`'busy'`). */
 export const MAX_SOUND_WAIT_S = 4
+/** A stinger starts this far after `currentTime`, so its first attack never lands in the past (Ruling 9). */
+export const SOUND_LEAD_S = 0.02
+/** Mute and preempt fade the old channel out over this long, then drop it after `STOP_DROP_MS`. */
+const STOP_FADE_S = 0.015
+const STOP_DROP_MS = 60
+/** A lazy load of the stingers that fails is tried again on later gestures, this many times in all. */
+export const MAX_LOAD_ATTEMPTS = 3
 
 export interface SoundEventDetail {
   id: StingerId
@@ -100,25 +107,46 @@ export function createSoundEngine(deps: SoundEngineDeps = {}): SoundEngine {
   let failed = false
   let stingers: StingerModule | null = null
   let loading = false
+  let loadFailures = 0
   let master: AudioNode | null = null
   let channel: GainNode | null = null
   let busyUntil = 0
 
-  /** Silences what sounds and what waits: the channel is cut from the master and a fresh one takes its place. */
+  /**
+   * Silences what sounds and what waits: the channel fades to 0 in `STOP_FADE_S` (a cut would click), is dropped from
+   * the master a moment later, and a fresh channel takes its place at once.
+   */
   const stopSounding = (): void => {
     busyUntil = 0
     if (ctx === null || channel === null || master === null) return
+    const old = channel
+    channel = null
     try {
-      channel.disconnect()
+      const now = ctx.currentTime
+      old.gain.cancelScheduledValues(now)
+      old.gain.setValueAtTime(old.gain.value, now)
+      old.gain.linearRampToValueAtTime(0, now + STOP_FADE_S)
     } catch {
-      // already disconnected
+      // a context that refuses automation: the disconnect below still silences it
     }
-    channel = ctx.createGain()
-    channel.connect(master)
+    setTimeout(() => {
+      try {
+        old.disconnect()
+      } catch {
+        // already disconnected
+      }
+    }, STOP_DROP_MS)
+    try {
+      const fresh = ctx.createGain()
+      fresh.connect(master)
+      channel = fresh
+    } catch {
+      // the next play builds the channel again
+    }
   }
 
   const load = (): void => {
-    if (stingers !== null || loading) return
+    if (stingers !== null || loading || loadFailures >= MAX_LOAD_ATTEMPTS) return
     loading = true
     loadStingers().then(
       (module) => {
@@ -126,7 +154,8 @@ export function createSoundEngine(deps: SoundEngineDeps = {}): SoundEngine {
         loading = false
       },
       () => {
-        loading = false // the next gesture tries again
+        loading = false
+        loadFailures += 1 // the next gesture tries again, up to MAX_LOAD_ATTEMPTS in all
       },
     )
   }
@@ -182,19 +211,27 @@ export function createSoundEngine(deps: SoundEngineDeps = {}): SoundEngine {
     play(id: StingerId, opts: PlayOptions = {}): SoundOutcome {
       if (muted) return outcome(id, 'muted')
       if (isHidden()) return outcome(id, 'hidden')
-      if (failed || !canCreate()) return outcome(id, 'unsupported')
+      if (failed || loadFailures >= MAX_LOAD_ATTEMPTS || !canCreate()) return outcome(id, 'unsupported')
       if (ctx === null || ctx.state !== 'running' || stingers === null) return outcome(id, 'blocked')
-      if (master === null || channel === null) {
-        master = stingers.createMaster(ctx)
-        channel = ctx.createGain()
-        channel.connect(master)
+      // A browser that lacks a node the stingers use (old Safari's webkitAudioContext has no StereoPanner) throws while
+      // scheduling: that throw must never reach React. What was half built fades out with the channel.
+      try {
+        if (master === null) master = stingers.createMaster(ctx)
+        if (channel === null) {
+          const fresh = ctx.createGain()
+          fresh.connect(master)
+          channel = fresh
+        }
+        if (opts.preempt === true) stopSounding()
+        const now = ctx.currentTime
+        const start = Math.max(now + SOUND_LEAD_S, busyUntil)
+        if (start - now > MAX_SOUND_WAIT_S) return outcome(id, 'busy')
+        busyUntil = start + stingers.scheduleStinger(ctx, channel!, id, start)
+        return outcome(id, 'played')
+      } catch {
+        stopSounding()
+        return outcome(id, 'unsupported')
       }
-      if (opts.preempt === true) stopSounding()
-      const now = ctx.currentTime
-      const start = Math.max(now, busyUntil)
-      if (start - now > MAX_SOUND_WAIT_S) return outcome(id, 'busy')
-      busyUntil = start + stingers.scheduleStinger(ctx, channel!, id, start)
-      return outcome(id, 'played')
     },
   }
 }

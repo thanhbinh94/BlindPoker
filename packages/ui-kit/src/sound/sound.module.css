@@ -24,7 +24,7 @@
   background: var(--gold-soft);
 }
 
-.mute[aria-pressed='true'] {
+.mute[data-muted='true'] {
   border-color: color-mix(in srgb, var(--ink) 28%, transparent);
   background: color-mix(in srgb, var(--ink) 8%, transparent);
 }

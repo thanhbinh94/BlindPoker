@@ -16,7 +16,7 @@ const params = (fake: FakeAudioContext): FakeParam[] =>
   fake.nodes.flatMap((n) => Object.values(n).filter((v): v is FakeParam => v instanceof FakeParam))
 
 describe('the stingers', () => {
-  it('lists the seven ids with the plan’s lengths', () => {
+  it("lists the seven ids with the plan's lengths", () => {
     expect(STINGER_IDS).toEqual([
       'entrance.god',
       'entrance.demigod',
@@ -41,7 +41,7 @@ describe('the stingers', () => {
     expect(render(id).len).toBe(STINGER_SECONDS[id])
   })
 
-  it.each(STINGER_IDS)('every voice stops by the stinger’s end (%s)', (id) => {
+  it.each(STINGER_IDS)("every voice stops by the stinger's end (%s)", (id) => {
     const { fake } = render(id)
     const sources = fake.sources()
     expect(sources.length).toBeGreaterThan(3)
@@ -55,7 +55,7 @@ describe('the stingers', () => {
     }
   })
 
-  it.each(STINGER_IDS)('every stinger reaches the master’s input (%s)', (id) => {
+  it.each(STINGER_IDS)("every stinger reaches the master's input (%s)", (id) => {
     const { fake, out } = render(id)
     const feeding = fake.feeding(out)
     expect(feeding).toHaveLength(1)
