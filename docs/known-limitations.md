@@ -1189,6 +1189,17 @@ hand" and the 39 cards' names and descriptions were drafted in English by the im
 *Why it stays:* CLAUDE.md §6 — English copy changes only when the user asks.
 *Tracked:* `packages/ui-kit/src/i18n/locales/en/game.json` (`chaos.*`); BP-41 Task 9 report.
 
+## The Thần titles' entrance and the table's sound (BP-42)
+
+**Sound is measured only in Chromium.** The seven stingers are rendered and measured in Chromium (`sound.spec.ts`), and the ops pack's
+F-15 and F-15b check in headless Chromium that a heralded sit asks for its stinger on every page (`played` on the visible tabs, `hidden`
+on a tab that says it is hidden) and that the mute holds after F5. Nobody has listened on a real phone: iOS Safari (including the
+silent switch, which may or may not silence Web Audio), Firefox on any platform, and a phone that suspends its audio when the screen
+locks are the user's to try by ear.
+*Why it stays:* only Chromium is installed (CLAUDE.md §3), a headless browser hears nothing, and the real-phone checks are the user's.
+*Tracked:* `packages/ui-kit/src/sound/engine.ts`, `stingers.ts`; `apps/normal-web/e2e/sound.spec.ts`,
+`apps/normal-web/e2e/ops/11-entrance.spec.ts` (F-15, F-15b); plan BP-42 amendment A18.
+
 ---
 
 ## Not limitations — things that were never in scope

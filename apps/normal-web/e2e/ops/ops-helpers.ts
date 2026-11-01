@@ -91,9 +91,18 @@ export async function registerPatiently(page: Page, who: Account): Promise<void>
   throw new Error(`could not register ${who.displayName}`)
 }
 
-/** A fresh browser context, a fresh account, signed in and standing in the lobby. */
-export async function newPlayer(browser: Browser, stem: string, viewport?: { width: number; height: number }): Promise<Player> {
+/**
+ * A fresh browser context, a fresh account, signed in and standing in the lobby. `prepare` runs on the context before its
+ * first page opens — the place for an init script that must be in every document the player loads (BP-42, F-15).
+ */
+export async function newPlayer(
+  browser: Browser,
+  stem: string,
+  viewport?: { width: number; height: number },
+  prepare?: (context: BrowserContext) => Promise<void>,
+): Promise<Player> {
   const context = await browser.newContext({ locale: 'vi-VN', timezoneId: 'Asia/Ho_Chi_Minh', colorScheme: 'dark', ...(viewport === undefined ? {} : { viewport }) })
+  if (prepare !== undefined) await prepare(context)
   const page = await context.newPage()
   const who = account(stem)
   await registerPatiently(page, who)
@@ -552,4 +561,26 @@ export async function grantReputation(gmPage: Page, playerId: string, amount: nu
   const res = await postApi(gmPage, `/api/gm/players/${encodeURIComponent(playerId)}/reputation`, { amount, reason })
   expect(res.status, `POST /api/gm/players/:id/reputation returned ${res.status} ${JSON.stringify(res.body)}`).toBe(200)
   return res.body as unknown as { reputation: number; rank: number }
+}
+
+/**
+ * BP-42: gives `playerId` the catalogue item `itemId` through the GM console's own route (`POST /api/gm/players/:id/items`),
+ * from `gmPage` — a page of an account `promoteToGm` made a GM. The pack's way to a Thần title without playing for one.
+ */
+export async function grantItem(gmPage: Page, playerId: string, itemId: string, reason = 'vật phẩm cho test'): Promise<void> {
+  const res = await postApi(gmPage, `/api/gm/players/${encodeURIComponent(playerId)}/items`, { itemId, reason })
+  expect(res.status, `POST /api/gm/players/:id/items returned ${res.status} ${JSON.stringify(res.body)}`).toBe(200)
+}
+
+/**
+ * BP-42: puts on the title `itemId`, which the player must own. `PUT /api/me/avatar` is a full replace (there is no
+ * `GET /api/me/avatar`), so the config is read from `GET /api/me/inventory` and sent back whole with the title in it.
+ */
+export async function equipTitle(page: Page, itemId: string): Promise<void> {
+  const res = await page.request.get('/api/me/inventory')
+  expect(res.ok(), `GET /api/me/inventory returned ${res.status()}`).toBeTruthy()
+  const { items, avatar } = (await res.json()) as { items: { itemId: string }[]; avatar: Record<string, unknown> }
+  expect(items.map((item) => item.itemId), `the player owns ${itemId}`).toContain(itemId)
+  const put = await putApi(page, '/api/me/avatar', { ...avatar, title: itemId })
+  expect(put.status, `PUT /api/me/avatar returned ${put.status} ${JSON.stringify(put.body)}`).toBe(200)
 }
