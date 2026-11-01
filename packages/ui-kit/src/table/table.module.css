@@ -2839,24 +2839,27 @@
     font-size: 0.6875rem;
   }
 
-  /* BP-42 A14: the header's right cell holds the dot, the mute button, the menu and "Rời phòng" on a 360 px phone, beside a
-     squeeze table's gold badge. The mute button and the menu's ⋯ are drawn 32 px wide, an invisible pad either side keeping
-     each 42 px to the thumb (the compact header's trick below); "Rời phòng" takes 8 px of side padding, the dot its own 8 px
-     and the gaps 6 px, so the room's name keeps what it had before the mute button came (Ruling 12). */
-  .header {
+  /* BP-42 A14: a header that holds the mute button (the app gave the room a sound engine) has the dot, the mute button, the menu
+     and "Rời phòng" in its right cell on a 360 px phone, beside a squeeze table's gold badge. The mute button and the menu's ⋯ are
+     drawn 32 px wide; "Rời phòng" takes 8 px of side padding, the dot its own 8 px and the gaps 6 px, so the room's name keeps what
+     it had before the mute button came (Ruling 12). Each icon's invisible pad (the compact header's trick below) stops where the
+     other's starts: the mute button reaches 5 px left (into the gap by the dot) and 3 px right, the ⋯ 3 px left and 5 px right
+     (into the gap by "Rời phòng", which has none), so each is 40 px wide to the thumb and the two never overlap. A header without
+     the button (Lite) keeps its old sizes. */
+  .header:has(> .headRight > .headMute) {
     column-gap: 6px;
   }
 
-  .headRight {
+  .headRight:has(> .headMute) {
     gap: 6px;
   }
 
-  .headRight > .conn {
+  .headRight:has(> .headMute) > .conn {
     min-width: 8px;
   }
 
   .headRight > .headMute,
-  .headRight [aria-haspopup='menu'] {
+  .headRight:has(> .headMute) [aria-haspopup='menu'] {
     position: relative;
     width: 32px;
     min-width: 32px;
@@ -2864,13 +2867,20 @@
   }
 
   .headRight > .headMute::after,
-  .headRight [aria-haspopup='menu']::after {
+  .headRight:has(> .headMute) [aria-haspopup='menu']::after {
     content: '';
     position: absolute;
-    inset: -4px -5px;
   }
 
-  .headRight > .headLeave {
+  .headRight > .headMute::after {
+    inset: -4px -3px -4px -5px;
+  }
+
+  .headRight:has(> .headMute) [aria-haspopup='menu']::after {
+    inset: -4px -5px -4px -3px;
+  }
+
+  .headRight:has(> .headMute) > .headLeave {
     padding: 0 var(--space-2);
   }
 }

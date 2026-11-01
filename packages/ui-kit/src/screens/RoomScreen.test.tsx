@@ -12,7 +12,8 @@ import PRIMITIVES_CSS from '../primitives/primitives.module.css?raw'
 import { makeHand, makePlayer, makeRoom, makeSeat, makeState } from '../test-fixtures.js'
 import type { PlayOptions, SoundEngine, SoundOutcome } from '../sound/engine.js'
 import type { StingerId } from '../sound/stingers.js'
-import { FRESH_MS } from '../table/entrance-schedule.js'
+import { DICE_ROLL_MS } from '../table/chaos-detail.js'
+import { ENTRANCE_MS, FRESH_MS } from '../table/entrance-schedule.js'
 import s from '../table/table.module.css'
 import { declarationsOf } from '../theme/contrast.js'
 import TABLE_CSS from '../table/table.module.css?raw'
@@ -136,7 +137,7 @@ describe('RoomScreen', () => {
 
     await confirm('5') // below 50 BB
     expect(client.sitDown).toHaveBeenLastCalledWith(1, 10_000)
-  })
+  }, 15_000) // userEvent types and clicks a lot: about 2 s alone, past 5 s under the full run’s load
 
   it('shows the server\'s refusal of a Start as a toast (bug log §10 E6: "Not enough players")', async () => {
     const client = fakeClient(makeState({ room: readyRoom }), {
@@ -1545,7 +1546,7 @@ describe('RoomScreen', () => {
       const dock = screen.getByRole('group', { name: 'Điều khiển bàn' })
       expect(within(dock).getByText((_, el) => el?.tagName === 'P' && /5 giây/.test(el.textContent ?? ''))).toBeInTheDocument()
       expect(screen.getByRole('group', { name: 'Hành động' })).toHaveAttribute('data-between', 'true')
-    })
+    }, 15_000) // userEvent: about 2 s alone, past 5 s under the full run’s load
 
     it('a spectator has no footer in the stack layout', () => {
       // Standing in a room someone else hosts: nothing to press under the felt, waiting or watching a hand.
@@ -2246,6 +2247,71 @@ describe('RoomScreen: Thần entrances and sound (BP-42)', () => {
     // Its band shows what is left of its time, silently.
     expect(screen.getByRole('button', { name: /has descended/ })).toBeInTheDocument()
     expect(engine.played).toEqual([])
+  })
+
+  it('on a phone held upright the band stands over the felt while an entrance shows, so the seat’s flash is seen (Ruling 13)', () => {
+    drawWith(makeState({ room: standingRoom, entrances: [entrance()] }))
+    // The rule keys on the room's stack layout and on the entrance's slot (first in the layer) holding the band.
+    const layer = document.querySelector(`.${screens.moments}`)!
+    expect(layer.firstElementChild).toContainElement(screen.getByRole('button', { name: /has descended/ }))
+    expect(declarationsOf(SCREENS_CSS, /^\.room\[data-layout='stack'\] > \.moments:has\(> :first-child:not\(:empty\)\)$/)).toMatchObject({
+      'justify-content': 'center',
+    })
+  })
+
+  it('a second entrance sounds in its turn, once the first band has ended (the id guard keeps one per entrance)', () => {
+    vi.useFakeTimers()
+    try {
+      const engine = fakeEngine()
+      const now = Date.now()
+      const state = makeState({
+        room: standingRoom,
+        entrances: [entrance({ at: now }), entrance({ id: 2, title: 'demigod', seat: 1, playerId: 'me', name: 'Mai', at: now + 100 })],
+      })
+      drawWith(state, engine)
+      expect(engine.played).toEqual([['entrance.god', undefined]])
+      act(() => void vi.advanceTimersByTime(ENTRANCE_MS + 50))
+      expect(screen.getByRole('button', { name: 'The Demigod Mai has appeared!' })).toBeInTheDocument()
+      expect(engine.played).toEqual([
+        ['entrance.god', undefined],
+        ['entrance.demigod', undefined],
+      ])
+      act(() => void vi.advanceTimersByTime(ENTRANCE_MS + 50))
+      expect(engine.played).toHaveLength(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  const MOMENTS: [ClientHerald['kind'], StingerId][] = [
+    ['god', 'moment.ascend'],
+    ['demigod', 'moment.demigod'],
+    ['godslain', 'moment.godslain'],
+    ['dice', 'moment.jackpot'],
+  ]
+  it.each(MOMENTS)('a %s herald plays %s, cutting what sounds (preempt)', (kind, stinger) => {
+    const engine = fakeEngine()
+    const chaosRoom = makeRoom({
+      mode: 'blind',
+      config: {
+        name: 'T',
+        mode: 'blind',
+        maxPlayers: 4,
+        isPrivate: false,
+        turnTimerSec: 20,
+        autoStart: false,
+        hasPassword: false,
+        blind: { holeCards: 3, decisionMode: 'playOrFold', fixedWager: 1_000, botCount: 0, chaosCycle: 5 },
+      },
+      players: [makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'SEATED', stack: 19_800 }), makePlayer({ playerId: 'me', displayName: 'Mai' })],
+    })
+    // A 6-6-6's band shows from the dice landing: its roll came `DICE_ROLL_MS` ago, so it lands now.
+    const herald: ClientHerald =
+      kind === 'dice'
+        ? { id: 1, kind, seat: 0, name: 'Ann', dice: [6, 6, 6], amount: 50_000, at: Date.now() - DICE_ROLL_MS }
+        : { id: 1, kind, seat: 0, name: 'Ann', at: Date.now() }
+    drawWith(makeState({ room: chaosRoom, chaos: { ...initialChaos, heralds: [herald] } }), engine)
+    expect(engine.played).toEqual([[stinger, { preempt: true }]])
   })
 
   it("the Thần's herald plays moment.ascend", () => {

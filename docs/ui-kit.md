@@ -697,7 +697,9 @@ them; a snapshot keeps them, leaving clears them). `RoomScreen` heralds each one
   (`--entrance-*` tokens, each band at least 0.9 opaque). Its live region (`role="status"`, "Màn ra mắt") is on every table, so a
   test that looks for the room's one status must scope its query. Empty, the slot takes no gap, so the herald and the dice stand
   where they always stood. Its button carries `data-herald="entrance"`; a BP-41 watcher matches
-  `button[data-herald]:not([data-herald="entrance"])`. A tap puts it away and lets the next one start.
+  `button[data-herald]:not([data-herald="entrance"])`. A tap puts it away and lets the next one start. On a phone held upright
+  (the stack layout) the herald's slot lies over the first row of opponents, so while an entrance shows the layer stands the band
+  a little below the screen's middle, over the felt, where the heralded seat's flash stays in sight (Ruling 13).
 - `PokerTable`'s `flash` (`{ seat, title }`) makes that seat's plate pulse a ring in the title's colour (`.seat[data-entrance]
   .plate::before`, a layer apart from the reign's aura) while the band shows. Under `prefers-reduced-motion` the band's words just
   show, and `RoomScreen` passes `flash = null`: there is no flash at all (Ruling 11), so the ring has no reduced-motion rule.
@@ -729,9 +731,10 @@ heard.
 
 **In the room.** `RoomScreenProps.sound?: SoundEngine`. Given, the header's `sound` slot gets `MuteButton` ("Tắt tiếng" / "Bật
 tiếng", no `aria-pressed`, Ruling 10), drawn before the seat menu: a bare `<button>` straight in `.headRight`, so the sideways
-header's 30 px rule and pad apply. At 400 px or less it and the menu's ⋯ are drawn 32 px wide with an invisible pad (`.headMute`,
-A14), and "Rời phòng" (`.headLeave`), the dot and the gaps give up a few pixels, so a squeeze table's name keeps the room it had
-before the button came (Ruling 12). The
+header's 30 px rule and pad apply. At 400 px or less, in a header that holds it, it and the menu's ⋯ are drawn 32 px wide, each
+with an invisible pad that makes it 40 px to the thumb without overlapping the other's (`.headMute`, A14), and "Rời phòng"
+(`.headLeave`), the dot and the gaps give up a few pixels, so a squeeze table's name keeps the room it had before the button came
+(Ruling 12). A header without the button (Lite) keeps its old sizes. The
 sideways chaos toast band stops `14rem` from the right to clear it (A2). Absent, there is no button and no sound, though the band
 still draws any entrance the state holds. Normal owns one engine (`apps/normal-web/src/sound.ts`) and hands it to the room and to
 Cài đặt's "Âm thanh". **Lite gets none:** it passes no `sound`, and its server never sends an entrance.
