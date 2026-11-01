@@ -779,5 +779,9 @@
   "avatar": {
     "turn": "Turn",
     "greet": "Your figure, tap to say hi"
+  },
+  "sound": {
+    "mute": "Mute",
+    "unmute": "Unmute"
   }
 }

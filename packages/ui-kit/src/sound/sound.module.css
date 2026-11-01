@@ -1,0 +1,42 @@
+/* The room header's mute button: an icon button the height of the header's small buttons ("Rời phòng" is a `Button
+   size="sm"`, 36 px; the seat menu's ⋯ is 34 px), the tap size on a touch screen. The compact (sideways) header and
+   the ≤ 400 px rules in `table.module.css` size it further as a direct child of `.headRight`. */
+.mute {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color var(--dur-1) var(--ease);
+}
+
+.mute:hover {
+  background: var(--gold-soft);
+}
+
+.mute[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--ink) 28%, transparent);
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+.mute:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .mute {
+    min-width: var(--tap);
+    min-height: var(--tap);
+  }
+}

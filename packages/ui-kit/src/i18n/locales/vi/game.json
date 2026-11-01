@@ -779,5 +779,9 @@
   "avatar": {
     "turn": "Xoay",
     "greet": "Nhân vật của bạn, bấm để chào"
+  },
+  "sound": {
+    "mute": "Tắt tiếng",
+    "unmute": "Bật tiếng"
   }
 }
