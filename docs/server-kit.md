@@ -448,7 +448,8 @@ title the player has equipped, or `null` for any other title or none. Without a 
 **When.** `Room.sitDown` asks the port right after `PLAYER_SAT`, **off the room's queue** (`void`), so the sit, its ACK and
 `PLAYER_SAT` never wait on it. The answer comes back through `enqueue` and is told only if the player still sits in the same
 seat with the same `sitId` and the room is not closing or closed. A rejected lookup logs `title lookup failed` as a warning and
-announces nothing. A bot never announces, a reconnect and sit-out/sit-in never announce, and the host's own first sit is announced like
+announces nothing; a failure on the room's side of the announcement logs `title entrance not sent` instead, and a room that closed
+before the answer drops it without a word. A bot never announces, a reconnect and sit-out/sit-in never announce, and the host's own first sit is announced like
 anyone's.
 
 **Cooldown.** The room keeps `Map<playerId, at>` on its injected clock: a player announced less than

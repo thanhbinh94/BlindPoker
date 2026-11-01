@@ -183,11 +183,12 @@ async function entranceSeenOnce(browser: Browser, id: string): Promise<void> {
       await expect(band(p.page), `${p.who.displayName}: the band is gone within 4 s`).toHaveCount(0, { timeout: left })
     }
 
-    // The stinger, asked for once on each page: Alice's and Bob's can sound, Carol's hidden tab answers "hidden".
+    // The stinger, asked for once on each page: Alice's and Bob's sound (their clicks unlocked the audio), Carol's hidden tab
+    // answers "hidden".
     for (const p of [bob, alice]) {
       await expect.poll(async () => (await heard(p.page, 'entrance.god')).length, { message: `${p.who.displayName} asked for the stinger` }).toBe(1)
       const [one] = await heard(p.page, 'entrance.god')
-      expect(['muted', 'hidden'], `${p.who.displayName}: the stinger's outcome (${one!.outcome})`).not.toContain(one!.outcome)
+      expect(one!.outcome, `${p.who.displayName}: the stinger's outcome`).toBe('played')
       test.info().annotations.push({ type: 'sound', description: `${id} ${p === bob ? 'Bob' : 'Alice'}: entrance.god → ${one!.outcome}` })
     }
     await expect.poll(() => heard(carol.page, 'entrance.god'), { message: 'Carol’s hidden tab' }).toEqual([{ id: 'entrance.god', outcome: 'hidden' }])

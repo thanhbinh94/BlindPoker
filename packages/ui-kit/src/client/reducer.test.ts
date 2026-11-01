@@ -1220,17 +1220,23 @@ describe('title entrances', () => {
     expect(entrance(holdem(), 11, 5, 'ghost', 4).entrances[0]).toMatchObject({ name: '5', playerId: 'ghost' })
   })
 
-  it('ids grow and only the latest four are kept', () => {
+  it('ids grow and only the latest six are kept', () => {
     let s = holdem()
-    for (let i = 0; i < 6; i += 1) s = entrance(s, 11 + i, 100 * i, `p${i % 3}`, i % 3)
-    expect(s.entrances.map((e) => e.id)).toEqual([3, 4, 5, 6])
-    expect(s.entrances.map((e) => e.at)).toEqual([200, 300, 400, 500])
+    for (let i = 0; i < 8; i += 1) s = entrance(s, 11 + i, 100 * i, `p${i % 3}`, i % 3)
+    expect(s.entrances.map((e) => e.id)).toEqual([3, 4, 5, 6, 7, 8])
+    expect(s.entrances.map((e) => e.at)).toEqual([200, 300, 400, 500, 600, 700])
   })
 
   it('a snapshot keeps them and adds none', () => {
     const s = entrance(holdem(), 11, 100, 'p1', 1)
     const after = reduceClient(s, { type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: 20, room: roomView('holdem', HOLDEM_RULES, [10000, 10000, 10000]), hand: null, deadlineAt: null }, now: 9000 }).entrances
     expect(after).toEqual(s.entrances)
+  })
+
+  it("a snapshot of another room clears them: one room's entrances never show at another's table", () => {
+    const s = entrance(holdem(), 11, 100, 'p1', 1)
+    const other = { ...roomView('holdem', HOLDEM_RULES, [10000, 10000, 10000]), roomId: 'r2' }
+    expect(reduceClient(s, { type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: 1, room: other, hand: null, deadlineAt: null }, now: 9000 }).entrances).toEqual([])
   })
 
   it('leaving, a close and NOT_IN_ROOM empty them', () => {

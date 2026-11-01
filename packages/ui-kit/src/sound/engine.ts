@@ -13,7 +13,10 @@ import type { StingerId } from './stingers.js'
 export type SoundOutcome = 'played' | 'muted' | 'hidden' | 'blocked' | 'unsupported' | 'busy'
 
 export interface PlayOptions {
-  /** Stop what is sounding (and what waits) and start now: the BP-41 moments cut an entrance short. */
+  /**
+   * Cut an entrance's stinger (sounding or waiting) and start now: the BP-41 moments cut an entrance short (A9, Ruling 3). A
+   * moment never cuts a moment: while one sounds or waits, this play queues behind it like any other (spec §5.2, the later waits).
+   */
   preempt?: boolean
 }
 
@@ -26,6 +29,11 @@ export interface SoundEngine {
   /** A user gesture: creates the AudioContext the first time, resumes it when suspended, loads the stingers once. */
   unlock(): void
   play(id: StingerId, opts?: PlayOptions): SoundOutcome
+  /**
+   * Fades out an entrance's stinger, sounding or waiting (its band put away or cut short). While a BP-41 moment sounds or waits,
+   * it does nothing: a moment is never stopped, nor what is queued with it.
+   */
+  stop(): void
 }
 
 export type StingerModule = typeof Stingers
@@ -49,7 +57,7 @@ export const SOUND_EVENT = 'bp:sound'
 export const MAX_SOUND_WAIT_S = 4
 /** A stinger starts this far after `currentTime`, so its first attack never lands in the past (Ruling 9). */
 export const SOUND_LEAD_S = 0.02
-/** Mute and preempt fade the old channel out over this long, then drop it after `STOP_DROP_MS`. */
+/** Mute, preempt and stop fade the old channel out over this long, then drop it after `STOP_DROP_MS`. */
 const STOP_FADE_S = 0.015
 const STOP_DROP_MS = 60
 /** A lazy load of the stingers that fails is tried again on later gestures, this many times in all. */
@@ -111,6 +119,8 @@ export function createSoundEngine(deps: SoundEngineDeps = {}): SoundEngine {
   let master: AudioNode | null = null
   let channel: GainNode | null = null
   let busyUntil = 0
+  /** Until when (ctx seconds) a BP-41 moment sounds or waits: before then, neither a preempt nor `stop()` cuts the channel. */
+  let momentUntil = 0
 
   /**
    * Silences what sounds and what waits: the channel fades to 0 in `STOP_FADE_S` (a cut would click), is dropped from
@@ -118,6 +128,7 @@ export function createSoundEngine(deps: SoundEngineDeps = {}): SoundEngine {
    */
   const stopSounding = (): void => {
     busyUntil = 0
+    momentUntil = 0
     if (ctx === null || channel === null || master === null) return
     const old = channel
     channel = null
@@ -150,8 +161,10 @@ export function createSoundEngine(deps: SoundEngineDeps = {}): SoundEngine {
     loading = true
     loadStingers().then(
       (module) => {
-        stingers = module
         loading = false
+        // a chunk that resolves to nothing counts as a failed load: kept, it would throw on the first play
+        if (module) stingers = module
+        else loadFailures += 1
       },
       () => {
         loading = false
@@ -159,6 +172,9 @@ export function createSoundEngine(deps: SoundEngineDeps = {}): SoundEngine {
       },
     )
   }
+
+  /** A BP-41 moment sounds or waits on the channel now. */
+  const momentAhead = (): boolean => ctx !== null && ctx.currentTime < momentUntil
 
   const outcome = (id: StingerId, result: SoundOutcome): SoundOutcome => {
     emit(id, result)
@@ -222,16 +238,20 @@ export function createSoundEngine(deps: SoundEngineDeps = {}): SoundEngine {
           fresh.connect(master)
           channel = fresh
         }
-        if (opts.preempt === true) stopSounding()
+        if (opts.preempt === true && !momentAhead()) stopSounding()
         const now = ctx.currentTime
         const start = Math.max(now + SOUND_LEAD_S, busyUntil)
         if (start - now > MAX_SOUND_WAIT_S) return outcome(id, 'busy')
         busyUntil = start + stingers.scheduleStinger(ctx, channel!, id, start)
+        if (!id.startsWith('entrance.')) momentUntil = busyUntil
         return outcome(id, 'played')
       } catch {
         stopSounding()
         return outcome(id, 'unsupported')
       }
+    },
+    stop(): void {
+      if (!momentAhead()) stopSounding()
     },
   }
 }

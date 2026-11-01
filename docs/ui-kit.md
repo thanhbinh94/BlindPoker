@@ -683,8 +683,8 @@ the three. The ops pack's F-14 (`apps/normal-web/e2e/ops/10-chaos.spec.ts`) forc
 ### Sound and entrances (BP-42, spec 2026-10-31)
 
 **The entrance band.** When a player wearing a Thần title (Thần Bài, Bán Thần, Kẻ Sát Thần) sits down, the server sends a
-`TITLE_ENTRANCE` room event; the reducer keeps the room's latest four in `ClientState.entrances` (outside `chaos`: every table has
-them; a snapshot keeps them, leaving clears them). `RoomScreen` heralds each one at **every** table, Hold'em included:
+`TITLE_ENTRANCE` room event; the reducer keeps the room's latest six in `ClientState.entrances` (outside `chaos`: every table has
+them; a snapshot of the same room keeps them, a snapshot of another room and leaving clear them). `RoomScreen` heralds each one at **every** table, Hold'em included:
 
 - `useEntrances({ entrances, heralds, rolls, hold })` (`table/EntranceBand.tsx`) runs the pure `scheduleEntrances`
   (`table/entrance-schedule.ts`): one band at a time for `ENTRANCE_MS` (3 s), at most `ENTRANCE_QUEUE_MAX` (3, the one showing
@@ -706,10 +706,13 @@ them; a snapshot keeps them, leaving clears them). `RoomScreen` heralds each one
 
 **The sound engine** (`src/sound/`). The game's only sound: seven EDM stingers synthesised with Web Audio (`stingers.ts`, no files),
 through one master (`MASTER_GAIN` 0.6 into a limiter). `createSoundEngine()` gives a `SoundEngine`: `play(id, { preempt? })`,
-`muted` / `setMuted` (remembered under `bp.sound.muted`, `'1'` = muted), `subscribe`, `unlock()` and `running`. It has one channel: a
-stinger waits for the one sounding, up to `MAX_SOUND_WAIT_S` (4 s), or is dropped (`'busy'`). It is silent while muted, in a hidden
-tab and before a gesture has unlocked the audio, and it never replays a sound it missed. `preempt` fades out what sounds and starts
-now. The stingers load by `import()` on the first `unlock()` (Ruling 6, Normal's entry budget); until then `play` answers
+`stop()`, `muted` / `setMuted` (remembered under `bp.sound.muted`, `'1'` = muted), `subscribe`, `unlock()` and `running`. It has one
+channel: a stinger waits for the one sounding, up to `MAX_SOUND_WAIT_S` (4 s), or is dropped (`'busy'`). It is silent while muted, in
+a hidden tab and before a gesture has unlocked the audio, and it never replays a sound it missed. `preempt` fades out an entrance's
+stinger (sounding or waiting) and starts now; while a BP-41 moment sounds or waits, a preempting moment queues behind it like any other
+(spec §5.2: the later one waits). `stop()` fades out an entrance's stinger the same way and does nothing while a moment sounds or
+waits; `RoomScreen` calls it when an entrance band that sounded ends early (a tap, or a reveal hold beginning inside it), never when it
+runs its 3 s. A lazy load that resolves to nothing counts as a failed one. The stingers load by `import()` on the first `unlock()` (Ruling 6, Normal's entry budget); until then `play` answers
 `'blocked'`. `attachGestureUnlock(engine)` resumes the context on every gesture while it is not running (Ruling 8). `StingerId` is
 exported as a type only; write the ids literally (`'entrance.god'`, `'moment.ascend'`, …), since a value import of `stingers.ts`
 would pull it back into the entry chunk.
@@ -743,7 +746,7 @@ Cài đặt's "Âm thanh". **Lite gets none:** it passes no `sound`, and its ser
 page loads, for its 3 s) and `/sound` (the header's mute button; the page never unlocks the audio, so nothing sounds).
 
 **`#sounds`** (`playground/sounds.tsx`) is the audition page: a row per stinger with its id and length, and "Phát", which unlocks a real
-engine with the click, waits for the lazily loaded stingers, plays the stinger (`preempt`, so a second press cuts the first) and puts up the
+engine with the click, waits for the lazily loaded stingers, plays the stinger (`preempt`, so a moment cuts an entrance; a press over a moment waits its turn, as at the table) and puts up the
 band the room shows with it for 3 s: the entrance band of the title, with a sample name, for the three entrances, and the BP-41 herald for
 the four moments. The room's own mute button and the outcome the engine answered sit at the top. It imports the stinger table from
 `stingers.ts` directly; only the playground may, because the package index keeps that file out of Normal's entry chunk. Dev-only, reached by

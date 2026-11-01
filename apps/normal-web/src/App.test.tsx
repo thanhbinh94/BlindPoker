@@ -600,7 +600,7 @@ describe('App — back into the room the server still holds (T5)', () => {
     expect(await screen.findByRole('button', { name: /Rời phòng/ })).toBeInTheDocument()
   })
 
-  it('the room gets a mute button, from the app\'s one sound engine', async () => {
+  it('the room gets a mute button, in the room header beside "Rời phòng"', async () => {
     window.history.replaceState(null, '', '/#/lobby')
     renderApp()
     await settled()

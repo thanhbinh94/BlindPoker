@@ -429,14 +429,16 @@ export class Room {
     void Promise.resolve().then(() => titles.equippedTitle(playerId)).then(
       (title) => {
         if (title === null) return
+        // Its own catch: a failure on the room's side is not the lookup's, and must not be logged as one.
         return this.enqueue(() => {
           const now = this.players.get(playerId)
           if (this.closing || this.status === 'CLOSED' || now === undefined || now.seat !== seat || now.sitId !== sitId) return
           this.entranceAt.set(playerId, this.deps.clock.now())
           this.broadcastRoomEvent({ type: 'TITLE_ENTRANCE', title, seat, playerId })
-        })
+        }).catch((err: unknown) => { this.deps.log.warn('title entrance not sent', { roomId: this.roomId, playerId, err: String(err) }) })
       },
-    ).catch((err: unknown) => { this.deps.log.warn('title lookup failed', { roomId: this.roomId, playerId, err: String(err) }) })
+      (err: unknown) => { this.deps.log.warn('title lookup failed', { roomId: this.roomId, playerId, err: String(err) }) },
+    )
   }
 
   standUp(playerId: string): Promise<void> {

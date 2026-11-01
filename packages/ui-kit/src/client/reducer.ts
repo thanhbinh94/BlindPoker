@@ -428,8 +428,12 @@ const nextMomentId = (chaos: ClientChaos): number =>
 
 const keepLast = <T,>(list: readonly T[], item: T): T[] => [...list, item].slice(-KEPT_MOMENTS)
 
-/** BP-42: how many title entrances the state keeps (the band shows at most three, one at a time; one spare). */
-const KEPT_ENTRANCES = 4
+/**
+ * BP-42: how many title entrances the state keeps. The band shows at most three, one at a time; the spares keep an entrance the
+ * schedule has started or dropped in the list while a burst of sit-downs arrives, so `useEntrances` does not forget it and
+ * show it again.
+ */
+const KEPT_ENTRANCES = 6
 
 /** Appends a `TITLE_ENTRANCE` to the room's list; any other event leaves the list as it is. */
 function applyEntrance(entrances: ClientEntrance[], event: RoomEvent, ctx: ChaosRoomContext): ClientEntrance[] {
@@ -680,6 +684,8 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
         roomReturns: state.roomStale ? state.roomReturns + 1 : state.roomReturns,
         hand: msg.hand ? handFromView(msg.hand, msg.room) : null,
         chaos: chaosFromSnapshot(msg.room, draftFromSnapshot(msg.chaos?.draft ?? null), msg.hand, msg.chaos?.bonus, msg.chaos?.table, state.chaos),
+        // BP-42: another room's entrances never show at this one's table
+        entrances: state.room !== null && state.room.roomId !== msg.room.roomId ? [] : state.entrances,
         resultSkips: skipsFromSnapshot(msg.resultSkips),
         seq: msg.seq,
         deadlineAt: msg.deadlineAt,

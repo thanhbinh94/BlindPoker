@@ -20,6 +20,7 @@ import { ChaosDraft } from '../table/ChaosDraft.js'
 import { ChaosHerald } from '../table/ChaosHerald.js'
 import { ChaosToasts } from '../table/ChaosToasts.js'
 import { EntranceBand, useEntrances } from '../table/EntranceBand.js'
+import { ENTRANCE_MS } from '../table/entrance-schedule.js'
 import { HandResult, ResultSkipControl, type ResultSkip } from '../table/HandResult.js'
 import { STACK_LAYOUT_QUERY, useRoomFrame, useStageTier, type RoomFrame } from '../table/frame.js'
 import { PokerTable, type TableLayout } from '../table/PokerTable.js'
@@ -232,12 +233,25 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor
   // The entrance's stinger, once, on the committed render where its band first shows within `FRESH_MS` of its start: an entrance
   // seen late (a snapshot, a reconnect, a remount) is never sounded. The id guard keeps StrictMode's second effect quiet.
   const soundedEntrance = useRef<number | null>(null)
+  /** The sounded entrance while its band is up, and when its band would run out on its own. */
+  const sounding = useRef<{ id: number; until: number } | null>(null)
+  const entranceSince = entrances.since
   useEffect(() => {
+    // A band that sounded and ends before its time — put away, or cut by a reveal hold beginning inside it — takes its stinger
+    // with it. One that runs its full time is left to finish. The engine's `stop()` never touches a BP-41 moment: a herald that
+    // cut the band has already started its own over the entrance's.
+    const live = sounding.current
+    if (live !== null && shownEntrance?.id !== live.id) {
+      sounding.current = null
+      if (Date.now() < live.until) soundRef.current?.stop()
+    }
     if (shownEntrance === null || !entrances.fresh || soundedEntrance.current === shownEntrance.id) return
     soundedEntrance.current = shownEntrance.id
+    sounding.current = { id: shownEntrance.id, until: entranceSince + ENTRANCE_MS }
     soundRef.current?.play(`entrance.${shownEntrance.title}`)
-  }, [shownEntrance, entrances.fresh])
-  // The BP-41 moments cut whatever sounds (A9, Ruling 3 for the ear), as their band cuts the entrance's.
+  }, [shownEntrance, entrances.fresh, entranceSince])
+  // The BP-41 moments cut an entrance's stinger (A9, Ruling 3 for the ear), as their band cuts the entrance's; a moment over a
+  // moment waits its turn in the engine (spec §5.2).
   const soundMoment = useCallback((h: ClientHerald) => void soundRef.current?.play(MOMENT_STINGER[h.kind], { preempt: true }), [])
 
   if (room === null) return null

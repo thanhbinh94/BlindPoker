@@ -188,6 +188,29 @@ describe('the sound engine', () => {
     expect(r.engine.play('entrance.god')).toBe('unsupported')
   })
 
+  it('a lazy import that resolves to nothing counts as a failed load, and is tried again', async () => {
+    const load = vi
+      .fn<() => Promise<typeof stingers>>()
+      .mockResolvedValueOnce(undefined as unknown as typeof stingers)
+      .mockResolvedValue(stingers)
+    const r = rig({ loadStingers: load })
+    r.engine.unlock()
+    await flush()
+    expect(r.engine.running).toBe(false)
+    expect(r.engine.play('entrance.god')).toBe('blocked') // not kept: no throw, no 'played'
+    r.engine.unlock()
+    await flush()
+    expect(load).toHaveBeenCalledTimes(2)
+    expect(r.engine.play('entrance.god')).toBe('played')
+    // three empty modules in all: given up, as for three rejections
+    const empty = rig({ loadStingers: () => Promise.resolve(null as unknown as typeof stingers) })
+    for (let i = 0; i < MAX_LOAD_ATTEMPTS; i += 1) {
+      empty.engine.unlock()
+      await flush()
+    }
+    expect(empty.engine.play('entrance.god')).toBe('unsupported')
+  })
+
   it("after unlock → 'played' a lead after currentTime", async () => {
     const r = await unlocked()
     expect(r.createContext).toHaveBeenCalledTimes(1)
@@ -255,6 +278,60 @@ describe('the sound engine', () => {
     // and the queue restarts from the preempting one
     expect(r.engine.play('moment.demigod')).toBe('played')
     expect(r.scheduled[2]!.when).toBeCloseTo(1.02 + 2.5, 9)
+  })
+
+  it('a moment never cuts a moment: a preempting moment over one sounding waits for it (scheduled at its end)', async () => {
+    const r = await unlocked()
+    r.fake.currentTime = 1
+    expect(r.engine.play('moment.ascend', { preempt: true })).toBe('played') // 1.02 → 3.52
+    // (the channel the first play built faded at its own preempt, with nothing on it; the newest is the live one)
+    const first = channelOf(r.fake).at(-1)
+    r.fake.currentTime = 1.5
+    expect(r.engine.play('moment.demigod', { preempt: true })).toBe('played')
+    expect(r.scheduled.map((x) => x.id)).toEqual(['moment.ascend', 'moment.demigod'])
+    expect(r.scheduled[1]!.when).toBeCloseTo(1.02 + 2.5, 9)
+    // nothing faded: the same channel still feeds the master
+    expect(first!.gain.events.some((e) => e.value === 0)).toBe(false)
+    expect(channelOf(r.fake).at(-1)).toBe(first)
+    // a moment that waits behind an entrance is not cut either: the preempting one queues after both
+    r.fake.currentTime = 20
+    r.engine.play('entrance.god') // 20.02 → 23.52
+    r.engine.play('moment.jackpot') // waits: 23.52 → 25.52
+    r.fake.currentTime = 20.5
+    expect(r.engine.play('moment.godslain', { preempt: true })).toBe('busy') // would wait 5.02 s
+    // once the moments are over, a preempt cuts an entrance again
+    r.fake.currentTime = 30
+    r.engine.play('entrance.demigod')
+    const sounding = channelOf(r.fake).at(-1)
+    r.fake.currentTime = 30.5
+    expect(r.engine.play('moment.ascend', { preempt: true })).toBe('played')
+    await expectFadedOut(sounding!, 30.5)
+    expect(r.scheduled.at(-1)!.when).toBeCloseTo(30.52, 9)
+  })
+
+  it('stop() fades out an entrance (sounding or waiting) and leaves a BP-41 moment alone', async () => {
+    const r = await unlocked()
+    r.engine.play('entrance.god')
+    const [first] = channelOf(r.fake)
+    r.fake.currentTime = 0.4
+    r.engine.stop()
+    await expectFadedOut(first!, 0.4)
+    // the channel is free again: the next play starts now
+    r.fake.currentTime = 0.6
+    r.engine.play('entrance.demigod')
+    expect(r.scheduled[1]!.when).toBeCloseTo(0.62, 9)
+    // a moment sounding: stop() leaves the channel (and what waits behind the moment) alone
+    r.fake.currentTime = 10
+    r.engine.play('moment.ascend', { preempt: true }) // cuts the demigod's entrance
+    const moment = channelOf(r.fake).at(-1)
+    r.engine.play('entrance.godslayer') // queues after the moment: 12.52
+    r.fake.currentTime = 10.5
+    r.engine.stop()
+    expect(channelOf(r.fake).at(-1)).toBe(moment)
+    expect(moment!.gain.events.some((e) => e.value === 0)).toBe(false)
+    r.fake.currentTime = 13
+    expect(r.engine.play('moment.demigod')).toBe('played')
+    expect(r.scheduled.at(-1)!.when).toBeCloseTo(12.52 + 4, 9) // still behind the godslayer's entrance
   })
 
   it('muting fades out what is sounding', async () => {
@@ -377,6 +454,7 @@ describe('attachGestureUnlock', () => {
       setMuted: () => {},
       subscribe: () => () => {},
       play: () => 'blocked' as const,
+      stop: () => {},
       unlock: vi.fn(),
     }
     return e

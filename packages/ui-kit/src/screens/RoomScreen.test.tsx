@@ -10,9 +10,12 @@ import { createI18n } from '../i18n/index.js'
 import primitives from '../primitives/primitives.module.css'
 import PRIMITIVES_CSS from '../primitives/primitives.module.css?raw'
 import { makeHand, makePlayer, makeRoom, makeSeat, makeState } from '../test-fixtures.js'
-import type { PlayOptions, SoundEngine, SoundOutcome } from '../sound/engine.js'
+import { createSoundEngine, type PlayOptions, type SoundEngine, type SoundOutcome } from '../sound/engine.js'
+import { FakeAudioContext } from '../sound/fake-audio.js'
+import * as stingers from '../sound/stingers.js'
 import type { StingerId } from '../sound/stingers.js'
 import { DICE_ROLL_MS } from '../table/chaos-detail.js'
+import { HERALD_MS } from '../table/ChaosHerald.js'
 import { ENTRANCE_MS, FRESH_MS } from '../table/entrance-schedule.js'
 import s from '../table/table.module.css'
 import { declarationsOf } from '../theme/contrast.js'
@@ -2164,13 +2167,17 @@ describe('RoomScreen on a Poker hỗn loạn table', () => {
 })
 
 describe('RoomScreen: Thần entrances and sound (BP-42)', () => {
-  /** A recording engine: what was played, with what options; `muted` and the header's button follow `setMuted`. */
-  function fakeEngine(): SoundEngine & { played: [StingerId, PlayOptions | undefined][] } {
+  /** A recording engine: what was played, with what options, and how often `stop()` was asked; `muted` and the header's button follow `setMuted`. */
+  function fakeEngine(): SoundEngine & { played: [StingerId, PlayOptions | undefined][]; stops: number } {
     const listeners = new Set<() => void>()
     const engine = {
       muted: false,
       running: true,
       played: [] as [StingerId, PlayOptions | undefined][],
+      stops: 0,
+      stop() {
+        engine.stops += 1
+      },
       setMuted(m: boolean) {
         engine.muted = m
         for (const l of listeners) l()
@@ -2188,13 +2195,91 @@ describe('RoomScreen: Thần entrances and sound (BP-42)', () => {
     return engine
   }
 
+  /**
+   * The real engine over a fake AudioContext (its clock stands still at 0), unlocked, with a recording schedule: what was
+   * scheduled when, and every outcome it answered.
+   */
+  async function recordingEngine() {
+    const fake = new FakeAudioContext()
+    const scheduled: { id: StingerId; when: number }[] = []
+    const emitted: [StingerId, SoundOutcome][] = []
+    const module: typeof stingers = {
+      ...stingers,
+      scheduleStinger: (_ctx, _out, id, when) => {
+        scheduled.push({ id, when })
+        return stingers.STINGER_SECONDS[id]
+      },
+    }
+    const engine = createSoundEngine({
+      createContext: () => fake.asContext(),
+      storage: null,
+      isHidden: () => false,
+      emit: (id, outcome) => void emitted.push([id, outcome]),
+      loadStingers: () => Promise.resolve(module),
+    })
+    engine.unlock()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    return { engine, scheduled, emitted }
+  }
+
   const entrance = (patch: Partial<ClientEntrance> = {}): ClientEntrance => ({ id: 1, title: 'god', seat: 0, playerId: 'a', name: 'Ann', at: Date.now(), ...patch })
-  const drawWith = (state: ClientState, sound?: SoundEngine) =>
-    render(
-      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
-        <RoomScreen client={fakeClient(state)} lang="en" onLeft={vi.fn()} {...(sound === undefined ? {} : { sound })} />
-      </I18nextProvider>,
-    )
+  const screenWith = (state: ClientState, sound?: SoundEngine) => (
+    <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+      <RoomScreen client={fakeClient(state)} lang="en" onLeft={vi.fn()} {...(sound === undefined ? {} : { sound })} />
+    </I18nextProvider>
+  )
+  const drawWith = (state: ClientState, sound?: SoundEngine) => render(screenWith(state, sound))
+  const chaosRoom = makeRoom({
+    mode: 'blind',
+    config: {
+      name: 'T',
+      mode: 'blind',
+      maxPlayers: 4,
+      isPrivate: false,
+      turnTimerSec: 20,
+      autoStart: false,
+      hasPassword: false,
+      blind: { holeCards: 3, decisionMode: 'playOrFold', fixedWager: 1_000, botCount: 0, chaosCycle: 5 },
+    },
+    players: [makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'SEATED', stack: 19_800 }), makePlayer({ playerId: 'me', displayName: 'Mai' })],
+  })
+
+  /** A showdown that turns Ann's face-down cards over, seen from my seat: the river first, then the hand complete. */
+  const holdRoom = makeRoom({
+    players: [
+      makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'IN_HAND', stack: 19_800 }),
+      makePlayer({ playerId: 'me', displayName: 'Mai', seat: 2, status: 'IN_HAND', stack: 19_800 }),
+    ],
+  })
+  const river = makeHand({
+    handId: 'h7',
+    mySeat: 2,
+    actingSeat: 0,
+    seats: [
+      makeSeat({ seat: 0, playerId: 'a', displayName: 'Ann', stack: 19_800 }),
+      makeSeat({ seat: 2, playerId: 'me', displayName: 'Mai', stack: 19_800, holeCards: parseCards('Qs Qd') }),
+    ],
+  })
+  const shownDown: ClientHand = {
+    ...river,
+    phase: 'COMPLETE',
+    actingSeat: null,
+    seats: [{ ...river.seats[0]!, holeCards: parseCards('Js Th') }, river.seats[1]!],
+    result: {
+      pots: [],
+      fee: 0,
+      carryOverOut: 0,
+      uncalledReturned: null,
+      cancelled: false,
+      reason: null,
+      payouts: [{ seat: 2, amount: 600 }],
+      showdown: [
+        { seat: 0, cards: parseCards('Js Th'), rank: 1, category: HandCategory.HIGH_CARD, best: parseCards('Ah Kd Js Th 2c') },
+        { seat: 2, cards: parseCards('Qs Qd'), rank: 2, category: HandCategory.PAIR, best: parseCards('Qs Qd Ah Kd 2c') },
+      ],
+    },
+  }
+  const entranceBand = () => screen.queryByRole('button', { name: /has descended/ })
 
   let reduceMotion = false
   beforeEach(() => {
@@ -2291,20 +2376,6 @@ describe('RoomScreen: Thần entrances and sound (BP-42)', () => {
   ]
   it.each(MOMENTS)('a %s herald plays %s, cutting what sounds (preempt)', (kind, stinger) => {
     const engine = fakeEngine()
-    const chaosRoom = makeRoom({
-      mode: 'blind',
-      config: {
-        name: 'T',
-        mode: 'blind',
-        maxPlayers: 4,
-        isPrivate: false,
-        turnTimerSec: 20,
-        autoStart: false,
-        hasPassword: false,
-        blind: { holeCards: 3, decisionMode: 'playOrFold', fixedWager: 1_000, botCount: 0, chaosCycle: 5 },
-      },
-      players: [makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'SEATED', stack: 19_800 }), makePlayer({ playerId: 'me', displayName: 'Mai' })],
-    })
     // A 6-6-6's band shows from the dice landing: its roll came `DICE_ROLL_MS` ago, so it lands now.
     const herald: ClientHerald =
       kind === 'dice'
@@ -2314,25 +2385,128 @@ describe('RoomScreen: Thần entrances and sound (BP-42)', () => {
     expect(engine.played).toEqual([[stinger, { preempt: true }]])
   })
 
-  it("the Thần's herald plays moment.ascend", () => {
-    const engine = fakeEngine()
-    const chaosRoom = makeRoom({
-      mode: 'blind',
-      config: {
-        name: 'T',
-        mode: 'blind',
-        maxPlayers: 4,
-        isPrivate: false,
-        turnTimerSec: 20,
-        autoStart: false,
-        hasPassword: false,
-        blind: { holeCards: 3, decisionMode: 'playOrFold', fixedWager: 1_000, botCount: 0, chaosCycle: 5 },
-      },
-      players: [makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'SEATED', stack: 19_800 }), makePlayer({ playerId: 'me', displayName: 'Mai' })],
-    })
+  it('a Thần and a Bán Thần heralded together both sound: the second moment waits for the first, never cuts it (spec §5.2)', async () => {
+    const r = await recordingEngine()
+    const now = Date.now()
+    const heralds: ClientHerald[] = [
+      { id: 1, kind: 'god', seat: 0, name: 'Ann', at: now },
+      { id: 2, kind: 'demigod', seat: 1, name: 'Mai', at: now },
+    ]
+    drawWith(makeState({ room: chaosRoom, chaos: { ...initialChaos, heralds } }), r.engine)
+    expect(r.emitted).toEqual([
+      ['moment.ascend', 'played'],
+      ['moment.demigod', 'played'],
+    ])
+    expect(r.scheduled[0]!.when).toBeCloseTo(0.02, 9)
+    expect(r.scheduled[1]!.when).toBeCloseTo(0.02 + stingers.STINGER_SECONDS['moment.ascend'], 9)
+  })
+
+  it('an entrance waits out the reveal hold: no band, no stinger and no seat flash until the turned cards have landed, then one of each', () => {
+    vi.useFakeTimers()
+    try {
+      const engine = fakeEngine()
+      const view = drawWith(makeState({ room: holdRoom, hand: river }), engine)
+      // The hand ends by turning Ann's cards over, and Ann's entrance arrives in the same frame.
+      view.rerender(screenWith(makeState({ room: holdRoom, hand: shownDown, entrances: [entrance({ at: Date.now() })] }), engine))
+      expect(entranceBand()).toBeNull()
+      expect(document.querySelector('[data-entrance]')).toBeNull()
+      expect(engine.played).toEqual([])
+      act(() => void vi.advanceTimersByTime(REVEAL_HOLD_MS - 1))
+      expect(entranceBand()).toBeNull()
+      expect(document.querySelector('[data-entrance]')).toBeNull()
+      expect(engine.played).toEqual([])
+      act(() => void vi.advanceTimersByTime(20))
+      expect(entranceBand()).toBeInTheDocument()
+      expect(document.querySelectorAll('[data-entrance]')).toHaveLength(1)
+      expect(engine.played).toEqual([['entrance.god', undefined]])
+      act(() => void vi.advanceTimersByTime(ENTRANCE_MS + 50))
+      expect(engine.played).toHaveLength(1)
+      expect(engine.stops).toBe(0) // it ran its full time
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("on a chaos table the Thần's herald sounds first, alone; the entrance's band and stinger follow once the herald is over", () => {
+    vi.useFakeTimers()
+    try {
+      const engine = fakeEngine()
+      const now = Date.now()
+      const herald: ClientHerald = { id: 1, kind: 'god', seat: 0, name: 'Ann', at: now }
+      drawWith(makeState({ room: chaosRoom, chaos: { ...initialChaos, heralds: [herald] }, entrances: [entrance({ seat: 1, playerId: 'me', name: 'Mai', at: now })] }), engine)
+      expect(engine.played).toEqual([['moment.ascend', { preempt: true }]])
+      expect(entranceBand()).toBeNull()
+      act(() => void vi.advanceTimersByTime(HERALD_MS - 1))
+      expect(entranceBand()).toBeNull()
+      expect(engine.played).toHaveLength(1)
+      act(() => void vi.advanceTimersByTime(50))
+      expect(screen.getByRole('button', { name: 'The Card God Mai has descended!' })).toBeInTheDocument()
+      expect(engine.played).toEqual([
+        ['moment.ascend', { preempt: true }],
+        ['entrance.god', undefined],
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a band put away by a tap stops its stinger; one that runs its time is left to finish', () => {
+    vi.useFakeTimers()
+    try {
+      const tapped = fakeEngine()
+      const first = drawWith(makeState({ room: standingRoom, entrances: [entrance()] }), tapped)
+      expect(tapped.played).toEqual([['entrance.god', undefined]])
+      act(() => void vi.advanceTimersByTime(500))
+      fireEvent.click(entranceBand()!)
+      expect(entranceBand()).toBeNull()
+      expect(tapped.stops).toBe(1)
+      first.unmount()
+
+      const ran = fakeEngine()
+      drawWith(makeState({ room: standingRoom, entrances: [entrance({ id: 2, at: Date.now() })] }), ran)
+      expect(ran.played).toHaveLength(1)
+      act(() => void vi.advanceTimersByTime(ENTRANCE_MS + 50))
+      expect(entranceBand()).toBeNull()
+      expect(ran.stops).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a band cut short by a reveal hold beginning inside it stops its stinger', () => {
+    vi.useFakeTimers()
+    try {
+      const engine = fakeEngine()
+      const entrances = [entrance()]
+      const view = drawWith(makeState({ room: holdRoom, hand: river, entrances }), engine)
+      expect(engine.played).toEqual([['entrance.god', undefined]])
+      act(() => void vi.advanceTimersByTime(800))
+      view.rerender(screenWith(makeState({ room: holdRoom, hand: shownDown, entrances }), engine))
+      expect(entranceBand()).toBeNull()
+      expect(engine.stops).toBe(1)
+      // and it does not come back once the hold is over
+      act(() => void vi.advanceTimersByTime(REVEAL_HOLD_MS + 50))
+      expect(entranceBand()).toBeNull()
+      expect(engine.played).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a herald that cuts a sounding band leaves its own moment playing: the band’s stop never reaches a BP-41 moment', async () => {
+    const r = await recordingEngine()
+    const now = Date.now()
+    const entrances = [entrance({ at: now })]
+    const view = drawWith(makeState({ room: chaosRoom, entrances }), r.engine)
+    expect(r.emitted).toEqual([['entrance.god', 'played']])
     const herald: ClientHerald = { id: 1, kind: 'god', seat: 0, name: 'Ann', at: Date.now() }
-    drawWith(makeState({ room: chaosRoom, chaos: { ...initialChaos, heralds: [herald] } }), engine)
-    expect(engine.played).toEqual([['moment.ascend', { preempt: true }]])
+    view.rerender(screenWith(makeState({ room: chaosRoom, entrances, chaos: { ...initialChaos, heralds: [herald] } }), r.engine))
+    expect(entranceBand()).toBeNull()
+    expect(r.emitted.at(-1)).toEqual(['moment.ascend', 'played'])
+    expect(r.scheduled.at(-1)!.when).toBeCloseTo(0.02, 9) // it cut the entrance and started at once
+    // The moment still holds the channel: the next stinger waits for its end, as it would not after a stop.
+    expect(r.engine.play('moment.jackpot')).toBe('played')
+    expect(r.scheduled.at(-1)!.when).toBeCloseTo(0.02 + stingers.STINGER_SECONDS['moment.ascend'], 9)
   })
 
   it('no mute button without an engine', () => {

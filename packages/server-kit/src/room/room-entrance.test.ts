@@ -128,6 +128,38 @@ describe('Room title entrance (BP-42)', () => {
     answer('god')
     await settle()
     expect(h.ofType('b', 'ROOM_EVENT').length).toBe(before)
+    expect(h.logs.filter((l) => l.level === 'warn')).toEqual([])
+  })
+
+  it('an answer for an earlier sitting in the same seat is not announced; the current sitting’s is, once (sitId)', async () => {
+    const answers: ((title: EntranceTitle) => void)[] = []
+    const port: TitlePort = { equippedTitle: () => new Promise<EntranceTitle>((resolve) => void answers.push(resolve)) }
+    const h = await twoHumans(port)
+    await h.room.sitDown('a', 0, BUY_IN)
+    await h.room.standUp('a')
+    await h.room.sitDown('a', 0, BUY_IN)
+    expect(answers).toHaveLength(2)
+    answers[0]!('god')
+    await settle()
+    expect(entrances(h, 'b')).toEqual([])
+    answers[1]!('god')
+    await settle()
+    expect(entrances(h, 'b')).toEqual([{ type: 'TITLE_ENTRANCE', title: 'god', seat: 0, playerId: 'a' }])
+  })
+
+  it('a failure on the room’s side of the announcement is logged as its own, not as a failed lookup', async () => {
+    let answer!: (title: EntranceTitle) => void
+    const h = await twoHumans({ equippedTitle: () => new Promise<EntranceTitle>((resolve) => { answer = resolve }) })
+    const room = h.room as unknown as { broadcastRoomEvent: (...args: unknown[]) => void }
+    const original = room.broadcastRoomEvent.bind(h.room)
+    await h.room.sitDown('a', 0, BUY_IN)
+    room.broadcastRoomEvent = (...args: unknown[]) => {
+      if ((args[0] as { type: string }).type === 'TITLE_ENTRANCE') throw new Error('socket gone')
+      original(...args)
+    }
+    answer('god')
+    await settle()
+    expect(h.logs.filter((l) => l.level === 'warn').map((l) => l.msg)).toEqual(['title entrance not sent'])
   })
 
   it('bots and reconnects are never announced', async () => {

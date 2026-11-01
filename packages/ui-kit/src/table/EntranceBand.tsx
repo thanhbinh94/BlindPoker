@@ -28,6 +28,8 @@ export interface EntrancesNow {
    * on every later render, and for one first seen late (a snapshot, a reconnect, a remount).
    */
   fresh: boolean
+  /** When `shown` began on the band (client time; 0 with none): it runs until `since + ENTRANCE_MS` unless it is put away or cut. */
+  since: number
   /** Puts the shown entrance away (a tap on the band): it ends now, and the next may start at once. */
   dismiss: () => void
 }
@@ -99,7 +101,7 @@ export function useEntrances({ entrances, heralds, rolls, hold }: UseEntrancesOp
     setKept((k) => (k.ended.has(shownId) ? k : { started: k.started, ended: new Map([...k.ended, [shownId, at]]) }))
   }, [shownId])
 
-  return { shown, fresh, dismiss }
+  return { shown, fresh, since: shownFrom, dismiss }
 }
 
 export interface EntranceBandProps {

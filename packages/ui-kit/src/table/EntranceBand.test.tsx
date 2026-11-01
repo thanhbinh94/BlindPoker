@@ -195,7 +195,7 @@ describe('useEntrances (BP-42 spec §4)', () => {
     expect(band()).toBeNull()
   })
 
-  it('never shows during the reveal hold, and a late first show is not fresh', () => {
+  it('never shows during the reveal hold, and shows fresh (its sound due) once the hold ends', () => {
     const hold = { since: T0, until: null }
     const view = draw({ entrances: [entrance({ at: T0 + 100 })], hold })
     act(() => void vi.advanceTimersByTime(3_000))
