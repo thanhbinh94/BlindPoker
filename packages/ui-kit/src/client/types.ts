@@ -1,6 +1,6 @@
 import type {
   Card, ChaosBonusPayload, ChaosCreditReason, ChaosCritMultiplier, ChaosDiceResult, ChaosEffectKind, ChaosGodCurse, ChaosOutcome, ChaosReignKind, ChaosTableView, ChaosTier,
-  ChaosTransfer, Decision, ErrorCode, GameMode, HeldCardView, LegalActions, PlayerAction, RoomSummary, RoomView, ServerMessage, ShowdownHand,
+  ChaosTransfer, Decision, EntranceTitle, ErrorCode, GameMode, HeldCardView, LegalActions, PlayerAction, RoomSummary, RoomView, ServerMessage, ShowdownHand,
 } from '@bp/core'
 import type { PreActionKind } from './preaction.js'
 
@@ -154,6 +154,19 @@ export interface ClientDiceRoll {
 }
 
 /**
+ * BP-42: a Thần title holder who sat down (`ROOM_EVENT TITLE_ENTRANCE`), with the name the room knew at arrival. `id` grows by one
+ * per entrance within the room; `at` is the frame's `now`. Lives outside `ClientChaos`: every table has entrances, chaos or not.
+ */
+export interface ClientEntrance {
+  id: number
+  title: EntranceTitle
+  seat: number
+  playerId: string
+  name: string
+  at: number
+}
+
+/**
  * A chaos draft as this viewer sees it: `offer` is the three cards sent to this player alone (`null` for a spectator,
  * and for a seat drafted with nothing to choose from), `picked` once its choice is made.
  */
@@ -299,6 +312,11 @@ export interface ClientState {
    */
   autoPlay: boolean
   chaos: ClientChaos
+  /**
+   * BP-42: the room's latest title entrances, oldest first (four at most). A snapshot keeps them (it is no arrival); leaving,
+   * being removed, a closed room, `NOT_IN_ROOM` and `reset` empty them.
+   */
+  entrances: ClientEntrance[]
   /** Poker hỗn loạn: the "Bỏ qua" count of the running result wait, or `null` when none runs. */
   resultSkips: ClientResultSkips | null
 }
@@ -351,5 +369,6 @@ export const initialClientState: ClientState = {
   preAction: null,
   autoPlay: false,
   chaos: initialChaos,
+  entrances: [],
   resultSkips: null,
 }

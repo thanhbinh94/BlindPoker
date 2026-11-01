@@ -1,6 +1,6 @@
 import type { ChaosDiceResult, ChaosTableView, GameEvent, HandView, HeldCardView, LegalActions, RoomEvent, RoomView, ServerMessage } from '@bp/core'
 import { initialChaos, initialClientState } from './types.js'
-import type { AppliedChaosView, ClientAction, ClientChaos, ClientDiceRoll, ClientHand, ClientHandResult, ClientHerald, ClientSeat, ClientState } from './types.js'
+import type { AppliedChaosView, ClientAction, ClientChaos, ClientDiceRoll, ClientEntrance, ClientHand, ClientHandResult, ClientHerald, ClientSeat, ClientState } from './types.js'
 
 export { initialClientState }
 
@@ -402,7 +402,7 @@ function applyRoomEvent(room: RoomView, event: RoomEvent): RoomView {
     case 'CHAOS_HERALD':
     case 'CHAOS_TABLE':
     case 'CHAOS_STEAL':
-    case 'TITLE_ENTRANCE': // a moment, not room state (BP-42; the client keeps its queue in Task 3)
+    case 'TITLE_ENTRANCE': // a moment, not room state (BP-42): `ClientState.entrances` keeps it
     case 'RESULT_SKIPS': // the count lives in `ClientState.resultSkips`
       return room
   }
@@ -427,6 +427,17 @@ const nextMomentId = (chaos: ClientChaos): number =>
   Math.max(0, ...chaos.heralds.map((h) => h.id), ...chaos.rolls.map((r) => r.id)) + 1
 
 const keepLast = <T,>(list: readonly T[], item: T): T[] => [...list, item].slice(-KEPT_MOMENTS)
+
+/** BP-42: how many title entrances the state keeps (the band shows at most three, one at a time; one spare). */
+const KEPT_ENTRANCES = 4
+
+/** Appends a `TITLE_ENTRANCE` to the room's list; any other event leaves the list as it is. */
+function applyEntrance(entrances: ClientEntrance[], event: RoomEvent, ctx: ChaosRoomContext): ClientEntrance[] {
+  if (event.type !== 'TITLE_ENTRANCE') return entrances
+  const id = Math.max(0, ...entrances.map((e) => e.id)) + 1
+  const name = ctx.nameOfPlayer(event.playerId) ?? ctx.nameOfSeat(event.seat)
+  return [...entrances, { id, title: event.title, seat: event.seat, playerId: event.playerId, name, at: ctx.now }].slice(-KEPT_ENTRANCES)
+}
 
 /** An empty table view (no Thần, no Bán Thần, no bomb) is `null`, as `CHAOS_STATE` says it by leaving `table` out. */
 const tableOrNull = (table: ChaosTableView | undefined): ChaosTableView | null =>
@@ -693,6 +704,7 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
           roomStale: false,
           hand: null,
           chaos: initialChaos,
+          entrances: [],
           resultSkips: null,
           seq: 0,
           deadlineAt: null,
@@ -713,7 +725,7 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
     case 'ROOM_EVENT': {
       const resyncNeeded = state.resyncNeeded || state.room === null || gap(state, msg.seq)
       if (msg.event.type === 'ROOM_CLOSED') {
-        return { ...notify(state, 'ROOM_CLOSED', { reason: msg.event.reason }, now), room: null, hand: null, chaos: initialChaos, resultSkips: null, seq: msg.seq, resyncNeeded, preAction: null, autoPlay: false }
+        return { ...notify(state, 'ROOM_CLOSED', { reason: msg.event.reason }, now), room: null, hand: null, chaos: initialChaos, entrances: [], resultSkips: null, seq: msg.seq, resyncNeeded, preAction: null, autoPlay: false }
       }
       const event = msg.event
       // Standing, leaving or sitting out ends the seat's standing preferences with it.
@@ -722,7 +734,7 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
       // when the hand ended. The room is gone for this client exactly as after a leave it asked for: the room screen
       // hands over to the app (`onLeft`). A kick also brings its own KICKED notification; that stays a toast only.
       if (mine && event.type === 'PLAYER_LEFT') {
-        return { ...state, room: null, hand: null, chaos: initialChaos, resultSkips: null, seq: msg.seq, deadlineAt: null, preAction: null, autoPlay: false }
+        return { ...state, room: null, hand: null, chaos: initialChaos, entrances: [], resultSkips: null, seq: msg.seq, deadlineAt: null, preAction: null, autoPlay: false }
       }
       const myPlayer = state.me !== null ? state.room?.players.find((p) => p.playerId === state.me!.playerId) : undefined
       const stopsAutoPlay = mine && (event.type === 'PLAYER_STOOD' || (event.type === 'PLAYER_SIT_OUT' && event.sittingOut))
@@ -742,6 +754,7 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
         hand: credited ? { ...state.hand!, seats: mapSeat(state.hand!, event.seat, (x) => ({ ...x, stack: event.stack })) } : state.hand,
         room: state.room ? applyRoomEvent(state.room, event) : null,
         chaos: applyChaosRoomEvent(state.chaos, event, ctx),
+        entrances: applyEntrance(state.entrances, event, ctx),
         resultSkips: skipsAfter(state.resultSkips, event),
         seq: msg.seq,
         resyncNeeded,
@@ -767,7 +780,7 @@ export function reduceClient(state: ClientState, action: ClientAction): ClientSt
     case 'resyncSent':
       return { ...state, resyncNeeded: false }
     case 'leftRoom':
-      return { ...state, room: null, hand: null, chaos: initialChaos, resultSkips: null, preAction: null, autoPlay: false }
+      return { ...state, room: null, hand: null, chaos: initialChaos, entrances: [], resultSkips: null, preAction: null, autoPlay: false }
     case 'preAction':
       // A tick needs a hand to belong to; outside one there is nothing it could mean.
       return { ...state, preAction: action.kind === null || state.hand === null ? null : { kind: action.kind, handId: state.hand.handId } }
