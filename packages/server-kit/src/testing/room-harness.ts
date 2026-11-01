@@ -4,6 +4,7 @@ import type { Logger } from '../infra/logger.js'
 import { createMemoryRepositories, type MemoryRepositories } from '../memory-repositories.js'
 import { Room } from '../room/room.js'
 import { DEFAULT_ROOM_OPTIONS, type RoomOptions } from '../room/types.js'
+import type { TitlePort } from '../title-port.js'
 import { ManualClock } from './manual-clock.js'
 import { createMemoryChaosPort, type MemoryChaosOptions } from './memory-chaos.js'
 
@@ -45,6 +46,8 @@ export function createRoomHarness(
     players?: [id: string, balance: number][]; options?: Partial<RoomOptions>; seed?: number; hostId?: string; bot?: BotStrategy
     /** A chaos port over the harness repos (`createMemoryChaosPort`), for a chaos table. */
     chaos?: true | Omit<MemoryChaosOptions, 'repos'>
+    /** BP-42: the Thần title a player wears, for a test of the entrance. */
+    titles?: TitlePort
   } = {},
 ): RoomHarness {
   const clock = new ManualClock()
@@ -75,6 +78,7 @@ export function createRoomHarness(
       options: { ...TEST_ROOM_OPTIONS, ...opts.options },
       onDomainEvent: (e) => domainEvents.push(e),
       ...(chaos ? { chaos } : {}),
+      ...(opts.titles ? { titles: opts.titles } : {}),
     },
   })
   const ofType = <T extends ServerMessage['t']>(playerId: string, t: T) => (sent.get(playerId) ?? []).filter((m): m is Extract<ServerMessage, { t: T }> => m.t === t)

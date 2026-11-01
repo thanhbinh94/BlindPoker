@@ -402,6 +402,7 @@ function applyRoomEvent(room: RoomView, event: RoomEvent): RoomView {
     case 'CHAOS_HERALD':
     case 'CHAOS_TABLE':
     case 'CHAOS_STEAL':
+    case 'TITLE_ENTRANCE': // a moment, not room state (BP-42; the client keeps its queue in Task 3)
     case 'RESULT_SKIPS': // the count lives in `ClientState.resultSkips`
       return room
   }

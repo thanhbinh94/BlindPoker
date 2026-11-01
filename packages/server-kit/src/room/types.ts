@@ -4,6 +4,7 @@ import type { DomainEvent } from '../domain-events.js'
 import type { Clock } from '../infra/clock.js'
 import type { Logger } from '../infra/logger.js'
 import type { Repositories } from '../repositories.js'
+import type { TitlePort } from '../title-port.js'
 
 export interface RoomPlayer {
   identity: PlayerIdentity
@@ -84,6 +85,8 @@ export interface RoomOptions {
   consecutiveTimeoutsToStand: number
   /** Hands started without a player who asked to sit out before the seat is taken back (spec §11.3). */
   handsSatOutToStand: number
+  /** BP-42: a player wearing a Thần title is announced at most once per room in this long (ms, the injected clock). */
+  entranceCooldownMs: number
   /** Test hook: overrides `config.turnTimerSec * 1000` when set. */
   turnTimerMsOverride?: number
 }
@@ -98,6 +101,7 @@ export const DEFAULT_ROOM_OPTIONS: RoomOptions = {
   carryOverReleaseMs: 60_000,
   consecutiveTimeoutsToStand: 3,
   handsSatOutToStand: 5,
+  entranceCooldownMs: 600_000,
 }
 
 export interface Outbox {
@@ -115,6 +119,8 @@ export interface RoomDeps {
   onDomainEvent?: (e: DomainEvent) => void
   /** Poker hỗn loạn: without it, a chaos table is refused (`CHAOS_UNAVAILABLE`). */
   chaos?: ChaosPort
+  /** BP-42: the Thần title a player wears; without it nobody is heralded when they sit. */
+  titles?: TitlePort
 }
 
 export class RoomError extends Error {

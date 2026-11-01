@@ -8,6 +8,7 @@ import { realClock, type Clock } from './infra/clock.js'
 import { consoleLogger, type Logger } from './infra/logger.js'
 import { cryptoRng } from './infra/rng.js'
 import type { Repositories, SessionResolver } from './repositories.js'
+import type { TitlePort } from './title-port.js'
 import { RoomManager } from './room/room-manager.js'
 import { DEFAULT_ROOM_OPTIONS, type RoomOptions } from './room/types.js'
 
@@ -25,6 +26,8 @@ export interface GameServerOptions {
   onDomainEvent?: (e: DomainEvent) => void
   /** Poker hỗn loạn's cards, settings and ledger (Normal); without it chaos tables are refused (`CHAOS_UNAVAILABLE`). */
   chaos?: ChaosPort
+  /** The Thần title a player wears (Normal); without it nobody is heralded when they sit down (BP-42). */
+  titles?: TitlePort
   /** Upper bound on `shutdown()`; past it the remaining work is abandoned and a warning is logged. Default 10s. */
   shutdownTimeoutMs?: number
 }
@@ -70,6 +73,7 @@ export function createGameServer(options: GameServerOptions): GameServer {
     options: { ...DEFAULT_ROOM_OPTIONS, ...options.roomOptions },
     ...(options.onDomainEvent ? { onDomainEvent: options.onDomainEvent } : {}),
     ...(options.chaos ? { chaos: options.chaos } : {}),
+    ...(options.titles ? { titles: options.titles } : {}),
   })
   gateway = new Gateway({ clock, rooms, resolver: options.resolver, repos: options.repos, log, options: { ...DEFAULT_GATEWAY_OPTIONS, ...options.gatewayOptions } })
   const gw = gateway
