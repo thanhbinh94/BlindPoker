@@ -123,6 +123,11 @@
       "dark": "Dark",
       "light": "Light"
     },
+    "sound": {
+      "title": "Sound",
+      "on": "On",
+      "off": "Off"
+    },
     "language": {
       "title": "Language"
     },

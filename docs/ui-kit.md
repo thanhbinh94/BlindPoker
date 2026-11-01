@@ -742,6 +742,13 @@ Cài đặt's "Âm thanh". **Lite gets none:** it passes no `sound`, and its ser
 **Playground.** Any `#worst/…` page takes `/enter-god`, `/enter-demigod` or `/enter-godslayer` (seat 1 makes that entrance as the
 page loads, for its 3 s) and `/sound` (the header's mute button; the page never unlocks the audio, so nothing sounds).
 
+**`#sounds`** (`playground/sounds.tsx`) is the audition page: a row per stinger with its id and length, and "Phát", which unlocks a real
+engine with the click, waits for the lazily loaded stingers, plays the stinger (`preempt`, so a second press cuts the first) and puts up the
+band the room shows with it for 3 s: the entrance band of the title, with a sample name, for the three entrances, and the BP-41 herald for
+the four moments. The room's own mute button and the outcome the engine answered sit at the top. It imports the stinger table from
+`stingers.ts` directly; only the playground may, because the package index keeps that file out of Normal's entry chunk. Dev-only, reached by
+URL like `#peel`.
+
 ### Avatars (`src/avatar2d/`)
 
 The kit does render an avatar — a **chibi**: pre-rendered PNG layers on a shared frame, not a 3D rig or anything

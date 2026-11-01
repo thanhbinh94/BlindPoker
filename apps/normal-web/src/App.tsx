@@ -29,6 +29,7 @@ import { makeCaptionFor, makeChibiFor, makeRankFor } from './screens/TableChrome
 import s from './screens/normal.module.css'
 import w from './screens/welcome.module.css'
 import { clearLastEmail } from './session.js'
+import { soundEngine } from './sound.js'
 import { useSessionGate } from './session-gate.js'
 import { lazyScreen } from './stale-chunk.js'
 import { useAsync } from './screens/useAsync.js'
@@ -461,7 +462,7 @@ export function App({ api, socketFactory }: AppProps) {
           onLanguage={setLang}
         >
           {inRoom ? (
-            <RoomScreen client={viewClient} lang={lang} onLeft={() => navigate('/lobby')} chibiFor={chibiFor} captionFor={captionFor} rankFor={rankFor} />
+            <RoomScreen client={viewClient} lang={lang} onLeft={() => navigate('/lobby')} chibiFor={chibiFor} captionFor={captionFor} rankFor={rankFor} sound={soundEngine()} />
           ) : ACCOUNT_ROUTES.includes(path) ? (
             <>
               {/* One fallback for all six: the chunk is a single request on a page the rail has already drawn, so
@@ -493,6 +494,7 @@ export function App({ api, socketFactory }: AppProps) {
                     onSignedOut={onSignedOut}
                     version={NORMAL_VERSION}
                     role={gate.me?.role ?? 'player'}
+                    sound={soundEngine()}
                   />
                 ) : path === '/gm' ? (
                   // The route is a convenience and the server is the lock: a player who types the address is sent to the lobby

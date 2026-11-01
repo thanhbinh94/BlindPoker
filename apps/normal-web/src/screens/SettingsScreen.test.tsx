@@ -1,4 +1,5 @@
-import { screen } from '@testing-library/react'
+import { createSoundEngine, MuteButton, type SoundEngine } from '@bp/ui-kit'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, type MeDto, type NormalApi } from '../api.js'
@@ -19,12 +20,17 @@ function stubApi(overrides: Partial<NormalApi> = {}): NormalApi {
   return { me: vi.fn().mockResolvedValue(ME), ...overrides } as unknown as NormalApi
 }
 
+/** A real engine on a memory store: nothing is unlocked or loaded, so it only keeps the on/off choice. */
+function quietEngine(): SoundEngine {
+  return createSoundEngine({ storage: null, createContext: () => null })
+}
+
 function renderScreen(props: Partial<Parameters<typeof SettingsScreen>[0]> = {}) {
   const api = props.api ?? stubApi()
   const onLanguage = props.onLanguage ?? vi.fn()
   const onSignedOut = props.onSignedOut ?? vi.fn()
   const result = renderWithI18n(
-    <SettingsScreen api={api} lang={props.lang ?? 'vi'} onLanguage={onLanguage} onSignedOut={onSignedOut} version={props.version ?? '0.1.0'} role={props.role ?? 'player'} />,
+    <SettingsScreen api={api} lang={props.lang ?? 'vi'} onLanguage={onLanguage} onSignedOut={onSignedOut} version={props.version ?? '0.1.0'} role={props.role ?? 'player'} sound={props.sound ?? quietEngine()} />,
     makeI18n(props.lang ?? 'vi'),
   )
   return { ...result, api, onLanguage, onSignedOut }
@@ -50,6 +56,43 @@ describe('SettingsScreen', () => {
     expect(light).toHaveAttribute('aria-pressed', 'true')
     expect(localStorage.getItem(THEME_KEY)).toBe('light')
     expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+  })
+
+  it("the sound panel turns the sound off and on, shared with the room's button", async () => {
+    const user = userEvent.setup()
+    const sound = quietEngine()
+    // The room's header button is the same engine's: here it stands beside the screen to show the two are one switch.
+    renderWithI18n(
+      <>
+        <SettingsScreen api={stubApi()} lang="vi" onLanguage={vi.fn()} onSignedOut={vi.fn()} version="0.1.0" role="player" sound={sound} />
+        <MuteButton engine={sound} />
+      </>,
+      makeI18n('vi'),
+    )
+    await screen.findByText(ME.displayName)
+
+    const group = screen.getByRole('group', { name: viNormal.settings.sound.title })
+    const on = within(group).getByRole('button', { name: viNormal.settings.sound.on })
+    const off = within(group).getByRole('button', { name: viNormal.settings.sound.off })
+    expect(on).toHaveAttribute('aria-pressed', 'true')
+    expect(sound.muted).toBe(false)
+
+    await user.click(off)
+
+    expect(sound.muted).toBe(true)
+    expect(off).toHaveAttribute('aria-pressed', 'true')
+    expect(on).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Bật tiếng' })).toBeInTheDocument()
+
+    // Pressed from the other side, the panel follows.
+    await user.click(screen.getByRole('button', { name: 'Bật tiếng' }))
+    expect(sound.muted).toBe(false)
+    expect(on).toHaveAttribute('aria-pressed', 'true')
+
+    await user.click(off)
+    await user.click(on)
+    expect(sound.muted).toBe(false)
+    expect(screen.getByRole('button', { name: 'Tắt tiếng' })).toBeInTheDocument()
   })
 
   it('hands the language change up to the app, which owns it', async () => {

@@ -8,6 +8,7 @@ import { createApi } from './api.js'
 import enNormal from './locales/en/normal.json'
 import viNormal from './locales/vi/normal.json'
 import { loadTheme } from './prefs.js'
+import { startSound } from './sound.js'
 import { reloadForNewVersion } from './stale-chunk.js'
 
 // Before React: the stored theme is on the root by the time the first frame paints, so the page never flashes
@@ -19,6 +20,9 @@ applyTheme(document.documentElement, loadTheme())
 window.addEventListener('vite:preloadError', (event) => {
   if (reloadForNewVersion()) event.preventDefault()
 })
+
+// BP-42: the first tap or key press on the page unlocks the audio (browsers allow no sound before one) and loads the stingers.
+startSound()
 
 const i18n = createI18n({ extraResources: { vi: { normal: viNormal }, en: { normal: enNormal } } })
 
