@@ -7,7 +7,7 @@
  * A gift of the check-in schedule is **not** disabled here: whether it sells depends on the live schedule and on the
  * month (spec R20), so the shop asks the schedule at every read and every purchase instead (`shop-service.ts`).
  */
-import type { AchievementDef } from '../achievements/definitions.js'
+import { rewardItemIdsOf, type AchievementDef } from '../achievements/definitions.js'
 import type { AppDb, AppTx } from '../db/client.js'
 import { shopConfig, shopPrices } from '../db/schema.js'
 import type { ItemCatalog, ItemDef, Rarity } from '../inventory/items.js'
@@ -26,7 +26,7 @@ export const WELCOME_CHOICES_KEY = 'welcome_choices'
 
 /** Every item an achievement rewards: never for sale (spec B1). */
 export function achievementItemIds(defs: readonly AchievementDef[]): Set<string> {
-  return new Set(defs.flatMap((def) => (def.reward.itemId === undefined ? [] : [def.reward.itemId])))
+  return new Set(rewardItemIdsOf(defs))
 }
 
 /** The seed row of one item: the rarity's price and rank, off sale when every player already has it or earns it. */

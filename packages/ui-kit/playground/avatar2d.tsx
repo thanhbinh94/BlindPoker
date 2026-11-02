@@ -56,7 +56,7 @@ const BODIES: Record<Gender, BodyRef> = { f: body('f'), m: body('m') }
 
 /** The hats whose layer carries a hair clip (2026-10-06): the ones that cover the crown. A copy of the pipeline's
  * `HAIR_CLIP.hats` (`apps/normal-web/scripts/avatar-pipeline/masks.mjs`) — `avatar-pipeline.test.ts` holds the two equal. */
-const CLIPPING_HATS = ['beanie01', 'beret_red01', 'conical_hat01', 'cap_navy01', 'bucket_khaki01', 'fedora01', 'witch_hat01', 'pumpkin01', 'santa_hat01', 'straw_hat01']
+const CLIPPING_HATS = ['beanie01', 'beret_red01', 'conical_hat01', 'cap_navy01', 'bucket_khaki01', 'fedora01', 'godslayer_helm01', 'witch_hat01', 'pumpkin01', 'santa_hat01', 'straw_hat01']
 
 /** `item_<slot>_<code>_L<layer>` — the pipeline's naming convention. `hood_black01` is the one item drawn here with
  * both hide flags, so it is the one row that shows the hairstyle disappearing; `CLIPPING_HATS` clip it instead. */

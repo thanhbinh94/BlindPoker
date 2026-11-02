@@ -23,6 +23,21 @@ export type AchievementCategory = 'login' | 'holdem' | 'blind' | 'social' | 'cha
 export interface AchievementReward {
   points?: number
   itemId?: string
+  /**
+   * BP-43 (spec 2026-11-02 §3): the pieces of a title's wardrobe set, granted with the title in the same unlock. They are
+   * earned like `itemId`: never for sale and never drawn (see `rewardItemIds`).
+   */
+  setItems?: string[]
+}
+
+/** The ids an unlock grants, in order: the reward's `itemId` first, then its `setItems`. An undefined `itemId` is dropped. */
+export function rewardItemIds(def: AchievementDef): string[] {
+  return [...(def.reward.itemId === undefined ? [] : [def.reward.itemId]), ...(def.reward.setItems ?? [])]
+}
+
+/** Every item any of these achievements grants: what the shop must not sell and the daily draw must not hand out. */
+export function rewardItemIdsOf(defs: readonly AchievementDef[]): string[] {
+  return defs.flatMap(rewardItemIds)
 }
 
 export interface AchievementDef {
