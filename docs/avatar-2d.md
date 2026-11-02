@@ -1676,3 +1676,39 @@ picture, and no outfit lost cloth to the cut: the Santa coat's white trim and th
 the spec had flagged as a risk. The witch dress redrew a sliver of neck between its cape's collar, above the brooch
 (68 px @2x); the skin cut found it and the tone paints it, so `withSkin` in the pipeline test and `layerSkin` in
 `bodies.test.ts` list it beside the insteps.
+
+### 10.8 BP-43: the Thần sets (2026-11-02)
+
+Fifteen pictures: for each of the three Thần titles (`title_god` "Thần Bài", `title_demigod` "Bán Thần", `title_godslayer`
+"Kẻ Sát Thần") an outfit with a men's cut (two registry entries, one per body), a head item, an aura and a frame, all epic.
+The catalogue side (the sets are granted with the title's achievement and never sold or drawn) is in
+`docs/normal-server.md`; the moving auras are in `docs/ui-kit.md`. Every registry entry passed on its first collected
+attempt, because each draft was measured with `verify --picture` before `collect` (§10.7: judge drafts first, and a draft
+that measures off never spends an attempt).
+
+**A picture receiver took the images out of the ChatGPT page.** A small receiver on 127.0.0.1 took each generated image
+from the page by `postMessage` instead of through the download button, so a draft reached `verify --picture` without a
+click-and-save step per image.
+
+**An aura or a frame is fitted by its whole ink box, so a stray wing shrinks the ring.** A frame is fitted at `RING` 260 by
+the box of all its ink. The first Demigod frame had wide wings out to the sides; fitted by the whole box, the ring itself
+would have shrunk onto the 208-px portrait. It was redrawn with "two small wings close to its upper edge, each no longer
+than a fifth of the ring's width, so the ring fills almost the whole image". Ask for a frame's ornament to stay on the
+ring, never beside it.
+
+**A faint haze in the corners fails `background`; a new chat fixes it, a hand clean never.** ChatGPT left a haze (alpha 1 to
+51) in a corner of three Demigod aura drafts and one frame draft, and `background` refuses it. Redrawing in a new chat with
+"the glow fading out well inside the image … all four corners stay fully transparent" passed. Do not clean a picture by
+hand: every layer is cut from a picture, and the registry's evidence is the picture that was collected.
+
+**The Godslayer's helm is light steel-grey, with short side horns.** A dark helm over the default bob loses its crown to
+the cut (§10.7, BP-33), and tall pieces make the model shrink the figure (§10.7, BP-35), so the helm over the bob is a
+light steel-grey with short horns at the sides. It joins `HAIR_CLIP` (`apps/normal-web/scripts/avatar-pipeline/masks.mjs`) because a spiky
+cut's tips rose above it. A few light specks remain at its lower side edges, where the cut bit into the helm next to the hair
+(`docs/known-limitations.md`). The Card God's ace crown and the Demigod's laurel sit on the hair and carry no clip.
+
+**The women's armour leaves a sliver of leg.** The Godslayer's women's armour shows 118 x 18 px (@2x) of leg between the skirt
+and the boots. The skin cut finds it and the tone paints it, so it is listed in `bodies.test.ts` beside the other slivers of
+§10.7.
+
+The source pictures live in the main checkout's gitignored `assets/avatar-src/`.

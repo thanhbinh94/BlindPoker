@@ -793,6 +793,17 @@ always @2x. One exception (Ruling 16, Plan 27): a `head` chibi with a `size` who
 render the @1x `src` with no `srcset`. A 72 px portrait on a 2× phone is 144 device px, and @2x made a row of them
 about 440 KB.
 
+**Aura motion (BP-43).** The three Thần auras move: the Thần Bài aura breathes (`glow`, 3 s), the Bán Thần aura twinkles
+(`twinkle`, 1.6 s) and the Sát Thần aura flickers (`flicker`, 0.9 s). `aura-motion.ts` holds `AURA_MOTION`, keyed by the
+layer's file stem (`item_aura_card_god01_L10`, `item_aura_demigod01_L10`, `item_aura_godslayer01_L10`), and
+`auraMotionOf(file)` (`null` for any other layer; `Object.hasOwn`, so an inherited key such as `toString` is none).
+`Chibi` puts the matching class (`auraGlow`, `auraTwinkle`, `auraFlicker`, in `avatar2d.module.css`) on the aura layer's own
+`<img>` in `renderLayer`. The keyframes animate `opacity` and `filter: brightness()` only, never `transform`, so the layer
+cannot drift off the figure or off the frame. **Two gates keep the class off:** a `lazy` chibi (a grid of wardrobe, shop or
+saved-outfit cards would run dozens of animations at once) and `prefers-reduced-motion: reduce` (`Chibi` reads it through
+`useMediaQuery`; the module also has a `@media` block that sets `animation: none`, and `theme/global.css` already stops
+every animation). Pinned by `aura-motion.test.ts` and the aura tests in `Chibi.test.tsx`. Playground: `thansets.tsx`.
+
 **Live figure (BP-30, spec K6 §3.1–§3.2).** `LiveFigure` (`LiveFigure.tsx`) is what a stage draws instead of a bare
 `Chibi`: the same `subject`, `frame`, `size`, `label`, `expression` and `lazy`, plus `live` (`'idle'` by default),
 `react`, `facing` (controlled, `'right'` by default), `greet` (on by default), `className` on the wrapper and
