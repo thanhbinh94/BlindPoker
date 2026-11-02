@@ -9,6 +9,108 @@ below are the real history.
 
 ---
 
+## Plan 43 — the Thần title sets: an outfit, a head piece, a moving aura and a frame for each title, granted with it and backfilled to holders; the Card God's title reads Thần Bài — merged `MERGE` (2026-11-02)
+
+Part B of BP-42 (spec `2026-10-31-title-entrance-design.md` §6–§7). On 2026-11-02 the user settled the name ("giữ Thần Bài,
+đổi caption ghế thành Thần Bài luôn") and handed the phase over whole ("tự lập spec, plan, phát triển và deploy"). Spec
+`2026-11-02-title-wardrobe-design.md` (H6, H7). Plan `2026-11-02-plan43-title-wardrobe.md`, with pre-flight amendments
+A1–A15. Branch `feature/BP-43-title-wardrobe`. Normal edition only.
+
+- **What a player gets.**
+  - **Three sets of four pieces each, all epic:**
+    - **Thần Bài:** Long bào Thần Bài, a crimson robe with gold trim and the four suits; Vương miện Át; Hào quang Thần
+      Bài, golden light with the four aces; Khung Thần Bài, gold and crimson with a crown.
+    - **Bán Thần:** Áo choàng Bán Thần, a white and silver mantle; Vòng nguyệt quế bạc; Hào quang Bán Thần, silver-blue
+      sparkles; Khung Bán Thần, a silver ring with small wings.
+    - **Kẻ Sát Thần:** Giáp Sát Thần, black armour with a crimson cape; Mũ sừng Sát Thần; Hào quang Sát Thần, crimson fire
+      with shards of a broken crown; Khung Sát Thần, black with glowing cracks.
+    - Each outfit has a men's cut.
+  - **How they arrive:** the title's achievement now hands over the whole set in the same unlock, with its points paid
+    once. Players who already hold a title get the set through an operator backfill.
+  - **Never sold, never drawn:** a set piece is never on sale and never comes from a daily login. A locked one in the
+    wardrobe names the achievement that gives it.
+  - **The auras move:** the three set auras breathe (Thần Bài), twinkle (Bán Thần) and flicker (Sát Thần) on every large
+    chibi. They stay still under reduced motion and on lazy grid cards.
+  - **Thần Bài:** the title `title_god` reads "Thần Bài" in Vietnamese: under a seat's name, in the wardrobe and in the
+    achievement's reward. The achievement itself is still "Hóa Thần".
+  - **Achievements screen:** a title's reward line ends "· cả bộ trang phục".
+- **Under it.**
+  - **The art:**
+    - Fifteen pictures from ChatGPT in the user's Chrome went through the registry loop. Each draft was measured with
+      `verify --picture` before `collect`, so every registry entry passed on its first collected attempt.
+    - The helm joins `HAIR_CLIP`. `STAGE_ONE_ITEMS` carries the twelve codes.
+    - The playground gained a dev-only `#thansets` page.
+  - **The server:**
+    - Achievements gain `reward.setItems`, checked at load: non-empty, unique, not the title itself, in the catalogue,
+      not `isDefault` or `free`, and only beside an `itemId`.
+    - `rewardItemIds` / `rewardItemIdsOf` feed every reader: the shop seed, the shop's achievement lock (which covers
+      buying, the shelf, featured slots and the welcome choices), the daily draw's reserved ids and the unlock.
+    - `title-set-backfill-cli` is the sixth `dist/` entry: `--dry-run` first, then `players=<n> granted=<n>`. It writes
+      inventory rows only, and a rerun grants 0.
+  - **The web:** `AchievementRewardDto.setItems` and `GmUnlockDto`, the wardrobe hint and the reward line.
+  - **The kit:** `aura-motion.ts`. `Chibi` puts the class on those three aura layers when the chibi is not lazy and not
+    under reduced motion. The CSS animates opacity and brightness only.
+- **Tests.**
+  - **Art and catalogue:** `avatar:check` passes on 175 files, 0 failures. The count pins moved to 142 items and 32
+    outfit layers.
+  - **Server:**
+    - the load rules;
+    - a natural unlock pays 300 000 once and grants five items, and a second evaluation grants and pays nothing;
+    - the GM unlock grants the set;
+    - a grant that throws rolls back the points, the claim and the inventory;
+    - the shop refuses a set piece even after a GM switches its price on;
+    - the seed leaves set pieces off sale;
+    - the reserved ids include them;
+    - the backfill: GM-granted owners, a partial holder, a rerun, the dry run, and no ledger, reputation or balance rows.
+  - **Web:** the wardrobe hint and the reward line.
+  - **Kit:** the three classes, another aura, lazy, reduced motion, and the head crop drawing no aura.
+  - **Screenshots:** the playground's three sets at 1920 × 940, 1366 × 768 and 375 × 812; the Achievements screen at 375
+    and 1366, with no text overlap.
+- **Docs.**
+  - `docs/avatar-2d.md` §10.8 (what the drafts taught);
+  - `docs/normal-server.md` (set items, the backfill);
+  - `docs/ui-kit.md` (aura motion);
+  - `docs/deployment-normal.md` and `deploy/normal-windows/README.md` §9f (the backfill step; the LAN host asks first);
+  - `docs/known-limitations.md`;
+  - `docs/player-guide.md` (the name and the sets);
+  - `docs/acceptance-checklist.md` 66.31 (six entries).
+- **Khác với spec / Deviations from the spec.**
+  1. Spec §4 asked the server to refuse at boot a set item "đang bán trong cửa hàng" (on sale in the shop). Prices live
+     in the database, so boot can't see them. The achievement lock keeps a set piece off sale whatever its price row
+     says (A8).
+  2. The twelve catalogue rows and their names landed with the art commit, not with Task 2. The ingest writes a men's
+     cut into an existing row (A3).
+  3. The helm is light steel-grey with a red gem, not black with red eyes. A dark helm over the bob loses its crown to
+     the cut (BP-33), and red eyes would have meant painting the face.
+- **Rulings.**
+  1. The user's "tự lập … deploy" covers approving the pictures; the user may still send one back.
+  2. The helm's colours and shape (above).
+  3. Only the vi title is renamed; en "Ascended" stays, and the achievement keeps "Hóa Thần".
+  4. A frame is fitted by its whole ink box, so the first Demigod frame was redrawn with small wings.
+  5. A draft is judged before `collect`, and a hazy one is redrawn, never hand-cleaned.
+  6. The helm joins `HAIR_CLIP`.
+  7. English names are in sentence case, like their peers.
+  8. The docs task was reviewed by the final review only.
+  9. The backfill's `players` counts distinct owners.
+  10. The final review's F2 (skip the motion on `cheap` chibis) was not applied: a head-crop chibi draws no aura at all.
+- **New English copy (the session's, for the user's review):**
+  - Card God's robe, Ace crown, Card God's aura, Card God's frame;
+  - Demigod's mantle, Silver laurel, Demigod's aura, Demigod's frame;
+  - Godslayer's armour, Godslayer's horned helm, Godslayer's aura, Godslayer's frame;
+  - "the full outfit set".
+- **Gate** (the branch's final tree `932e385`; `main` had not moved). typecheck and lint clean. Unit 263 files, 4,619 passed, 14 skipped. `build:normal` ok; `build:lite` up to the Node 22 exe step (Node 24 here); `avatar:check` 175 files, 0 failures; e2e Normal 25/25; e2e Lite 4/4; ops 74/74 (20.7 min).
+- **Deployed.** DEPLOY
+- **Still open.**
+  - The user's look at the pictures: any piece can be sent back for a redraw.
+  - The English names.
+  - The LAN host's backfill, which writes the user's Neon database (ask first).
+  - Light specks at the helm's lower sides, where the cut met the hair.
+  - The aura motion on real phones.
+  - A GM's gift schedule or `grantItem` can still name a set piece, and a backfill rerun re-grants a piece a GM took back.
+  - The looping table track (spec BP-42 §9).
+
+---
+
 ## Plan 42 — the Thần titles' entrance and the game's first sound: a band and an EDM stinger for a title holder who sits down, stingers for the BP-41 moments, a mute button — merged `8fbcd60` (2026-11-02)
 
 Brainstormed with the user on 2026-10-31 ("khi vào bàn tôi muốn có những hiệu ứng hoặc thông báo… cho toàn bộ người chơi phải
