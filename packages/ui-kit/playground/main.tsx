@@ -10,6 +10,7 @@ import { PLAYGROUND_MODES, PLAYGROUND_SEAT_COUNTS, createMockClient, type Playgr
 import { PeelPage } from './peel.js'
 import { WorstPage, parseWorstHash } from './scenarios.js'
 import { SoundsPage } from './sounds.js'
+import { ThanSetsPage } from './thansets.js'
 import '../src/theme/index.css'
 
 type View = 'room' | 'lobby'
@@ -127,6 +128,7 @@ function Root() {
   if (hash === '#avatar2d') return <Avatar2dPage />
   if (hash === '#peel') return <PeelPage />
   if (hash === '#sounds') return <SoundsPage />
+  if (hash === '#thansets') return <ThanSetsPage />
   const worst = parseWorstHash(hash)
   return worst === null ? <App /> : <WorstPage key={hash} spec={worst} />
 }

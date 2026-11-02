@@ -10199,6 +10199,874 @@
         }
       ],
       "ingested": true
+    },
+    {
+      "id": "v4/item_outfit_card_god01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_card_god01",
+      "look": {
+        "description": "a long deep-crimson imperial robe reaching the ankles, with broad gold trim down the front, at the cuffs and at the hem, a gold sash at the waist, four simple gold card-suit emblems (spade, heart, diamond, club) in one row across the chest, a short crimson cape that hangs straight down close behind the body, never wider than the arms, and gold closed shoes that fully cover the feet"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_card_god01.png",
+      "ingest": {
+        "as": "item:outfit:card_god01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-11-02T00:23:45.518Z",
+          "chat": "https://chatgpt.com/c/6ae7d733-0338-83ec-b1c1-6e8b8f6f81e9",
+          "file": "v4_item_outfit_card_god01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.997,
+            "widthRatio": 0.997,
+            "drift": {
+              "left": 0,
+              "top": -1,
+              "right": 0,
+              "bottom": 3
+            },
+            "registered": {
+              "scale": 0.995,
+              "dx": 0,
+              "dy": -4,
+              "iou": 0.642
+            },
+            "heads": 2.406,
+            "hairDelta": 7.54,
+            "checks": {
+              "item_outfit_card_god01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 0.995 about the feet, then 0, -4 px (IoU 0.642) — drift is judged there, not on the edges as drawn"
+          ]
+        }
+      ],
+      "ingested": true,
+      "note": "BP-43: a Thần title set (spec 2026-10-31 §6), granted with the title only."
+    },
+    {
+      "id": "v4/item_outfit_card_god01_m",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": "m",
+      "catalog": "outfit_card_god01",
+      "look": {
+        "description": "a deep-crimson imperial tunic for a man falling to the knees, with broad gold trim down the front, at the cuffs and at the hem, a gold sash at the waist, four simple gold card-suit emblems (spade, heart, diamond, club) in one row across the chest, a short crimson cape that hangs straight down close behind the body, never wider than the arms, straight crimson trousers and gold closed shoes that fully cover the feet"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "v4_item_outfit_card_god01_m.png",
+      "ingest": {
+        "as": "item:outfit:card_god01",
+        "base": "m",
+        "variant": "m",
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-11-02T00:25:02.037Z",
+          "chat": "https://chatgpt.com/c/6ae7d77c-5774-83ec-a232-ad43e8f6cb23",
+          "file": "v4_item_outfit_card_god01_m.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.998,
+            "widthRatio": 0.998,
+            "drift": {
+              "left": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 2
+            },
+            "registered": {
+              "scale": 0.99,
+              "dx": 0,
+              "dy": -4,
+              "iou": 0.734
+            },
+            "heads": 2.457,
+            "hairDelta": 7.995,
+            "checks": {
+              "item_outfit_card_god01_m_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 0.99 about the feet, then 0, -4 px (IoU 0.734) — drift is judged there, not on the edges as drawn"
+          ]
+        }
+      ],
+      "ingested": true,
+      "note": "BP-43: a Thần title set (spec 2026-10-31 §6), granted with the title only."
+    },
+    {
+      "id": "v4/item_outfit_demigod01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_demigod01",
+      "look": {
+        "description": "a long pure-white robe reaching the ankles with silver-grey edges, a pale-gold belt at the waist, a silver-grey shawl over the shoulders that hangs straight down close behind the body, never wider than the arms, and silver closed boots that fully cover the feet; the white is cool and bright, clearly whiter and greyer than the skin"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_demigod01.png",
+      "ingest": {
+        "as": "item:outfit:demigod01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-11-02T00:25:18.621Z",
+          "chat": "https://chatgpt.com/c/6ae7d798-06c8-83ec-96bf-c3eeab1ca450",
+          "file": "v4_item_outfit_demigod01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1535",
+            "width": 1024,
+            "height": 1535,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.993,
+            "widthRatio": 0.989,
+            "drift": {
+              "left": 3,
+              "top": 0,
+              "right": -3,
+              "bottom": 0
+            },
+            "heads": 2.399,
+            "hairDelta": 8.765,
+            "checks": {
+              "item_outfit_demigod01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "another canvas than the reference's: scaled by 0.993 and anchored before drift, hair colour and scope",
+            "pipeline: fed the picture aligned onto the reference canvas"
+          ]
+        }
+      ],
+      "ingested": true,
+      "note": "BP-43: a Thần title set (spec 2026-10-31 §6), granted with the title only."
+    },
+    {
+      "id": "v4/item_outfit_demigod01_m",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": "m",
+      "catalog": "outfit_demigod01",
+      "look": {
+        "description": "a pure-white tunic for a man falling to the knees with silver-grey edges, a pale-gold belt at the waist, a silver-grey shawl over the shoulders that hangs straight down close behind the body, never wider than the arms, straight light-grey trousers and silver closed boots that fully cover the feet; the white is cool and bright, clearly whiter and greyer than the skin"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "v4_item_outfit_demigod01_m.png",
+      "ingest": {
+        "as": "item:outfit:demigod01",
+        "base": "m",
+        "variant": "m",
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-11-02T00:27:56.578Z",
+          "chat": "https://chatgpt.com/c/6ae7d8a2-21dc-83ec-8b43-b29422606387",
+          "file": "v4_item_outfit_demigod01_m.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1535",
+            "width": 1024,
+            "height": 1535,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1,
+            "drift": {
+              "left": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0
+            },
+            "heads": 2.45,
+            "hairDelta": 8.268,
+            "checks": {
+              "item_outfit_demigod01_m_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "pipeline: fed the picture aligned onto the reference canvas"
+          ]
+        }
+      ],
+      "ingested": true,
+      "note": "BP-43: a Thần title set (spec 2026-10-31 §6), granted with the title only."
+    },
+    {
+      "id": "v4/item_outfit_godslayer01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_godslayer01",
+      "look": {
+        "description": "black plate armour with dark-crimson edges: a black breastplate, black shoulder guards no wider than the arms, a black armoured skirt reaching the knees, black armoured boots that fully cover the feet, and a tattered dark-crimson cape that hangs straight down close behind the body, never wider than the arms"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_godslayer01.png",
+      "ingest": {
+        "as": "item:outfit:godslayer01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-11-02T00:28:07.317Z",
+          "chat": "https://chatgpt.com/c/6ae7d8a7-bb4c-83ec-9ce9-0d435b3695dd",
+          "file": "v4_item_outfit_godslayer01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1535",
+            "width": 1024,
+            "height": 1535,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.99,
+            "widthRatio": 0.99,
+            "drift": {
+              "left": 2,
+              "top": 0,
+              "right": -2,
+              "bottom": 0
+            },
+            "heads": 2.414,
+            "hairDelta": 7.74,
+            "checks": {
+              "item_outfit_godslayer01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "another canvas than the reference's: scaled by 0.99 and anchored before drift, hair colour and scope",
+            "pipeline: fed the picture aligned onto the reference canvas"
+          ]
+        }
+      ],
+      "ingested": true,
+      "note": "BP-43: a Thần title set (spec 2026-10-31 §6), granted with the title only."
+    },
+    {
+      "id": "v4/item_outfit_godslayer01_m",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": "m",
+      "catalog": "outfit_godslayer01",
+      "look": {
+        "description": "black plate armour for a man with dark-crimson edges: a black breastplate, black shoulder guards no wider than the arms, black armoured trousers, black armoured boots that fully cover the feet, and a tattered dark-crimson cape that hangs straight down close behind the body, never wider than the arms"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "v4_item_outfit_godslayer01_m.png",
+      "ingest": {
+        "as": "item:outfit:godslayer01",
+        "base": "m",
+        "variant": "m",
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-11-02T00:29:23.339Z",
+          "chat": "https://chatgpt.com/c/6ae7d8ad-78fc-83ec-9fd0-e0be1a639f49",
+          "file": "v4_item_outfit_godslayer01_m.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1535",
+            "width": 1024,
+            "height": 1535,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.998,
+            "widthRatio": 0.998,
+            "drift": {
+              "left": 1,
+              "top": 0,
+              "right": -1,
+              "bottom": 0
+            },
+            "heads": 2.449,
+            "hairDelta": 10.116,
+            "checks": {
+              "item_outfit_godslayer01_m_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "another canvas than the reference's: scaled by 0.998 and anchored before drift, hair colour and scope",
+            "pipeline: fed the picture aligned onto the reference canvas"
+          ]
+        }
+      ],
+      "ingested": true,
+      "note": "BP-43: a Thần title set (spec 2026-10-31 §6), granted with the title only."
+    },
+    {
+      "id": "v4/item_head_ace_crown01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_ace_crown01",
+      "look": {
+        "description": "a small gold crown with five short points and a white card-shaped plaque bearing a black ace of spades at its front centre, resting on top of the hair"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": "Keep this exact image: the same character, the same pose, the same size and position in the frame, the same neutral face with open eyes, the same hair and hair colour, the same tank top and shorts, the same transparent background. Add only this: a small gold crown with five short points and a white card-shaped plaque bearing a black ace of spades at its front centre, resting on top of the hair, fully inside the image; all of the hair, the fringe included, stays exactly as it is and shows around and below the crown. The crown is no wider than the hair and no taller than a beanie. No glasses. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
+      "file": "v4_item_head_ace_crown01.png",
+      "ingest": {
+        "as": "item:head:ace_crown01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-11-02T00:31:19.554Z",
+          "chat": "https://chatgpt.com/c/6ae7d947-dee4-83ec-9828-3c1e9dd689c7",
+          "file": "v4_item_head_ace_crown01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1535",
+            "width": 1024,
+            "height": 1535,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.012,
+            "drift": {
+              "left": -3,
+              "top": null,
+              "right": 3,
+              "bottom": 0
+            },
+            "scope": 0.009,
+            "checks": {
+              "item_head_ace_crown01_L80": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "another canvas than the reference's: scaled by 1 and anchored before drift, hair colour and scope",
+            "pipeline: fed the picture aligned onto the reference canvas"
+          ]
+        }
+      ],
+      "ingested": true,
+      "note": "BP-43: a Thần title set (spec 2026-10-31 §6), granted with the title only."
+    },
+    {
+      "id": "v4/item_head_laurel_silver01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_laurel_silver01",
+      "look": {
+        "description": "a thin wreath of silver laurel leaves resting around the top of the head like a crown, with a faint thin pale-blue glow along it"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": "Keep this exact image: the same character, the same pose, the same size and position in the frame, the same neutral face with open eyes, the same hair and hair colour, the same tank top and shorts, the same transparent background. Add only this: a thin wreath of silver laurel leaves resting around the top of the head like a crown, with a faint thin pale-blue glow along it; all of the hair, the fringe included, stays exactly as it is and shows around and between the leaves. The wreath is no wider than the hair. No glasses. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
+      "file": "v4_item_head_laurel_silver01.png",
+      "ingest": {
+        "as": "item:head:laurel_silver01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-11-02T00:31:25.636Z",
+          "chat": "https://chatgpt.com/c/6ae7d94b-ed84-83ec-a3f1-d99fd2017175",
+          "file": "v4_item_head_laurel_silver01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1535",
+            "width": 1024,
+            "height": 1535,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.004,
+            "drift": {
+              "left": -1,
+              "top": null,
+              "right": 1,
+              "bottom": 0
+            },
+            "scope": 0.019,
+            "checks": {
+              "item_head_laurel_silver01_L80": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "another canvas than the reference's: scaled by 1 and anchored before drift, hair colour and scope",
+            "scope 0.019 outside the head — advisory for a head item",
+            "pipeline: fed the picture aligned onto the reference canvas"
+          ]
+        }
+      ],
+      "ingested": true,
+      "note": "BP-43: a Thần title set (spec 2026-10-31 §6), granted with the title only."
+    },
+    {
+      "id": "v4/item_head_godslayer_helm01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_godslayer_helm01",
+      "look": {
+        "description": "a light steel-grey metal half helmet with dark-crimson edges covering the top of the head down to just above the eyebrows, two short dark-crimson horns curving outwards to the sides no higher than the top of a beanie, and one small glowing red gem at its front centre; the helmet fully covers the top of the head"
+      },
+      "reference": "@item_hair_f_bob01",
+      "prompt": null,
+      "file": "v4_item_head_godslayer_helm01.png",
+      "ingest": {
+        "as": "item:head:godslayer_helm01",
+        "base": "f",
+        "variant": null,
+        "flags": [
+          "--hair",
+          "f_bob01"
+        ]
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-11-02T00:33:01.777Z",
+          "chat": "https://chatgpt.com/c/6ae7d984-b04c-83ec-a062-c58cf53b40e6",
+          "file": "v4_item_head_godslayer_helm01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1535",
+            "width": 1024,
+            "height": 1535,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.006,
+            "drift": {
+              "left": -1,
+              "top": null,
+              "right": 2,
+              "bottom": 0
+            },
+            "scope": 0.006,
+            "checks": {
+              "item_head_godslayer_helm01_L80": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "another canvas than the reference's: scaled by 1 and anchored before drift, hair colour and scope",
+            "pipeline: fed the picture aligned onto the reference canvas"
+          ]
+        }
+      ],
+      "ingested": true,
+      "note": "BP-43: a Thần title set (spec 2026-10-31 §6), granted with the title only."
+    },
+    {
+      "id": "item_aura_card_god01",
+      "kind": "aura",
+      "slot": "aura",
+      "wear": null,
+      "catalog": "aura_card_god01",
+      "look": {
+        "description": "radiant golden light with four glowing playing cards, the aces of spades, hearts, diamonds and clubs, floating evenly spaced around the ring, and small gold sparkles"
+      },
+      "reference": null,
+      "prompt": null,
+      "file": "aura_card_god01.png",
+      "ingest": {
+        "as": "item:aura:card_god01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-11-02T00:33:07.265Z",
+          "chat": "https://chatgpt.com/c/6ae7d9b8-01a8-83ec-894e-40a8ab6f8ac4",
+          "file": "aura_card_god01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1254×1254",
+            "width": 1254,
+            "height": 1254,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "hollow": 0,
+            "checks": {
+              "item_aura_card_god01_L10": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true,
+      "note": "BP-43: a Thần title set (spec 2026-10-31 §6), granted with the title only."
+    },
+    {
+      "id": "item_aura_demigod01",
+      "kind": "aura",
+      "slot": "aura",
+      "wear": null,
+      "catalog": "aura_demigod01",
+      "look": {
+        "description": "soft silver and pale-blue light with gentle twinkling white sparkles and thin rays, the glow fading out well inside the image so that the outer border and all four corners stay fully transparent"
+      },
+      "reference": null,
+      "prompt": null,
+      "file": "aura_demigod01.png",
+      "ingest": {
+        "as": "item:aura:demigod01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-11-02T00:40:22.342Z",
+          "chat": "https://chatgpt.com/c/6ae7db20-68d0-83ec-a05d-9e0f61a2df16",
+          "file": "aura_demigod01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1254×1254",
+            "width": 1254,
+            "height": 1254,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "hollow": 0.004,
+            "checks": {
+              "item_aura_demigod01_L10": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true,
+      "note": "BP-43: a Thần title set (spec 2026-10-31 §6), granted with the title only. Three drafts with a faint haze in two corners (`background`) were never collected; the description gained the fade-out clause."
+    },
+    {
+      "id": "item_aura_godslayer01",
+      "kind": "aura",
+      "slot": "aura",
+      "wear": null,
+      "catalog": "aura_godslayer01",
+      "look": {
+        "description": "dark crimson flames with wisps of black smoke and a few small shards of a broken gold crown floating in the fire"
+      },
+      "reference": null,
+      "prompt": null,
+      "file": "aura_godslayer01.png",
+      "ingest": {
+        "as": "item:aura:godslayer01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-11-02T00:34:11.812Z",
+          "chat": "https://chatgpt.com/c/6ae7da04-a6f4-83ec-9df9-1d81fc293880",
+          "file": "aura_godslayer01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1254×1254",
+            "width": 1254,
+            "height": 1254,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "hollow": 0,
+            "checks": {
+              "item_aura_godslayer01_L10": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true,
+      "note": "BP-43: a Thần title set (spec 2026-10-31 §6), granted with the title only."
+    },
+    {
+      "id": "item_frame_card_god",
+      "kind": "frame",
+      "slot": "frame",
+      "wear": null,
+      "catalog": "frame_card_god",
+      "look": {
+        "description": "a gold and deep-crimson ring with a small gold crown sitting on top of the ring"
+      },
+      "reference": null,
+      "prompt": null,
+      "file": "frame_card_god.png",
+      "ingest": {
+        "as": "item:frame:card_god",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-11-02T00:36:14.261Z",
+          "chat": "https://chatgpt.com/c/6ae7da62-0398-83ec-a612-b60492c737fc",
+          "file": "frame_card_god.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1254×1254",
+            "width": 1254,
+            "height": 1254,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "hollow": 0,
+            "checks": {
+              "item_frame_card_god_L90": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true,
+      "note": "BP-43: a Thần title set (spec 2026-10-31 §6), granted with the title only."
+    },
+    {
+      "id": "item_frame_demigod",
+      "kind": "frame",
+      "slot": "frame",
+      "wear": null,
+      "catalog": "frame_demigod",
+      "look": {
+        "description": "a polished silver ring with two small white feathered wings attached close to its upper left and upper right edge, each wing no longer than a fifth of the ring's width, so the ring itself fills almost the whole image"
+      },
+      "reference": null,
+      "prompt": null,
+      "file": "frame_demigod.png",
+      "ingest": {
+        "as": "item:frame:demigod",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-11-02T00:42:16.849Z",
+          "chat": "https://chatgpt.com/c/6ae7dc14-5610-83ec-804c-4cae560a8e79",
+          "file": "frame_demigod.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1254×1254",
+            "width": 1254,
+            "height": 1254,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "hollow": 0,
+            "checks": {
+              "item_frame_demigod_L90": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true,
+      "note": "BP-43: a Thần title set (spec 2026-10-31 §6), granted with the title only. The first draft's wide side wings would have shrunk the ring (a frame is fitted by its whole ink box) onto the portrait; it and two hazy or opaque redraws were never collected. The prompt also carried \"no haze, glow or shadow, all four corners completely empty\"."
+    },
+    {
+      "id": "item_frame_godslayer",
+      "kind": "frame",
+      "slot": "frame",
+      "wear": null,
+      "catalog": "frame_godslayer",
+      "look": {
+        "description": "a black ring with dark-crimson edges and jagged glowing red cracks"
+      },
+      "reference": null,
+      "prompt": null,
+      "file": "frame_godslayer.png",
+      "ingest": {
+        "as": "item:frame:godslayer",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-11-02T00:37:07.294Z",
+          "chat": "https://chatgpt.com/c/6ae7daa2-bac8-83ec-bd0f-92c8edef6987",
+          "file": "frame_godslayer.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1254×1254",
+            "width": 1254,
+            "height": 1254,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "hollow": 0,
+            "checks": {
+              "item_frame_godslayer_L90": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true,
+      "note": "BP-43: a Thần title set (spec 2026-10-31 §6), granted with the title only."
     }
   ]
 }

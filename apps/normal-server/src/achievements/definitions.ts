@@ -23,6 +23,21 @@ export type AchievementCategory = 'login' | 'holdem' | 'blind' | 'social' | 'cha
 export interface AchievementReward {
   points?: number
   itemId?: string
+  /**
+   * BP-43 (spec 2026-11-02 §3): the pieces of a title's wardrobe set, granted with the title in the same unlock. They are
+   * earned like `itemId`: never for sale and never drawn (see `rewardItemIds`).
+   */
+  setItems?: string[]
+}
+
+/** The ids an unlock grants, in order: the reward's `itemId` first, then its `setItems`. An undefined `itemId` is dropped. */
+export function rewardItemIds(def: AchievementDef): string[] {
+  return [...(def.reward.itemId === undefined ? [] : [def.reward.itemId]), ...(def.reward.setItems ?? [])]
+}
+
+/** Every item any of these achievements grants: what the shop must not sell and the daily draw must not hand out. */
+export function rewardItemIdsOf(defs: readonly AchievementDef[]): string[] {
+  return defs.flatMap(rewardItemIds)
 }
 
 export interface AchievementDef {
@@ -78,6 +93,26 @@ function parseDef(path: string, raw: unknown, at: number, catalog: ItemCatalog):
     if (typeof itemId !== 'string' || itemId === '') fail(path, `${id} has a malformed itemId reward`)
     if (catalog.get(itemId) === undefined) fail(path, `${id} rewards ${itemId}, which is not in the item catalogue`)
     reward.itemId = itemId
+  }
+  if (rw['setItems'] !== undefined) {
+    const setItems = rw['setItems']
+    if (!Array.isArray(setItems) || setItems.length === 0 || !setItems.every((s): s is string => typeof s === 'string' && s !== '')) {
+      fail(path, `${id} has a setItems that is not a non-empty array of item ids`)
+    }
+    // A set rides on the title: without an `itemId` there is nothing it is the set of.
+    if (reward.itemId === undefined) fail(path, `${id} has setItems but no itemId`)
+    const seenSet = new Set<string>()
+    for (const setId of setItems) {
+      if (setId === reward.itemId) fail(path, `${id} lists its own itemId ${setId} in setItems`)
+      if (seenSet.has(setId)) fail(path, `${id} lists ${setId} twice in setItems`)
+      seenSet.add(setId)
+      const item = catalog.get(setId)
+      if (item === undefined) fail(path, `${id} sets ${setId}, which is not in the item catalogue`)
+      // A default or free item is owned by everyone already: granting it would be a row that means nothing, and listing it
+      // here would hide it from the shop's and the draw's view of what is earned.
+      if (item.isDefault || item.free === true) fail(path, `${id} sets ${setId}, which is a default or free item`)
+    }
+    reward.setItems = [...setItems]
   }
   // An achievement that grants nothing is almost certainly a typo in the reward key, and it would
   // otherwise be a row that unlocks silently and pays nobody.

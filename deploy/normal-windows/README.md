@@ -417,6 +417,27 @@ Giữa bước 1 và bước 2, mọi món trong catalogue đã được bày b�
 
 ---
 
+## 9f. Lần nâng cấp lên Plan 43: trao bộ đồ cho người đã có danh hiệu Thần
+
+Plan 43 thêm cho ba danh hiệu Thần (Thần Bài, Bán Thần, Kẻ Sát Thần) mỗi danh hiệu một bộ đồ bốn món, trao cùng lúc với
+danh hiệu. Không có migration mới, nên cứ `.\stop.ps1` rồi `.\run.ps1 -NoMigrate` như thường. Người đã có danh hiệu từ
+trước chỉ có danh hiệu; để họ nhận bộ đồ, chạy **một lần** lệnh dưới đây. Lệnh này **ghi vào database Neon của bạn**
+(chỉ thêm các dòng vào kho đồ, không đụng tới điểm), nên chỉ chạy khi bạn đã đồng ý (người trợ giúp phải hỏi bạn trước).
+Chạy khi `/health` báo `"rooms":0`, chạy thử trước rồi chạy thật, **từ thư mục kit này** (lệnh tự đọc `DATABASE_URL`
+trong `.env` của thư mục đang đứng, nên không cần đặt biến nào, và đừng chạy từ thư mục khác):
+
+```powershell
+node ..\..\apps\normal-server\dist\title-set-backfill-cli.js --dry-run   # chỉ đếm, không ghi gì
+node ..\..\apps\normal-server\dist\title-set-backfill-cli.js             # ghi thật
+```
+
+Mỗi lần in một dòng `players=… granted=…` (lần chạy thử có thêm tiền tố `(dry run) `). Lệnh trao **mọi món còn thiếu**
+trong bộ, nên chạy lại thì thường `granted=0` và lỡ chạy hai lần cũng không sao; nhưng nếu GM đã cố ý thu hồi một món
+của bộ thì lần chạy lại sẽ trao món đó lần nữa. Gõ sai tham số thì lệnh in dòng hướng dẫn, thoát mã 2 và không ghi gì. Chi tiết:
+[`docs/deployment-normal.md`](../../docs/deployment-normal.md) §7, "Lần nâng cấp lên Plan 43".
+
+---
+
 ## 10. Giới hạn
 
 - **Không có HTTPS.** Mật khẩu đi qua mạng ở dạng rõ. Chỉ dùng trong mạng bạn tin được.

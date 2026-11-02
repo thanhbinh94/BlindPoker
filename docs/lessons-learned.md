@@ -1620,6 +1620,31 @@ Rulings 1–16 are listed in the CHANGELOG section. The lessons behind them:
 - **A dev-only flag in a test hook still needs its boundary checked**, here by grep that nothing in `src/` imports the
   playground and that `stingers.ts` stays off the static graph (the entry is 174.7 of 180 KB).
 
+## Plan 43 — the Thần title sets (merged `MERGE`, 2026-11-02)
+
+Rulings 1–10 are listed in the CHANGELOG section. The lessons behind them:
+
+- **Measure drafts, collect winners.** Every one of the fifteen registry entries passed on its first collected attempt
+  because each ChatGPT draft was run through `verify --picture` before `collect`. Two pieces needed redraws, and none of
+  them cost an attempt.
+- **A local picture receiver beats the download button.** A page on 127.0.0.1 took each image from the ChatGPT tab by
+  `postMessage`, by name. With four chats running in parallel, there was never any doubt which file was which.
+- **An aura or a frame is fitted by its whole ink box.** Wide ornaments shrink the ring. The first Demigod frame's wings
+  would have put the ring on the portrait, and `hollow` passed it. Look at the frame on the 208-px crop, not only at the
+  verdict.
+- **ChatGPT leaves faint haze in corners.** Alpha 1–51 in a corner fails `background`. A follow-up asking "keep this
+  exactly, remove the haze" sometimes gives an opaque background instead. A new chat whose description makes the glow
+  fade out well inside the image worked.
+- **Adding catalogue items moves many count pins.** Items, outfit layers with skin lines, stage files, sheet cards, fit
+  cards, the aura and frame lists, `HAIR_CLIP`, and the playground's own copy of it all moved. Budget a task for the
+  pins.
+- **An item an achievement grants is read in more places than the grant.** The shop seed, the shop's lock, the daily
+  draw and the wardrobe hint all enumerated `reward.itemId`. Pre-flight caught the shop lock; the final review caught
+  the wardrobe hint. One helper (`rewardItemIds`) and a grep for the old field before the merge would have found them
+  all.
+- **Check a reviewer's premise before applying the fix.** F2 asked to stop the motion on small avatars, but a head-crop
+  chibi draws no aura at all. The fixer checked `layersFor` and left it alone.
+
 ## 5. Open items
 
 The single list is `docs/known-limitations.md`. As of this writing, the items a next session is most likely to meet:

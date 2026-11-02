@@ -443,13 +443,14 @@ Với thẻ Kim cương, **ba con giống nhau** thì thưởng gấp đôi, k�
 
 Ba thành tựu mới ở mục **"Poker hỗn loạn"** của trang "Thành tựu", mỗi thành tựu thưởng **một lần**:
 
-| Danh hiệu | Điều kiện | Thưởng |
+| Thành tựu | Điều kiện | Thưởng |
 |---|---|---|
-| "Hóa Thần" | Thành Thần Bài lần đầu | 300.000 điểm, 300 danh vọng và danh hiệu "Hóa Thần" |
+| "Hóa Thần" | Thành Thần Bài lần đầu | 300.000 điểm, 300 danh vọng và danh hiệu "Thần Bài" |
 | "Bán Thần" | Thành Bán Thần lần đầu | 150.000 điểm, 150 danh vọng và danh hiệu "Bán Thần" |
 | "Kẻ Sát Thần" | Hạ Thần Bài 2 lần (cộng mọi bàn) | 500.000 điểm, 500 danh vọng và danh hiệu "Kẻ Sát Thần" |
 
 - Một lần hóa Thần, thành Bán Thần hay hạ Thần chỉ được đếm khi ván đó có **ít nhất 2 người thật được chia bài** (người ngồi ngoài không tính), và hạ một **Thần là bot** không đếm cho "Kẻ Sát Thần" (người hạ vẫn nhận 2 thẻ Kim cương). Bot không nhận danh hiệu.
+- Mỗi danh hiệu đi kèm **một bộ bốn món** trong "Phòng thay đồ": một bộ trang phục, một món đội đầu, một hào quang và một khung. Bộ của "Thần Bài" gồm Long bào Thần Bài, Vương miện Át, Hào quang Thần Bài và Khung Thần Bài; bộ của "Bán Thần" gồm Áo choàng Bán Thần, Vòng nguyệt quế bạc, Hào quang Bán Thần và Khung Bán Thần; bộ của "Kẻ Sát Thần" gồm Giáp Sát Thần, Mũ sừng Sát Thần, Hào quang Sát Thần và Khung Sát Thần. Các món này chỉ có khi đạt thành tựu: cửa hàng không bán và quà hằng ngày không rơi ra chúng.
 - Thưởng danh hiệu không tính vào trần điểm thẻ mỗi ngày. Hồ sơ đếm số lần hóa Thần, thành Bán Thần và hạ Thần của bạn.
 
 ### Bộ 86 thẻ
@@ -650,7 +651,7 @@ Bấm "Mua" thì hộp "Mua món này?" hỏi lại, ví dụ "Mua Nón lá vớ
 
 ## 9. Thành tựu (bản Normal)
 
-Mở "Hồ sơ" rồi bấm "Thành tựu". Trang này cho biết bạn "Đã đạt" bao nhiêu trên tổng số, tiến độ từng thành tựu và ngày đạt. Khi đạt, bạn thấy thông báo "Đạt thành tựu mới" và nhận thưởng ngay, không phải bấm nhận. Ván bị hủy (ví dụ khi máy chủ khởi động lại) không được tính. Ván ở bàn "Poker hỗn loạn" chỉ tính vào số ván đã chơi (cả ván Blind, ván trọn vẹn và ván có bot) và số phòng đã vào, không tính vào ván thắng, chuỗi, bộ bài mạnh hay ván thắng lớn (mục 6a); riêng ba danh hiệu "Hóa Thần", "Bán Thần" và "Kẻ Sát Thần" ở mục "Poker hỗn loạn" chỉ đạt được ở bàn hỗn loạn (bảng ở mục 6a). Có 47 thành tựu trong năm mục.
+Mở "Hồ sơ" rồi bấm "Thành tựu". Trang này cho biết bạn "Đã đạt" bao nhiêu trên tổng số, tiến độ từng thành tựu và ngày đạt. Khi đạt, bạn thấy thông báo "Đạt thành tựu mới" và nhận thưởng ngay, không phải bấm nhận. Ván bị hủy (ví dụ khi máy chủ khởi động lại) không được tính. Ván ở bàn "Poker hỗn loạn" chỉ tính vào số ván đã chơi (cả ván Blind, ván trọn vẹn và ván có bot) và số phòng đã vào, không tính vào ván thắng, chuỗi, bộ bài mạnh hay ván thắng lớn (mục 6a); riêng ba thành tựu "Hóa Thần", "Bán Thần" và "Kẻ Sát Thần" ở mục "Poker hỗn loạn" chỉ đạt được ở bàn hỗn loạn (bảng ở mục 6a). Có 47 thành tựu trong năm mục.
 
 **"Điểm danh"**: *ngày ghé bàn* là số ngày bạn bấm "Nhận thưởng" ở "Điểm danh", không phải số lần đăng nhập.
 

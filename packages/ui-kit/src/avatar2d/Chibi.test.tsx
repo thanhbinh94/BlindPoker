@@ -687,6 +687,85 @@ describe('Chibi live', () => {
     expect(keyframes('chibiSpinRight')).toMatch(/transform:\s*scaleX\(-0\.06\)\s*;/)
   })
 
+  describe('the three Thần auras move (Plan 43)', () => {
+    const auraOf = (code: string): WearRef => ({ id: `aura_${code}`, order: 10, file: `item_aura_${code}_L10` })
+    const auraImg = (container: ParentNode, code: string) => container.querySelector(`img[src="/avatar/item_aura_${code}_L10@1x.png"]`) as HTMLElement
+    const MOTION_CLASSES = [s.auraGlow, s.auraTwinkle, s.auraFlicker]
+    const moves = (img: Element) => MOTION_CLASSES.some((name) => img.classList.contains(name!))
+    const wearing = (code: string): ChibiConfig => ({ ...SUBJECT, aura: auraOf(code) })
+
+    it('each Thần aura layer carries its own motion class, and no other layer does', () => {
+      const cases: ReadonlyArray<[string, string]> = [
+        ['card_god01', s.auraGlow!],
+        ['demigod01', s.auraTwinkle!],
+        ['godslayer01', s.auraFlicker!],
+      ]
+      for (const [code, motion] of cases) {
+        const { container, unmount } = render(<Chibi subject={wearing(code)} />)
+        expect(auraImg(container, code)).toHaveClass(motion)
+        const moving = [...container.querySelectorAll('img')].filter(moves)
+        expect(moving).toHaveLength(1)
+        unmount()
+      }
+    })
+
+    it('another aura carries no motion class', () => {
+      const { container } = render(<Chibi subject={wearing('fire01')} />)
+      const img = auraImg(container, 'fire01')
+      expect(img).not.toBeNull()
+      expect(moves(img)).toBe(false)
+    })
+
+    it('a lazy chibi carries none', () => {
+      const { container } = render(<Chibi subject={wearing('card_god01')} lazy />)
+      const img = auraImg(container, 'card_god01')
+      expect(img).not.toBeNull()
+      expect(moves(img)).toBe(false)
+    })
+
+    it('a head crop draws no aura layer at all, and its frame border keeps the head-crop geometry', () => {
+      const subject: ChibiConfig = { ...SUBJECT, frame: FRAME_ITEM, aura: auraOf('card_god01') }
+      const { container } = render(<Chibi subject={subject} frame="head" />)
+      expect(auraImg(container, 'card_god01')).toBeNull()
+      expect(container.querySelector('img[src*="_L10@"]')).toBeNull()
+      const border = container.querySelector('img[src="/avatar/item_frame_gold_L90@1x.png"]')
+      expect(border).not.toBeNull()
+      expect(border).toHaveClass(s.headCrop!)
+      expect([...container.querySelectorAll('img')].some(moves)).toBe(false)
+    })
+
+    it('reduced motion carries none', () => {
+      stubReducedMotion(true)
+      for (const code of ['card_god01', 'demigod01', 'godslayer01']) {
+        const { container, unmount } = render(<Chibi subject={wearing(code)} />)
+        const img = auraImg(container, code)
+        expect(img).not.toBeNull()
+        expect(moves(img)).toBe(false)
+        unmount()
+      }
+    })
+
+    it('the styles: opacity and brightness only, never a transform, and every motion stops under reduced motion', () => {
+      const css = AVATAR2D_CSS.replace(/\/\*[\s\S]*?\*\//g, '')
+      const keyframes = (name: string) => css.match(new RegExp(`@keyframes ${name}\\s*\\{([\\s\\S]*?)\\n\\}\\n`))?.[1] ?? ''
+      const rule = (selector: string) => css.match(new RegExp(`(?:^|\\n)\\.${selector}\\s*\\{([^}]*)\\}`))?.[1] ?? ''
+      for (const name of ['chibiAuraGlow', 'chibiAuraTwinkle', 'chibiAuraFlicker']) {
+        const body = keyframes(name)
+        expect(body).toMatch(/opacity:/)
+        expect(body).toMatch(/filter:\s*brightness\(/)
+        expect(body).not.toMatch(/transform|translate|scale|rotate/)
+        expect(body.replace(/opacity:[^;]+;|filter:\s*brightness\([^)]*\);|[\s\d.%,{}]/g, '')).toBe('')
+      }
+      expect(rule('auraGlow')).toMatch(/animation:\s*chibiAuraGlow\s+3s\s+ease-in-out\s+infinite/)
+      expect(rule('auraTwinkle')).toMatch(/animation:\s*chibiAuraTwinkle\s+1\.6s\b/)
+      expect(rule('auraFlicker')).toMatch(/animation:\s*chibiAuraFlicker\s+0\.9s\b/)
+      expect(keyframes('chibiAuraGlow')).toMatch(/opacity:\s*0\.85[\s\S]*brightness\(1\)[\s\S]*opacity:\s*1[\s\S]*brightness\(1\.25\)/)
+      expect(keyframes('chibiAuraTwinkle')).toMatch(/brightness\(1\.35\)/)
+      const reduce = [...css.matchAll(/@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/g)].map((m) => m[1]).join('\n')
+      for (const name of ['.auraGlow', '.auraTwinkle', '.auraFlicker']) expect(reduce).toContain(name)
+    })
+  })
+
   it('live off draws one face and no life attribute', () => {
     const { container } = render(<Chibi subject={SUBJECT} live="off" react={{ kind: 'cheer', key: 1 }} facing="left" />)
     const root = container.firstElementChild as HTMLElement

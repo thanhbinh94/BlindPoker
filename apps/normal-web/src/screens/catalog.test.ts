@@ -94,6 +94,22 @@ describe('hintFor', () => {
     expect(hintFor(crown, sources(ACHIEVEMENTS), tEn)).toBe(enNormal.achievements.login_days_100.name)
   })
 
+  it('names the Thần achievement that hands over a locked set piece with its title (BP-43)', () => {
+    const chaosGod: AchievementDefDto = {
+      id: 'chaos_god',
+      category: 'chaos',
+      metric: 'chaosAscensions',
+      threshold: 1,
+      reward: { points: 300000, itemId: 'title_god', setItems: ['outfit_card_god01', 'head_ace_crown01', 'aura_card_god01', 'frame_card_god'] },
+    }
+    const aura = item({ id: 'aura_card_god01', slot: 'aura', rarity: 'epic' })
+
+    expect(hintFor(aura, sources([...ACHIEVEMENTS, chaosGod]), tVi)).toBe(viNormal.achievements.chaos_god.name)
+    expect(hintFor(aura, sources([...ACHIEVEMENTS, chaosGod]), tEn)).toBe(enNormal.achievements.chaos_god.name)
+    // Without the achievement list the piece falls back, as an epic aura the draw never hands out.
+    expect(hintFor(aura, sources([]), tVi)).toBe(viNormal.wardrobe.hint.unavailable)
+  })
+
   it('says "no way to earn this" for what nothing hands out: an outfit, or an item outside the draw slots', () => {
     expect(hintFor(OUTFIT, sources([]), tVi)).toBe(viNormal.wardrobe.hint.unavailable)
     expect(hintFor(item({ id: 'title_rookie', slot: 'title', rarity: 'common' }), sources(ACHIEVEMENTS), tVi)).toBe(viNormal.wardrobe.hint.unavailable)

@@ -26,7 +26,7 @@ import { creditWithin, type NormalRepositories } from '../repos/index.js'
 import { isUuid } from '../repos/util.js'
 import { achievementRuleFor, type ReputationService } from '../reputation/reputation-service.js'
 import type { StatsService } from '../stats/stats-service.js'
-import { byMetric, type AchievementDef } from './definitions.js'
+import { byMetric, rewardItemIds, type AchievementDef } from './definitions.js'
 
 export interface AchievementProgress {
   id: string
@@ -63,7 +63,7 @@ export interface AchievementServiceDeps {
 }
 
 /** The `source` recorded in `inventory` for an item that came from an achievement. */
-const ACHIEVEMENT_SOURCE = 'achievement'
+export const ACHIEVEMENT_SOURCE = 'achievement'
 
 /**
  * Flips one achievement to unlocked and pays its whole reward inside the caller's transaction — the one code path
@@ -114,8 +114,10 @@ export async function unlockWithin(
   if (def.reward.points !== undefined) {
     await creditWithin(tx, [{ playerId, delta: def.reward.points, reason: pay.reason, refId: pay.refId }])
   }
-  if (def.reward.itemId !== undefined) {
-    await pay.inventory.grant(tx, playerId, def.reward.itemId, ACHIEVEMENT_SOURCE)
+  // BP-43: the title and its wardrobe set arrive in the same unlock. `grant` is idempotent, and the points above are paid
+  // only on the claim, so a piece the player already owns costs nothing and a rerun pays nothing.
+  for (const itemId of rewardItemIds(def)) {
+    await pay.inventory.grant(tx, playerId, itemId, ACHIEVEMENT_SOURCE)
   }
   if (pay.reputation === undefined) return { outcome: 'unlocked', rankUp: false, rank: 0 }
   const refId = `ach:${playerId}:${def.id}`

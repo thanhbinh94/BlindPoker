@@ -64,6 +64,20 @@ const ROWS: AchievementProgressDto[] = [
     unlockedAt: null,
   },
   {
+    id: 'chaos_god',
+    category: 'chaos',
+    metric: 'chaosGodsMade',
+    threshold: 1,
+    reward: {
+      points: 300_000,
+      itemId: 'title_god',
+      setItems: ['outfit_card_god01', 'head_ace_crown01', 'aura_card_god01', 'frame_card_god'],
+    },
+    reputation: 300,
+    progress: 0,
+    unlockedAt: null,
+  },
+  {
     id: 'chaos_godslayer',
     category: 'chaos',
     metric: 'chaosGodsSlain',
@@ -114,7 +128,7 @@ describe('AchievementsScreen', () => {
     renderScreen()
     await screen.findByText(viNormal.achievements.login_days_7.name)
 
-    expect(screen.getByText(viNormal.achievements.ui.summary.replace('{{unlocked}}', '3').replace('{{total}}', '8'))).toBeInTheDocument()
+    expect(screen.getByText(viNormal.achievements.ui.summary.replace('{{unlocked}}', '3').replace('{{total}}', '9'))).toBeInTheDocument()
     for (const label of Object.values(viNormal.achievements.ui.category)) {
       expect(screen.getByRole('heading', { name: label })).toBeInTheDocument()
     }
@@ -141,6 +155,25 @@ describe('AchievementsScreen', () => {
     const demigod = screen.getAllByText(viNormal.achievements.chaos_demigod.name)[0]!.closest('li')!
     expect(demigod).toHaveAttribute('data-unlocked', 'true')
     expect(demigod).toHaveTextContent('150 danh vọng')
+  })
+
+  it("says a Thần achievement's reward brings the whole outfit set, and leaves a reward without a set unchanged", async () => {
+    renderScreen()
+    await screen.findAllByText(viNormal.achievements.chaos_god.name)
+
+    // "Thần Bài" is the title's name and the achievement's own name is "Hóa Thần": the row is found by its description.
+    const row = screen.getByText(viNormal.achievements.chaos_god.desc).closest('li')!
+    const points = within(row).getByText('300.000 điểm')
+    expect(viNormal.items.title_god).toBe('Thần Bài')
+    expect(points.parentElement).toHaveTextContent('300.000 điểm · Thần Bài · cả bộ trang phục')
+    // The set note is one more part, kept whole like the points and the title.
+    expect(within(points.parentElement!).getByText(viNormal.achievements.ui.setReward)).toHaveClass(s.achPart!)
+
+    // An achievement with no set prints exactly what it did before.
+    const godslayer = screen.getByText(viNormal.achievements.chaos_godslayer.desc).closest('li')!
+    expect(within(godslayer).queryByText(viNormal.achievements.ui.setReward)).toBeNull()
+    expect(within(godslayer).getByText('500.000 điểm').parentElement).toHaveTextContent(`500.000 điểm · ${viNormal.items.title_godslayer}`)
+    expect(within(godslayer).getByText('500.000 điểm').parentElement).not.toHaveTextContent('trang phục')
   })
 
   it('shows no reputation on an achievement that names none', async () => {

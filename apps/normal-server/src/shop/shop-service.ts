@@ -32,7 +32,7 @@
  */
 import { InsufficientBalanceError } from '@bp/server-kit'
 import { asc, eq, inArray } from 'drizzle-orm'
-import type { AchievementDef } from '../achievements/definitions.js'
+import { rewardItemIds, type AchievementDef } from '../achievements/definitions.js'
 import type { AppDb, AppTx } from '../db/client.js'
 import { ledgerKeys, players, shopConfig, shopFeatured, shopPrices } from '../db/schema.js'
 import { dayKey, dayStartMs, monthKey } from '../economy/daily-rules.js'
@@ -192,7 +192,7 @@ export function createShopService(deps: ShopServiceDeps): ShopService {
   const clock = deps.now ?? Date.now
   /** Item → the achievement that rewards it (the first, if two ever did). */
   const rewardOwner = new Map<string, string>()
-  for (const def of deps.defs) if (def.reward.itemId !== undefined && !rewardOwner.has(def.reward.itemId)) rewardOwner.set(def.reward.itemId, def.id)
+  for (const def of deps.defs) for (const itemId of rewardItemIds(def)) if (!rewardOwner.has(itemId)) rewardOwner.set(itemId, def.id)
 
   const toPrice = (r: typeof shopPrices.$inferSelect): ShopPrice => ({ itemId: r.itemId, pricePoints: r.pricePoints, minRank: r.minRank, enabled: r.enabled, salePrice: r.salePrice })
 

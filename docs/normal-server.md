@@ -27,6 +27,8 @@ src/
   grant-gm-cli.ts    operator tool: make an account a GM, or take the role back (--revoke); DATABASE_URL only
   reputation-backfill-cli.ts  operator tool, once per Plan 27 upgrade: credit every account the reputation its
                      history earned (--dry-run first); DATABASE_URL only — see "Reputation, the shop and the welcome gift"
+  title-set-backfill-cli.ts  operator tool, once per Plan 43 upgrade: hand every holder of a Thần title the wardrobe
+                     set that came after it (--dry-run first); inventory rows only; DATABASE_URL only
   e2e-entry.ts       the e2e server's own entry; e2e-promote.ts is its one extra route, e2e-options.ts its env knobs
                      (E2E_READ_LIMIT; BP-41's E2E_CHAOS_CARDS, changes laid over the chaos cards) — never in dist/
   app.ts             buildApp(): wiring, in the one order that works (below)
@@ -98,7 +100,7 @@ Most of it is arbitrary. Four steps are not, and each one is a bug if moved:
 2. **`stats.start()` is subscribed before `achievements.start()`.** The bus calls subscribers in
    subscription order and awaits each one, so the counters are written before the achievement layer
    reads them. Reversed, "did the counter land yet" becomes a race with no fix at the call site.
-3. **`economy` is constructed with `reservedItemIds` = every `reward.itemId` in the achievement
+3. **`economy` is constructed with `reservedItemIds` = `rewardItemIdsOf(defs)` (every `reward.itemId` and `reward.setItems` id) in the achievement
    definitions, and with `gifts` = `loadDailyGifts(catalog)`.** Both are kept off the daily random
    draw: an item somebody was supposed to earn, or one the schedule promises for a month.
    `loadDailyGifts` runs right after `loadAchievements` and before `seed`, so a bad schedule stops
@@ -805,6 +807,40 @@ successful sit, off its queue, so a slow or failing read never holds a sit; it t
 `metric` must be a key of `PlayerStats` (`stats/player-stats.ts`); `reward` is `{ points }`,
 `{ itemId }` or both. An `itemId` must exist in `items.json` — and adding one automatically removes
 that item from the daily draw pool, because `app.ts` passes every reward id as `reservedItemIds`.
+
+**A set that comes with the title (`reward.setItems`, BP-43).** A reward may also carry `"setItems": [itemId, …]`, the
+wardrobe pieces that arrive in the same unlock as `itemId`. The three Thần achievements use it:
+
+```json
+{ "id": "chaos_god", …, "reward": { "points": 300000, "itemId": "title_god",
+  "setItems": ["outfit_card_god01", "head_ace_crown01", "aura_card_god01", "frame_card_god"] } }
+```
+
+- **Load rules** (`loadAchievements`, which fails the boot): `setItems` is a non-empty array of non-empty strings; the
+  reward also has an `itemId` (the set is the title's); no id repeats or equals `itemId`; every id is in the item
+  catalogue; and none is `isDefault` or `free` (everyone owns those, so a grant would mean nothing). Whether an item is
+  *on sale* cannot be checked at load, because prices live in the database; the shop's achievement lock (below) keeps a
+  set item off sale.
+- **The grant.** `unlockWithin` (`achievements/achievement-service.ts`, the one path for an earned unlock and a GM's)
+  grants `rewardItemIds(def)` (the `itemId` first, then `setItems`) through `inventory.grant` with the `achievement`
+  source, inside the same transaction. Points and reputation are paid only on the claim, and `grant` is `ON CONFLICT DO
+  NOTHING`, so a piece the player already owns costs nothing and a rerun pays nothing.
+- **Never sold, never drawn.** `rewardItemIds(def)` and `rewardItemIdsOf(defs)` (`achievements/definitions.ts`) name
+  every item an achievement hands over, set pieces included. Every reader uses them in place of the bare `reward.itemId`.
+  On the server: `app.ts` (`reservedItemIds` for the daily draw), `shop/shop-prices-seed.ts` (the seeded price rows are
+  off sale), `shop/shop-service.ts` (the `achievement` lock, which names the owning achievement) and the unlock itself
+  (`unlockWithin`). On the web, the wardrobe's hint for a locked piece (`screens/catalog.ts` `hintFor`) reads the
+  achievement DTO's `reward.setItems` and names the achievement that gives it. A new reader of "what an achievement
+  hands over" should use them too.
+- **The backfill** (`inventory/title-sets.ts`, `title-set-backfill-cli.ts`). A player who earned a Thần title before
+  BP-43 holds the title alone. `backfillTitleSets(db, { dryRun, defs })` finds, for every definition with `setItems`,
+  every player owning its `itemId` (any source) and grants each set item they lack, one transaction per player, with the
+  `achievement` source. Inventory rows only: no points, no ledger row, no reputation. A rerun grants 0. The CLI is
+  `node dist/title-set-backfill-cli.js [--dry-run]` (the sixth `dist` entry of `scripts/build.mjs`; also
+  `pnpm --filter @bp/normal-server backfill:title-sets`). It reads only `DATABASE_URL` (the environment, else `.env` in the
+  working directory), prints `players=<n> granted=<n>` (prefixed `(dry run) `), and exits 0, 2 for a missing
+  `DATABASE_URL` or any argument other than `--dry-run`, 1 on an error. Operator steps: `docs/deployment-normal.md`.
+  Tests: `inventory/title-sets.test.ts`.
 
 An unlock also adds reputation: by default the rule of its reward tier (`achievementRuleFor`: an item →
 `achievement_item`, more than 5 000 points → `achievement_big`, else `achievement_small`). An optional

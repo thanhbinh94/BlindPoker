@@ -52,7 +52,7 @@ import fastifyCookie from '@fastify/cookie'
 import { lt } from 'drizzle-orm'
 import Fastify, { type FastifyInstance } from 'fastify'
 import { createAchievementService, type AchievementService } from './achievements/achievement-service.js'
-import { loadAchievements, type AchievementDef } from './achievements/definitions.js'
+import { loadAchievements, rewardItemIdsOf, type AchievementDef } from './achievements/definitions.js'
 import { createAuthService, type AuthService } from './auth/auth-service.js'
 import { readSessionCookie } from './auth/cookie.js'
 import { loadChaosCatalogue } from './chaos/chaos-catalogue.js'
@@ -365,7 +365,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     // Only the balance moves: a table stack, in either mode, is left alone.
     onBalanceChanged: (playerId) => void game.balanceChanged(playerId),
     // Everything an achievement has promised is off the random draw's table.
-    reservedItemIds: defs.flatMap((def) => (def.reward.itemId === undefined ? [] : [def.reward.itemId])),
+    reservedItemIds: rewardItemIdsOf(defs),
     reputation,
     ...(deps.now ? { now: deps.now } : {}),
     ...(deps.rng ? { rng: deps.rng } : {}),

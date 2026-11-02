@@ -1200,6 +1200,45 @@ locks are the user's to try by ear.
 *Tracked:* `packages/ui-kit/src/sound/engine.ts`, `stingers.ts`; `apps/normal-web/e2e/sound.spec.ts`,
 `apps/normal-web/e2e/ops/11-entrance.spec.ts` (F-15, F-15b); plan BP-42 amendment A18.
 
+## The Thần sets (BP-43)
+
+**The Godslayer's helm carries a few light specks at its lower side edges.** The helm over the default bob is a light
+steel-grey (a dark one loses its crown to the cut) and joins `HAIR_CLIP`; where the cut bit into the helm next to the hair, a
+few light pixels remain at its lower side edges, visible when zoomed.
+*Why it stays:* a redraw trades the specks for holes or for a hand clean-up, which the pipeline does not do (every layer is
+cut from a picture); the specks are a handful of pixels.
+*Tracked:* `docs/avatar-2d.md` §10.8; registry `v4/item_head_godslayer_helm01`.
+
+**A GM's gift schedule and `grantItem` can still name a set item.** A set item is kept off the shop, the daily draw and the
+seeded prices, but the GM tools take any catalogue id, so a GM can gift a set piece as they can `title_devoted`.
+*Why it stays:* the GM is trusted with the catalogue, and the gift is a deliberate act, not a leak; a guard would need a
+reason the GM can read.
+*Tracked:* plan 43 amendment A15; `apps/normal-server/src/gm/gm-service.ts`.
+
+**A rerun of the title-set backfill re-grants a set piece a GM took back.** The backfill grants whatever set item a title
+holder lacks, and it cannot tell "never given" from "deliberately removed", so a GM who took a piece back (or a player who
+never got one) gets it again on the next run.
+*Why it stays:* the backfill is a once-per-upgrade operator step with a dry run, and a tombstone for taken-back items would
+need a new table for a case nobody has asked for; the deployment guides say so beside the commands.
+*Tracked:* `apps/normal-server/src/inventory/title-sets.ts`; `docs/deployment-normal.md` §7, `deploy/normal-windows/README.md` §9f.
+
+**A set item cannot be checked "on sale" when the catalogue loads.** The load rules refuse a default or `free` set item
+and an unknown id, but the shop's prices live in the database, so a price row that is switched on for a set item is not
+seen at load. The shop's `achievement` lock refuses to sell it regardless.
+*Why it stays:* the loader has no database; the lock is the guard, and `shop-prices-seed.ts` seeds those rows off sale.
+*Tracked:* plan 43 amendment A8; `apps/normal-server/src/shop/shop-service.ts`.
+
+**The aura motion is checked only in Chromium.** The glow, twinkle and flicker are unit-tested (the class, the gates) and
+looked at in the playground, but nobody has watched them on a real phone: how the brightness filter on an aura layer
+costs a low-end phone's frame rate, and whether Safari or Firefox play it the same, are the user's to try by eye.
+*Why it stays:* only Chromium is installed (CLAUDE.md §3) and the real-phone checks are the user's.
+*Tracked:* `packages/ui-kit/src/avatar2d/aura-motion.ts`, `avatar2d.module.css`.
+
+**The English names of the twelve set items are the session's.** The item names in the English locale were drafted by the
+implementer and have not been reviewed.
+*Why it stays:* CLAUDE.md §6 — English copy changes only when the user asks.
+*Tracked:* the item names in `apps/normal-web/src/locales/en/normal.json`; plan 43 Task 2.
+
 ---
 
 ## Not limitations — things that were never in scope

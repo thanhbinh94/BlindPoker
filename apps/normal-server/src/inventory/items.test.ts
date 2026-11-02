@@ -118,10 +118,10 @@ function fixtureWith(...defs: ItemDef[]): string {
 describe('the shipped catalogue', () => {
   const catalog = loadItemCatalog()
 
-  it('has a hundred and thirty items spread across all eleven slots', () => {
+  it('has a hundred and forty-two items spread across all eleven slots', () => {
     const all = catalog.all()
-    // BP-41: 127 + the three chaos titles (`title_god`, `title_demigod`, `title_godslayer`).
-    expect(all.length).toBe(130)
+    // BP-41: 127 + the three chaos titles; BP-43: + the twelve Thần set pieces (three outfits, three heads, three auras, three frames).
+    expect(all.length).toBe(142)
     expect(SLOTS).toHaveLength(11)
     for (const slot of SLOTS) expect(all.some((d) => d.slot === slot), slot).toBe(true)
     // The v2 slots are gone: a wardrobe piece is one PNG layer now, not a body part it dresses.
@@ -271,6 +271,7 @@ describe('the shipped catalogue', () => {
     // rose through them. Read off the manifest's `masks.hairClip` of the hat's layer, which its colours share.
     // BP-33's cap, bucket hat and fedora cover the crown too: the ingest of their real pictures cut their clips.
     // BP-35's witch hat, pumpkin, Santa hat and straw hat as well, cut the same way when their pictures were ingested.
+    // BP-43's godslayer helm covers the crown to the brow, so its ingest cut a clip too (the ace crown and the laurel sit on the hair).
     const clipping = catalog.all().filter((def) => def.asset?.clipsHair === true).map((def) => def.id).sort()
     expect(clipping).toEqual([
       'head_beanie01',
@@ -285,6 +286,7 @@ describe('the shipped catalogue', () => {
       'head_cap_navy01',
       'head_conical_hat01',
       'head_fedora01',
+      'head_godslayer_helm01',
       'head_pumpkin01',
       'head_santa_hat01',
       'head_straw_hat01',

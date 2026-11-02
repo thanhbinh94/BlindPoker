@@ -782,6 +782,20 @@
       "copyOf": "bot_7_face_neutral_L50",
       "cutOn": "f"
     },
+    "item_aura_card_god01_L10": {
+      "layer": 10,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 144000,
+      "real": true
+    },
+    "item_aura_demigod01_L10": {
+      "layer": 10,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 133352,
+      "real": true
+    },
     "item_aura_earth01_L10": {
       "layer": 10,
       "w": 384,
@@ -794,6 +808,13 @@
       "w": 384,
       "h": 448,
       "bytes2x": 243257,
+      "real": true
+    },
+    "item_aura_godslayer01_L10": {
+      "layer": 10,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 128996,
       "real": true
     },
     "item_aura_gold_cards01_L10": {
@@ -929,11 +950,32 @@
       "bytes2x": 201236,
       "real": true
     },
+    "item_frame_card_god_L90": {
+      "layer": 90,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 200545,
+      "real": true
+    },
+    "item_frame_demigod_L90": {
+      "layer": 90,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 176636,
+      "real": true
+    },
     "item_frame_founder_L90": {
       "layer": 90,
       "w": 384,
       "h": 448,
       "bytes2x": 260812,
+      "real": true
+    },
+    "item_frame_godslayer_L90": {
+      "layer": 90,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 203358,
       "real": true
     },
     "item_frame_gold_L90": {
@@ -1245,6 +1287,14 @@
         }
       }
     },
+    "item_head_ace_crown01_L80": {
+      "layer": 80,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 14511,
+      "real": true,
+      "cutOn": "f"
+    },
     "item_head_beanie01_L80": {
       "layer": 80,
       "w": 384,
@@ -1396,6 +1446,20 @@
       "real": true,
       "cutOn": "f"
     },
+    "item_head_godslayer_helm01_L80": {
+      "layer": 80,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 69973,
+      "real": true,
+      "cutOn": "f",
+      "masks": {
+        "hairClip": {
+          "bytes2x": 5878,
+          "meanL": 0
+        }
+      }
+    },
     "item_head_headband_red01_L80": {
       "layer": 80,
       "w": 384,
@@ -1412,6 +1476,14 @@
       "hidesHairFront": true,
       "hidesHairBack": true,
       "placeholder": true
+    },
+    "item_head_laurel_silver01_L80": {
+      "layer": 80,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 23776,
+      "real": true,
+      "cutOn": "f"
     },
     "item_head_lotus_pin01_L80": {
       "layer": 80,
@@ -1605,6 +1677,46 @@
         }
       }
     },
+    "item_outfit_card_god01_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 125089,
+      "real": true,
+      "cutOn": "f",
+      "masks": {
+        "skinLine": {
+          "bytes2x": 4574,
+          "meanL": 0.2919
+        },
+        "skin": {
+          "bytes2x": 4015,
+          "meanL": 0,
+          "empty": true
+        }
+      }
+    },
+    "item_outfit_card_god01_m_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 120446,
+      "real": true,
+      "variantOf": "item_outfit_card_god01_L40",
+      "wear": "m",
+      "cutOn": "m",
+      "masks": {
+        "skinLine": {
+          "bytes2x": 4505,
+          "meanL": 0.3017
+        },
+        "skin": {
+          "bytes2x": 4015,
+          "meanL": 0,
+          "empty": true
+        }
+      }
+    },
     "item_outfit_casual01_L40": {
       "layer": 40,
       "w": 384,
@@ -1691,6 +1803,46 @@
         }
       }
     },
+    "item_outfit_demigod01_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 133563,
+      "real": true,
+      "cutOn": "f",
+      "masks": {
+        "skinLine": {
+          "bytes2x": 4510,
+          "meanL": 0.3777
+        },
+        "skin": {
+          "bytes2x": 4015,
+          "meanL": 0,
+          "empty": true
+        }
+      }
+    },
+    "item_outfit_demigod01_m_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 127363,
+      "real": true,
+      "variantOf": "item_outfit_demigod01_L40",
+      "wear": "m",
+      "cutOn": "m",
+      "masks": {
+        "skinLine": {
+          "bytes2x": 4479,
+          "meanL": 0.3476
+        },
+        "skin": {
+          "bytes2x": 4015,
+          "meanL": 0,
+          "empty": true
+        }
+      }
+    },
     "item_outfit_denim01_L40": {
       "layer": 40,
       "w": 384,
@@ -1702,6 +1854,45 @@
         "skinLine": {
           "bytes2x": 4473,
           "meanL": 0.3225
+        },
+        "skin": {
+          "bytes2x": 4015,
+          "meanL": 0,
+          "empty": true
+        }
+      }
+    },
+    "item_outfit_godslayer01_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 153022,
+      "real": true,
+      "cutOn": "f",
+      "masks": {
+        "skinLine": {
+          "bytes2x": 4986,
+          "meanL": 0.2778
+        },
+        "skin": {
+          "bytes2x": 4174,
+          "meanL": 0.8095
+        }
+      }
+    },
+    "item_outfit_godslayer01_m_L40": {
+      "layer": 40,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 144825,
+      "real": true,
+      "variantOf": "item_outfit_godslayer01_L40",
+      "wear": "m",
+      "cutOn": "m",
+      "masks": {
+        "skinLine": {
+          "bytes2x": 4916,
+          "meanL": 0.2508
         },
         "skin": {
           "bytes2x": 4015,
@@ -2016,6 +2207,22 @@
     }
   },
   "icons": {
+    "item_aura_card_god01_icon": {
+      "kind": "icon",
+      "of": "item_aura_card_god01_L10",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 43552,
+      "real": true
+    },
+    "item_aura_demigod01_icon": {
+      "kind": "icon",
+      "of": "item_aura_demigod01_L10",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 45764,
+      "real": true
+    },
     "item_aura_earth01_icon": {
       "kind": "icon",
       "of": "item_aura_earth01_L10",
@@ -2030,6 +2237,14 @@
       "w": 96,
       "h": 96,
       "bytes2x": 52044,
+      "real": true
+    },
+    "item_aura_godslayer01_icon": {
+      "kind": "icon",
+      "of": "item_aura_godslayer01_L10",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 38120,
       "real": true
     },
     "item_aura_gold_cards01_icon": {
@@ -2176,12 +2391,36 @@
       "bytes2x": 25245,
       "real": true
     },
+    "item_frame_card_god_icon": {
+      "kind": "icon",
+      "of": "item_frame_card_god_L90",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 24841,
+      "real": true
+    },
+    "item_frame_demigod_icon": {
+      "kind": "icon",
+      "of": "item_frame_demigod_L90",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 23596,
+      "real": true
+    },
     "item_frame_founder_icon": {
       "kind": "icon",
       "of": "item_frame_founder_L90",
       "w": 96,
       "h": 96,
       "bytes2x": 30288,
+      "real": true
+    },
+    "item_frame_godslayer_icon": {
+      "kind": "icon",
+      "of": "item_frame_godslayer_L90",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 25201,
       "real": true
     },
     "item_frame_gold_icon": {
@@ -2214,6 +2453,14 @@
       "w": 96,
       "h": 96,
       "bytes2x": 27336,
+      "real": true
+    },
+    "item_head_ace_crown01_icon": {
+      "kind": "icon",
+      "of": "item_head_ace_crown01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 26866,
       "real": true
     },
     "item_head_beanie01_icon": {
@@ -2322,6 +2569,14 @@
       "bytes2x": 20699,
       "real": true
     },
+    "item_head_godslayer_helm01_icon": {
+      "kind": "icon",
+      "of": "item_head_godslayer_helm01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 27720,
+      "real": true
+    },
     "item_head_headband_red01_icon": {
       "kind": "icon",
       "of": "item_head_headband_red01_L80",
@@ -2337,6 +2592,14 @@
       "h": 96,
       "bytes2x": 5494,
       "placeholder": true
+    },
+    "item_head_laurel_silver01_icon": {
+      "kind": "icon",
+      "of": "item_head_laurel_silver01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 10899,
+      "real": true
     },
     "item_head_lotus_pin01_icon": {
       "kind": "icon",
@@ -2443,6 +2706,22 @@
       "bytes2x": 25991,
       "real": true
     },
+    "item_outfit_card_god01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_card_god01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 30712,
+      "real": true
+    },
+    "item_outfit_card_god01_m_icon": {
+      "kind": "icon",
+      "of": "item_outfit_card_god01_m_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 29367,
+      "real": true
+    },
     "item_outfit_casual01_icon": {
       "kind": "icon",
       "of": "item_outfit_casual01_L40",
@@ -2476,12 +2755,44 @@
       "bytes2x": 23839,
       "real": true
     },
+    "item_outfit_demigod01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_demigod01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 32375,
+      "real": true
+    },
+    "item_outfit_demigod01_m_icon": {
+      "kind": "icon",
+      "of": "item_outfit_demigod01_m_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 30696,
+      "real": true
+    },
     "item_outfit_denim01_icon": {
       "kind": "icon",
       "of": "item_outfit_denim01_L40",
       "w": 96,
       "h": 96,
       "bytes2x": 29645,
+      "real": true
+    },
+    "item_outfit_godslayer01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_godslayer01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 36353,
+      "real": true
+    },
+    "item_outfit_godslayer01_m_icon": {
+      "kind": "icon",
+      "of": "item_outfit_godslayer01_m_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 34245,
       "real": true
     },
     "item_outfit_hawaii01_icon": {

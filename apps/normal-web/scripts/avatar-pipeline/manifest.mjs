@@ -90,6 +90,7 @@ export const STAGE_ONE_ITEMS = {
     'tophat01', 'dealer_visor01', 'beret_red01', 'crown_gold01', 'conical_hat01', 'beanie01', 'party_cone01', 'hood_black01',
     'cap_navy01', 'bucket_khaki01', 'headband_red01', 'cat_ears01', 'lotus_pin01', 'fedora01',
     'witch_hat01', 'pumpkin01', 'devil_horns01', 'santa_hat01', 'earmuffs01', 'reindeer01', 'straw_hat01', 'flower_crown01', 'crab01',
+    'ace_crown01', 'laurel_silver01', 'godslayer_helm01',
   ],
   face: [
     'glasses_round_gold01', 'sunglasses01', 'masquerade01', 'eyepatch01', 'glasses_square01', 'bandaid01', 'aviators01', 'monocle_gold01',
@@ -99,9 +100,10 @@ export const STAGE_ONE_ITEMS = {
     'casual01', 'dealer01', 'tuxedo01', 'royal_robe01', 'tet_red01', 'champion01',
     'hoodie_navy01', 'tracksuit_red01', 'ao_ba_ba01', 'denim01', 'bomber_neon01', 'ao_dai_jade01', 'trench01', 'brocade_red01',
     'skeleton01', 'witch01', 'vampire01', 'sweater_xmas01', 'puffer01', 'santa01', 'hawaii01', 'sailor01',
+    'card_god01', 'demigod01', 'godslayer01',
   ],
-  aura: ['water01', 'fire01', 'wind01', 'earth01', 'lightning01', 'sakura01', 'gold_cards01', 'ice01'],
-  frame: ['bronze', 'silver', 'gold', 'monthly', 'veteran', 'founder'],
+  aura: ['water01', 'fire01', 'wind01', 'earth01', 'lightning01', 'sakura01', 'gold_cards01', 'ice01', 'card_god01', 'demigod01', 'godslayer01'],
+  frame: ['bronze', 'silver', 'gold', 'monthly', 'veteran', 'founder', 'card_god', 'demigod', 'godslayer'],
 }
 
 /** D01 §4.3: the only hide rules stage 1 has. A hood covers both halves of the hair. */

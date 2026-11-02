@@ -43,6 +43,11 @@ let balanceCalls: { playerId: string; balance: number }[] = []
 
 const NOW = Date.UTC(2026, 9, 4, 12, 0)
 
+/** BP-43: the wardrobe set each Thần title hands over (spec 2026-11-02 §3). */
+const GOD_SET = ['outfit_card_god01', 'head_ace_crown01', 'aura_card_god01', 'frame_card_god']
+const DEMIGOD_SET = ['outfit_demigod01', 'head_laurel_silver01', 'aura_demigod01', 'frame_demigod']
+const GODSLAYER_SET = ['outfit_godslayer01', 'head_godslayer_helm01', 'aura_godslayer01', 'frame_godslayer']
+
 beforeAll(async () => {
   test = await createTestDb()
   db = test.db
@@ -150,10 +155,11 @@ describe('loadAchievements', () => {
     expect(defs.find((d) => d.id === 'rooms_50')).toMatchObject({ category: 'social', metric: 'roomsJoined', threshold: 50, reward: { itemId: 'outfit_sailor01' } })
     expect(defs.find((d) => d.id === 'win_streak_7')).toMatchObject({ category: 'holdem', metric: 'bestWinStreak', threshold: 7, reward: { itemId: 'head_crab01' } })
     // BP-41 (spec 2026-10-28 §4.4): the three chaos titles, each points + a title item + its own reputation.
+    // BP-43 (spec 2026-11-02 §3): each title hands over its four-piece wardrobe set in the same unlock.
     expect(defs.filter((d) => d.category === 'chaos')).toEqual([
-      { id: 'chaos_god', category: 'chaos', metric: 'chaosAscensions', threshold: 1, reward: { points: 300_000, itemId: 'title_god' }, reputation: 300 },
-      { id: 'chaos_demigod', category: 'chaos', metric: 'chaosDemigods', threshold: 1, reward: { points: 150_000, itemId: 'title_demigod' }, reputation: 150 },
-      { id: 'chaos_godslayer', category: 'chaos', metric: 'chaosGodsSlain', threshold: 2, reward: { points: 500_000, itemId: 'title_godslayer' }, reputation: 500 },
+      { id: 'chaos_god', category: 'chaos', metric: 'chaosAscensions', threshold: 1, reward: { points: 300_000, itemId: 'title_god', setItems: GOD_SET }, reputation: 300 },
+      { id: 'chaos_demigod', category: 'chaos', metric: 'chaosDemigods', threshold: 1, reward: { points: 150_000, itemId: 'title_demigod', setItems: DEMIGOD_SET }, reputation: 150 },
+      { id: 'chaos_godslayer', category: 'chaos', metric: 'chaosGodsSlain', threshold: 2, reward: { points: 500_000, itemId: 'title_godslayer', setItems: GODSLAYER_SET }, reputation: 500 },
     ])
     // Every older achievement keeps paying its rule: none names a reputation of its own.
     expect(defs.filter((d) => d.reputation !== undefined).map((d) => d.id)).toEqual(['chaos_god', 'chaos_demigod', 'chaos_godslayer'])
@@ -201,6 +207,26 @@ describe('loadAchievements', () => {
     for (const reputation of [0, -5, 1.5, '300', null]) {
       expect(() => loadAchievements(catalog, fixture([{ ...chaos, reputation }])), String(reputation)).toThrow(/reputation that is not a positive whole number/)
     }
+  })
+
+  it('BP-43: takes a setItems list beside the itemId, and refuses each way it can lie', () => {
+    const titled = { ...OK, category: 'chaos', metric: 'chaosGodsSlain', threshold: 2, reward: { points: 500_000, itemId: 'title_godslayer' }, reputation: 500 }
+    const withSet = (setItems: unknown) => fixture([{ ...titled, reward: { ...titled.reward, setItems } }])
+    expect(loadAchievements(catalog, withSet(GODSLAYER_SET))[0]?.reward).toEqual({ points: 500_000, itemId: 'title_godslayer', setItems: GODSLAYER_SET })
+
+    for (const bad of [[], 'outfit_godslayer01', ['outfit_godslayer01', 7], ['outfit_godslayer01', ''], null, {}]) {
+      expect(() => loadAchievements(catalog, withSet(bad)), JSON.stringify(bad)).toThrow(/setItems that is not a non-empty array/)
+    }
+    expect(() => loadAchievements(catalog, withSet(['outfit_godslayer01', 'outfit_godslayer01']))).toThrow(/lists outfit_godslayer01 twice/)
+    expect(() => loadAchievements(catalog, withSet(['outfit_godslayer01', 'title_godslayer']))).toThrow(/lists its own itemId title_godslayer/)
+    expect(() => loadAchievements(catalog, withSet(['outfit_godslayer01', 'hat_imaginary']))).toThrow(/sets hat_imaginary, which is not in the item catalogue/)
+    // A set without the title it rides on.
+    expect(() => loadAchievements(catalog, fixture([{ ...OK, reward: { points: 5_000, setItems: GODSLAYER_SET } }]))).toThrow(/setItems but no itemId/)
+    // A default or a free item is everyone's already (A8).
+    const aDefault = catalog.defaults()[0]!
+    const aFree = [...catalog.freeIds()][0]!
+    expect(() => loadAchievements(catalog, withSet([aDefault]))).toThrow(/default or free item/)
+    expect(() => loadAchievements(catalog, withSet([aFree]))).toThrow(/default or free item/)
   })
 })
 
@@ -374,6 +400,8 @@ describe('BP-41: the chaos titles', () => {
   const settleChaos = (seats: HandSummaryPlayer[]): Promise<void> => settle(seats, { mode: 'blind', config: CHAOS })
   const repOf = (playerId: string) =>
     db.select({ delta: reputationEvents.delta, reason: reputationEvents.reason, refId: reputationEvents.refId }).from(reputationEvents).where(eq(reputationEvents.playerId, playerId))
+  /** What the player owns, as item and source, in item-id order: the acquisition time is the transaction's, not the test's. */
+  const owned = async (playerId: string) => (await inv.list(playerId)).map((r) => ({ itemId: r.itemId, source: r.source })).sort((a, b) => (a.itemId < b.itemId ? -1 : 1))
   const standing = async (playerId: string) => (await db.select({ reputation: players.reputation, rank: players.rank }).from(players).where(eq(players.id, playerId)))[0]
 
   it('each title unlocks once from a chaos hand with its points, its title item and its own reputation', async () => {
@@ -388,12 +416,14 @@ describe('BP-41: the chaos titles', () => {
     ])
 
     expect(await ledger(god)).toEqual([{ amount: 300_000, reason: 'achievement', refId: `ach:${god}:chaos_god` }])
-    expect(await inv.list(god)).toEqual([{ itemId: 'title_god', source: 'achievement', acquiredAt: expect.any(Number) }])
+    expect(await owned(god)).toEqual(['title_god', ...GOD_SET].sort().map((itemId) => ({ itemId, source: 'achievement' })))
+    expect(await repos.balances.get(god)).toBe(300_000)
     expect(await repOf(god)).toEqual([{ delta: 300, reason: 'achievement', refId: `ach:${god}:chaos_god` }])
     expect(await standing(god)).toEqual({ reputation: 300, rank: 2 })
 
     expect(await ledger(half)).toEqual([{ amount: 150_000, reason: 'achievement', refId: `ach:${half}:chaos_demigod` }])
-    expect(await inv.list(half)).toEqual([{ itemId: 'title_demigod', source: 'achievement', acquiredAt: expect.any(Number) }])
+    expect(await owned(half)).toEqual(['title_demigod', ...DEMIGOD_SET].sort().map((itemId) => ({ itemId, source: 'achievement' })))
+    expect(await repos.balances.get(half)).toBe(150_000)
     expect(await repOf(half)).toEqual([{ delta: 150, reason: 'achievement', refId: `ach:${half}:chaos_demigod` }])
 
     // One god slain of two: progress, nothing paid.
@@ -402,8 +432,8 @@ describe('BP-41: the chaos titles', () => {
     expect(await repOf(slayer)).toEqual([])
 
     expect(notified.filter((n) => n.msg.t === 'NOTIFICATION' && n.msg.kind === 'ACHIEVEMENT_UNLOCKED').map((n) => [n.playerId, n.msg])).toEqual([
-      [god, { t: 'NOTIFICATION', kind: 'ACHIEVEMENT_UNLOCKED', payload: { id: 'chaos_god', reward: { points: 300_000, itemId: 'title_god' } } }],
-      [half, { t: 'NOTIFICATION', kind: 'ACHIEVEMENT_UNLOCKED', payload: { id: 'chaos_demigod', reward: { points: 150_000, itemId: 'title_demigod' } } }],
+      [god, { t: 'NOTIFICATION', kind: 'ACHIEVEMENT_UNLOCKED', payload: { id: 'chaos_god', reward: { points: 300_000, itemId: 'title_god', setItems: GOD_SET } } }],
+      [half, { t: 'NOTIFICATION', kind: 'ACHIEVEMENT_UNLOCKED', payload: { id: 'chaos_demigod', reward: { points: 150_000, itemId: 'title_demigod', setItems: DEMIGOD_SET } } }],
     ])
     expect(balanceCalls).toEqual([{ playerId: god, balance: 300_000 }, { playerId: half, balance: 150_000 }])
 
@@ -414,14 +444,51 @@ describe('BP-41: the chaos titles', () => {
       seat(half, { seat: 2, chaosTitles: { demigod: true } }),
     ])
     expect(await ledger(slayer)).toEqual([{ amount: 500_000, reason: 'achievement', refId: `ach:${slayer}:chaos_godslayer` }])
-    expect(await inv.list(slayer)).toEqual([{ itemId: 'title_godslayer', source: 'achievement', acquiredAt: expect.any(Number) }])
+    expect(await owned(slayer)).toEqual(['title_godslayer', ...GODSLAYER_SET].sort().map((itemId) => ({ itemId, source: 'achievement' })))
+    expect(await repos.balances.get(slayer)).toBe(500_000)
     expect(await repOf(slayer)).toEqual([{ delta: 500, reason: 'achievement', refId: `ach:${slayer}:chaos_godslayer` }])
     expect(await standing(slayer)).toEqual({ reputation: 500, rank: 3 })
     expect(await find(god, 'chaos_god')).toMatchObject({ progress: 2, unlockedAt: NOW })
     expect(await ledger(god)).toHaveLength(1)
     expect(await ledger(half)).toHaveLength(1)
+    // BP-43: the second evaluation granted no piece again and paid nothing (five rows each, balances unchanged).
+    expect(await owned(god)).toHaveLength(5)
+    expect(await owned(half)).toHaveLength(5)
+    expect(await repos.balances.get(god)).toBe(300_000)
+    expect(await repos.balances.get(half)).toBe(150_000)
     expect(await repOf(god)).toHaveLength(1)
     expect(await repOf(half)).toHaveLength(1)
+  })
+
+  it('BP-43: a set piece whose grant throws rolls the whole unlock back, and a retry then pays and grants everything once', async () => {
+    const playerId = await seedPlayer()
+    const def = defs.find((d) => d.id === 'chaos_god')!
+    // The inventory throws on the third set piece: title and two pieces were already granted inside the transaction.
+    const failing: InventoryService = {
+      ...inv,
+      grant: async (tx, pid, itemId, source, ref) => {
+        if (itemId === 'aura_card_god01') throw new Error('grant failed')
+        return inv.grant(tx, pid, itemId, source, ref)
+      },
+    }
+    const run = (inventoryService: InventoryService) =>
+      db.transaction((tx) => unlockWithin(tx, playerId, def, new Date(NOW), { inventory: inventoryService, reason: 'gm_achievement', refId: 'gm:9', reputation }))
+    const claim = async () =>
+      (await db.select({ unlockedAt: playerAchievements.unlockedAt }).from(playerAchievements).where(eq(playerAchievements.playerId, playerId))).map((r) => r.unlockedAt)
+
+    await expect(run(failing)).rejects.toThrow('grant failed')
+
+    expect(await repos.balances.get(playerId)).toBe(0)
+    expect(await ledger(playerId)).toEqual([])
+    // No claimed row survives (a guarded UPDATE on an absent row never inserted one, or it rolled back to null).
+    expect((await claim()).every((at) => at === null)).toBe(true)
+    expect(await owned(playerId)).toEqual([])
+    expect(await repOf(playerId)).toEqual([])
+
+    // Nothing was half-claimed: the same unlock goes through with the real inventory.
+    expect((await run(inv)).outcome).toBe('unlocked')
+    expect(await owned(playerId)).toHaveLength(5)
+    expect(await ledger(playerId)).toEqual([{ amount: 300_000, reason: 'gm_achievement', refId: 'gm:9' }])
   })
 
   it('a GM unlock pays the same override, under the same reputation ref as the earning', async () => {
@@ -432,6 +499,7 @@ describe('BP-41: the chaos titles', () => {
     expect(await run()).toEqual({ outcome: 'unlocked', rankUp: true, rank: 2 })
     expect(await run()).toEqual({ outcome: 'already', rankUp: false, rank: 0 })
     expect(await ledger(playerId)).toEqual([{ amount: 150_000, reason: 'gm_achievement', refId: 'gm:7' }])
+    expect(await owned(playerId)).toEqual(['title_demigod', ...DEMIGOD_SET].sort().map((itemId) => ({ itemId, source: 'achievement' })))
     expect(await repOf(playerId)).toEqual([{ delta: 150, reason: 'achievement', refId: `ach:${playerId}:chaos_demigod` }])
   })
 })

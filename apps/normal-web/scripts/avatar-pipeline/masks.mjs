@@ -1407,12 +1407,14 @@ export async function describeColours({ dir, manifest, names, items = [], log = 
  * of its six hats that cover the crown — the cap, the bucket hat and the fedora; the headband, the cat-ear headband and
  * the lotus hairpin sit on the hair and leave the crown showing, so they carry none. BP-35 adds the four of its nine
  * head items that cover the crown — the witch hat, the pumpkin, the Santa hat and the straw hat; the devil horns, the
- * earmuffs, the reindeer antlers, the flower crown and the crab sit on the hair and carry none. `open` and `feather`
+ * earmuffs, the reindeer antlers, the flower crown and the crab sit on the hair and carry none. BP-43 adds the
+ * Godslayer's horned helm, which covers the crown down to the brow (a spiky cut's tips rose above it unclipped); the ace
+ * crown and the silver laurel sit on the hair like the gold crown and the flower crown, and carry none. `open` and `feather`
  * are @2x pixels: the hat's solid ink is opened by `open` before its edge is read (`hatEdges`), and the clip's edge is
  * softened over `feather`.
  */
 export const HAIR_CLIP = {
-  hats: ['beanie01', 'beret_red01', 'conical_hat01', 'cap_navy01', 'bucket_khaki01', 'fedora01', 'witch_hat01', 'pumpkin01', 'santa_hat01', 'straw_hat01'],
+  hats: ['beanie01', 'beret_red01', 'conical_hat01', 'cap_navy01', 'bucket_khaki01', 'fedora01', 'witch_hat01', 'pumpkin01', 'santa_hat01', 'straw_hat01', 'godslayer_helm01'],
   open: 4,
   feather: 1,
 }

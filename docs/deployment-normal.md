@@ -438,6 +438,29 @@ thông báo lên bậc.
   sẽ được tính theo số mới, không cùng thước với những người khác. Nếu cần chạy lại, hãy chạy trước khi GM sửa bảng
   nguồn.
 
+### Lần nâng cấp lên Plan 43: trao bộ đồ cho người đã có danh hiệu Thần
+
+Plan 43 thêm cho mỗi danh hiệu Thần một bộ đồ (áo, đồ đội đầu, hào quang, khung — bốn món) và trao bộ đó cùng lúc với
+danh hiệu: **Thần Bài** (`title_god`), **Bán Thần** (`title_demigod`), **Kẻ Sát Thần** (`title_godslayer`). Không có
+migration mới. Người mở thành tựu từ sau lần nâng cấp này nhận đủ bộ ngay; người **đã** có danh hiệu từ trước chỉ có
+danh hiệu, nên cần chạy **một lần** lệnh trao bộ đồ cho họ. Sau bước 3 ở trên (đã `backup.sh` ở bước 1, `app` đã lên),
+trước hết chạy thử, rồi chạy thật:
+
+```bash
+cd /opt/bind-poker/deploy/normal
+docker compose exec app node dist/title-set-backfill-cli.js --dry-run   # chỉ đếm, không ghi gì
+docker compose exec app node dist/title-set-backfill-cli.js             # ghi thật
+```
+
+Mỗi lần in một dòng `players=<số người có ít nhất một danh hiệu Thần> granted=<số món đã trao>`; lần chạy thử in thêm
+tiền tố `(dry run) ` ở đầu dòng, ví dụ `(dry run) players=3 granted=12`. Lệnh chỉ thêm các dòng vào kho đồ (`inventory`),
+nguồn `achievement`: không cộng điểm, không ghi sổ cái, không cộng danh vọng (lần mở thành tựu đã trả những thứ đó rồi).
+Lệnh đọc `DATABASE_URL` của container `app`; thoát 0 khi xong, 2 khi thiếu `DATABASE_URL` hoặc gõ sai tham số (in dòng
+hướng dẫn, không ghi gì), 1 khi lỗi. **Chạy lại không trao thêm gì** (`granted=0`), người đã có một phần của bộ chỉ được bù
+phần còn thiếu, nên lỡ chạy hai lần cũng không sao, và chạy lúc đang có ván cũng không sao. Lệnh trao *mọi món còn
+thiếu*, nên nếu GM đã cố ý thu hồi một món của bộ thì lần chạy lại sẽ trao món đó lần nữa. Ba bộ đồ này không bán ở cửa
+hàng và không nằm trong quà ngẫu nhiên hằng ngày; chỉ có thành tựu và lệnh này mới trao.
+
 ---
 
 ## 8. Đổi mật khẩu database

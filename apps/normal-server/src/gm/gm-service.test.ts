@@ -179,6 +179,28 @@ describe('GmService — achievements', () => {
     expect(row).toEqual({ reputation: 500, rank: 3 })
     expect(notified).toHaveBeenCalledWith(me.playerId, { t: 'NOTIFICATION', kind: 'RANK_UP', payload: { rank: 3 } })
   })
+
+  it('BP-43: a GM unlock of a Thần title hands over the title and its whole set, pays the points once and refuses a second time', async () => {
+    const def = h.app.services.defs.find((d) => d.id === 'chaos_demigod')!
+    expect(def.reward.setItems).toHaveLength(4)
+    const wanted = [def.reward.itemId!, ...def.reward.setItems!].sort()
+    const owns = async (): Promise<string[]> =>
+      rowsOf<{ item_id: string }>(
+        await db.execute(sql`select item_id from inventory where player_id = ${me.playerId} and item_id in (${sql.join(wanted.map((id) => sql`${id}`), sql`, `)}) order by item_id`),
+      ).map((r) => r.item_id)
+    expect(await owns()).toEqual([])
+
+    const r = await gm.unlockAchievement(actor(boss), me.playerId, def.id, 'thưởng danh hiệu')
+    expect(r.reward).toEqual(def.reward)
+    expect(r.balance).toBe(ECONOMY.startingBalance + 150_000)
+    expect(await owns()).toEqual(wanted)
+    const sources = rowsOf<{ source: string }>(await db.execute(sql`select distinct source from inventory where player_id = ${me.playerId} and item_id = ${def.reward.setItems![0]!}`))
+    expect(sources).toEqual([{ source: 'achievement' }])
+
+    await expect(gm.unlockAchievement(actor(boss), me.playerId, def.id, 'lần hai')).rejects.toMatchObject({ code: 'ALREADY_UNLOCKED' })
+    expect(await owns()).toEqual(wanted)
+    expect(await h.app.services.repos.balances.get(me.playerId)).toBe(ECONOMY.startingBalance + 150_000)
+  })
 })
 
 describe('GmService — check-in', () => {

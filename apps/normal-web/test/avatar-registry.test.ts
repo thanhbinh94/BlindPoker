@@ -602,7 +602,7 @@ describe('the committed registry', () => {
     // casual01's first picture painted the tank-top strap; that reason stays on the prompt until the asset is done.
     if (!['ok', 'approved'].includes(casual.status)) expect(renderPrompt(casual, registry)).toContain(FIX_LINES.strap)
     // Plan 12's assets stay exactly as they were…
-    expect(tally(registry.assets.filter(isPlan12))).toEqual({ item: 11, aura: 8, frame: 6, base: 4, expression: 20, bot: 16 })
+    expect(tally(registry.assets.filter(isPlan12))).toEqual({ item: 11, aura: 11, frame: 9, base: 4, expression: 20, bot: 16 })
     // …and the v4 kinds hold at least the 44 A2c seeds.
     const v4 = tally(registry.assets.filter((entry: Asset) => !isPlan12(entry)))
     for (const [kind, least] of Object.entries({ body: 2, hair: 8, bodyExpression: 10, item: 8, bot: 16 })) expect(v4[kind] ?? 0).toBeGreaterThanOrEqual(least)

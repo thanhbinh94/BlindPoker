@@ -32,13 +32,13 @@ const DEC = Date.UTC(2026, 11, 5, 12)
 const ADMIN = '00000000-0000-4000-8000-0000000000aa'
 const START = 100_000
 
-function makeShop(over: { inventory?: InventoryService; repos?: NormalRepositories } = {}): ShopService {
+function makeShop(over: { inventory?: InventoryService; repos?: NormalRepositories; defs?: AchievementDef[] } = {}): ShopService {
   return createShopService({
     db,
     repos: over.repos ?? repos,
     inventory: over.inventory ?? inv,
     catalog,
-    defs,
+    defs: over.defs ?? defs,
     gifts,
     reputation,
     timezone: 'UTC',
@@ -113,9 +113,9 @@ const entryOf = async (playerId: string, itemId: string, now = OCT) => (await sh
 describe('ShopService', () => {
   it('seeds a price per catalogue item once', async () => {
     await db.delete(shopPrices)
-    expect(await shop.seedPrices()).toBe(130)
+    expect(await shop.seedPrices()).toBe(142)
     const prices = new Map((await shop.prices()).map((p) => [p.itemId, p]))
-    expect(prices.size).toBe(130)
+    expect(prices.size).toBe(142)
     // BP-41: the three chaos titles are achievements' rewards, so they are seeded off sale.
     for (const id of ['title_god', 'title_demigod', 'title_godslayer']) expect(prices.get(id), id).toMatchObject({ enabled: false })
     expect(prices.get('outfit_casual01')).toMatchObject({ enabled: false })
@@ -157,12 +157,40 @@ describe('ShopService', () => {
     expect(r).toEqual({ ok: false, code: 'SHOP_DISABLED' })
   })
 
+  // BP-43: the Thần sets. `achievements.json` now names the pieces (Task 3); the definitions are still rebuilt here with the
+  // god's `setItems` to pin the god's set on its own.
+  const SET_ITEMS = ['aura_card_god01', 'frame_card_god', 'outfit_card_god01', 'head_ace_crown01']
+  const withSets = (): AchievementDef[] => defs.map((d) => (d.id === 'chaos_god' ? { ...d, reward: { ...d.reward, setItems: SET_ITEMS } } : d))
+
+  it('seeds a set piece named only in setItems off sale, and a second seed inserts nothing', async () => {
+    await db.delete(shopPrices)
+    const sets = makeShop({ defs: withSets() })
+    expect(await sets.seedPrices()).toBe(142)
+    const prices = new Map((await sets.prices()).map((p) => [p.itemId, p]))
+    for (const id of SET_ITEMS) expect(prices.get(id), id).toMatchObject({ enabled: false, pricePoints: 150_000 })
+    // The shipped achievements file now names the other two Thần sets as well, so they are off sale too.
+    for (const id of ['aura_demigod01', 'frame_demigod', 'outfit_godslayer01', 'head_godslayer_helm01']) expect(prices.get(id), id).toMatchObject({ enabled: false })
+    expect(await sets.seedPrices()).toBe(0)
+  })
+
+  it('locks a set piece to its achievement and refuses to sell it even after a GM switches it on', async () => {
+    const sets = makeShop({ defs: withSets() })
+    const me = await seedPlayer(1_000_000, 5)
+    const entry = async (id: string) => (await sets.view(me, OCT)).entries.find((e) => e.itemId === id)
+    expect(await entry('aura_card_god01')).toMatchObject({ lock: { kind: 'achievement', achievementId: 'chaos_god' }, purchasable: false })
+    await db.transaction((tx) => sets.setPrices(tx, [{ itemId: 'aura_card_god01', enabled: true }], ADMIN))
+    expect(await entry('aura_card_god01')).toMatchObject({ lock: { kind: 'achievement', achievementId: 'chaos_god' }, purchasable: false })
+    expect(await sets.buy(me, 'aura_card_god01', 'set-piece', OCT)).toEqual({ ok: false, code: 'SHOP_DISABLED' })
+    expect(await balanceOf(me)).toBe(1_000_000)
+    expect(await itemRows(me)).toEqual([])
+  })
+
   it('shows an unpriced and a disabled item locked, and the player\'s standing', async () => {
     const me = await seedPlayer(42_000, 3)
     await db.delete(shopPrices).where(eq(shopPrices.itemId, 'head_beanie01'))
     await db.update(shopPrices).set({ enabled: false }).where(eq(shopPrices.itemId, 'outfit_dealer01'))
     const view = await shop.view(me, OCT)
-    expect(view.entries).toHaveLength(130)
+    expect(view.entries).toHaveLength(142)
     // BP-41: a chaos title is an achievement's, never for sale.
     expect(view.entries.find((e) => e.itemId === 'title_godslayer')).toMatchObject({ lock: { kind: 'achievement', achievementId: 'chaos_godslayer' }, purchasable: false })
     expect(view.entries.find((e) => e.itemId === 'head_beanie01')).toMatchObject({ lock: { kind: 'unpriced' }, purchasable: false })

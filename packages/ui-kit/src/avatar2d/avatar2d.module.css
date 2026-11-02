@@ -216,3 +216,95 @@
     animation: none;
   }
 }
+
+/* Plan 43: the three Thần set auras move. The motion class sits on the aura layer's own `<img>` (see `aura-motion.ts`),
+   never on a lazy chibi's or under reduced motion. Opacity and `filter: brightness()` only: no transform, so the layer
+   cannot drift off the figure or off the frame. */
+@keyframes chibiAuraGlow {
+  0%,
+  100% {
+    opacity: 0.85;
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 1;
+    filter: brightness(1.25);
+  }
+}
+
+@keyframes chibiAuraTwinkle {
+  0%,
+  100% {
+    opacity: 0.9;
+    filter: brightness(1);
+  }
+  20% {
+    opacity: 1;
+    filter: brightness(1.35);
+  }
+  35% {
+    opacity: 0.92;
+    filter: brightness(1.05);
+  }
+  60% {
+    opacity: 1;
+    filter: brightness(1.3);
+  }
+  75% {
+    opacity: 0.9;
+    filter: brightness(1);
+  }
+}
+
+@keyframes chibiAuraFlicker {
+  0%,
+  100% {
+    opacity: 0.95;
+    filter: brightness(1);
+  }
+  12% {
+    opacity: 0.85;
+    filter: brightness(0.8);
+  }
+  27% {
+    opacity: 1;
+    filter: brightness(1.15);
+  }
+  41% {
+    opacity: 0.9;
+    filter: brightness(0.9);
+  }
+  58% {
+    opacity: 1;
+    filter: brightness(1.1);
+  }
+  73% {
+    opacity: 0.88;
+    filter: brightness(0.85);
+  }
+  86% {
+    opacity: 1;
+    filter: brightness(1.05);
+  }
+}
+
+.auraGlow {
+  animation: chibiAuraGlow 3s ease-in-out infinite;
+}
+
+.auraTwinkle {
+  animation: chibiAuraTwinkle 1.6s ease-in-out infinite;
+}
+
+.auraFlicker {
+  animation: chibiAuraFlicker 0.9s linear infinite;
+}
+
+/* `global.css` already stops every animation under reduced motion, and `Chibi` never sets these classes then; said here too. */
+@media (prefers-reduced-motion: reduce) {
+  .auraGlow,
+  .auraTwinkle,
+  .auraFlicker {
+    animation: none;
+  }
+}

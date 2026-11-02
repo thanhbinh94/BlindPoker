@@ -52,22 +52,22 @@ function body(gender: Gender): BodyRef {
   return { gender, body: `body_${gender}_L30`, faces }
 }
 
-const BODIES: Record<Gender, BodyRef> = { f: body('f'), m: body('m') }
+export const BODIES: Record<Gender, BodyRef> = { f: body('f'), m: body('m') }
 
 /** The hats whose layer carries a hair clip (2026-10-06): the ones that cover the crown. A copy of the pipeline's
  * `HAIR_CLIP.hats` (`apps/normal-web/scripts/avatar-pipeline/masks.mjs`) — `avatar-pipeline.test.ts` holds the two equal. */
-const CLIPPING_HATS = ['beanie01', 'beret_red01', 'conical_hat01', 'cap_navy01', 'bucket_khaki01', 'fedora01', 'witch_hat01', 'pumpkin01', 'santa_hat01', 'straw_hat01']
+const CLIPPING_HATS = ['beanie01', 'beret_red01', 'conical_hat01', 'cap_navy01', 'bucket_khaki01', 'fedora01', 'godslayer_helm01', 'witch_hat01', 'pumpkin01', 'santa_hat01', 'straw_hat01']
 
 /** `item_<slot>_<code>_L<layer>` — the pipeline's naming convention. `hood_black01` is the one item drawn here with
  * both hide flags, so it is the one row that shows the hairstyle disappearing; `CLIPPING_HATS` clip it instead. */
-function wear(slot: string, code: string, order: number): WearRef {
+export function wear(slot: string, code: string, order: number): WearRef {
   const hides = code === 'hood_black01' ? { hidesHairFront: true, hidesHairBack: true } : {}
   const clips = slot === 'head' && CLIPPING_HATS.includes(code) ? { clipsHair: true } : {}
   return { id: `${slot}_${code}`, order, file: `item_${slot}_${code}_L${order}`, ...hides, ...clips }
 }
 
 /** A figure of `gender` in that gender's cut of the casual outfit, wearing `hair` (its default unless given). */
-const chibi = (gender: Gender, patch: Partial<ChibiConfig> = {}, hair: string = DEFAULT_HAIR[gender]): ChibiConfig => ({
+export const chibi = (gender: Gender, patch: Partial<ChibiConfig> = {}, hair: string = DEFAULT_HAIR[gender]): ChibiConfig => ({
   kind: 'human',
   body: BODIES[gender],
   hair: hairRefOf(hair),
