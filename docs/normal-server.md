@@ -826,10 +826,12 @@ wardrobe pieces that arrive in the same unlock as `itemId`. The three Thần ach
   source, inside the same transaction. Points and reputation are paid only on the claim, and `grant` is `ON CONFLICT DO
   NOTHING`, so a piece the player already owns costs nothing and a rerun pays nothing.
 - **Never sold, never drawn.** `rewardItemIds(def)` and `rewardItemIdsOf(defs)` (`achievements/definitions.ts`) name
-  every item an achievement hands over, set pieces included. Three readers use them in place of the bare `reward.itemId`:
-  `app.ts` (`reservedItemIds` for the daily draw), `shop/shop-prices-seed.ts` (the seeded price rows are off sale) and
-  `shop/shop-service.ts` (the `achievement` lock, which names the owning achievement). A new reader of "what an
-  achievement hands over" should use them too.
+  every item an achievement hands over, set pieces included. Every reader uses them in place of the bare `reward.itemId`.
+  On the server: `app.ts` (`reservedItemIds` for the daily draw), `shop/shop-prices-seed.ts` (the seeded price rows are
+  off sale), `shop/shop-service.ts` (the `achievement` lock, which names the owning achievement) and the unlock itself
+  (`unlockWithin`). On the web, the wardrobe's hint for a locked piece (`screens/catalog.ts` `hintFor`) reads the
+  achievement DTO's `reward.setItems` and names the achievement that gives it. A new reader of "what an achievement
+  hands over" should use them too.
 - **The backfill** (`inventory/title-sets.ts`, `title-set-backfill-cli.ts`). A player who earned a Thần title before
   BP-43 holds the title alone. `backfillTitleSets(db, { dryRun, defs })` finds, for every definition with `setItems`,
   every player owning its `itemId` (any source) and grants each set item they lack, one transaction per player, with the

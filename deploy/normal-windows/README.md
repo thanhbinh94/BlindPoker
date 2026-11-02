@@ -423,16 +423,17 @@ Plan 43 thêm cho ba danh hiệu Thần (Thần Bài, Bán Thần, Kẻ Sát Th�
 danh hiệu. Không có migration mới, nên cứ `.\stop.ps1` rồi `.\run.ps1 -NoMigrate` như thường. Người đã có danh hiệu từ
 trước chỉ có danh hiệu; để họ nhận bộ đồ, chạy **một lần** lệnh dưới đây. Lệnh này **ghi vào database Neon của bạn**
 (chỉ thêm các dòng vào kho đồ, không đụng tới điểm), nên chỉ chạy khi bạn đã đồng ý (người trợ giúp phải hỏi bạn trước).
-Chạy khi `/health` báo `"rooms":0`, chạy thử trước rồi chạy thật, từ thư mục kit này:
+Chạy khi `/health` báo `"rooms":0`, chạy thử trước rồi chạy thật, **từ thư mục kit này** (lệnh tự đọc `DATABASE_URL`
+trong `.env` của thư mục đang đứng, nên không cần đặt biến nào, và đừng chạy từ thư mục khác):
 
 ```powershell
-$env:DATABASE_URL = ((Get-Content .env) -match '^DATABASE_URL=' | Select-Object -First 1) -replace '^DATABASE_URL=', ''
 node ..\..\apps\normal-server\dist\title-set-backfill-cli.js --dry-run   # chỉ đếm, không ghi gì
 node ..\..\apps\normal-server\dist\title-set-backfill-cli.js             # ghi thật
 ```
 
-Mỗi lần in một dòng `players=… granted=…` (lần chạy thử có thêm tiền tố `(dry run) `). Chạy lại thì `granted=0`, nên lỡ
-chạy hai lần cũng không sao. Gõ sai tham số thì lệnh in dòng hướng dẫn, thoát mã 2 và không ghi gì. Chi tiết:
+Mỗi lần in một dòng `players=… granted=…` (lần chạy thử có thêm tiền tố `(dry run) `). Lệnh trao **mọi món còn thiếu**
+trong bộ, nên chạy lại thì thường `granted=0` và lỡ chạy hai lần cũng không sao; nhưng nếu GM đã cố ý thu hồi một món
+của bộ thì lần chạy lại sẽ trao món đó lần nữa. Gõ sai tham số thì lệnh in dòng hướng dẫn, thoát mã 2 và không ghi gì. Chi tiết:
 [`docs/deployment-normal.md`](../../docs/deployment-normal.md) §7, "Lần nâng cấp lên Plan 43".
 
 ---

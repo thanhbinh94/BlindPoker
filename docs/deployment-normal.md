@@ -457,7 +457,8 @@ tiền tố `(dry run) ` ở đầu dòng, ví dụ `(dry run) players=3 granted
 nguồn `achievement`: không cộng điểm, không ghi sổ cái, không cộng danh vọng (lần mở thành tựu đã trả những thứ đó rồi).
 Lệnh đọc `DATABASE_URL` của container `app`; thoát 0 khi xong, 2 khi thiếu `DATABASE_URL` hoặc gõ sai tham số (in dòng
 hướng dẫn, không ghi gì), 1 khi lỗi. **Chạy lại không trao thêm gì** (`granted=0`), người đã có một phần của bộ chỉ được bù
-phần còn thiếu, nên lỡ chạy hai lần cũng không sao, và chạy lúc đang có ván cũng không sao. Ba bộ đồ này không bán ở cửa
+phần còn thiếu, nên lỡ chạy hai lần cũng không sao, và chạy lúc đang có ván cũng không sao. Lệnh trao *mọi món còn
+thiếu*, nên nếu GM đã cố ý thu hồi một món của bộ thì lần chạy lại sẽ trao món đó lần nữa. Ba bộ đồ này không bán ở cửa
 hàng và không nằm trong quà ngẫu nhiên hằng ngày; chỉ có thành tựu và lệnh này mới trao.
 
 ---

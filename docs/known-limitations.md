@@ -1215,6 +1215,13 @@ seeded prices, but the GM tools take any catalogue id, so a GM can gift a set pi
 reason the GM can read.
 *Tracked:* plan 43 amendment A15; `apps/normal-server/src/gm/gm-service.ts`.
 
+**A rerun of the title-set backfill re-grants a set piece a GM took back.** The backfill grants whatever set item a title
+holder lacks, and it cannot tell "never given" from "deliberately removed", so a GM who took a piece back (or a player who
+never got one) gets it again on the next run.
+*Why it stays:* the backfill is a once-per-upgrade operator step with a dry run, and a tombstone for taken-back items would
+need a new table for a case nobody has asked for; the deployment guides say so beside the commands.
+*Tracked:* `apps/normal-server/src/inventory/title-sets.ts`; `docs/deployment-normal.md` §7, `deploy/normal-windows/README.md` §9f.
+
 **A set item cannot be checked "on sale" when the catalogue loads.** The load rules refuse a default or `free` set item
 and an unknown id, but the shop's prices live in the database, so a price row that is switched on for a set item is not
 seen at load. The shop's `achievement` lock refuses to sell it regardless.

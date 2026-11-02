@@ -443,7 +443,7 @@ Với thẻ Kim cương, **ba con giống nhau** thì thưởng gấp đôi, k�
 
 Ba thành tựu mới ở mục **"Poker hỗn loạn"** của trang "Thành tựu", mỗi thành tựu thưởng **một lần**:
 
-| Danh hiệu | Điều kiện | Thưởng |
+| Thành tựu | Điều kiện | Thưởng |
 |---|---|---|
 | "Hóa Thần" | Thành Thần Bài lần đầu | 300.000 điểm, 300 danh vọng và danh hiệu "Thần Bài" |
 | "Bán Thần" | Thành Bán Thần lần đầu | 150.000 điểm, 150 danh vọng và danh hiệu "Bán Thần" |
