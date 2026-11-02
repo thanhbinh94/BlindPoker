@@ -157,8 +157,8 @@ describe('ShopService', () => {
     expect(r).toEqual({ ok: false, code: 'SHOP_DISABLED' })
   })
 
-  // BP-43: the Thần sets. `achievements.json` names the pieces only once the grant task lands, so the definitions are built
-  // here with `setItems` set, exactly as that task will load them.
+  // BP-43: the Thần sets. `achievements.json` now names the pieces (Task 3); the definitions are still rebuilt here with the
+  // god's `setItems` to pin the god's set on its own.
   const SET_ITEMS = ['aura_card_god01', 'frame_card_god', 'outfit_card_god01', 'head_ace_crown01']
   const withSets = (): AchievementDef[] => defs.map((d) => (d.id === 'chaos_god' ? { ...d, reward: { ...d.reward, setItems: SET_ITEMS } } : d))
 
@@ -168,8 +168,8 @@ describe('ShopService', () => {
     expect(await sets.seedPrices()).toBe(142)
     const prices = new Map((await sets.prices()).map((p) => [p.itemId, p]))
     for (const id of SET_ITEMS) expect(prices.get(id), id).toMatchObject({ enabled: false, pricePoints: 150_000 })
-    // The other Thần sets are not named by these definitions, so they are on sale until the achievements file lists them.
-    expect(prices.get('aura_demigod01')).toMatchObject({ enabled: true })
+    // The shipped achievements file now names the other two Thần sets as well, so they are off sale too.
+    for (const id of ['aura_demigod01', 'frame_demigod', 'outfit_godslayer01', 'head_godslayer_helm01']) expect(prices.get(id), id).toMatchObject({ enabled: false })
     expect(await sets.seedPrices()).toBe(0)
   })
 

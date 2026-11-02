@@ -50,7 +50,7 @@
   { "id": "games_500", "category": "social", "metric": "gamesCompleted", "threshold": 500, "reward": { "itemId": "badge_veteran" } },
   { "id": "games_1000", "category": "social", "metric": "gamesCompleted", "threshold": 1000, "reward": { "itemId": "frame_veteran" } },
 
-  { "id": "chaos_god", "category": "chaos", "metric": "chaosAscensions", "threshold": 1, "reward": { "points": 300000, "itemId": "title_god" }, "reputation": 300 },
-  { "id": "chaos_demigod", "category": "chaos", "metric": "chaosDemigods", "threshold": 1, "reward": { "points": 150000, "itemId": "title_demigod" }, "reputation": 150 },
-  { "id": "chaos_godslayer", "category": "chaos", "metric": "chaosGodsSlain", "threshold": 2, "reward": { "points": 500000, "itemId": "title_godslayer" }, "reputation": 500 }
+  { "id": "chaos_god", "category": "chaos", "metric": "chaosAscensions", "threshold": 1, "reward": { "points": 300000, "itemId": "title_god", "setItems": ["outfit_card_god01", "head_ace_crown01", "aura_card_god01", "frame_card_god"] }, "reputation": 300 },
+  { "id": "chaos_demigod", "category": "chaos", "metric": "chaosDemigods", "threshold": 1, "reward": { "points": 150000, "itemId": "title_demigod", "setItems": ["outfit_demigod01", "head_laurel_silver01", "aura_demigod01", "frame_demigod"] }, "reputation": 150 },
+  { "id": "chaos_godslayer", "category": "chaos", "metric": "chaosGodsSlain", "threshold": 2, "reward": { "points": 500000, "itemId": "title_godslayer", "setItems": ["outfit_godslayer01", "head_godslayer_helm01", "aura_godslayer01", "frame_godslayer"] }, "reputation": 500 }
 ]
