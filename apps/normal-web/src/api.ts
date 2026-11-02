@@ -174,6 +174,8 @@ export interface AvatarCatalogDto {
 export interface AchievementRewardDto {
   points?: number
   itemId?: string
+  /** Plan 43: the wardrobe set an achievement hands over with its title; sent only by the three Thần achievements. */
+  setItems?: string[]
 }
 
 export interface AchievementDefDto {
@@ -734,7 +736,7 @@ export interface GmCheckinDto {
 /** What unlocking an achievement for a player answers: the reward paid through the same path as earning it. */
 export interface GmUnlockDto {
   actionId: number
-  reward: { points?: number; itemId?: string }
+  reward: AchievementRewardDto
   balance: number
 }
 

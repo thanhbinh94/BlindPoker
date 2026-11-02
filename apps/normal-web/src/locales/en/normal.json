@@ -1014,6 +1014,7 @@
         "chaos": "Chaos Poker"
       },
       "reputation": "{{points}} reputation",
+      "setReward": "the full outfit set",
       "unlocked": "Unlocked"
     },
     "login_days_7": {

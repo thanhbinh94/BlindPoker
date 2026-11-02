@@ -22,7 +22,8 @@ export function rewardText(row: AchievementProgressDto, lang: Language, t: TFunc
 }
 
 /**
- * The reward's parts, points then item. `whole`: kept on one line — the points, and a title's name ("Hóa Thần", "Kẻ Sát Thần").
+ * The reward's parts, points, item, then "the whole set" when the achievement hands over a wardrobe set (Plan 43).
+ * `whole`: kept on one line — the points, a title's name ("Thần Bài", "Kẻ Sát Thần") and the set note.
  * A wardrobe item's longer name ("Áo măng tô thám tử") may wrap between its words, so a phone's badge column stays narrow
  * (fix-wave follow-up R5). A line never breaks inside a title's name.
  */
@@ -30,6 +31,7 @@ export function rewardParts(row: AchievementProgressDto, lang: Language, t: TFun
   const parts: { text: string; whole: boolean }[] = []
   if (row.reward.points !== undefined) parts.push({ text: `${formatPoints(row.reward.points, lang)} ${t('common:units.pointsShort')}`, whole: true })
   if (row.reward.itemId !== undefined) parts.push({ text: itemName(row.reward.itemId, t), whole: row.reward.itemId.startsWith('title_') })
+  if (row.reward.setItems !== undefined && row.reward.setItems.length > 0) parts.push({ text: t('achievements.ui.setReward'), whole: true })
   return parts
 }
 
