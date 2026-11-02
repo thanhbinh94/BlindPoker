@@ -29,7 +29,7 @@ export interface HintSources {
 /**
  * Why a locked tile is locked, in one line: how a player would come to own it.
  *
- * An achievement that rewards this exact item wins over the rest, because it is the more useful answer — "win a royal
+ * An achievement that rewards this exact item (as its `itemId`, or one piece of its `setItems`) wins over the rest, because it is the more useful answer — "win a royal
  * flush" beats "comes from a daily draw" when both happen to be true. After it, a gift the check-in schedule names
  * (spec 2026-10-12 §4.4): one of every month reads "Quà điểm danh ngày 28", one of a given month says which —
  * "Quà điểm danh ngày 28 tháng 11/2026". The server lists only what is still to come, so an item whose month has
@@ -42,7 +42,7 @@ export interface HintSources {
  * refetches it on mount. Accepted: the server is the one that grants, and a stale hint only over-promises a tile.
  */
 export function hintFor(item: ItemDto, sources: HintSources, t: TFunction<'normal'>): string {
-  const rewarding = sources.achievements.find((def) => def.reward.itemId === item.id)
+  const rewarding = sources.achievements.find((def) => def.reward.itemId === item.id || def.reward.setItems?.includes(item.id) === true)
   if (rewarding !== undefined) return achievementName(rewarding.id, t)
   const gift = sources.gifts.find((g) => g.itemId === item.id)
   if (gift !== undefined) {

@@ -460,6 +460,37 @@ describe('BP-41: the chaos titles', () => {
     expect(await repOf(half)).toHaveLength(1)
   })
 
+  it('BP-43: a set piece whose grant throws rolls the whole unlock back, and a retry then pays and grants everything once', async () => {
+    const playerId = await seedPlayer()
+    const def = defs.find((d) => d.id === 'chaos_god')!
+    // The inventory throws on the third set piece: title and two pieces were already granted inside the transaction.
+    const failing: InventoryService = {
+      ...inv,
+      grant: async (tx, pid, itemId, source, ref) => {
+        if (itemId === 'aura_card_god01') throw new Error('grant failed')
+        return inv.grant(tx, pid, itemId, source, ref)
+      },
+    }
+    const run = (inventoryService: InventoryService) =>
+      db.transaction((tx) => unlockWithin(tx, playerId, def, new Date(NOW), { inventory: inventoryService, reason: 'gm_achievement', refId: 'gm:9', reputation }))
+    const claim = async () =>
+      (await db.select({ unlockedAt: playerAchievements.unlockedAt }).from(playerAchievements).where(eq(playerAchievements.playerId, playerId))).map((r) => r.unlockedAt)
+
+    await expect(run(failing)).rejects.toThrow('grant failed')
+
+    expect(await repos.balances.get(playerId)).toBe(0)
+    expect(await ledger(playerId)).toEqual([])
+    // No claimed row survives (a guarded UPDATE on an absent row never inserted one, or it rolled back to null).
+    expect((await claim()).every((at) => at === null)).toBe(true)
+    expect(await owned(playerId)).toEqual([])
+    expect(await repOf(playerId)).toEqual([])
+
+    // Nothing was half-claimed: the same unlock goes through with the real inventory.
+    expect((await run(inv)).outcome).toBe('unlocked')
+    expect(await owned(playerId)).toHaveLength(5)
+    expect(await ledger(playerId)).toEqual([{ amount: 300_000, reason: 'gm_achievement', refId: 'gm:9' }])
+  })
+
   it('a GM unlock pays the same override, under the same reputation ref as the earning', async () => {
     const playerId = await seedPlayer()
     const def = defs.find((d) => d.id === 'chaos_demigod')!

@@ -723,6 +723,17 @@ describe('Chibi live', () => {
       expect(moves(img)).toBe(false)
     })
 
+    it('a head crop draws no aura layer at all, and its frame border keeps the head-crop geometry', () => {
+      const subject: ChibiConfig = { ...SUBJECT, frame: FRAME_ITEM, aura: auraOf('card_god01') }
+      const { container } = render(<Chibi subject={subject} frame="head" />)
+      expect(auraImg(container, 'card_god01')).toBeNull()
+      expect(container.querySelector('img[src*="_L10@"]')).toBeNull()
+      const border = container.querySelector('img[src="/avatar/item_frame_gold_L90@1x.png"]')
+      expect(border).not.toBeNull()
+      expect(border).toHaveClass(s.headCrop!)
+      expect([...container.querySelectorAll('img')].some(moves)).toBe(false)
+    })
+
     it('reduced motion carries none', () => {
       stubReducedMotion(true)
       for (const code of ['card_god01', 'demigod01', 'godslayer01']) {

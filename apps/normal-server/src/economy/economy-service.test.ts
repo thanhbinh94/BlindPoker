@@ -13,7 +13,7 @@ import { createInventoryService } from '../inventory/inventory-service.js'
 import type { ItemCatalog } from '../inventory/items.js'
 import { loadItemCatalog } from '../inventory/items.js'
 import { DAILY_DRAW_SLOTS } from '../inventory/slots.js'
-import { loadAchievements } from '../achievements/definitions.js'
+import { loadAchievements, rewardItemIdsOf } from '../achievements/definitions.js'
 import type { NormalRepositories } from '../repos/index.js'
 import { createRepositories } from '../repos/index.js'
 import { createReputationService, type ReputationService } from '../reputation/reputation-service.js'
@@ -64,9 +64,9 @@ beforeAll(async () => {
   await catalog.seed(db)
   // Wired the way Task 6 wires it: the reward ids come from the loaded definitions, so
   // `achievements.json` stays the only place one is written down.
-  const rewardItemIds = loadAchievements(catalog)
-    .map((d) => d.reward.itemId)
-    .filter((id): id is string => id !== undefined)
+  // BP-43: `rewardItemIdsOf` also carries a Thần title's whole set, which the shop and the draw must never hand out.
+  const rewardItemIds = rewardItemIdsOf(loadAchievements(catalog))
+  expect(rewardItemIds).toContain('aura_card_god01')
   reserved = new Set([...gifts.fixedItemIds(), ...rewardItemIds])
   bus = createEventBus(silentLogger)
   bus.subscribe((e) => {
