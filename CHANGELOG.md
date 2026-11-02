@@ -16,7 +16,7 @@ chú ý", "giống liên minh huyền thoại khi có pentakill", "có âm thanh
 dạng edm", "cả 2… note phần này cho phase sau"); the session wrote the spec alone, the user approved it on 2026-11-01 ("ok, lập
 plan và làm phần A luôn"). Spec `2026-10-31-title-entrance-design.md` (decisions H1–H5), Part A only; plan
 `2026-11-01-plan42-title-entrance-sound.md` with its pre-flight amendments A1–A18. Branch `feature/BP-42-title-entrance`.
-Normal edition only. **Not deployed:** spec §7.1 waits for the user to listen to the stingers and approve the copy.
+Normal edition only. Spec §7.1 held the deploy for the user's ear; they listened and said "ok deploy" on 2026-11-02.
 
 - **What a player gets.**
   - **An entrance.** A player wearing a Thần title (Hóa Thần, Bán Thần or Kẻ Sát Thần, in the title slot) who sits down at any
@@ -65,8 +65,10 @@ Normal edition only. **Not deployed:** spec §7.1 waits for the user to listen t
   appeared!", "The Godslayer {{name}} has taken a seat — beware, Card God!", "Entrance" (the band's label), "Mute" / "Unmute",
   "Sound" / "On" / "Off".
 - **Gate.** typecheck, lint, unit 4,591 passed (14 skipped), build:normal, avatar:check, e2e Normal 25, e2e Lite 4, ops 72 + F-15/F-15b = 73 passed with F-10 skipped as before; P-03 failed once on `net::ERR_NO_BUFFER_SPACE` (Windows socket buffers, 25 min into the run) and passed on its own. build:lite stops at the exe step as on this machine before (Node 24, the SEA blob wants 22); the Lite web build and its e2e pass.
+- **Deployed.** On the VPS since 2026-11-02, by git bundle ahead of the push (`9a86213..24320c6`; backup `bp-2026-11-02-0712`;
+  no migration; rooms 0; health ok; the `stingers` chunk served). Stingers and copy shipped as auditioned. The LAN host is not
+  touched. Lite has no entrance or sound.
 - **Still open.**
-  - **The user's audition** of the seven stingers (WAVs sent) and approval of the copy, then the VPS deploy (spec §7.1).
   - Real phones: iOS Safari (the silent switch mutes Web Audio), Firefox Android, a phone that suspends audio on lock.
   - The seat caption says "Hóa Thần" (the title item's name) while the band says "Thần Bài": the user's call.
   - A stinger queued behind a moment still plays after its band was tapped away; a tapped-away BP-41 herald still holds an
