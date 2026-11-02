@@ -27,6 +27,8 @@ src/
   grant-gm-cli.ts    operator tool: make an account a GM, or take the role back (--revoke); DATABASE_URL only
   reputation-backfill-cli.ts  operator tool, once per Plan 27 upgrade: credit every account the reputation its
                      history earned (--dry-run first); DATABASE_URL only — see "Reputation, the shop and the welcome gift"
+  title-set-backfill-cli.ts  operator tool, once per Plan 43 upgrade: hand every holder of a Thần title the wardrobe
+                     set that came after it (--dry-run first); inventory rows only; DATABASE_URL only
   e2e-entry.ts       the e2e server's own entry; e2e-promote.ts is its one extra route, e2e-options.ts its env knobs
                      (E2E_READ_LIMIT; BP-41's E2E_CHAOS_CARDS, changes laid over the chaos cards) — never in dist/
   app.ts             buildApp(): wiring, in the one order that works (below)

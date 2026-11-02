@@ -63,7 +63,7 @@ export interface AchievementServiceDeps {
 }
 
 /** The `source` recorded in `inventory` for an item that came from an achievement. */
-const ACHIEVEMENT_SOURCE = 'achievement'
+export const ACHIEVEMENT_SOURCE = 'achievement'
 
 /**
  * Flips one achievement to unlocked and pays its whole reward inside the caller's transaction — the one code path

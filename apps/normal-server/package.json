@@ -10,6 +10,7 @@
     "start": "node dist/main.js",
     "migrate": "node dist/migrate-cli.js",
     "backfill:reputation": "node dist/reputation-backfill-cli.js",
+    "backfill:title-sets": "node dist/title-set-backfill-cli.js",
     "db:generate": "drizzle-kit generate",
     "dev": "pnpm run build && node dist/main.js"
   },
