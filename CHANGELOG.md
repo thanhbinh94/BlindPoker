@@ -9,7 +9,7 @@ below are the real history.
 
 ---
 
-## Plan 43 — the Thần title sets: an outfit, a head piece, a moving aura and a frame for each title, granted with it and backfilled to holders; the Card God's title reads Thần Bài — merged `MERGE` (2026-11-02)
+## Plan 43 — the Thần title sets: an outfit, a head piece, a moving aura and a frame for each title, granted with it and backfilled to holders; the Card God's title reads Thần Bài — merged `bdb9550` (2026-11-02)
 
 Part B of BP-42 (spec `2026-10-31-title-entrance-design.md` §6–§7). On 2026-11-02 the user settled the name ("giữ Thần Bài,
 đổi caption ghế thành Thần Bài luôn") and handed the phase over whole ("tự lập spec, plan, phát triển và deploy"). Spec

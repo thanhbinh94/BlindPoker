@@ -1620,7 +1620,7 @@ Rulings 1–16 are listed in the CHANGELOG section. The lessons behind them:
 - **A dev-only flag in a test hook still needs its boundary checked**, here by grep that nothing in `src/` imports the
   playground and that `stingers.ts` stays off the static graph (the entry is 174.7 of 180 KB).
 
-## Plan 43 — the Thần title sets (merged `MERGE`, 2026-11-02)
+## Plan 43 — the Thần title sets (merged `bdb9550`, 2026-11-02)
 
 Rulings 1–10 are listed in the CHANGELOG section. The lessons behind them:
 
