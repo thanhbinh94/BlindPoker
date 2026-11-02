@@ -55,6 +55,77 @@ and the `title_god` title reads "Thần Bài" in Vietnamese.
 5. **The frame ring covering the portrait.** A frame is fitted by its whole ink box (`RING` 260), so wide ornaments
    shrink the ring. Check by eye on the sheet that the ring clears the 208-px crop (the art task).
 
+## Amendments (pre-flight 2026-11-02)
+
+An independent review against the real code. Each amendment binds the task it names and wins over that task's text.
+
+- **A1 (blocker, Task 2): the shop's achievement lock.** `shop-service.ts:194-195` builds `rewardOwner` from
+  `def.reward.itemId` only. It gates buying (`:318`), the auto-shelf (`sellable`, `:224`), `setFeatured` and the welcome
+  choices (`gm-service.ts:828`).
+  - Build it from `rewardItemIds(def)`.
+  - Test: `entryOf(me,'aura_card_god01')` gives `lock {kind:'achievement', achievementId:'chaos_god'}`, and the purchase
+    is still refused after `setPrices` sets `enabled: true`.
+- **A2 (Task 2): reservation helpers.** Draws are common or rare only (`daily-gifts.ts:74-76`), so a daily-draw test
+  observes nothing.
+  - Export both `rewardItemIds(def): string[]` (drops an undefined `itemId`) and
+    `rewardItemIdsOf(defs: readonly AchievementDef[]): string[]` from `definitions.ts`.
+  - Use them in `app.ts:368`, in `achievementItemIds` (`shop-prices-seed.ts:28-30`) and in `rewardOwner`.
+  - Unit-test the pure function, plus the seed test "seeds a price per catalogue item once" with a set item seeded
+    `enabled: false`.
+- **A3 (Task 2): the rows already exist.** Task 1 committed the 12 rows (with `variants.m`) and their vi/en names in
+  `c2427ac`. Task 2 verifies them and does not re-add them.
+- **A4 (Task 2): hide flags.** Item rows carry hide flags inside `asset`, and only when true. `items.ts:266-281` fails at
+  load on a disagreement with the manifest. The v4 head layers carry none (the helm is clipped by its `hairClip` mask),
+  so write none.
+- **A5 (Task 2): count pins** broken by Tasks 1–2. Fix every one:
+  - 130 → 142 at `apps/normal-server/src/inventory/items.test.ts:121,124` (and the "a hundred and thirty" in the
+    title), `apps/normal-server/src/shop/shop-service.test.ts:116,118,165` and
+    `apps/normal-web/src/locales/locales.test.ts:33`;
+  - `apps/normal-server/src/inventory/bodies.test.ts:68` (26 → 32 outfit layers with skin line art);
+  - `apps/normal-web/test/avatar-pipeline.test.ts:1287` (the layer count) and `:1413` (26).
+  - Run the affected suites to find any other pin.
+- **A6 (Task 3): existing tests to update.** In `achievement-service.test.ts`:
+  - `:153-157` uses `toEqual` on the three chaos definitions: add `setItems`;
+  - `:391` and `:396` use `inv.list(...)` `toEqual([title only])`: list all five items.
+  - The GM test goes in `apps/normal-server/src/gm/gm-service.test.ts`, beside `:122`; that file uses the real
+    definitions.
+- **A7 (Task 3): one code path.** The GM path calls `unlockWithin` (`gm-service.ts:489`), so the one change covers both.
+- **A8 (Task 3): load rule for set items.** Also reject at load a `setItems` id whose item is `isDefault` or `free`.
+  Whether an item is on sale cannot be checked at load (prices live in the database); A1's lock keeps a set item off
+  sale. That is a deviation (CHANGELOG).
+- **A9 (blocker, Task 4): the backfill's signature.**
+  - Export `ACHIEVEMENT_SOURCE` from `achievement-service.ts`.
+  - Build `createInventoryService(db)` inside `backfillTitleSets`.
+  - Under `dryRun`, count the missing rows with a select.
+  - "Owner" means an `inventory.item_id = reward.itemId` row, any source.
+  - Test file: `apps/normal-server/src/inventory/title-sets.test.ts`, with `createTestDb` from `../db/test-db.js`, as
+    `reputation/backfill.test.ts` does.
+- **A10 (Task 4): what a sixth dist entry touches.**
+  - `build.mjs:47-48` and its header comment `:6-7` ("five" → "six");
+  - `test/build.test.ts:26` (`ENTRY_FILES`);
+  - `docs/acceptance-checklist.md:194` (66.31): add the file, "the five" → "the six"; the cited title stays;
+  - `docs/normal-server.md:28` (file tree);
+  - the commands beside `docs/deployment-normal.md:416` and `deploy/normal-windows/README.md:406` (Task 7).
+  - The Docker image needs nothing.
+- **A11 (controller, after merge):** on the VPS, after `docker compose up`:
+  1. `docker compose exec app node dist/title-set-backfill-cli.js --dry-run`;
+  2. then the real run;
+  3. report `players` / `granted`.
+  - The LAN host (Neon) waits for the user's yes.
+- **A12 (Task 6): test mechanics.**
+  - Reduced motion is stubbed through `stubReducedMotion` (`Chibi.test.tsx:461`, a helper scoped in its `describe`, with
+    `vi.unstubAllGlobals()` in `afterEach`). Put the new tests in that `describe`.
+  - A lazy chibi is in view at once in jsdom (no `IntersectionObserver`), so only the `lazy` gate keeps the class off.
+  - Compute the class inside `renderLayer`, joined with `s.headCrop` where the frame border passes it.
+  - Assert `toHaveClass('auraGlow')`.
+  - `global.css:137-145` already stops animations; keep the module `@media` block for convention.
+- **A13 (Task 5): fixtures and DTOs.** Add a `chaos_god` fixture row with `setItems` to `AchievementsScreen.test.tsx`.
+  Widen `GmUnlockDto.reward` (`api.ts:737`) too.
+- **A14 (Task 2): player guide.** `docs/player-guide.md:448`: the title "Thần Bài". `:653`: "ba danh hiệu" → "ba thành
+  tựu". Leave "Hóa Thần Bài!" (`game.json:409`, the reign toast, a verb phrase).
+- **A15 (Task 7): known limitation.** A GM's gift schedule and `grantItem` can still name a set item, as
+  `title_devoted` can. Record it in `docs/known-limitations.md`.
+
 ---
 
 ### Task 1: The fifteen pictures (controller, with Claude in Chrome — not dispatched)
