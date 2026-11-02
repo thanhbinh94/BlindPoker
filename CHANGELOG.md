@@ -99,7 +99,10 @@ A1–A15. Branch `feature/BP-43-title-wardrobe`. Normal edition only.
   - Godslayer's armour, Godslayer's horned helm, Godslayer's aura, Godslayer's frame;
   - "the full outfit set".
 - **Gate** (the branch's final tree `932e385`; `main` had not moved). typecheck and lint clean. Unit 263 files, 4,619 passed, 14 skipped. `build:normal` ok; `build:lite` up to the Node 22 exe step (Node 24 here); `avatar:check` 175 files, 0 failures; e2e Normal 25/25; e2e Lite 4/4; ops 74/74 (20.7 min).
-- **Deployed.** DEPLOY
+- **Deployed.** On the VPS since 2026-11-02, by git bundle ahead of the push (`24320c6..e9183b2`). Backup
+  `bp-2026-11-02-0959`, no migration, rooms 0, health ok. The backfill's dry run said `players=3 granted=20`; the real run
+  granted 20, and a second dry run found 0. The LAN host is not touched (its backfill writes the user's Neon database:
+  ask first). Lite has no titles.
 - **Still open.**
   - The user's look at the pictures: any piece can be sent back for a redraw.
   - The English names.
