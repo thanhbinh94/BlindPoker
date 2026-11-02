@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { cx } from '../primitives/cx.js'
 import { useMediaQuery } from '../table/useMediaQuery.js'
 import { assetUrl, useAvatarAssetsBase } from './AvatarAssets.js'
+import { auraMotionOf, type AuraMotion } from './aura-motion.js'
 import { useLoadedClip } from './clip.js'
 import { hashChibi, layersFor } from './layers.js'
 import { useInView } from './lazy.js'
@@ -155,6 +156,9 @@ export interface ChibiProps {
  * layers rank 100 lower still (−110 … −190), behind every layer of the stage or a seat, whatever its order. */
 const LAZY_TINT_PRIORITY = -100
 
+/** The class each aura motion plays through (`avatar2d.module.css`). */
+const AURA_MOTION_CLASS: Readonly<Record<AuraMotion, string>> = { glow: s.auraGlow ?? '', twinkle: s.auraTwinkle ?? '', flicker: s.auraFlicker ?? '' }
+
 /** The head crop's side in the @1x art (the round 208×208 avatar crop): drawn no larger on screen, @1x is enough. */
 const HEAD_CROP_PX = 208
 
@@ -257,12 +261,19 @@ export function Chibi({
   const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
   const cheap = frame === 'head' && size !== undefined && size * dpr <= HEAD_CROP_PX
 
+  // Plan 43: a Thần set's aura plays its motion on a large chibi only: not in a lazy grid of cards, not under reduced motion.
+  const auraMotion = (layer: LayerRef): string | undefined => {
+    if (lazy || reducedMotion) return undefined
+    const motion = auraMotionOf(layer.file)
+    return motion === null ? undefined : AURA_MOTION_CLASS[motion]
+  }
+
   const renderLayer = ({ layer, face }: StackEntry, extraClassName?: string) => (
     <ChibiLayer
       key={layer.file}
       base={base}
       layer={layer}
-      className={extraClassName}
+      className={cx(extraClassName, auraMotion(layer))}
       tintPriority={lazy ? LAZY_TINT_PRIORITY - layer.order : undefined}
       density={cheap ? 1 : undefined}
       face={face}
